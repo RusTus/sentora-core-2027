@@ -20,7 +20,8 @@ $class_name = null;
 
 function x__autoload($class_name)
 {
-    $path = 'dryden/' . str_replace('_', '/', $class_name) . '.class.php';
+    // Absolute path so classes still load if the working directory changes
+    $path = __DIR__ . '/' . str_replace('_', '/', $class_name) . '.class.php';
     if (file_exists($path)) {
         require_once $path;
     }

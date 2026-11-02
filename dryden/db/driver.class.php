@@ -78,6 +78,7 @@ class db_driver extends PDO {
      * @param $driver_options [optional]
      */
     public function __construct($dsn, $username = null, $password = null, $driver_options = null) {
+        // PHP 8 PDO throws on errors by default; Sentora handles them itself below.
         parent::__construct($dsn, $username, $password, $driver_options);
     }
 
@@ -120,9 +121,9 @@ class db_driver extends PDO {
      * @param String $query
      * @return type
      */
-    public function runQuery($query) {
+    public function query(string $query, ?int $fetchMode = null, mixed ...$fetchModeArgs): PDOStatement|false {
         try {
-            $result = parent::runQuery($query);
+            $result = ($fetchMode === null) ? parent::query($query) : parent::query($query, $fetchMode, ...$fetchModeArgs);
             return($result);
         } catch (PDOException $e) {
             $errormessage = $this->errorInfo();
@@ -142,7 +143,7 @@ class db_driver extends PDO {
      * @deprecated since version 10.0.1
      * @return type
      */
-    public function exec($query) {
+    public function exec(string $query): int|false {
         try {
             $result = parent::exec($query);
             return($result);
@@ -185,7 +186,7 @@ class db_driver extends PDO {
      * @param Array $driver_options
      * @return type
      */
-    public function prepare($query, $driver_options = array()) {
+    public function prepare(string $query, array $driver_options = array()): PDOStatement|false {
         try {
             $result = parent::prepare($query, $driver_options);
             $this->queriesExecuted[] = $query;

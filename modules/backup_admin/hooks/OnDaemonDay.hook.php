@@ -99,7 +99,7 @@ if (ui_module::CheckModuleEnabled('Backup Config')) {
                         if ($file != "." && $file != "..") {
                             $filetime = @filemtime($backupdir . $file);
                             if ($filetime == NULL) {
-                                $filetime = @filemtime(utf8_decode($backupdir . $file));
+                                $filetime = @filemtime(mb_convert_encoding($backupdir . $file, 'ISO-8859-1', 'UTF-8'));
                             }
                             $filetime = floor((time() - $filetime) / 86400);
                             echo "" . $file . " - " . $purge_date . " - " . $filetime . "";
@@ -130,7 +130,7 @@ if (ui_module::CheckModuleEnabled('Backup Config')) {
             if ($file != "." && $file != "..") {
                 $filetime = @filemtime($temp_dir . $file);
                 if ($filetime == NULL) {
-                    $filetime = @filemtime(utf8_decode($temp_dir . $file));
+                    $filetime = @filemtime(mb_convert_encoding($temp_dir . $file, 'ISO-8859-1', 'UTF-8'));
                 }
                 $filetime = floor((time() - $filetime) / 86400);
                 echo "" . $file . " - " . $purge_date . " - " . $filetime . "";

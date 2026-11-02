@@ -53,7 +53,9 @@ use function strtoupper;
 use function trigger_error;
 
 use const E_USER_ERROR;
+use const E_USER_WARNING;
 use const PHP_VERSION;
+use const PHP_VERSION_ID;
 
 /**
  * Handles the export for the SQL class
@@ -66,6 +68,9 @@ class ExportSql extends ExportPlugin
      * @var bool
      */
     private $sentCharset = false;
+
+    /** @var string */
+    private $sqlViews = '';
 
     protected function init(): void
     {
@@ -555,6 +560,7 @@ class ExportSql extends ExportPlugin
             }
 
             $createQuery = $this->replaceWithAliases(
+                $delimiter,
                 $dbi->getDefinition($db, $type, $routine),
                 $aliases,
                 $db,
@@ -563,7 +569,7 @@ class ExportSql extends ExportPlugin
             );
             if (! empty($createQuery) && $cfg['Export']['remove_definer_from_definitions']) {
                 // Remove definer clause from routine definitions
-                $parser = new Parser($createQuery);
+                $parser = new Parser('DELIMITER ' . $delimiter . $crlf . $createQuery);
                 $statement = $parser->statements[0];
                 $statement->options->remove('DEFINER');
                 $createQuery = $statement->build();
@@ -854,7 +860,9 @@ class ExportSql extends ExportPlugin
             $compat = 'NONE';
         }
 
-        if (isset($GLOBALS['sql_drop_database'])) {
+        $exportStructure = ! isset($GLOBALS['sql_structure_or_data'])
+            || in_array($GLOBALS['sql_structure_or_data'], ['structure', 'structure_and_data'], true);
+        if ($exportStructure && isset($GLOBALS['sql_drop_database'])) {
             if (
                 ! $this->export->outputHandler(
                     'DROP DATABASE IF EXISTS '
@@ -979,6 +987,12 @@ class ExportSql extends ExportPlugin
             unset($GLOBALS['sql_auto_increments']);
         }
 
+        //add views to the sql dump file
+        if ($this->sqlViews !== '') {
+            $result = $this->export->outputHandler($this->sqlViews);
+            $this->sqlViews = '';
+        }
+
         //add constraints to the sql dump file
         if (isset($GLOBALS['sql_constraints'])) {
             $result = $this->export->outputHandler($GLOBALS['sql_constraints']);
@@ -1024,7 +1038,7 @@ class ExportSql extends ExportPlugin
                 $eventDef = $dbi->getDefinition($db, 'EVENT', $eventName);
                 if (! empty($eventDef) && $cfg['Export']['remove_definer_from_definitions']) {
                     // remove definer clause from the event definition
-                    $parser = new Parser($eventDef);
+                    $parser = new Parser('DELIMITER ' . $delimiter . $crlf . $eventDef);
                     $statement = $parser->statements[0];
                     $statement->options->remove('DEFINER');
                     $eventDef = $statement->build();
@@ -1529,7 +1543,7 @@ class ExportSql extends ExportPlugin
             $message = sprintf(__('Error reading structure for table %s:'), $db . '.' . $table);
             $message .= ' ' . $tmpError;
             if (! defined('TESTSUITE')) {
-                trigger_error($message, E_USER_ERROR);
+                trigger_error($message, PHP_VERSION_ID < 80400 ? E_USER_ERROR : E_USER_WARNING);
             }
 
             return $this->exportComment($message);
@@ -1602,7 +1616,7 @@ class ExportSql extends ExportPlugin
             }
 
             // Substitute aliases in `CREATE` query.
-            $createQuery = $this->replaceWithAliases($createQuery, $aliases, $db, $table, $flag);
+            $createQuery = $this->replaceWithAliases(null, $createQuery, $aliases, $db, $table, $flag);
 
             // One warning per view.
             if ($flag && $view) {
@@ -2112,12 +2126,19 @@ class ExportSql extends ExportPlugin
                         }
 
                         $triggerQuery .= 'DELIMITER ' . $delimiter . $crlf;
-                        $triggerQuery .= $this->replaceWithAliases($trigger['create'], $aliases, $db, $table, $flag);
+                        $triggerQuery .= $this->replaceWithAliases(
+                            $delimiter,
+                            $trigger['create'],
+                            $aliases,
+                            $db,
+                            $table,
+                            $flag
+                        );
                         if ($flag) {
                             $usedAlias = true;
                         }
 
-                        $triggerQuery .= 'DELIMITER ;' . $crlf;
+                        $triggerQuery .= $delimiter . $crlf . 'DELIMITER ;' . $crlf;
                     }
 
                     // One warning per table.
@@ -2165,6 +2186,13 @@ class ExportSql extends ExportPlugin
                     }
 
                     $dump .= $this->getTableDefForView($db, $table, $crlf, true, $aliases);
+                }
+
+                if (empty($GLOBALS['sql_views_as_tables'])) {
+                    // Save views, to be inserted after indexes
+                    // in case the view uses USE INDEX syntax
+                    $this->sqlViews .= $dump;
+                    $dump = '';
                 }
 
                 break;
@@ -2244,7 +2272,7 @@ class ExportSql extends ExportPlugin
             $message = sprintf(__('Error reading data for table %s:'), $db . '.' . $table);
             $message .= ' ' . $tmpError;
             if (! defined('TESTSUITE')) {
-                trigger_error($message, E_USER_ERROR);
+                trigger_error($message, PHP_VERSION_ID < 80400 ? E_USER_ERROR : E_USER_WARNING);
             }
 
             return $this->export->outputHandler(
@@ -2607,15 +2635,17 @@ class ExportSql extends ExportPlugin
     /**
      * replaces db/table/column names with their aliases
      *
-     * @param string $sqlQuery SQL query in which aliases are to be substituted
-     * @param array  $aliases  Alias information for db/table/column
-     * @param string $db       the database name
-     * @param string $table    the tablename
-     * @param string $flag     the flag denoting whether any replacement was done
+     * @param string|null $delimiter The delimiter for the parser (";" or "$$")
+     * @param string      $sqlQuery  SQL query in which aliases are to be substituted
+     * @param array       $aliases   Alias information for db/table/column
+     * @param string      $db        the database name
+     * @param string      $table     the tablename
+     * @param string      $flag      the flag denoting whether any replacement was done
      *
      * @return string query replaced with aliases
      */
     public function replaceWithAliases(
+        ?string $delimiter,
         $sqlQuery,
         array $aliases,
         $db,
@@ -2627,7 +2657,7 @@ class ExportSql extends ExportPlugin
         /**
          * The parser of this query.
          */
-        $parser = new Parser($sqlQuery);
+        $parser = new Parser(empty($delimiter) ? $sqlQuery : 'DELIMITER ' . $delimiter . "\n" . $sqlQuery);
 
         if (empty($parser->statements[0])) {
             return $sqlQuery;

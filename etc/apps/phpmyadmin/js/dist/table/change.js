@@ -165,20 +165,32 @@ function verifyAfterSearchFieldChange(index, searchFormId) {
     if (hasMultiple) {
       $(searchFormId).validate({
         // update errors as we write
-        onkeyup: function (element) {
+        onkeyup: function onkeyup(element) {
           $(element).valid();
         }
       });
       // validator method for IN(...), NOT IN(...)
       // BETWEEN and NOT BETWEEN
+      // See all possible syntaxes in tests of https://regexr.com/7h1eq
       jQuery.validator.addMethod('validationFunctionForMultipleInt', function (value) {
-        return value.match(/^(?:(?:\d\s*)|\s*)+(?:,\s*\d+)*$/i) !== null;
+        if (value === '') {
+          return true;
+        }
+        return value.replace(/ /g, '').match(/^(((0x[0-9a-f]+)|([+-]?([0-9]*\.?[0-9]+|[0-9]+\.?[0-9]*)(e[+-]?[0-9]+)?))(,|$))+$/i) !== null;
       }, Messages.strEnterValidNumber);
       validateMultipleIntField($thisInput, true);
     } else {
+      // validator method for INTs
+      // See all possible syntaxes in tests of https://regexr.com/7h1ci
+      jQuery.validator.addMethod('validationFunctionForInt', function (value) {
+        if (value === '') {
+          return true;
+        }
+        return value.match(/^(0x[0-9a-f]+$)|([+-]?([0-9]*\.?[0-9]+|[0-9]+\.?[0-9]*)(e[+-]?[0-9]+)?)$/i) !== null;
+      }, Messages.strEnterValidNumber);
       $(searchFormId).validate({
         // update errors as we write
-        onkeyup: function (element) {
+        onkeyup: function onkeyup(element) {
           $(element).valid();
         }
       });
@@ -201,7 +213,7 @@ function validateMultipleIntField(jqueryInput, returnValueIfFine) {
   jqueryInput.rules('add', {
     validationFunctionForMultipleInt: {
       param: jqueryInput.value,
-      depends: function () {
+      depends: function depends() {
         return returnValueIfFine;
       }
     }
@@ -220,15 +232,15 @@ function validateIntField(jqueryInput, returnValueIfIsNumber) {
   // removing previous rules
   jqueryInput.rules('remove');
   jqueryInput.rules('add', {
-    number: {
-      param: true,
-      depends: function () {
+    validationFunctionForInt: {
+      param: jqueryInput.value,
+      depends: function depends() {
         return returnValueIfIsNumber;
       }
     },
     min: {
       param: mini,
-      depends: function () {
+      depends: function depends() {
         if (isNaN(jqueryInput.val())) {
           return false;
         } else {
@@ -238,7 +250,7 @@ function validateIntField(jqueryInput, returnValueIfIsNumber) {
     },
     max: {
       param: maxi,
-      depends: function () {
+      depends: function depends() {
         if (isNaN(jqueryInput.val())) {
           return false;
         } else {
@@ -272,29 +284,39 @@ function verificationsAfterFieldChange(urlField, multiEdit, theType) {
     $('#salt_' + target.id).prev('br').remove();
     $('#salt_' + target.id).remove();
   }
-
-  // Remove possible blocking rules if the user changed functions
-  $('#' + target.id).rules('remove', 'validationFunctionForMd5');
-  $('#' + target.id).rules('remove', 'validationFunctionForAesDesEncrypt');
-  if (target.value === 'MD5') {
-    $('#' + target.id).rules('add', {
-      validationFunctionForMd5: {
-        param: $thisInput,
-        depends: function () {
-          return checkForCheckbox(multiEdit);
-        }
-      }
-    });
+  var couldFetchRules = false;
+  try {
+    // See: issue #18792 - In some weird cases the input goes away before it validates
+    // And it breaks jquery, this is a well known jquery bug with different trigger schemes
+    $('#' + target.id).rules();
+    couldFetchRules = true;
+  } catch (error) {
+    console.log(error);
   }
-  if (target.value === 'DES_ENCRYPT' || target.value === 'AES_ENCRYPT') {
-    $('#' + target.id).rules('add', {
-      validationFunctionForAesDesEncrypt: {
-        param: $thisInput,
-        depends: function () {
-          return checkForCheckbox(multiEdit);
+  if (couldFetchRules) {
+    // Remove possible blocking rules if the user changed functions
+    $('#' + target.id).rules('remove', 'validationFunctionForMd5');
+    $('#' + target.id).rules('remove', 'validationFunctionForAesDesEncrypt');
+    if (target.value === 'MD5') {
+      $('#' + target.id).rules('add', {
+        validationFunctionForMd5: {
+          param: $thisInput,
+          depends: function depends() {
+            return checkForCheckbox(multiEdit);
+          }
         }
-      }
-    });
+      });
+    }
+    if (target.value === 'DES_ENCRYPT' || target.value === 'AES_ENCRYPT') {
+      $('#' + target.id).rules('add', {
+        validationFunctionForAesDesEncrypt: {
+          param: $thisInput,
+          depends: function depends() {
+            return checkForCheckbox(multiEdit);
+          }
+        }
+      });
+    }
   }
   if (target.value === 'HEX' && theType.substring(0, 3) === 'int') {
     // Add note when HEX function is selected on a int
@@ -321,8 +343,12 @@ function verificationsAfterFieldChange(urlField, multiEdit, theType) {
     $thisInput.removeAttr('min');
     $thisInput.removeAttr('max');
     // @todo: put back attributes if corresponding function is deselected
-  }
 
+    if ($thisFunction.val() === 'NOW') {
+      $thisInput.attr('min', 0);
+      $thisInput.attr('max', $thisInput.parent().attr('data-decimals'));
+    }
+  }
   if ($thisInput.data('rulesadded') === null && !functionSelected) {
     // call validate before adding rules
     $($thisInput[0].form).validate();
@@ -331,7 +357,7 @@ function verificationsAfterFieldChange(urlField, multiEdit, theType) {
       $thisInput.rules('add', {
         validationFunctionForDateTime: {
           param: theType,
-          depends: function () {
+          depends: function depends() {
             return checkForCheckbox(multiEdit);
           }
         }
@@ -350,7 +376,7 @@ function verificationsAfterFieldChange(urlField, multiEdit, theType) {
         $thisInput.rules('add', {
           maxlength: {
             param: maxlen,
-            depends: function () {
+            depends: function depends() {
               return checkForCheckbox(multiEdit);
             }
           }
@@ -361,7 +387,7 @@ function verificationsAfterFieldChange(urlField, multiEdit, theType) {
       $thisInput.rules('add', {
         validationFunctionForHex: {
           param: true,
-          depends: function () {
+          depends: function depends() {
             return checkForCheckbox(multiEdit);
           }
         }
@@ -566,7 +592,7 @@ function addNewContinueInsertionFields(event) {
     $(this).datepicker('destroy');
   });
   if (currRows < targetRows) {
-    var tempIncrementIndex = function () {
+    var tempIncrementIndex = function tempIncrementIndex() {
       var $thisElement = $(this);
       /**
        * Extract the index from the name attribute for all input/select fields and increment it
@@ -642,7 +668,7 @@ function addNewContinueInsertionFields(event) {
         });
       }
     };
-    var tempReplaceAnchor = function () {
+    var tempReplaceAnchor = function tempReplaceAnchor() {
       var $anchor = $(this);
       var newValue = 'rownumber=' + newRowIndex;
       // needs improvement in case something else inside
@@ -650,7 +676,7 @@ function addNewContinueInsertionFields(event) {
       var newHref = $anchor.attr('href').replace(/rownumber=\d+/, newValue);
       $anchor.attr('href', newHref);
     };
-    var restoreValue = function () {
+    var restoreValue = function restoreValue() {
       if ($(this).closest('tr').find('span.column_type').html() === 'enum') {
         if ($(this).val() === $checkedValue) {
           $(this).prop('checked', true);

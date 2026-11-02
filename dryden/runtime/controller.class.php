@@ -114,7 +114,7 @@ class runtime_controller
      * @param string $type What type of requests would you like to see? (URL, USER, FORM or COOKIE)
      * @return array List of all set variables for the requested type.
      */
-    public function GetAllControllerRequests($type)
+    public function GetAllControllerRequests($type = "URL")
     {
         if ($type == 'FORM') {
             return $this->vars_post[0];

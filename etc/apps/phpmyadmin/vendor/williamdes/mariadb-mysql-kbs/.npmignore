@@ -1,0 +1,6 @@
+*
+!/LICENSE
+!/README.md
+!/package.json
+!/dist/merged-slim.json
+!/dist/merged-ultraslim.json

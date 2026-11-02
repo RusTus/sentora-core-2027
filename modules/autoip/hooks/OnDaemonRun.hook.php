@@ -21,7 +21,17 @@
 			$autoipsettings = $zdbh->query("SELECT * FROM x_autoip")->fetch();
         	if ($autoipsettings) {
 				if ($autoipsettings['ai_enabled_in'] == 1){
-					$detectedip = file_get_contents($autoipsettings['ai_command_vc']);
+					// Try the configured service first, then fall back to others: a single
+					// service that is down or rate limiting (HTTP 429) left the IP empty
+					$detectedip = '';
+					$ctx = stream_context_create(array('http' => array('timeout' => 10)));
+					foreach (array_unique(array($autoipsettings['ai_command_vc'], 'https://api.ipify.org', 'https://ipv4.icanhazip.com', 'https://checkip.amazonaws.com')) as $ipservice) {
+						$answer = trim((string) @file_get_contents($ipservice, false, $ctx));
+						if (filter_var($answer, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+							$detectedip = $answer;
+							break;
+						}
+					}
 					$regexp = "^\b(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b^";
 					$matchresult = preg_match_all($regexp, $detectedip, $matches);
 					if(!empty($matchresult)){

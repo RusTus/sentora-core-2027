@@ -1,3 +1,7 @@
+function _defineProperty(e, r, t) { return (r = _toPropertyKey(r)) in e ? Object.defineProperty(e, r, { value: t, enumerable: !0, configurable: !0, writable: !0 }) : e[r] = t, e; }
+function _toPropertyKey(t) { var i = _toPrimitive(t, "string"); return "symbol" == _typeof(i) ? i : i + ""; }
+function _toPrimitive(t, r) { if ("object" != _typeof(t) || !t) return t; var e = t[Symbol.toPrimitive]; if (void 0 !== e) { var i = e.call(t, r || "default"); if ("object" != _typeof(i)) return i; throw new TypeError("@@toPrimitive must return a primitive value."); } return ("string" === r ? String : Number)(t); }
+function _typeof(o) { "@babel/helpers - typeof"; return _typeof = "function" == typeof Symbol && "symbol" == typeof Symbol.iterator ? function (o) { return typeof o; } : function (o) { return o && "function" == typeof Symbol && o.constructor === Symbol && o !== Symbol.prototype ? "symbol" : typeof o; }, _typeof(o); }
 /* global isStorageSupported */ // js/config.js
 /* global ChartType, ColumnType, DataTable, JQPlotChartFactory */ // js/chart.js
 /* global DatabaseStructure */ // js/database/structure.js
@@ -97,7 +101,7 @@ $.ajaxPrefilter(function (options, originalOptions) {
   var nocache = new Date().getTime() + '' + Math.floor(Math.random() * 1000000);
   if (typeof options.data === 'string') {
     options.data += '&_nocache=' + nocache + '&token=' + encodeURIComponent(CommonParams.get('token'));
-  } else if (typeof options.data === 'object') {
+  } else if (_typeof(options.data) === 'object') {
     options.data = $.extend(originalOptions.data, {
       '_nocache': nocache,
       'token': CommonParams.get('token')
@@ -145,7 +149,7 @@ Functions.addDatepicker = function ($thisElement, type, options) {
     constrainInput: false,
     altFieldTimeOnly: false,
     showAnim: '',
-    beforeShow: function (input, inst) {
+    beforeShow: function beforeShow(input, inst) {
       // Remember that we came from the datepicker; this is used
       // in table/change.js by verificationsAfterFieldChange()
       $thisElement.data('comes_from', 'datepicker');
@@ -171,10 +175,10 @@ Functions.addDatepicker = function ($thisElement, type, options) {
         }
       }, 0);
     },
-    onSelect: function () {
+    onSelect: function onSelect() {
       $thisElement.data('datepicker').inline = true;
     },
-    onClose: function () {
+    onClose: function onClose() {
       // The value is no more from the date picker
       $thisElement.data('comes_from', '');
       if (typeof $thisElement.data('datepicker') !== 'undefined') {
@@ -317,7 +321,7 @@ Functions.getSqlEditor = function ($textarea, options, resize, lintOptions) {
     }
     $(codemirrorEditor.getWrapperElement()).css('resize', resizeType).resizable({
       handles: handles,
-      resize: function () {
+      resize: function resize() {
         codemirrorEditor.setSize($(this).width(), $(this).height());
       }
     });
@@ -412,7 +416,7 @@ Functions.escapeJsString = function (unsafe) {
  * @return {string}
  */
 Functions.escapeBacktick = function (s) {
-  return s.replace('`', '``');
+  return s.replaceAll('`', '``');
 };
 
 /**
@@ -420,7 +424,7 @@ Functions.escapeBacktick = function (s) {
  * @return {string}
  */
 Functions.escapeSingleQuote = function (s) {
-  return s.replace('\\', '\\\\').replace('\'', '\\\'');
+  return s.replaceAll('\\', '\\\\').replaceAll('\'', '\\\'');
 };
 Functions.sprintf = function () {
   return sprintf.apply(this, arguments);
@@ -489,7 +493,7 @@ Functions.prepareForAjaxRequest = function ($form) {
 Functions.checkPasswordStrength = function (value, meterObject, meterObjectLabel, username) {
   // List of words we don't want to appear in the password
   var customDict = ['phpmyadmin', 'mariadb', 'mysql', 'php', 'my', 'admin'];
-  if (username !== null) {
+  if (username) {
     customDict.push(username);
   }
   zxcvbnts.core.zxcvbnOptions.setOptions({
@@ -560,7 +564,11 @@ Functions.suggestPassword = function (passwordForm) {
   passwordForm.elements.pma_pw2.value = passwd.value;
   var meterObj = $jQueryPasswordForm.find('meter[name="pw_meter"]').first();
   var meterObjLabel = $jQueryPasswordForm.find('span[name="pw_strength"]').first();
-  Functions.checkPasswordStrength(passwd.value, meterObj, meterObjLabel);
+  var username = '';
+  if (passwordForm.elements.username) {
+    username = passwordForm.elements.username.value;
+  }
+  Functions.checkPasswordStrength(passwd.value, meterObj, meterObjLabel, username);
   return true;
 };
 
@@ -589,7 +597,7 @@ Functions.displayPasswordGenerateButton = function () {
   }
   var generatePwdDiv = $('<div></div>').addClass('item');
   $('<label></label>').attr({
-    for: 'button_generate_password'
+    "for": 'button_generate_password'
   }).html(Messages.strGeneratePassword + ':').appendTo(generatePwdDiv);
   var optionsSpan = $('<span></span>').addClass('options').appendTo(generatePwdDiv);
   pwdButton.clone(true).appendTo(optionsSpan);
@@ -900,13 +908,13 @@ AJAX.registerOnload('functions.js', function () {
       type: 'POST',
       url: href,
       data: params,
-      success: function (data) {
+      success: function success(data) {
         if (data.success) {
           if (CommonParams.get('LoginCookieValidity') - idleSecondsCounter < 0) {
             /* There is other active window, let's reset counter */
             idleSecondsCounter = 0;
           }
-          var remaining = Math.min( /* Remaining login validity */
+          var remaining = Math.min(/* Remaining login validity */
           CommonParams.get('LoginCookieValidity') - idleSecondsCounter, /* Remaining time till session GC */
           CommonParams.get('session_gc_maxlifetime'));
           var interval = 1000;
@@ -1064,14 +1072,9 @@ Functions.setQuery = function (query) {
  * @return {void}
  */
 Functions.handleSimulateQueryButton = function () {
-  var updateRegExp = new RegExp('^\\s*UPDATE\\s+((`[^`]+`)|([A-Za-z0-9_$]+))\\s+SET\\s', 'i');
-  var deleteRegExp = new RegExp('^\\s*DELETE\\s+FROM\\s', 'i');
-  var query = '';
-  if (codeMirrorEditor) {
-    query = codeMirrorEditor.getValue();
-  } else {
-    query = $('#sqlquery').val();
-  }
+  var updateRegExp = /^\s*UPDATE\b\s*(((`([^`]|``)+`)|([a-z0-9_$]+))\s*\.\s*)?((`([^`]|``)+`)|([a-z0-9_$]+))\s*\bSET\b/i;
+  var deleteRegExp = /^\s*DELETE\b\s*((((`([^`]|``)+`)|([a-z0-9_$]+))\s*\.\s*)?((`([^`]|``)+`)|([a-z0-9_$]+))\s*)?\bFROM\b/i;
+  var query = codeMirrorEditor ? codeMirrorEditor.getValue() : $('#sqlquery').val();
   var $simulateDml = $('#simulate_dml');
   if (updateRegExp.test(query) || deleteRegExp.test(query)) {
     if (!$simulateDml.length) {
@@ -1107,13 +1110,13 @@ Functions.insertQuery = function (queryType) {
         type: 'POST',
         url: 'index.php?route=/database/sql/format',
         data: params,
-        success: function (data) {
+        success: function success(data) {
           if (data.success) {
             codeMirrorEditor.setValue(data.sql);
           }
           $('#querymessage').html('');
         },
-        error: function () {
+        error: function error() {
           $('#querymessage').html('');
         }
       });
@@ -1138,7 +1141,7 @@ Functions.insertQuery = function (queryType) {
   }
   var query = '';
   var myListBox = document.sqlform.dummy;
-  table = document.sqlform.table.value;
+  table = Functions.escapeBacktick(document.sqlform.table.value);
   if (myListBox.options.length > 0) {
     sqlBoxLocked = true;
     var columnsList = '';
@@ -1432,7 +1435,7 @@ Functions.codeMirrorAutoCompleteOnInputRead = function (instance) {
         'db': CommonParams.get('db'),
         'no_debug': true
       };
-      var columnHintRender = function (elem, self, data) {
+      var columnHintRender = function columnHintRender(elem, self, data) {
         $('<div class="autocomplete-column-name">').text(data.columnName).appendTo(elem);
         $('<div class="autocomplete-column-hint">').text(data.columnHint).appendTo(elem);
       };
@@ -1440,7 +1443,7 @@ Functions.codeMirrorAutoCompleteOnInputRead = function (instance) {
         type: 'POST',
         url: 'index.php?route=/database/sql/autocomplete',
         data: params,
-        success: function (data) {
+        success: function success(data) {
           if (data.success) {
             var tables = JSON.parse(data.tables);
             sqlAutoCompleteDefaultTable = CommonParams.get('table');
@@ -1476,7 +1479,7 @@ Functions.codeMirrorAutoCompleteOnInputRead = function (instance) {
             instance.options.hintOptions.defaultTable = sqlAutoCompleteDefaultTable;
           }
         },
-        complete: function () {
+        complete: function complete() {
           sqlAutoCompleteInProgress = false;
         }
       });
@@ -1830,7 +1833,7 @@ Functions.previewSql = function ($form) {
     type: 'POST',
     url: formUrl,
     data: formData,
-    success: function (response) {
+    success: function success(response) {
       Functions.ajaxRemoveMessage($messageBox);
       if (response.success) {
         $('#previewSqlModal').modal('show');
@@ -1843,7 +1846,7 @@ Functions.previewSql = function ($form) {
         Functions.ajaxShowMessage(response.message);
       }
     },
-    error: function () {
+    error: function error() {
       Functions.ajaxShowMessage(Messages.strErrorProcessingRequest);
     }
   });
@@ -1890,7 +1893,7 @@ Functions.checkReservedWordColumns = function ($form) {
     type: 'POST',
     url: 'index.php?route=/table/structure/reserved-word-check',
     data: $form.serialize(),
-    success: function (data) {
+    success: function success(data) {
       if (typeof data.success !== 'undefined' && data.success === true) {
         isConfirmed = confirm(data.message);
       }
@@ -1974,6 +1977,16 @@ $(function () {
       $('#copyStatus').remove();
     }, 2000);
   });
+  $(document).on('mouseover mouseleave', '.ajax_notification a', function (event) {
+    var message = Messages.strDismiss;
+    if (event.type === 'mouseover') {
+      message = $(this).hasClass('copyQueryBtn') ? Messages.strCopyToClipboard : Messages.strEditQuery;
+    }
+    Functions.tooltip($('.ajax_notification'), 'span', message);
+  });
+  $(document).on('mouseup', '.ajax_notification a', function (event) {
+    event.stopPropagation();
+  });
 });
 
 /**
@@ -2000,7 +2013,9 @@ Functions.showWarningForIntTypes = function () {
     var lengthRestrictions = $('select.column_type option').map(function () {
       return $(this).filter(':selected').attr('data-length-restricted');
     }).get();
-    var restricationFound = lengthRestrictions.some(restriction => Number(restriction) === 1);
+    var restricationFound = lengthRestrictions.some(function (restriction) {
+      return Number(restriction) === 1;
+    });
     if (restricationFound) {
       $('div#length_not_allowed').show();
     } else {
@@ -2101,7 +2116,7 @@ Functions.sqlPrettyPrint = function (string) {
   var token;
   var tokens = [];
   var output = '';
-  var tabs = function (cnt) {
+  var tabs = function tabs(cnt) {
     var ret = '';
     for (var i = 0; i < 4 * cnt; i++) {
       ret += ' ';
@@ -2225,7 +2240,6 @@ Functions.sqlPrettyPrint = function (string) {
       //   output += ...
     }
   }
-
   return output;
 };
 
@@ -2261,7 +2275,7 @@ Functions.confirm = function (question, url, callbackFn, openCallback) {
   var buttonOptions = [{
     text: Messages.strOK,
     'class': 'btn btn-primary submitOK',
-    click: function () {
+    click: function click() {
       $(this).dialog('close');
       if (typeof callbackFn === 'function') {
         callbackFn.call(this, url);
@@ -2270,7 +2284,7 @@ Functions.confirm = function (question, url, callbackFn, openCallback) {
   }, {
     text: Messages.strCancel,
     'class': 'btn btn-secondary submitCancel',
-    click: function () {
+    click: function click() {
       $(this).dialog('close');
     }
   }];
@@ -2282,7 +2296,7 @@ Functions.confirm = function (question, url, callbackFn, openCallback) {
       'ui-dialog-titlebar-close': 'btn-close'
     },
     buttons: buttonOptions,
-    close: function () {
+    close: function close() {
       $(this).remove();
     },
     open: openCallback,
@@ -2629,16 +2643,13 @@ AJAX.registerOnload('functions.js', function () {
     /**
      * @var buttonOptions Object containing options to be passed to jQueryUI's dialog
      */
-    var buttonOptions = {
-      [Messages.strGo]: {
-        text: Messages.strGo,
-        'class': 'btn btn-primary'
-      },
-      [Messages.strCancel]: {
-        text: Messages.strCancel,
-        'class': 'btn btn-secondary'
-      }
-    };
+    var buttonOptions = _defineProperty(_defineProperty({}, Messages.strGo, {
+      text: Messages.strGo,
+      'class': 'btn btn-primary'
+    }), Messages.strCancel, {
+      text: Messages.strCancel,
+      'class': 'btn btn-secondary'
+    });
     buttonOptions[Messages.strGo].click = function () {
       event.preventDefault();
 
@@ -2671,7 +2682,6 @@ AJAX.registerOnload('functions.js', function () {
         Functions.ajaxRemoveMessage($msgbox);
       }); // end $.post()
     };
-
     buttonOptions[Messages.strCancel].click = function () {
       $(this).dialog('close');
     };
@@ -2691,7 +2701,7 @@ AJAX.registerOnload('functions.js', function () {
         },
         title: Messages.strChangePassword,
         width: 600,
-        close: function () {
+        close: function close() {
           $(this).remove();
         },
         buttons: buttonOptions,
@@ -2936,7 +2946,7 @@ AJAX.registerOnload('functions.js', function () {
       value: 1,
       min: 1,
       max: 9,
-      slide: function (event, ui) {
+      slide: function slide(event, ui) {
         $(this).closest('table').find('input[type=submit]').val(Functions.sprintf(Messages.enum_addValue, ui.value));
       }
     });
@@ -2968,7 +2978,7 @@ AJAX.registerOnload('functions.js', function () {
         type: 'POST',
         url: href,
         data: params,
-        success: function (data) {
+        success: function success(data) {
           centralColumnList[db + '_' + table] = data.message;
         },
         async: false
@@ -3016,7 +3026,7 @@ AJAX.registerOnload('functions.js', function () {
       modal: true,
       title: Messages.pickColumnTitle,
       buttons: buttonOptions,
-      open: function () {
+      open: function open() {
         $('#col_list').on('click', '.pick', function () {
           $centralColumnsDialog.remove();
         });
@@ -3049,7 +3059,7 @@ AJAX.registerOnload('functions.js', function () {
         });
         $(this).closest('.ui-dialog').find('.ui-dialog-buttonpane button').first().trigger('focus');
       },
-      close: function () {
+      close: function close() {
         $('#col_list').off('click', '.pick');
         $('.filter_rows').off('keyup');
         $(this).remove();
@@ -3118,10 +3128,10 @@ AJAX.registerOnload('functions.js', function () {
     var hadAddButtonHidden = $(this).closest('fieldset').find('.add_fields').hasClass('hide');
     if (hadAddButtonHidden === false) {
       var rowsToAdd = $(this).closest('fieldset').find('.slider').slider('value');
-      var tempEmptyVal = function () {
+      var tempEmptyVal = function tempEmptyVal() {
         $(this).val('');
       };
-      var tempSetFocus = function () {
+      var tempSetFocus = function tempSetFocus() {
         if ($(this).find('option:selected').val() === '') {
           return true;
         }
@@ -3140,17 +3150,17 @@ AJAX.registerOnload('functions.js', function () {
 Functions.indexDialogModal = function (routeUrl, url, title, callbackSuccess, callbackFailure) {
   /* Remove the hidden dialogs if there are*/
   var modal = $('#indexDialogModal');
-  const indexDialogPreviewModal = document.getElementById('indexDialogPreviewModal');
-  indexDialogPreviewModal.addEventListener('shown.bs.modal', () => {
-    const modalBody = indexDialogPreviewModal.querySelector('.modal-body');
-    const $form = $('#index_frm');
-    const formUrl = $form.attr('action');
-    const sep = CommonParams.get('arg_separator');
-    const formData = $form.serialize() + sep + 'do_save_data=1' + sep + 'preview_sql=1' + sep + 'ajax_request=1';
+  var indexDialogPreviewModal = document.getElementById('indexDialogPreviewModal');
+  indexDialogPreviewModal.addEventListener('shown.bs.modal', function () {
+    var modalBody = indexDialogPreviewModal.querySelector('.modal-body');
+    var $form = $('#index_frm');
+    var formUrl = $form.attr('action');
+    var sep = CommonParams.get('arg_separator');
+    var formData = $form.serialize() + sep + 'do_save_data=1' + sep + 'preview_sql=1' + sep + 'ajax_request=1';
     $.post({
       url: formUrl,
       data: formData,
-      success: response => {
+      success: function success(response) {
         if (!response.success) {
           modalBody.innerHTML = '<div class="alert alert-danger" role="alert">' + Messages.strErrorProcessingRequest + '</div>';
           return;
@@ -3158,12 +3168,12 @@ Functions.indexDialogModal = function (routeUrl, url, title, callbackSuccess, ca
         modalBody.innerHTML = response.sql_data;
         Functions.highlightSql($('#indexDialogPreviewModal'));
       },
-      error: () => {
+      error: function error() {
         modalBody.innerHTML = '<div class="alert alert-danger" role="alert">' + Messages.strErrorProcessingRequest + '</div>';
       }
     });
   });
-  indexDialogPreviewModal.addEventListener('hidden.bs.modal', () => {
+  indexDialogPreviewModal.addEventListener('hidden.bs.modal', function () {
     indexDialogPreviewModal.querySelector('.modal-body').innerHTML = '<div class="spinner-border" role="status">' + '<span class="visually-hidden">' + Messages.strLoading + '</span></div>';
   });
 
@@ -3213,7 +3223,6 @@ Functions.indexDialogModal = function (routeUrl, url, title, callbackSuccess, ca
       }
     }); // end $.post()
   });
-
   var $msgbox = Functions.ajaxShowMessage();
   $.post(routeUrl, url, function (data) {
     if (typeof data !== 'undefined' && data.success === false) {
@@ -3231,7 +3240,6 @@ Functions.indexDialogModal = function (routeUrl, url, title, callbackSuccess, ca
     }
   }); // end $.get()
 };
-
 Functions.indexEditorDialog = function (url, title, callbackSuccess, callbackFailure) {
   Functions.indexDialogModal('index.php?route=/table/indexes', url, title, callbackSuccess, callbackFailure);
 };
@@ -3242,13 +3250,27 @@ Functions.showIndexEditDialog = function ($outer) {
   Indexes.checkIndexType();
   Functions.checkIndexName('index_frm');
   var $indexColumns = $('#index_columns');
-  $indexColumns.find('td').each(function () {
-    $(this).css('width', $(this).width() + 'px');
-  });
   $indexColumns.find('tbody').sortable({
     axis: 'y',
     containment: $indexColumns.find('tbody'),
-    tolerance: 'pointer'
+    tolerance: 'pointer',
+    forcePlaceholderSize: true,
+    // Add custom dragged row
+    helper: function helper(event, tr) {
+      var $originalCells = tr.children();
+      var $helper = tr.clone();
+      $helper.children().each(function (index) {
+        // Set cell width in dragged row
+        $(this).width($originalCells.eq(index).outerWidth());
+        var $childrenSelect = $originalCells.eq(index).children('select');
+        if ($childrenSelect.length) {
+          var selectedIndex = $childrenSelect.prop('selectedIndex');
+          // Set correct select value in dragged row
+          $(this).children('select').prop('selectedIndex', selectedIndex);
+        }
+      });
+      return $helper;
+    }
   });
   Functions.showHints($outer);
   // Add a slider for selecting how many columns to add to the index
@@ -3257,7 +3279,7 @@ Functions.showIndexEditDialog = function ($outer) {
     value: 1,
     min: 1,
     max: 16,
-    slide: function (event, ui) {
+    slide: function slide(event, ui) {
       $(this).closest('fieldset').find('input[type=submit]').val(Functions.sprintf(Messages.strAddToIndex, ui.value));
     }
   });
@@ -3506,16 +3528,24 @@ AJAX.registerOnload('functions.js', function () {
 
   // Sync favorite tables from localStorage to pmadb.
   if ($('#sync_favorite_tables').length) {
+    var favoriteTables = '';
+    if (isStorageSupported('localStorage') && typeof window.localStorage.favoriteTables !== 'undefined' && window.localStorage.favoriteTables !== 'undefined') {
+      favoriteTables = window.localStorage.favoriteTables;
+      if (favoriteTables === 'undefined') {
+        // Do not send an invalid value
+        return;
+      }
+    }
     $.ajax({
       url: $('#sync_favorite_tables').attr('href'),
       cache: false,
       type: 'POST',
       data: {
-        'favoriteTables': isStorageSupported('localStorage') && typeof window.localStorage.favoriteTables !== 'undefined' ? window.localStorage.favoriteTables : '',
+        'favoriteTables': favoriteTables,
         'server': CommonParams.get('server'),
         'no_debug': true
       },
-      success: function (data) {
+      success: function success(data) {
         // Update localStorage.
         if (isStorageSupported('localStorage')) {
           window.localStorage.favoriteTables = data.favoriteTables;
@@ -3667,8 +3697,8 @@ Functions.getCellValue = function (td) {
  * @return {string}
  */
 Functions.stringifyJSON = function (json) {
-  let replacer = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : null;
-  let space = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : 0;
+  var replacer = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : null;
+  var space = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : 0;
   try {
     return JSON.stringify(JSON.parse(json), replacer, space);
   } catch (e) {
@@ -3694,8 +3724,8 @@ AJAX.registerOnload('functions.js', function () {
 /**
  * @implements EventListener
  */
-const PrintPage = {
-  handleEvent: () => {
+var PrintPage = {
+  handleEvent: function handleEvent() {
     window.print();
   }
 };
@@ -3704,7 +3734,7 @@ const PrintPage = {
  * Unbind all event handlers before tearing down a page
  */
 AJAX.registerTeardown('functions.js', function () {
-  document.querySelectorAll('.jsPrintButton').forEach(item => {
+  document.querySelectorAll('.jsPrintButton').forEach(function (item) {
     item.removeEventListener('click', PrintPage);
   });
   $(document).off('click', 'a.create_view.ajax');
@@ -3712,7 +3742,7 @@ AJAX.registerTeardown('functions.js', function () {
   $(document).off('change', '#fkc_checkbox');
 });
 AJAX.registerOnload('functions.js', function () {
-  document.querySelectorAll('.jsPrintButton').forEach(item => {
+  document.querySelectorAll('.jsPrintButton').forEach(function (item) {
     item.addEventListener('click', PrintPage);
   });
   $('.logout').on('click', function () {
@@ -3746,7 +3776,6 @@ AJAX.registerOnload('functions.js', function () {
       }
     }); // end $(document).on()
   }
-
   if ($('textarea[name="view[as]"]').length !== 0) {
     codeMirrorEditor = Functions.getSqlEditor($('textarea[name="view[as]"]'));
   }
@@ -3811,9 +3840,14 @@ $(function () {
 
 /**
  * Scrolls the page to the top if clicking the server-breadcrumb bar
+ * If the user holds the Ctrl (or Meta on macOS) key, it prevents the scroll
+ * so they can open the link in a new tab.
  */
 $(function () {
   $(document).on('click', '#server-breadcrumb, #goto_pagetop', function (event) {
+    if (event.ctrlKey || event.metaKey) {
+      return;
+    }
     event.preventDefault();
     $('html, body').animate({
       scrollTop: 0
@@ -4064,17 +4098,20 @@ Functions.ignorePhpErrors = function (clearPrevErrors) {
  * @param $inputField
  */
 Functions.toggleDatepickerIfInvalid = function ($td, $inputField) {
-  // Regex allowed by the Datetimepicker UI
-  var dtexpDate = new RegExp(['^([0-9]{4})', '-(((01|03|05|07|08|10|12)-((0[1-9])|([1-2][0-9])|(3[0-1])))|((02|04|06|09|11)', '-((0[1-9])|([1-2][0-9])|30)))$'].join(''));
-  var dtexpTime = new RegExp(['^(([0-1][0-9])|(2[0-3]))', ':((0[0-9])|([1-5][0-9]))', ':((0[0-9])|([1-5][0-9]))(.[0-9]{1,6}){0,1}$'].join(''));
+  // If the Datetimepicker UI is not present, return
+  if ($inputField.hasClass('hasDatepicker')) {
+    // Regex allowed by the Datetimepicker UI
+    var dtexpDate = new RegExp(['^([0-9]{4})', '-(((01|03|05|07|08|10|12)-((0[1-9])|([1-2][0-9])|(3[0-1])))|((02|04|06|09|11)', '-((0[1-9])|([1-2][0-9])|30)))$'].join(''));
+    var dtexpTime = new RegExp(['^(([0-1][0-9])|(2[0-3]))', ':((0[0-9])|([1-5][0-9]))', ':((0[0-9])|([1-5][0-9]))(.[0-9]{1,6}){0,1}$'].join(''));
 
-  // If key-ed in Time or Date values are unsupported by the UI, close it
-  if ($td.attr('data-type') === 'date' && !dtexpDate.test($inputField.val())) {
-    $inputField.datepicker('hide');
-  } else if ($td.attr('data-type') === 'time' && !dtexpTime.test($inputField.val())) {
-    $inputField.datepicker('hide');
-  } else {
-    $inputField.datepicker('show');
+    // If key-ed in Time or Date values are unsupported by the UI, close it
+    if ($td.attr('data-type') === 'date' && !dtexpDate.test($inputField.val())) {
+      $inputField.datepicker('hide');
+    } else if ($td.attr('data-type') === 'time' && !dtexpTime.test($inputField.val())) {
+      $inputField.datepicker('hide');
+    } else {
+      $inputField.datepicker('show');
+    }
   }
 };
 
@@ -4083,7 +4120,7 @@ Functions.toggleDatepickerIfInvalid = function ($td, $inputField) {
  * NOTE: do NOT use a module or it will break the callback, issue #15435
  */
 // eslint-disable-next-line no-unused-vars, camelcase
-var Functions_recaptchaCallback = function () {
+var Functions_recaptchaCallback = function Functions_recaptchaCallback() {
   $('#login_form').trigger('submit');
 };
 
@@ -4168,7 +4205,7 @@ Functions.getImage = function (image, alternate, attributes) {
       title: '',
       src: 'themes/dot.gif'
     },
-    attr: function (name, value) {
+    attr: function attr(name, value) {
       if (value === undefined) {
         if (this.data[name] === undefined) {
           return '';
@@ -4179,7 +4216,7 @@ Functions.getImage = function (image, alternate, attributes) {
         this.data[name] = value;
       }
     },
-    toString: function () {
+    toString: function toString() {
       var retval = '<' + 'img';
       for (var i in this.data) {
         retval += ' ' + i + '="' + this.data[i] + '"';
@@ -4246,7 +4283,7 @@ Functions.configSet = function (key, value) {
       server: CommonParams.get('server'),
       value: serialized
     },
-    success: function (data) {
+    success: function success(data) {
       if (data.success !== true) {
         // Try to find a message to display
         if (data.error || data.message || false) {
@@ -4290,7 +4327,7 @@ Functions.configGet = function (key, cached, successCallback, failureCallback) {
       server: CommonParams.get('server'),
       key: key
     },
-    success: function (data) {
+    success: function success(data) {
       if (data.success !== true) {
         // Try to find a message to display
         if (data.error || data.message || false) {

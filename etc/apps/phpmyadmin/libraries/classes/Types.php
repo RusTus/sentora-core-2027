@@ -303,9 +303,10 @@ class Types
 
             case 'TIMESTAMP':
                 return __(
-                    'A timestamp, range is 1970-01-01 00:00:01 UTC to 2038-01-09 ' .
-                    '03:14:07 UTC, stored as the number of seconds since the epoch ' .
-                    '(1970-01-01 00:00:00 UTC)'
+                    'A timestamp, range is 1970-01-01 00:00:01 UTC to 2038-01-19 ' .
+                    '03:14:07 UTC on 32-bit platforms (MariaDB 11.3 and earlier), ' .
+                    'and up to 2106-02-07 06:28:15 UTC on 64-bit platforms (MariaDB 11.5 and later), ' .
+                    'stored as the number of seconds since the epoch (1970-01-01 00:00:00 UTC)'
                 );
 
             case 'TIME':
@@ -862,6 +863,28 @@ class Types
         }
 
         return $ret;
+    }
+
+    public function mapAliasToMysqlType(string $alias): string
+    {
+        return [
+            'BOOL' => 'TINYINT',
+            'BOOLEAN' => 'TINYINT',
+            'CHARACTER VARYING' => 'VARCHAR',
+            'FIXED' => 'DECIMAL',
+            'FLOAT4' => 'FLOAT',
+            'FLOAT8' => 'DOUBLE',
+            'INT1' => 'TINYINT',
+            'INT2' => 'SMALLINT',
+            'INT3' => 'MEDIUMINT',
+            'INT4' => 'INT',
+            'INT8' => 'BIGINT',
+            'LONG VARBINARY' => 'MEDIUMBLOB',
+            'LONG VARCHAR' => 'MEDIUMTEXT',
+            'LONG' => 'MEDIUMTEXT',
+            'MIDDLEINT' => 'MEDIUMINT',
+            'NUMERIC' => 'DECIMAL',
+        ][$alias] ?? $alias;
     }
 
     /**

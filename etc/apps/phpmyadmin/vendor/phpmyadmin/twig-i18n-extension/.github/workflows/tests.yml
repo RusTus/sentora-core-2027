@@ -1,0 +1,44 @@
+name: Run tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test-php:
+    name: Test on PHP ${{ matrix.php-version }}
+    runs-on: ubuntu-latest
+    continue-on-error: ${{ matrix.experimental }}
+    strategy:
+      matrix:
+        php-version: [ '7.2', '7.3', '7.4', '8.0', '8.1', '8.2', '8.3', '8.4' ]
+        experimental: [ false ]
+        include:
+          - php-version: '8.5'
+            experimental: true
+            composer-options: '--ignore-platform-req=php+'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up PHP ${{ matrix.php-version }}
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php-version }}
+          extensions: mbstring
+          coverage: xdebug
+
+      - name: Install Composer dependencies
+        uses: ramsey/composer-install@v3
+        with:
+          dependency-versions: highest
+          composer-options: ${{ matrix.composer-options }}
+
+      - name: Run PHP tests
+        run: composer run phpunit
+
+      - name: Send coverage
+        uses: codecov/codecov-action@v3
+        with:
+          flags: unit-${{ matrix.php-version }}
+          name: phpunit-${{ matrix.php-version }}

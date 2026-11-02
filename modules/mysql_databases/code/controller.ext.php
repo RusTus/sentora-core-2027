@@ -43,11 +43,12 @@ class module_controller extends ctrl_module
         global $zdbh;
         global $controller;
 		
-        $currentuser = ctrl_users::GetUserDetail($uid);
+        // $uid and $username were never set here (PHP warnings); use the logged-in user
+        $currentuser = ctrl_users::GetUserDetail();
+        $username = $currentuser['username'] . "_";
 
-        if ($username < 33)
+        if (strlen($username) < 33)
 		{
-			$username = $currentuser['username'] . "_";
 			$prefixsize = strlen($username);
 			$maxChar = 32-$prefixsize;
 

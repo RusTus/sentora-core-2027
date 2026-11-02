@@ -1,3 +1,7 @@
+function _typeof(o) { "@babel/helpers - typeof"; return _typeof = "function" == typeof Symbol && "symbol" == typeof Symbol.iterator ? function (o) { return typeof o; } : function (o) { return o && "function" == typeof Symbol && o.constructor === Symbol && o !== Symbol.prototype ? "symbol" : typeof o; }, _typeof(o); }
+function _defineProperty(e, r, t) { return (r = _toPropertyKey(r)) in e ? Object.defineProperty(e, r, { value: t, enumerable: !0, configurable: !0, writable: !0 }) : e[r] = t, e; }
+function _toPropertyKey(t) { var i = _toPrimitive(t, "string"); return "symbol" == _typeof(i) ? i : i + ""; }
+function _toPrimitive(t, r) { if ("object" != _typeof(t) || !t) return t; var e = t[Symbol.toPrimitive]; if (void 0 !== e) { var i = e.call(t, r || "default"); if ("object" != _typeof(i)) return i; throw new TypeError("@@toPrimitive must return a primitive value."); } return ("string" === r ? String : Number)(t); }
 /**
  * @fileoverview    function used for index manipulation pages
  * @name            Table Structure
@@ -145,18 +149,21 @@ Indexes.removeColumnFromIndex = function (colIndex) {
     if (sourceArray === null) {
       return;
     }
-
-    // Remove column from index array.
-    var sourceLength = sourceArray[previousIndex[1]].columns.length;
-    for (var i = 0; i < sourceLength; i++) {
-      if (sourceArray[previousIndex[1]].columns[i].col_index === colIndex) {
-        sourceArray[previousIndex[1]].columns.splice(i, 1);
+    if (previousIndex[1] in sourceArray) {
+      // Remove column from index array.
+      var sourceLength = sourceArray[previousIndex[1]].columns.length;
+      for (var i = 0; i < sourceLength; i++) {
+        if (i in sourceArray[previousIndex[1]].columns) {
+          if (sourceArray[previousIndex[1]].columns[i].col_index === colIndex) {
+            sourceArray[previousIndex[1]].columns.splice(i, 1);
+          }
+        }
       }
-    }
 
-    // Remove index completely if no columns left.
-    if (sourceArray[previousIndex[1]].columns.length === 0) {
-      sourceArray.splice(previousIndex[1], 1);
+      // Remove index completely if no columns left.
+      if (sourceArray[previousIndex[1]].columns.length === 0) {
+        sourceArray.splice(previousIndex[1], 1);
+      }
     }
 
     // Update current index details.
@@ -215,7 +222,7 @@ Indexes.addColumnToIndex = function (sourceArray, arrayIndex, indexChoice, colIn
     $.each(columns, function () {
       columnNames.push($('input[name="field_name[' + this.col_index + ']"]').val());
     });
-    displayName = '[' + columnNames.join(', ') + ']';
+    displayName = '[' + columnNames.join(', ').trimRight() + ']';
   }
   $.each(columns, function () {
     var id = 'index_name_' + this.col_index + '_8';
@@ -300,16 +307,13 @@ Indexes.showAddIndexDialog = function (sourceArray, arrayIndex, targetColumns, c
     columns[columnName] = [columnType, targetColumns[i]];
   }
   postData.columns = JSON.stringify(columns);
-  var buttonOptions = {
-    [Messages.strGo]: {
-      text: Messages.strGo,
-      class: 'btn btn-primary'
-    },
-    [Messages.strCancel]: {
-      text: Messages.strCancel,
-      class: 'btn btn-secondary'
-    }
-  };
+  var buttonOptions = _defineProperty(_defineProperty({}, Messages.strGo, {
+    text: Messages.strGo,
+    "class": 'btn btn-primary'
+  }), Messages.strCancel, {
+    text: Messages.strCancel,
+    "class": 'btn btn-secondary'
+  });
   buttonOptions[Messages.strGo].click = function () {
     var isMissingValue = false;
     $('select[name="index[columns][names][]"]').each(function () {
@@ -358,7 +362,7 @@ Indexes.showAddIndexDialog = function (sourceArray, arrayIndex, targetColumns, c
           title: Messages.strAddIndex,
           width: 450,
           minHeight: 250,
-          create: function () {
+          create: function create() {
             $(this).on('keypress', function (e) {
               if (e.which === 13 || e.keyCode === 13 || window.event.keyCode === 13) {
                 e.preventDefault();
@@ -367,7 +371,7 @@ Indexes.showAddIndexDialog = function (sourceArray, arrayIndex, targetColumns, c
               }
             });
           },
-          open: function () {
+          open: function open() {
             Functions.checkIndexName('index_frm');
             Functions.showHints($div);
             $('#index_columns').find('td').each(function () {
@@ -381,7 +385,7 @@ Indexes.showAddIndexDialog = function (sourceArray, arrayIndex, targetColumns, c
           },
           modal: true,
           buttons: buttonOptions,
-          close: function () {
+          close: function close() {
             $(this).remove();
           }
         });
@@ -429,16 +433,13 @@ Indexes.indexTypeSelectionDialog = function (sourceArray, indexChoice, colIndex)
   // For UNIQUE/INDEX type, show choice for single-column and composite index.
   $dialogContent.append($singleColumnRadio);
   $dialogContent.append($compositeIndexRadio);
-  var buttonOptions = {
-    [Messages.strGo]: {
-      text: Messages.strGo,
-      class: 'btn btn-primary'
-    },
-    [Messages.strCancel]: {
-      text: Messages.strCancel,
-      class: 'btn btn-secondary'
-    }
-  };
+  var buttonOptions = _defineProperty(_defineProperty({}, Messages.strGo, {
+    text: Messages.strGo,
+    "class": 'btn btn-primary'
+  }), Messages.strCancel, {
+    text: Messages.strCancel,
+    "class": 'btn btn-secondary'
+  });
 
   // 'OK' operation.
   buttonOptions[Messages.strGo].click = function () {
@@ -486,7 +487,7 @@ Indexes.indexTypeSelectionDialog = function (sourceArray, indexChoice, colIndex)
     title: Messages.strAddIndex,
     resizable: false,
     buttons: buttonOptions,
-    open: function () {
+    open: function open() {
       $('#composite_index').on('change', function () {
         if ($(this).is(':checked')) {
           $dialogContent.append(Indexes.getCompositeIndexList(sourceArray, colIndex));
@@ -500,7 +501,7 @@ Indexes.indexTypeSelectionDialog = function (sourceArray, indexChoice, colIndex)
         }
       });
     },
-    close: function () {
+    close: function close() {
       $('#composite_index').off('change');
       $('#single_column').off('change');
       $(this).remove();
@@ -681,7 +682,7 @@ AJAX.registerOnload('indexes.js', function () {
     var sourceArray = null;
     if (indexChoice === 'none') {
       Indexes.removeColumnFromIndex(colIndex);
-      var id = 'index_name_' + '0' + '_8';
+      var id = 'index_name_' + colIndex + '_8';
       var $name = $('#' + id);
       if ($name.length === 0) {
         $name = $('<a id="' + id + '" href="#" class="ajax show_index_dialog"></a>');
@@ -726,7 +727,10 @@ AJAX.registerOnload('indexes.js', function () {
     var indexChoice = previousIndex[0];
     var arrayIndex = previousIndex[1];
     var sourceArray = Indexes.getIndexArray(indexChoice);
-    if (sourceArray !== null) {
+    if (sourceArray === null) {
+      return;
+    }
+    if (arrayIndex in sourceArray) {
       var sourceLength = sourceArray[arrayIndex].columns.length;
       var targetColumns = [];
       for (var i = 0; i < sourceLength; i++) {

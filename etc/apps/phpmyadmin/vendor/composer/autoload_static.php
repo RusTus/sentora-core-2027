@@ -4,15 +4,15 @@
 
 namespace Composer\Autoload;
 
-class ComposerStaticInit5a360facea79a6ba3440ba7eaed9051a
+class ComposerStaticInitd6813237323ce9372fba701cec6173b5
 {
     public static $files = array (
         'a4a119a56e50fbb293281d9a48007e0e' => __DIR__ . '/..' . '/symfony/polyfill-php80/bootstrap.php',
         '6e3fae29631ef280660b3cdad06f25a8' => __DIR__ . '/..' . '/symfony/deprecation-contracts/function.php',
+        'a4ecaeafb8cfb009ad0e052c90355e98' => __DIR__ . '/..' . '/beberlei/assert/lib/Assert/functions.php',
         '320cde22f66dd4f5d3fd621d3e88b98f' => __DIR__ . '/..' . '/symfony/polyfill-ctype/bootstrap.php',
         '0e6d7bf4a5811bfa5cf40c5ccd6fae6a' => __DIR__ . '/..' . '/symfony/polyfill-mbstring/bootstrap.php',
         '23c18046f52bef3eea034657bafda50f' => __DIR__ . '/..' . '/symfony/polyfill-php81/bootstrap.php',
-        'a4ecaeafb8cfb009ad0e052c90355e98' => __DIR__ . '/..' . '/beberlei/assert/lib/Assert/functions.php',
         '0d59ee240a4cd96ddbb4ff164fccea4d' => __DIR__ . '/..' . '/symfony/polyfill-php73/bootstrap.php',
         '7b11c4dc42b3b3023073cb14e519683c' => __DIR__ . '/..' . '/ralouphie/getallheaders/src/getallheaders.php',
         'e39a8b23c42d4e1452234d762b03835a' => __DIR__ . '/..' . '/ramsey/uuid/src/functions.php',
@@ -105,8 +105,14 @@ class ComposerStaticInit5a360facea79a6ba3440ba7eaed9051a
         '4af1dca6db8c527c6eed27bff85ff0e5' => __DIR__ . '/..' . '/thecodingmachine/safe/generated/yaz.php',
         'fe43ca06499ac37bc2dedd823af71eb5' => __DIR__ . '/..' . '/thecodingmachine/safe/generated/zip.php',
         '356736db98a6834f0a886b8d509b0ecd' => __DIR__ . '/..' . '/thecodingmachine/safe/generated/zlib.php',
+        '89efb1254ef2d1c5d80096acd12c4098' => __DIR__ . '/..' . '/twig/twig/src/Resources/core.php',
+        'ffecb95d45175fd40f75be8a23b34f90' => __DIR__ . '/..' . '/twig/twig/src/Resources/debug.php',
+        'c7baa00073ee9c61edf148c51917cfb4' => __DIR__ . '/..' . '/twig/twig/src/Resources/escaper.php',
+        'f844ccf1d25df8663951193c3fc307c8' => __DIR__ . '/..' . '/twig/twig/src/Resources/string_loader.php',
         '253c157292f75eb38082b5acb06f3f01' => __DIR__ . '/..' . '/nikic/fast-route/src/functions.php',
         '3109cb1a231dcd04bee1f9f620d46975' => __DIR__ . '/..' . '/paragonie/sodium_compat/autoload.php',
+        'def43f6c87e4f8dfd0c9e1b1bab14fe8' => __DIR__ . '/..' . '/symfony/polyfill-iconv/bootstrap.php',
+        '9d2b9fc6db0f153a0a149fefb182415e' => __DIR__ . '/..' . '/symfony/polyfill-php84/bootstrap.php',
         '5011c20a8c04dcdea9f79098d4afe025' => __DIR__ . '/..' . '/phpmyadmin/motranslator/src/functions.php',
     );
 
@@ -124,10 +130,12 @@ class ComposerStaticInit5a360facea79a6ba3440ba7eaed9051a
         ),
         'S' => 
         array (
+            'Symfony\\Polyfill\\Php84\\' => 23,
             'Symfony\\Polyfill\\Php81\\' => 23,
             'Symfony\\Polyfill\\Php80\\' => 23,
             'Symfony\\Polyfill\\Php73\\' => 23,
             'Symfony\\Polyfill\\Mbstring\\' => 26,
+            'Symfony\\Polyfill\\Iconv\\' => 23,
             'Symfony\\Polyfill\\Ctype\\' => 23,
             'Symfony\\Contracts\\Service\\' => 26,
             'Symfony\\Contracts\\Cache\\' => 24,
@@ -158,8 +166,6 @@ class ComposerStaticInit5a360facea79a6ba3440ba7eaed9051a
             'PragmaRX\\Google2FAQRCode\\Tests\\' => 31,
             'PragmaRX\\Google2FAQRCode\\' => 25,
             'PhpMyAdmin\\Twig\\Extensions\\' => 27,
-            'PhpMyAdmin\\Tests\\Selenium\\' => 26,
-            'PhpMyAdmin\\Tests\\' => 17,
             'PhpMyAdmin\\SqlParser\\' => 21,
             'PhpMyAdmin\\ShapeFile\\' => 21,
             'PhpMyAdmin\\MoTranslator\\' => 24,
@@ -220,6 +226,10 @@ class ComposerStaticInit5a360facea79a6ba3440ba7eaed9051a
         array (
             0 => __DIR__ . '/..' . '/twig/twig/src',
         ),
+        'Symfony\\Polyfill\\Php84\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/symfony/polyfill-php84',
+        ),
         'Symfony\\Polyfill\\Php81\\' => 
         array (
             0 => __DIR__ . '/..' . '/symfony/polyfill-php81',
@@ -235,6 +245,10 @@ class ComposerStaticInit5a360facea79a6ba3440ba7eaed9051a
         'Symfony\\Polyfill\\Mbstring\\' => 
         array (
             0 => __DIR__ . '/..' . '/symfony/polyfill-mbstring',
+        ),
+        'Symfony\\Polyfill\\Iconv\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/symfony/polyfill-iconv',
         ),
         'Symfony\\Polyfill\\Ctype\\' => 
         array (
@@ -304,8 +318,8 @@ class ComposerStaticInit5a360facea79a6ba3440ba7eaed9051a
         ),
         'Psr\\Http\\Message\\' => 
         array (
-            0 => __DIR__ . '/..' . '/psr/http-factory/src',
-            1 => __DIR__ . '/..' . '/psr/http-message/src',
+            0 => __DIR__ . '/..' . '/psr/http-message/src',
+            1 => __DIR__ . '/..' . '/psr/http-factory/src',
         ),
         'Psr\\Http\\Client\\' => 
         array (
@@ -335,14 +349,6 @@ class ComposerStaticInit5a360facea79a6ba3440ba7eaed9051a
         array (
             0 => __DIR__ . '/..' . '/phpmyadmin/twig-i18n-extension/src',
         ),
-        'PhpMyAdmin\\Tests\\Selenium\\' => 
-        array (
-            0 => __DIR__ . '/../..' . '/test/selenium',
-        ),
-        'PhpMyAdmin\\Tests\\' => 
-        array (
-            0 => __DIR__ . '/../..' . '/test/classes',
-        ),
         'PhpMyAdmin\\SqlParser\\' => 
         array (
             0 => __DIR__ . '/..' . '/phpmyadmin/sql-parser/src',
@@ -365,8 +371,8 @@ class ComposerStaticInit5a360facea79a6ba3440ba7eaed9051a
         ),
         'League\\Uri\\' => 
         array (
-            0 => __DIR__ . '/..' . '/league/uri/src',
-            1 => __DIR__ . '/..' . '/league/uri-interfaces/src',
+            0 => __DIR__ . '/..' . '/league/uri-interfaces/src',
+            1 => __DIR__ . '/..' . '/league/uri/src',
         ),
         'Fig\\Http\\Message\\' => 
         array (
@@ -545,6 +551,7 @@ class ComposerStaticInit5a360facea79a6ba3440ba7eaed9051a
         'CBOR\\TextStringWithChunkObject' => __DIR__ . '/..' . '/spomky-labs/cbor-php/src/TextStringWithChunkObject.php',
         'CBOR\\UnsignedIntegerObject' => __DIR__ . '/..' . '/spomky-labs/cbor-php/src/UnsignedIntegerObject.php',
         'CBOR\\Utils' => __DIR__ . '/..' . '/spomky-labs/cbor-php/src/Utils.php',
+        'CURLStringFile' => __DIR__ . '/..' . '/symfony/polyfill-php81/Resources/stubs/CURLStringFile.php',
         'CodeLts\\U2F\\U2FServer\\Registration' => __DIR__ . '/..' . '/code-lts/u2f-php-server/src/Registration.php',
         'CodeLts\\U2F\\U2FServer\\RegistrationRequest' => __DIR__ . '/..' . '/code-lts/u2f-php-server/src/RegistrationRequest.php',
         'CodeLts\\U2F\\U2FServer\\SignRequest' => __DIR__ . '/..' . '/code-lts/u2f-php-server/src/SignRequest.php',
@@ -600,6 +607,7 @@ class ComposerStaticInit5a360facea79a6ba3440ba7eaed9051a
         'DASPRiD\\Enum\\Exception\\SerializeNotSupportedException' => __DIR__ . '/..' . '/dasprid/enum/src/Exception/SerializeNotSupportedException.php',
         'DASPRiD\\Enum\\Exception\\UnserializeNotSupportedException' => __DIR__ . '/..' . '/dasprid/enum/src/Exception/UnserializeNotSupportedException.php',
         'DASPRiD\\Enum\\NullValue' => __DIR__ . '/..' . '/dasprid/enum/src/NullValue.php',
+        'Deprecated' => __DIR__ . '/..' . '/symfony/polyfill-php84/Resources/stubs/Deprecated.php',
         'FG\\ASN1\\ASNObject' => __DIR__ . '/..' . '/fgrosse/phpasn1/lib/ASN1/ASNObject.php',
         'FG\\ASN1\\AbstractString' => __DIR__ . '/..' . '/fgrosse/phpasn1/lib/ASN1/AbstractString.php',
         'FG\\ASN1\\AbstractTime' => __DIR__ . '/..' . '/fgrosse/phpasn1/lib/ASN1/AbstractTime.php',
@@ -697,6 +705,8 @@ class ComposerStaticInit5a360facea79a6ba3440ba7eaed9051a
         'League\\Uri\\HttpFactory' => __DIR__ . '/..' . '/league/uri/src/HttpFactory.php',
         'League\\Uri\\Idna\\Idna' => __DIR__ . '/..' . '/league/uri-interfaces/src/Idna/Idna.php',
         'League\\Uri\\Idna\\IdnaInfo' => __DIR__ . '/..' . '/league/uri-interfaces/src/Idna/IdnaInfo.php',
+        'League\\Uri\\Idna\\IdnaInfoTest' => __DIR__ . '/..' . '/league/uri-interfaces/src/Idna/IdnaInfoTest.php',
+        'League\\Uri\\Idna\\IdnaTest' => __DIR__ . '/..' . '/league/uri-interfaces/src/Idna/IdnaTest.php',
         'League\\Uri\\Uri' => __DIR__ . '/..' . '/league/uri/src/Uri.php',
         'League\\Uri\\UriInfo' => __DIR__ . '/..' . '/league/uri/src/UriInfo.php',
         'League\\Uri\\UriResolver' => __DIR__ . '/..' . '/league/uri/src/UriResolver.php',
@@ -1331,12 +1341,36 @@ class ComposerStaticInit5a360facea79a6ba3440ba7eaed9051a
         'PhpMyAdmin\\SqlParser\\Contexts\\ContextMariaDb100400' => __DIR__ . '/..' . '/phpmyadmin/sql-parser/src/Contexts/ContextMariaDb100400.php',
         'PhpMyAdmin\\SqlParser\\Contexts\\ContextMariaDb100500' => __DIR__ . '/..' . '/phpmyadmin/sql-parser/src/Contexts/ContextMariaDb100500.php',
         'PhpMyAdmin\\SqlParser\\Contexts\\ContextMariaDb100600' => __DIR__ . '/..' . '/phpmyadmin/sql-parser/src/Contexts/ContextMariaDb100600.php',
+        'PhpMyAdmin\\SqlParser\\Contexts\\ContextMariaDb100700' => __DIR__ . '/..' . '/phpmyadmin/sql-parser/src/Contexts/ContextMariaDb100700.php',
+        'PhpMyAdmin\\SqlParser\\Contexts\\ContextMariaDb100800' => __DIR__ . '/..' . '/phpmyadmin/sql-parser/src/Contexts/ContextMariaDb100800.php',
+        'PhpMyAdmin\\SqlParser\\Contexts\\ContextMariaDb100900' => __DIR__ . '/..' . '/phpmyadmin/sql-parser/src/Contexts/ContextMariaDb100900.php',
+        'PhpMyAdmin\\SqlParser\\Contexts\\ContextMariaDb101000' => __DIR__ . '/..' . '/phpmyadmin/sql-parser/src/Contexts/ContextMariaDb101000.php',
+        'PhpMyAdmin\\SqlParser\\Contexts\\ContextMariaDb101100' => __DIR__ . '/..' . '/phpmyadmin/sql-parser/src/Contexts/ContextMariaDb101100.php',
+        'PhpMyAdmin\\SqlParser\\Contexts\\ContextMariaDb110000' => __DIR__ . '/..' . '/phpmyadmin/sql-parser/src/Contexts/ContextMariaDb110000.php',
+        'PhpMyAdmin\\SqlParser\\Contexts\\ContextMariaDb110100' => __DIR__ . '/..' . '/phpmyadmin/sql-parser/src/Contexts/ContextMariaDb110100.php',
+        'PhpMyAdmin\\SqlParser\\Contexts\\ContextMariaDb110200' => __DIR__ . '/..' . '/phpmyadmin/sql-parser/src/Contexts/ContextMariaDb110200.php',
+        'PhpMyAdmin\\SqlParser\\Contexts\\ContextMariaDb110300' => __DIR__ . '/..' . '/phpmyadmin/sql-parser/src/Contexts/ContextMariaDb110300.php',
+        'PhpMyAdmin\\SqlParser\\Contexts\\ContextMariaDb110400' => __DIR__ . '/..' . '/phpmyadmin/sql-parser/src/Contexts/ContextMariaDb110400.php',
+        'PhpMyAdmin\\SqlParser\\Contexts\\ContextMariaDb110500' => __DIR__ . '/..' . '/phpmyadmin/sql-parser/src/Contexts/ContextMariaDb110500.php',
+        'PhpMyAdmin\\SqlParser\\Contexts\\ContextMariaDb110600' => __DIR__ . '/..' . '/phpmyadmin/sql-parser/src/Contexts/ContextMariaDb110600.php',
+        'PhpMyAdmin\\SqlParser\\Contexts\\ContextMariaDb110700' => __DIR__ . '/..' . '/phpmyadmin/sql-parser/src/Contexts/ContextMariaDb110700.php',
+        'PhpMyAdmin\\SqlParser\\Contexts\\ContextMariaDb110800' => __DIR__ . '/..' . '/phpmyadmin/sql-parser/src/Contexts/ContextMariaDb110800.php',
+        'PhpMyAdmin\\SqlParser\\Contexts\\ContextMariaDb120000' => __DIR__ . '/..' . '/phpmyadmin/sql-parser/src/Contexts/ContextMariaDb120000.php',
+        'PhpMyAdmin\\SqlParser\\Contexts\\ContextMariaDb120100' => __DIR__ . '/..' . '/phpmyadmin/sql-parser/src/Contexts/ContextMariaDb120100.php',
         'PhpMyAdmin\\SqlParser\\Contexts\\ContextMySql50000' => __DIR__ . '/..' . '/phpmyadmin/sql-parser/src/Contexts/ContextMySql50000.php',
         'PhpMyAdmin\\SqlParser\\Contexts\\ContextMySql50100' => __DIR__ . '/..' . '/phpmyadmin/sql-parser/src/Contexts/ContextMySql50100.php',
         'PhpMyAdmin\\SqlParser\\Contexts\\ContextMySql50500' => __DIR__ . '/..' . '/phpmyadmin/sql-parser/src/Contexts/ContextMySql50500.php',
         'PhpMyAdmin\\SqlParser\\Contexts\\ContextMySql50600' => __DIR__ . '/..' . '/phpmyadmin/sql-parser/src/Contexts/ContextMySql50600.php',
         'PhpMyAdmin\\SqlParser\\Contexts\\ContextMySql50700' => __DIR__ . '/..' . '/phpmyadmin/sql-parser/src/Contexts/ContextMySql50700.php',
         'PhpMyAdmin\\SqlParser\\Contexts\\ContextMySql80000' => __DIR__ . '/..' . '/phpmyadmin/sql-parser/src/Contexts/ContextMySql80000.php',
+        'PhpMyAdmin\\SqlParser\\Contexts\\ContextMySql80100' => __DIR__ . '/..' . '/phpmyadmin/sql-parser/src/Contexts/ContextMySql80100.php',
+        'PhpMyAdmin\\SqlParser\\Contexts\\ContextMySql80200' => __DIR__ . '/..' . '/phpmyadmin/sql-parser/src/Contexts/ContextMySql80200.php',
+        'PhpMyAdmin\\SqlParser\\Contexts\\ContextMySql80300' => __DIR__ . '/..' . '/phpmyadmin/sql-parser/src/Contexts/ContextMySql80300.php',
+        'PhpMyAdmin\\SqlParser\\Contexts\\ContextMySql80400' => __DIR__ . '/..' . '/phpmyadmin/sql-parser/src/Contexts/ContextMySql80400.php',
+        'PhpMyAdmin\\SqlParser\\Contexts\\ContextMySql90000' => __DIR__ . '/..' . '/phpmyadmin/sql-parser/src/Contexts/ContextMySql90000.php',
+        'PhpMyAdmin\\SqlParser\\Contexts\\ContextMySql90100' => __DIR__ . '/..' . '/phpmyadmin/sql-parser/src/Contexts/ContextMySql90100.php',
+        'PhpMyAdmin\\SqlParser\\Contexts\\ContextMySql90200' => __DIR__ . '/..' . '/phpmyadmin/sql-parser/src/Contexts/ContextMySql90200.php',
+        'PhpMyAdmin\\SqlParser\\Contexts\\ContextMySql90300' => __DIR__ . '/..' . '/phpmyadmin/sql-parser/src/Contexts/ContextMySql90300.php',
         'PhpMyAdmin\\SqlParser\\Core' => __DIR__ . '/..' . '/phpmyadmin/sql-parser/src/Core.php',
         'PhpMyAdmin\\SqlParser\\Exceptions\\LexerException' => __DIR__ . '/..' . '/phpmyadmin/sql-parser/src/Exceptions/LexerException.php',
         'PhpMyAdmin\\SqlParser\\Exceptions\\LoaderException' => __DIR__ . '/..' . '/phpmyadmin/sql-parser/src/Exceptions/LoaderException.php',
@@ -1355,6 +1389,7 @@ class ComposerStaticInit5a360facea79a6ba3440ba7eaed9051a
         'PhpMyAdmin\\SqlParser\\Statements\\DropStatement' => __DIR__ . '/..' . '/phpmyadmin/sql-parser/src/Statements/DropStatement.php',
         'PhpMyAdmin\\SqlParser\\Statements\\ExplainStatement' => __DIR__ . '/..' . '/phpmyadmin/sql-parser/src/Statements/ExplainStatement.php',
         'PhpMyAdmin\\SqlParser\\Statements\\InsertStatement' => __DIR__ . '/..' . '/phpmyadmin/sql-parser/src/Statements/InsertStatement.php',
+        'PhpMyAdmin\\SqlParser\\Statements\\KillStatement' => __DIR__ . '/..' . '/phpmyadmin/sql-parser/src/Statements/KillStatement.php',
         'PhpMyAdmin\\SqlParser\\Statements\\LoadStatement' => __DIR__ . '/..' . '/phpmyadmin/sql-parser/src/Statements/LoadStatement.php',
         'PhpMyAdmin\\SqlParser\\Statements\\LockStatement' => __DIR__ . '/..' . '/phpmyadmin/sql-parser/src/Statements/LockStatement.php',
         'PhpMyAdmin\\SqlParser\\Statements\\MaintenanceStatement' => __DIR__ . '/..' . '/phpmyadmin/sql-parser/src/Statements/MaintenanceStatement.php',
@@ -1374,6 +1409,9 @@ class ComposerStaticInit5a360facea79a6ba3440ba7eaed9051a
         'PhpMyAdmin\\SqlParser\\Statements\\WithStatement' => __DIR__ . '/..' . '/phpmyadmin/sql-parser/src/Statements/WithStatement.php',
         'PhpMyAdmin\\SqlParser\\Token' => __DIR__ . '/..' . '/phpmyadmin/sql-parser/src/Token.php',
         'PhpMyAdmin\\SqlParser\\TokensList' => __DIR__ . '/..' . '/phpmyadmin/sql-parser/src/TokensList.php',
+        'PhpMyAdmin\\SqlParser\\Tools\\ContextGenerator' => __DIR__ . '/..' . '/phpmyadmin/sql-parser/src/Tools/ContextGenerator.php',
+        'PhpMyAdmin\\SqlParser\\Tools\\CustomJsonSerializer' => __DIR__ . '/..' . '/phpmyadmin/sql-parser/src/Tools/CustomJsonSerializer.php',
+        'PhpMyAdmin\\SqlParser\\Tools\\TestGenerator' => __DIR__ . '/..' . '/phpmyadmin/sql-parser/src/Tools/TestGenerator.php',
         'PhpMyAdmin\\SqlParser\\Translator' => __DIR__ . '/..' . '/phpmyadmin/sql-parser/src/Translator.php',
         'PhpMyAdmin\\SqlParser\\UtfString' => __DIR__ . '/..' . '/phpmyadmin/sql-parser/src/UtfString.php',
         'PhpMyAdmin\\SqlParser\\Utils\\BufferedQuery' => __DIR__ . '/..' . '/phpmyadmin/sql-parser/src/Utils/BufferedQuery.php',
@@ -1403,6 +1441,7 @@ class ComposerStaticInit5a360facea79a6ba3440ba7eaed9051a
         'PhpMyAdmin\\Twig\\AssetExtension' => __DIR__ . '/../..' . '/libraries/classes/Twig/AssetExtension.php',
         'PhpMyAdmin\\Twig\\CoreExtension' => __DIR__ . '/../..' . '/libraries/classes/Twig/CoreExtension.php',
         'PhpMyAdmin\\Twig\\Extensions\\I18nExtension' => __DIR__ . '/..' . '/phpmyadmin/twig-i18n-extension/src/I18nExtension.php',
+        'PhpMyAdmin\\Twig\\Extensions\\Node\\I18nNode' => __DIR__ . '/..' . '/phpmyadmin/twig-i18n-extension/src/Node/I18nNode.php',
         'PhpMyAdmin\\Twig\\Extensions\\Node\\TransNode' => __DIR__ . '/..' . '/phpmyadmin/twig-i18n-extension/src/Node/TransNode.php',
         'PhpMyAdmin\\Twig\\Extensions\\TokenParser\\TransTokenParser' => __DIR__ . '/..' . '/phpmyadmin/twig-i18n-extension/src/TokenParser/TransTokenParser.php',
         'PhpMyAdmin\\Twig\\FlashMessagesExtension' => __DIR__ . '/../..' . '/libraries/classes/Twig/FlashMessagesExtension.php',
@@ -1442,6 +1481,8 @@ class ComposerStaticInit5a360facea79a6ba3440ba7eaed9051a
         'PragmaRX\\Google2FAQRCode\\QRCode\\Bacon' => __DIR__ . '/..' . '/pragmarx/google2fa-qrcode/src/QRCode/Bacon.php',
         'PragmaRX\\Google2FAQRCode\\QRCode\\Chillerlan' => __DIR__ . '/..' . '/pragmarx/google2fa-qrcode/src/QRCode/Chillerlan.php',
         'PragmaRX\\Google2FAQRCode\\QRCode\\QRCodeServiceContract' => __DIR__ . '/..' . '/pragmarx/google2fa-qrcode/src/QRCode/QRCodeServiceContract.php',
+        'PragmaRX\\Google2FAQRCode\\Tests\\Constants' => __DIR__ . '/..' . '/pragmarx/google2fa-qrcode/tests/Constants.php',
+        'PragmaRX\\Google2FAQRCode\\Tests\\Google2FATest' => __DIR__ . '/..' . '/pragmarx/google2fa-qrcode/tests/Google2FATest.php',
         'PragmaRX\\Google2FA\\Exceptions\\Contracts\\Google2FA' => __DIR__ . '/..' . '/pragmarx/google2fa/src/Exceptions/Contracts/Google2FA.php',
         'PragmaRX\\Google2FA\\Exceptions\\Contracts\\IncompatibleWithGoogleAuthenticator' => __DIR__ . '/..' . '/pragmarx/google2fa/src/Exceptions/Contracts/IncompatibleWithGoogleAuthenticator.php',
         'PragmaRX\\Google2FA\\Exceptions\\Contracts\\InvalidAlgorithm' => __DIR__ . '/..' . '/pragmarx/google2fa/src/Exceptions/Contracts/InvalidAlgorithm.php',
@@ -1488,6 +1529,9 @@ class ComposerStaticInit5a360facea79a6ba3440ba7eaed9051a
         'Psr\\Log\\LoggerInterface' => __DIR__ . '/..' . '/psr/log/Psr/Log/LoggerInterface.php',
         'Psr\\Log\\LoggerTrait' => __DIR__ . '/..' . '/psr/log/Psr/Log/LoggerTrait.php',
         'Psr\\Log\\NullLogger' => __DIR__ . '/..' . '/psr/log/Psr/Log/NullLogger.php',
+        'Psr\\Log\\Test\\DummyTest' => __DIR__ . '/..' . '/psr/log/Psr/Log/Test/DummyTest.php',
+        'Psr\\Log\\Test\\LoggerInterfaceTest' => __DIR__ . '/..' . '/psr/log/Psr/Log/Test/LoggerInterfaceTest.php',
+        'Psr\\Log\\Test\\TestLogger' => __DIR__ . '/..' . '/psr/log/Psr/Log/Test/TestLogger.php',
         'Ramsey\\Collection\\AbstractArray' => __DIR__ . '/..' . '/ramsey/collection/src/AbstractArray.php',
         'Ramsey\\Collection\\AbstractCollection' => __DIR__ . '/..' . '/ramsey/collection/src/AbstractCollection.php',
         'Ramsey\\Collection\\AbstractSet' => __DIR__ . '/..' . '/ramsey/collection/src/AbstractSet.php',
@@ -1630,6 +1674,7 @@ class ComposerStaticInit5a360facea79a6ba3440ba7eaed9051a
         'ReCaptcha\\RequestMethod\\SocketPost' => __DIR__ . '/..' . '/google/recaptcha/src/ReCaptcha/RequestMethod/SocketPost.php',
         'ReCaptcha\\RequestParameters' => __DIR__ . '/..' . '/google/recaptcha/src/ReCaptcha/RequestParameters.php',
         'ReCaptcha\\Response' => __DIR__ . '/..' . '/google/recaptcha/src/ReCaptcha/Response.php',
+        'ReflectionConstant' => __DIR__ . '/..' . '/symfony/polyfill-php84/Resources/stubs/ReflectionConstant.php',
         'ReturnTypeWillChange' => __DIR__ . '/..' . '/symfony/polyfill-php81/Resources/stubs/ReturnTypeWillChange.php',
         'Safe\\DateTime' => __DIR__ . '/..' . '/thecodingmachine/safe/lib/DateTime.php',
         'Safe\\DateTimeImmutable' => __DIR__ . '/..' . '/thecodingmachine/safe/lib/DateTimeImmutable.php',
@@ -2115,21 +2160,28 @@ class ComposerStaticInit5a360facea79a6ba3440ba7eaed9051a
         'Symfony\\Contracts\\Service\\ServiceProviderInterface' => __DIR__ . '/..' . '/symfony/service-contracts/ServiceProviderInterface.php',
         'Symfony\\Contracts\\Service\\ServiceSubscriberInterface' => __DIR__ . '/..' . '/symfony/service-contracts/ServiceSubscriberInterface.php',
         'Symfony\\Contracts\\Service\\ServiceSubscriberTrait' => __DIR__ . '/..' . '/symfony/service-contracts/ServiceSubscriberTrait.php',
+        'Symfony\\Contracts\\Service\\Test\\ServiceLocatorTest' => __DIR__ . '/..' . '/symfony/service-contracts/Test/ServiceLocatorTest.php',
+        'Symfony\\Contracts\\Service\\Test\\ServiceLocatorTestCase' => __DIR__ . '/..' . '/symfony/service-contracts/Test/ServiceLocatorTestCase.php',
         'Symfony\\Polyfill\\Ctype\\Ctype' => __DIR__ . '/..' . '/symfony/polyfill-ctype/Ctype.php',
+        'Symfony\\Polyfill\\Iconv\\Iconv' => __DIR__ . '/..' . '/symfony/polyfill-iconv/Iconv.php',
         'Symfony\\Polyfill\\Mbstring\\Mbstring' => __DIR__ . '/..' . '/symfony/polyfill-mbstring/Mbstring.php',
         'Symfony\\Polyfill\\Php73\\Php73' => __DIR__ . '/..' . '/symfony/polyfill-php73/Php73.php',
         'Symfony\\Polyfill\\Php80\\Php80' => __DIR__ . '/..' . '/symfony/polyfill-php80/Php80.php',
         'Symfony\\Polyfill\\Php80\\PhpToken' => __DIR__ . '/..' . '/symfony/polyfill-php80/PhpToken.php',
         'Symfony\\Polyfill\\Php81\\Php81' => __DIR__ . '/..' . '/symfony/polyfill-php81/Php81.php',
+        'Symfony\\Polyfill\\Php84\\Php84' => __DIR__ . '/..' . '/symfony/polyfill-php84/Php84.php',
         'TCPDF' => __DIR__ . '/..' . '/tecnickcom/tcpdf/tcpdf.php',
         'TCPDF_COLORS' => __DIR__ . '/..' . '/tecnickcom/tcpdf/include/tcpdf_colors.php',
         'TCPDF_FONTS' => __DIR__ . '/..' . '/tecnickcom/tcpdf/include/tcpdf_fonts.php',
         'TCPDF_FONT_DATA' => __DIR__ . '/..' . '/tecnickcom/tcpdf/include/tcpdf_font_data.php',
         'TCPDF_IMAGES' => __DIR__ . '/..' . '/tecnickcom/tcpdf/include/tcpdf_images.php',
         'TCPDF_STATIC' => __DIR__ . '/..' . '/tecnickcom/tcpdf/include/tcpdf_static.php',
+        'Twig\\Attribute\\YieldReady' => __DIR__ . '/..' . '/twig/twig/src/Attribute/YieldReady.php',
         'Twig\\Cache\\CacheInterface' => __DIR__ . '/..' . '/twig/twig/src/Cache/CacheInterface.php',
+        'Twig\\Cache\\ChainCache' => __DIR__ . '/..' . '/twig/twig/src/Cache/ChainCache.php',
         'Twig\\Cache\\FilesystemCache' => __DIR__ . '/..' . '/twig/twig/src/Cache/FilesystemCache.php',
         'Twig\\Cache\\NullCache' => __DIR__ . '/..' . '/twig/twig/src/Cache/NullCache.php',
+        'Twig\\Cache\\ReadOnlyFilesystemCache' => __DIR__ . '/..' . '/twig/twig/src/Cache/ReadOnlyFilesystemCache.php',
         'Twig\\Compiler' => __DIR__ . '/..' . '/twig/twig/src/Compiler.php',
         'Twig\\Environment' => __DIR__ . '/..' . '/twig/twig/src/Environment.php',
         'Twig\\Error\\Error' => __DIR__ . '/..' . '/twig/twig/src/Error/Error.php',
@@ -2150,6 +2202,7 @@ class ComposerStaticInit5a360facea79a6ba3440ba7eaed9051a
         'Twig\\Extension\\SandboxExtension' => __DIR__ . '/..' . '/twig/twig/src/Extension/SandboxExtension.php',
         'Twig\\Extension\\StagingExtension' => __DIR__ . '/..' . '/twig/twig/src/Extension/StagingExtension.php',
         'Twig\\Extension\\StringLoaderExtension' => __DIR__ . '/..' . '/twig/twig/src/Extension/StringLoaderExtension.php',
+        'Twig\\Extension\\YieldNotReadyExtension' => __DIR__ . '/..' . '/twig/twig/src/Extension/YieldNotReadyExtension.php',
         'Twig\\FileExtensionEscapingStrategy' => __DIR__ . '/..' . '/twig/twig/src/FileExtensionEscapingStrategy.php',
         'Twig\\Lexer' => __DIR__ . '/..' . '/twig/twig/src/Lexer.php',
         'Twig\\Loader\\ArrayLoader' => __DIR__ . '/..' . '/twig/twig/src/Loader/ArrayLoader.php',
@@ -2165,10 +2218,12 @@ class ComposerStaticInit5a360facea79a6ba3440ba7eaed9051a
         'Twig\\NodeVisitor\\OptimizerNodeVisitor' => __DIR__ . '/..' . '/twig/twig/src/NodeVisitor/OptimizerNodeVisitor.php',
         'Twig\\NodeVisitor\\SafeAnalysisNodeVisitor' => __DIR__ . '/..' . '/twig/twig/src/NodeVisitor/SafeAnalysisNodeVisitor.php',
         'Twig\\NodeVisitor\\SandboxNodeVisitor' => __DIR__ . '/..' . '/twig/twig/src/NodeVisitor/SandboxNodeVisitor.php',
+        'Twig\\NodeVisitor\\YieldNotReadyNodeVisitor' => __DIR__ . '/..' . '/twig/twig/src/NodeVisitor/YieldNotReadyNodeVisitor.php',
         'Twig\\Node\\AutoEscapeNode' => __DIR__ . '/..' . '/twig/twig/src/Node/AutoEscapeNode.php',
         'Twig\\Node\\BlockNode' => __DIR__ . '/..' . '/twig/twig/src/Node/BlockNode.php',
         'Twig\\Node\\BlockReferenceNode' => __DIR__ . '/..' . '/twig/twig/src/Node/BlockReferenceNode.php',
         'Twig\\Node\\BodyNode' => __DIR__ . '/..' . '/twig/twig/src/Node/BodyNode.php',
+        'Twig\\Node\\CaptureNode' => __DIR__ . '/..' . '/twig/twig/src/Node/CaptureNode.php',
         'Twig\\Node\\CheckSecurityCallNode' => __DIR__ . '/..' . '/twig/twig/src/Node/CheckSecurityCallNode.php',
         'Twig\\Node\\CheckSecurityNode' => __DIR__ . '/..' . '/twig/twig/src/Node/CheckSecurityNode.php',
         'Twig\\Node\\CheckToStringNode' => __DIR__ . '/..' . '/twig/twig/src/Node/CheckToStringNode.php',
@@ -2214,6 +2269,7 @@ class ComposerStaticInit5a360facea79a6ba3440ba7eaed9051a
         'Twig\\Node\\Expression\\ConstantExpression' => __DIR__ . '/..' . '/twig/twig/src/Node/Expression/ConstantExpression.php',
         'Twig\\Node\\Expression\\FilterExpression' => __DIR__ . '/..' . '/twig/twig/src/Node/Expression/FilterExpression.php',
         'Twig\\Node\\Expression\\Filter\\DefaultFilter' => __DIR__ . '/..' . '/twig/twig/src/Node/Expression/Filter/DefaultFilter.php',
+        'Twig\\Node\\Expression\\Filter\\RawFilter' => __DIR__ . '/..' . '/twig/twig/src/Node/Expression/Filter/RawFilter.php',
         'Twig\\Node\\Expression\\FunctionExpression' => __DIR__ . '/..' . '/twig/twig/src/Node/Expression/FunctionExpression.php',
         'Twig\\Node\\Expression\\GetAttrExpression' => __DIR__ . '/..' . '/twig/twig/src/Node/Expression/GetAttrExpression.php',
         'Twig\\Node\\Expression\\InlinePrint' => __DIR__ . '/..' . '/twig/twig/src/Node/Expression/InlinePrint.php',
@@ -2243,6 +2299,7 @@ class ComposerStaticInit5a360facea79a6ba3440ba7eaed9051a
         'Twig\\Node\\IncludeNode' => __DIR__ . '/..' . '/twig/twig/src/Node/IncludeNode.php',
         'Twig\\Node\\MacroNode' => __DIR__ . '/..' . '/twig/twig/src/Node/MacroNode.php',
         'Twig\\Node\\ModuleNode' => __DIR__ . '/..' . '/twig/twig/src/Node/ModuleNode.php',
+        'Twig\\Node\\NameDeprecation' => __DIR__ . '/..' . '/twig/twig/src/Node/NameDeprecation.php',
         'Twig\\Node\\Node' => __DIR__ . '/..' . '/twig/twig/src/Node/Node.php',
         'Twig\\Node\\NodeCaptureInterface' => __DIR__ . '/..' . '/twig/twig/src/Node/NodeCaptureInterface.php',
         'Twig\\Node\\NodeOutputInterface' => __DIR__ . '/..' . '/twig/twig/src/Node/NodeOutputInterface.php',
@@ -2263,6 +2320,7 @@ class ComposerStaticInit5a360facea79a6ba3440ba7eaed9051a
         'Twig\\RuntimeLoader\\ContainerRuntimeLoader' => __DIR__ . '/..' . '/twig/twig/src/RuntimeLoader/ContainerRuntimeLoader.php',
         'Twig\\RuntimeLoader\\FactoryRuntimeLoader' => __DIR__ . '/..' . '/twig/twig/src/RuntimeLoader/FactoryRuntimeLoader.php',
         'Twig\\RuntimeLoader\\RuntimeLoaderInterface' => __DIR__ . '/..' . '/twig/twig/src/RuntimeLoader/RuntimeLoaderInterface.php',
+        'Twig\\Runtime\\EscaperRuntime' => __DIR__ . '/..' . '/twig/twig/src/Runtime/EscaperRuntime.php',
         'Twig\\Sandbox\\SecurityError' => __DIR__ . '/..' . '/twig/twig/src/Sandbox/SecurityError.php',
         'Twig\\Sandbox\\SecurityNotAllowedFilterError' => __DIR__ . '/..' . '/twig/twig/src/Sandbox/SecurityNotAllowedFilterError.php',
         'Twig\\Sandbox\\SecurityNotAllowedFunctionError' => __DIR__ . '/..' . '/twig/twig/src/Sandbox/SecurityNotAllowedFunctionError.php',
@@ -2271,9 +2329,12 @@ class ComposerStaticInit5a360facea79a6ba3440ba7eaed9051a
         'Twig\\Sandbox\\SecurityNotAllowedTagError' => __DIR__ . '/..' . '/twig/twig/src/Sandbox/SecurityNotAllowedTagError.php',
         'Twig\\Sandbox\\SecurityPolicy' => __DIR__ . '/..' . '/twig/twig/src/Sandbox/SecurityPolicy.php',
         'Twig\\Sandbox\\SecurityPolicyInterface' => __DIR__ . '/..' . '/twig/twig/src/Sandbox/SecurityPolicyInterface.php',
+        'Twig\\Sandbox\\SourcePolicyInterface' => __DIR__ . '/..' . '/twig/twig/src/Sandbox/SourcePolicyInterface.php',
         'Twig\\Source' => __DIR__ . '/..' . '/twig/twig/src/Source.php',
         'Twig\\Template' => __DIR__ . '/..' . '/twig/twig/src/Template.php',
         'Twig\\TemplateWrapper' => __DIR__ . '/..' . '/twig/twig/src/TemplateWrapper.php',
+        'Twig\\Test\\IntegrationTestCase' => __DIR__ . '/..' . '/twig/twig/src/Test/IntegrationTestCase.php',
+        'Twig\\Test\\NodeTestCase' => __DIR__ . '/..' . '/twig/twig/src/Test/NodeTestCase.php',
         'Twig\\Token' => __DIR__ . '/..' . '/twig/twig/src/Token.php',
         'Twig\\TokenParser\\AbstractTokenParser' => __DIR__ . '/..' . '/twig/twig/src/TokenParser/AbstractTokenParser.php',
         'Twig\\TokenParser\\ApplyTokenParser' => __DIR__ . '/..' . '/twig/twig/src/TokenParser/ApplyTokenParser.php',
@@ -2300,6 +2361,7 @@ class ComposerStaticInit5a360facea79a6ba3440ba7eaed9051a
         'Twig\\TwigFunction' => __DIR__ . '/..' . '/twig/twig/src/TwigFunction.php',
         'Twig\\TwigTest' => __DIR__ . '/..' . '/twig/twig/src/TwigTest.php',
         'Twig\\Util\\DeprecationCollector' => __DIR__ . '/..' . '/twig/twig/src/Util/DeprecationCollector.php',
+        'Twig\\Util\\ReflectionCallable' => __DIR__ . '/..' . '/twig/twig/src/Util/ReflectionCallable.php',
         'Twig\\Util\\TemplateDirIterator' => __DIR__ . '/..' . '/twig/twig/src/Util/TemplateDirIterator.php',
         'UnhandledMatchError' => __DIR__ . '/..' . '/symfony/polyfill-php80/Resources/stubs/UnhandledMatchError.php',
         'ValueError' => __DIR__ . '/..' . '/symfony/polyfill-php80/Resources/stubs/ValueError.php',
@@ -2401,9 +2463,9 @@ class ComposerStaticInit5a360facea79a6ba3440ba7eaed9051a
     public static function getInitializer(ClassLoader $loader)
     {
         return \Closure::bind(function () use ($loader) {
-            $loader->prefixLengthsPsr4 = ComposerStaticInit5a360facea79a6ba3440ba7eaed9051a::$prefixLengthsPsr4;
-            $loader->prefixDirsPsr4 = ComposerStaticInit5a360facea79a6ba3440ba7eaed9051a::$prefixDirsPsr4;
-            $loader->classMap = ComposerStaticInit5a360facea79a6ba3440ba7eaed9051a::$classMap;
+            $loader->prefixLengthsPsr4 = ComposerStaticInitd6813237323ce9372fba701cec6173b5::$prefixLengthsPsr4;
+            $loader->prefixDirsPsr4 = ComposerStaticInitd6813237323ce9372fba701cec6173b5::$prefixDirsPsr4;
+            $loader->classMap = ComposerStaticInitd6813237323ce9372fba701cec6173b5::$classMap;
 
         }, null, ClassLoader::class);
     }

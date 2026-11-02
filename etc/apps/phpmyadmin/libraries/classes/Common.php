@@ -45,6 +45,8 @@ use function trigger_error;
 use function urldecode;
 
 use const E_USER_ERROR;
+use const E_USER_WARNING;
+use const PHP_VERSION_ID;
 
 final class Common
 {
@@ -313,6 +315,13 @@ final class Common
         }
 
         /**
+         * Warning about mysqlnd. This does not apply to PMA >= 6.0
+         */
+        if (! function_exists('mysqli_stmt_get_result')) {
+            Core::warnMissingExtension('mysqlnd');
+        }
+
+        /**
          * We really need this one!
          */
         if (! function_exists('preg_replace')) {
@@ -490,7 +499,7 @@ final class Common
                 __(
                     'Failed to set session cookie. Maybe you are using HTTP instead of HTTPS to access phpMyAdmin.'
                 ),
-                E_USER_ERROR
+                PHP_VERSION_ID < 80400 ? E_USER_ERROR : E_USER_WARNING
             );
         }
 

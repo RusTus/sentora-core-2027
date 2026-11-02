@@ -248,14 +248,7 @@ class module_controller extends ctrl_module
             $line .= fs_filehandler::NewLine();
         }
 		
-		# Cron fix for snuff
-		if (extension_loaded('suhosin') == true ) {	
-			$restrictinfos = ctrl_options::GetSystemOption('php_exer') . " -d suhosin.executor.func.blacklist=\"passthru, show_source, shell_exec, system, pcntl_exec, popen, pclose, proc_open, proc_nice, proc_terminate, proc_get_status, proc_close, leak, apache_child_terminate, posix_kill, posix_mkfifo, posix_setpgid, posix_setsid, posix_setuid, escapeshellcmd, escapeshellarg, exec\" -d open_basedir=\"" . ctrl_options::GetSystemOption('hosted_dir') . $currentuser['username'] . "/" . ctrl_options::GetSystemOption('openbase_seperator') . ctrl_options::GetSystemOption('openbase_temp') . "\" ";
-		} else {
-			
-        	$restrictinfos = ctrl_options::GetSystemOption('php_exer') . " -d sp.configuration_file=\"/etc/sentora/configs/php/sp/cron.rules\" -d open_basedir=\"" . ctrl_options::GetSystemOption('hosted_dir') . $currentuser['username'] . "/" . ctrl_options::GetSystemOption('openbase_seperator') . ctrl_options::GetSystemOption('openbase_temp') . "\" ";
-		
-		};
+		$restrictinfos = ctrl_options::GetSystemOption('php_exer') . " -d open_basedir=\"" . ctrl_options::GetSystemOption('hosted_dir') . $currentuser['username'] . "/" . ctrl_options::GetSystemOption('openbase_seperator') . ctrl_options::GetSystemOption('openbase_temp') . "\" ";
 
 
         $line .= "#################################################################################" . fs_filehandler::NewLine();

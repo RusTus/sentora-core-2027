@@ -24,8 +24,11 @@ class fs_filehandler {
         $new_file = "";
         if (!is_dir($file)) {
             $fp = @fopen($file, 'w');
-            @fwrite($fp, $new_file);
-            @fclose($fp);
+            // PHP 8 throws a TypeError if fwrite() gets false
+            if ($fp !== false) {
+                fwrite($fp, $new_file);
+                fclose($fp);
+            }
         }
     }
 
@@ -139,8 +142,11 @@ class fs_filehandler {
                 }
             }
             $fp = @fopen($path, 'w');
-            @fwrite($fp, $string);
-            @fclose($fp);
+            // PHP 8 throws a TypeError if fwrite() gets false
+            if ($fp !== false) {
+                fwrite($fp, $string);
+                fclose($fp);
+            }
             fs_director::SetFileSystemPermissions($dest, $chmod);
         }
     }
@@ -186,8 +192,11 @@ class fs_filehandler {
         if (!file_exists($path))
             fs_filehandler::ResetFile($path);
         $fp = @fopen($path, 'w');
-        @fwrite($fp, $string);
-        @fclose($fp);
+        // PHP 8 throws a TypeError if fwrite() gets false
+        if ($fp !== false) {
+            fwrite($fp, $string);
+            fclose($fp);
+        }
         fs_director::SetFileSystemPermissions($path, $chmod);
         return true;
     }

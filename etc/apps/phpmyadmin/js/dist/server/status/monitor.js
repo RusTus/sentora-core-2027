@@ -1,3 +1,7 @@
+function _typeof(o) { "@babel/helpers - typeof"; return _typeof = "function" == typeof Symbol && "symbol" == typeof Symbol.iterator ? function (o) { return typeof o; } : function (o) { return o && "function" == typeof Symbol && o.constructor === Symbol && o !== Symbol.prototype ? "symbol" : typeof o; }, _typeof(o); }
+function _defineProperty(e, r, t) { return (r = _toPropertyKey(r)) in e ? Object.defineProperty(e, r, { value: t, enumerable: !0, configurable: !0, writable: !0 }) : e[r] = t, e; }
+function _toPropertyKey(t) { var i = _toPrimitive(t, "string"); return "symbol" == _typeof(i) ? i : i + ""; }
+function _toPrimitive(t, r) { if ("object" != _typeof(t) || !t) return t; var e = t[Symbol.toPrimitive]; if (void 0 !== e) { var i = e.call(t, r || "default"); if ("object" != _typeof(i)) return i; throw new TypeError("@@toPrimitive must return a primitive value."); } return ("string" === r ? String : Number)(t); }
 /**
  * @fileoverview    Javascript functions used in server status monitor page
  * @name            Server Status Monitor
@@ -20,15 +24,13 @@ var serverDbIsLocal;
 var chartSize;
 var monitorSettings;
 function serverResponseError() {
-  var btns = {
-    [Messages.strReloadPage]: {
-      text: Messages.strReloadPage,
-      class: 'btn btn-primary',
-      click: function () {
-        window.location.reload();
-      }
+  var btns = _defineProperty({}, Messages.strReloadPage, {
+    text: Messages.strReloadPage,
+    "class": 'btn btn-primary',
+    click: function click() {
+      window.location.reload();
     }
-  };
+  });
   $('#emptyDialog').dialog({
     classes: {
       'ui-dialog-titlebar-close': 'btn-close'
@@ -591,7 +593,7 @@ AJAX.registerOnload('server/status/monitor.js', function () {
     /* Reorder all charts that it fills all column cells */
     var numColumns;
     var $tr = $('#chartGrid').find('tr').first();
-    var tempManageCols = function () {
+    var tempManageCols = function tempManageCols() {
       if (numColumns > monitorSettings.columns) {
         if ($tr.next().length === 0) {
           $tr.after('<tr></tr>');
@@ -600,7 +602,7 @@ AJAX.registerOnload('server/status/monitor.js', function () {
       }
       numColumns++;
     };
-    var tempAddCol = function () {
+    var tempAddCol = function tempAddCol() {
       if ($(this).next().length !== 0) {
         $(this).append($(this).next().find('td').first());
       }
@@ -632,7 +634,6 @@ AJAX.registerOnload('server/status/monitor.js', function () {
     refreshChartGrid();
     saveMonitor(); // Save settings
   });
-
   $('div.popupContent select[name="gridChartRefresh"]').on('change', function () {
     monitorSettings.gridRefresh = parseInt(this.value, 10) * 1000;
     clearTimeout(runtime.refreshTimeout);
@@ -645,7 +646,6 @@ AJAX.registerOnload('server/status/monitor.js', function () {
     runtime.refreshTimeout = setTimeout(refreshChartGrid, monitorSettings.gridRefresh);
     saveMonitor(); // Save settings
   });
-
   $('a[href="#addNewChart"]').on('click', function (event) {
     event.preventDefault();
     $('#addChartButton').on('click', function () {
@@ -668,12 +668,14 @@ AJAX.registerOnload('server/status/monitor.js', function () {
       saveMonitor(); // Save settings
 
       $('#closeModalButton').off('click');
+      $('#addChartButton').off('click');
     });
     $('#closeModalButton').on('click', function () {
       newChart = null;
       $('span#clearSeriesLink').hide();
       $('#seriesPreview').html('');
       $('#closeModalButton').off('click');
+      $('#addChartButton').off('click');
     });
     var $presetList = $('#addChartModal').find('select[name="presetCharts"]');
     if ($presetList.html().length === 0) {
@@ -742,16 +744,13 @@ AJAX.registerOnload('server/status/monitor.js', function () {
       title: Messages.strImportDialogTitle
     });
     $('#emptyDialog').html(Messages.strImportDialogMessage + '<br><form>' + '<input type="file" name="file" id="import_file"> </form>');
-    var dlgBtns = {
-      [Messages.strImport]: {
-        text: Messages.strImport,
-        class: 'btn btn-primary'
-      },
-      [Messages.strCancel]: {
-        text: Messages.strCancel,
-        class: 'btn btn-secondary'
-      }
-    };
+    var dlgBtns = _defineProperty(_defineProperty({}, Messages.strImport, {
+      text: Messages.strImport,
+      "class": 'btn btn-primary'
+    }), Messages.strCancel, {
+      text: Messages.strCancel,
+      "class": 'btn btn-secondary'
+    });
     dlgBtns[Messages.strImport].click = function () {
       var input = $('#emptyDialog').find('#import_file')[0];
       var reader = new FileReader();
@@ -795,7 +794,9 @@ AJAX.registerOnload('server/status/monitor.js', function () {
         }
         $('#emptyDialog').dialog('close');
       };
-      reader.readAsText(input.files[0]);
+      if (input.files[0]) {
+        reader.readAsText(input.files[0]);
+      }
     };
     dlgBtns[Messages.strCancel].click = function () {
       $(this).dialog('close');
@@ -836,15 +837,13 @@ AJAX.registerOnload('server/status/monitor.js', function () {
   $('a[href="#monitorInstructionsDialog"]').on('click', function (event) {
     event.preventDefault();
     var $dialog = $('#monitorInstructionsDialog');
-    var dlgBtns = {
-      [Messages.strClose]: {
-        text: Messages.strClose,
-        class: 'btn btn-primary',
-        click: function () {
-          $(this).dialog('close');
-        }
+    var dlgBtns = _defineProperty({}, Messages.strClose, {
+      text: Messages.strClose,
+      "class": 'btn btn-primary',
+      click: function click() {
+        $(this).dialog('close');
       }
-    };
+    });
     $dialog.dialog({
       classes: {
         'ui-dialog-titlebar-close': 'btn-close'
@@ -853,7 +852,7 @@ AJAX.registerOnload('server/status/monitor.js', function () {
       height: 'auto',
       buttons: dlgBtns
     }).find('img.ajaxIcon').show();
-    var loadLogVars = function (getvars) {
+    var _loadLogVars = function loadLogVars(getvars) {
       var vars = {
         'ajax_request': true,
         'server': CommonParams.get('server')
@@ -950,7 +949,7 @@ AJAX.registerOnload('server/status/monitor.js', function () {
         $dialog.find('img.ajaxIcon').hide();
         $dialog.find('a.set').on('click', function () {
           var nameValue = $(this).attr('href').split('-');
-          loadLogVars({
+          _loadLogVars({
             varName: nameValue[0].substr(1),
             varValue: nameValue[1]
           });
@@ -958,7 +957,7 @@ AJAX.registerOnload('server/status/monitor.js', function () {
         });
       });
     };
-    loadLogVars();
+    _loadLogVars();
     return false;
   });
   $('input[name="chartType"]').on('change', function () {
@@ -1075,15 +1074,13 @@ AJAX.registerOnload('server/status/monitor.js', function () {
           title: Messages.strIncompatibleMonitorConfig
         });
         $('#emptyDialog').html(Messages.strIncompatibleMonitorConfigDescription);
-        var dlgBtns = {
-          [Messages.strClose]: {
-            text: Messages.strClose,
-            class: 'btn btn-primary',
-            click: function () {
-              $(this).dialog('close');
-            }
+        var dlgBtns = _defineProperty({}, Messages.strClose, {
+          text: Messages.strClose,
+          "class": 'btn btn-primary',
+          click: function click() {
+            $(this).dialog('close');
           }
-        };
+        });
         $('#emptyDialog').dialog({
           classes: {
             'ui-dialog-titlebar-close': 'btn-close'
@@ -1169,7 +1166,6 @@ AJAX.registerOnload('server/status/monitor.js', function () {
     } else {
       panelWidth = $('#logTable').innerWidth() - 10; // leave some space for vertical scroll bar
     }
-
     var wdt = panelWidth;
     var windowWidth = $(window).width();
     if (windowWidth > 768) {
@@ -1177,7 +1173,7 @@ AJAX.registerOnload('server/status/monitor.js', function () {
     }
     chartSize = {
       width: Math.floor(wdt),
-      height: Math.floor(0.75 * wdt)
+      height: Math.floor(0.55 * wdt)
     };
   }
 
@@ -1236,7 +1232,7 @@ AJAX.registerOnload('server/status/monitor.js', function () {
       };
     } else if (settings.title === Messages.strQuestions || settings.title === Messages.strConnections) {
       settings.axes.yaxis.tickOptions = {
-        formatter: function (format, val) {
+        formatter: function formatter(format, val) {
           if (Math.abs(val) >= 1000000) {
             return $.jqplot.sprintf('%.3g M', val / 1000000);
           } else if (Math.abs(val) >= 1000) {
@@ -1265,7 +1261,7 @@ AJAX.registerOnload('server/status/monitor.js', function () {
     for (i in chartObj.series) {
       series.push([[0, 0]]);
     }
-    var tempTooltipContentEditor = function (str, seriesIndex, pointIndex, plot) {
+    var tempTooltipContentEditor = function tempTooltipContentEditor(str, seriesIndex, pointIndex, plot) {
       var j;
       // TODO: move style to theme CSS
       var tooltipHtml = '<div id="tooltip_editor">';
@@ -1394,16 +1390,13 @@ AJAX.registerOnload('server/status/monitor.js', function () {
     var $dateEnd = $logAnalyseDialog.find('input[name="dateEnd"]');
     $dateStart.prop('readonly', true);
     $dateEnd.prop('readonly', true);
-    var dlgBtns = {
-      [Messages.strFromSlowLog]: {
-        text: Messages.strFromSlowLog,
-        class: 'btn btn-secondary'
-      },
-      [Messages.strFromGeneralLog]: {
-        text: Messages.strFromGeneralLog,
-        class: 'btn btn-secondary'
-      }
-    };
+    var dlgBtns = _defineProperty(_defineProperty({}, Messages.strFromSlowLog, {
+      text: Messages.strFromSlowLog,
+      "class": 'btn btn-secondary'
+    }), Messages.strFromGeneralLog, {
+      text: Messages.strFromGeneralLog,
+      "class": 'btn btn-secondary'
+    });
     dlgBtns[Messages.strFromSlowLog].click = function () {
       loadLog('slow', min, max);
       $(this).dialog('close');
@@ -1641,12 +1634,10 @@ AJAX.registerOnload('server/status/monitor.js', function () {
       title: Messages.strAnalysingLogsTitle
     });
     $('#emptyDialog').html(Messages.strAnalysingLogs + ' <img class="ajaxIcon" src="' + themeImagePath + 'ajax_clock_small.gif" alt="">');
-    var dlgBtns = {
-      [Messages.strCancelRequest]: {
-        text: Messages.strCancelRequest,
-        class: 'btn btn-primary'
-      }
-    };
+    var dlgBtns = _defineProperty({}, Messages.strCancelRequest, {
+      text: Messages.strCancelRequest,
+      "class": 'btn btn-primary'
+    });
     dlgBtns[Messages.strCancelRequest].click = function () {
       if (logRequest !== null) {
         logRequest.abort();
@@ -1674,12 +1665,10 @@ AJAX.registerOnload('server/status/monitor.js', function () {
       'server': CommonParams.get('server')
     }, function (data) {
       var logData;
-      var dlgBtns = {
-        [Messages.strClose]: {
-          text: Messages.strClose,
-          class: 'btn btn-primary'
-        }
-      };
+      var dlgBtns = _defineProperty({}, Messages.strClose, {
+        text: Messages.strClose,
+        "class": 'btn btn-primary'
+      });
       if (typeof data !== 'undefined' && data.success === true) {
         logData = data.message;
       } else {
@@ -1731,8 +1720,8 @@ AJAX.registerOnload('server/status/monitor.js', function () {
       }
       dlgBtns[Messages.strJumpToTable] = {
         text: Messages.strJumpToTable,
-        class: 'btn btn-secondary',
-        click: function () {
+        "class": 'btn btn-secondary',
+        click: function click() {
           $(this).dialog('close');
           $(document).scrollTop($('#logTable').offset().top);
         }
@@ -1781,7 +1770,7 @@ AJAX.registerOnload('server/status/monitor.js', function () {
       var columnSums = {};
 
       // For the slow log we have to count many columns (query_time, lock_time, rows_examined, rows_sent, etc.)
-      var countRow = function (query, row) {
+      var countRow = function countRow(query, row) {
         var cells = row.match(/<td>(.*?)<\/td>/gi);
         if (!columnSums[query]) {
           columnSums[query] = [0, 0, 0, 0];
@@ -1924,10 +1913,10 @@ AJAX.registerOnload('server/status/monitor.js', function () {
     var $tRow;
     var $tCell;
     $('#logTable').html($table);
-    var tempPushKey = function (key) {
+    var tempPushKey = function tempPushKey(key) {
       cols.push(key);
     };
-    var formatValue = function (name, value) {
+    var formatValue = function formatValue(name, value) {
       if (name === 'user_host') {
         return value.replace(/(\[.*?\])+/g, '');
       }
@@ -1954,15 +1943,14 @@ AJAX.registerOnload('server/status/monitor.js', function () {
     $table.append('<tfoot>' + '<tr><th colspan="' + (cols.length - 1) + '">' + Messages.strSumRows + ' ' + data.numRows + '<span class="float-end">' + Messages.strTotal + '</span></th><th class="text-end">' + data.sum.TOTAL + '</th></tr></tfoot>');
 
     // Append a tooltip to the count column, if there exist one
-    if ($('#logTable').find('tr').first().find('th').last().text().indexOf('#') > -1) {
-      $('#logTable').find('tr').first().find('th').last().append('&nbsp;' + Functions.getImage('b_help', '', {
-        'class': 'qroupedQueryInfoIcon'
-      }));
+    var amountColumn = $('#logTable').find('tr').first().find('th').last();
+    if (amountColumn.text().indexOf('#') > -1) {
+      amountColumn.append('&nbsp;' + Functions.getImage('b_help'));
       var tooltipContent = Messages.strCountColumnExplanation;
       if (groupInserts) {
-        tooltipContent += '<p>' + Messages.strMoreCountColumnExplanation + '</p>';
+        tooltipContent += '<br>' + Messages.strMoreCountColumnExplanation;
       }
-      Functions.tooltip($('img.qroupedQueryInfoIcon'), 'img', tooltipContent);
+      Functions.tooltip(amountColumn, 'th', tooltipContent);
     }
     $('#logTable').find('table').tablesorter({
       sortList: [[cols.length - 1, 1]],
@@ -1989,16 +1977,13 @@ AJAX.registerOnload('server/status/monitor.js', function () {
       $('#sqlquery').val(query);
     }
     var profilingChart = null;
-    var dlgBtns = {
-      [Messages.strAnalyzeQuery]: {
-        text: Messages.strAnalyzeQuery,
-        class: 'btn btn-primary'
-      },
-      [Messages.strClose]: {
-        text: Messages.strClose,
-        class: 'btn btn-secondary'
-      }
-    };
+    var dlgBtns = _defineProperty(_defineProperty({}, Messages.strAnalyzeQuery, {
+      text: Messages.strAnalyzeQuery,
+      "class": 'btn btn-primary'
+    }), Messages.strClose, {
+      text: Messages.strClose,
+      "class": 'btn btn-secondary'
+    });
     dlgBtns[Messages.strAnalyzeQuery].click = function () {
       profilingChart = loadQueryAnalysis(rowData);
     };
@@ -2013,7 +1998,7 @@ AJAX.registerOnload('server/status/monitor.js', function () {
       height: 'auto',
       resizable: false,
       buttons: dlgBtns,
-      close: function () {
+      close: function close() {
         if (profilingChart !== null) {
           profilingChart.destroy();
         }
@@ -2066,7 +2051,7 @@ AJAX.registerOnload('server/status/monitor.js', function () {
         explain += ')';
       }
       explain += '<p></p>';
-      var tempExplain = function (key, value) {
+      var tempExplain = function tempExplain(key, value) {
         var newValue = value === null ? 'null' : Functions.escapeHtml(value);
         if (key === 'type' && newValue.toLowerCase() === 'all') {
           newValue = '<span class="text-danger">' + newValue + '</span>';

@@ -49,11 +49,12 @@ class module_controller extends ctrl_module
         global $zdbh;
         global $controller;
 		
-        $currentuser = ctrl_users::GetUserDetail($uid);
+        // $uid and $username were never set here (PHP warnings); use the logged-in user
+        $currentuser = ctrl_users::GetUserDetail();
+        $username = $currentuser['username'] . "_";
 
-        if ($username < 33)
+        if (strlen($username) < 33)
 		{
-			$username = $currentuser['username'] . "_";
 			$prefixsize = strlen($username);
 			$maxChar = 32-$prefixsize;
 
@@ -229,7 +230,7 @@ class module_controller extends ctrl_module
         $sql->bindParam(':access', $access);
         $sql->execute();
         // Set MySQL password for new user...
-		if (sys_versions::ShowMySQLVersion() <= "5.7.5") {
+		if (version_compare(sys_versions::ShowMySQLVersion(), '5.7.6', '<')) {
 			// MySQL 5.7 or OLDER
 			$sql = $zdbh->prepare("SET PASSWORD FOR :username@:access=PASSWORD(:password)");
         } else {
@@ -437,9 +438,7 @@ class module_controller extends ctrl_module
         $mu_name_vc = $zdbh->mysqlRealEscapeString($rowuser['mu_name_vc']);
         $mu_access_vc = $zdbh->mysqlRealEscapeString($rowuser['mu_access_vc']);
         $sql = $zdbh->prepare("GRANT ALL PRIVILEGES ON `$my_name_vc`.* TO `$mu_name_vc`@`$mu_access_vc`");
-        $sql->bindParam(':my_name_vc', $rowdb['my_name_vc'], PDO::PARAM_STR);
-        $sql->bindParam(':mu_name_vc', $rowuser['mu_name_vc'], PDO::PARAM_STR);
-        $sql->bindParam(':mu_access_vc', $rowuser['mu_access_vc'], PDO::PARAM_STR);
+        // The names are escaped into the statement above, binding unused parameters throws an error
         $sql->execute();
         $sql = $zdbh->prepare("FLUSH PRIVILEGES");
         $sql->execute();
@@ -517,7 +516,7 @@ class module_controller extends ctrl_module
         if ($numrows->execute()) {
             if ($numrows->fetchColumn() <> 0) {
                 // Set MySQL password for new user...
-				if (sys_versions::ShowMySQLVersion() <= "5.7.5") {
+				if (version_compare(sys_versions::ShowMySQLVersion(), '5.7.6', '<')) {
 					// MySQL 5.7 or OLDER
 					$sql = $zdbh->prepare("SET PASSWORD FOR :mu_name_vc@:mu_access_vc=PASSWORD(:password)");
 				} else {

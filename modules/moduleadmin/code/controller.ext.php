@@ -340,7 +340,7 @@ class module_controller extends ctrl_module
         $numrows->bindParam(':info', $info);
         $numrows->execute();
         $retval = $numrows->fetch();
-        $retval = $retval['mo_updateurl_tx'];
+        $retval = ($retval !== false) ? $retval['mo_updateurl_tx'] : '';
         return $retval;
     }
 
@@ -354,7 +354,7 @@ class module_controller extends ctrl_module
         $numrows->bindParam(':info', $info);
         $numrows->execute();
         $retval = $numrows->fetch();
-        $retval = $retval['mo_updatever_vc'];
+        $retval = ($retval !== false) ? $retval['mo_updatever_vc'] : '';
         return $retval;
     }
 
@@ -368,7 +368,7 @@ class module_controller extends ctrl_module
         $numrows->bindParam(':info', $info);
         $numrows->execute();
         $retval = $numrows->fetch();
-        $retval = $retval['mo_type_en'];
+        $retval = ($retval !== false) ? $retval['mo_type_en'] : '';
         return $retval;
     }
 

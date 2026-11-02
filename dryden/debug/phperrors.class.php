@@ -22,11 +22,14 @@ class debug_phperrors {
      */
     static function SetMode($mode = '') {
         if ($mode == 'dev') {
-            error_reporting('1');
-            ini_set('error_reporting', 1);
+            error_reporting(E_ALL);
         } else {
-            error_reporting('0');
-            ini_set('error_reporting', 0);
+            // Production: never show errors in the page, but still write fatal
+            // errors to the Apache error log. Reporting nothing at all meant a
+            // fatal error gave a blank page with no trace anywhere.
+            ini_set('display_errors', '0');
+            ini_set('log_errors', '1');
+            error_reporting(E_ERROR | E_PARSE | E_CORE_ERROR | E_COMPILE_ERROR | E_USER_ERROR | E_RECOVERABLE_ERROR);
         }
     }
 

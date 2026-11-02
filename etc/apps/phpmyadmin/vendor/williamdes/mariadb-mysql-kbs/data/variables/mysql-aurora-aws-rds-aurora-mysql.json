@@ -1,0 +1,324 @@
+{
+  "data": [
+    {
+      "name": "AuroraDb_commits",
+      "type": "integer"
+    },
+    {
+      "name": "AuroraDb_commit_latency",
+      "type": "integer"
+    },
+    {
+      "name": "AuroraDb_ddl_stmt_duration",
+      "type": "integer"
+    },
+    {
+      "name": "AuroraDb_select_stmt_duration",
+      "type": "integer"
+    },
+    {
+      "name": "AuroraDb_insert_stmt_duration",
+      "type": "integer"
+    },
+    {
+      "name": "AuroraDb_update_stmt_duration",
+      "type": "integer"
+    },
+    {
+      "name": "AuroraDb_delete_stmt_duration",
+      "type": "integer"
+    },
+    {
+      "name": "Aurora_binlog_io_cache_allocated",
+      "type": "byte"
+    },
+    {
+      "name": "Aurora_binlog_io_cache_read_requests",
+      "type": "integer"
+    },
+    {
+      "name": "Aurora_binlog_io_cache_reads",
+      "type": "integer"
+    },
+    {
+      "name": "Aurora_enhanced_binlog",
+      "type": "boolean"
+    },
+    {
+      "name": "Aurora_external_connection_count",
+      "type": "integer"
+    },
+    {
+      "name": "Aurora_fast_insert_cache_hits",
+      "type": "integer"
+    },
+    {
+      "name": "Aurora_fast_insert_cache_misses",
+      "type": "integer"
+    },
+    {
+      "name": "Aurora_fts_cache_memory_used",
+      "type": "byte"
+    },
+    {
+      "name": "Aurora_fwd_master_dml_stmt_count",
+      "type": "integer"
+    },
+    {
+      "name": "Aurora_fwd_master_dml_stmt_duration",
+      "type": "integer"
+    },
+    {
+      "name": "Aurora_fwd_master_errors_rpc_timeout",
+      "type": "integer"
+    },
+    {
+      "name": "Aurora_fwd_master_errors_session_limit",
+      "type": "integer"
+    },
+    {
+      "name": "Aurora_fwd_master_errors_session_timeout",
+      "type": "integer"
+    },
+    {
+      "name": "Aurora_fwd_master_open_sessions",
+      "type": "integer"
+    },
+    {
+      "name": "Aurora_fwd_master_select_stmt_count",
+      "type": "integer"
+    },
+    {
+      "name": "Aurora_fwd_master_select_stmt_duration",
+      "type": "integer"
+    },
+    {
+      "name": "Aurora_fwd_writer_dml_stmt_count",
+      "type": "integer"
+    },
+    {
+      "name": "Aurora_fwd_writer_dml_stmt_duration",
+      "type": "integer"
+    },
+    {
+      "name": "Aurora_fwd_writer_errors_rpc_timeout",
+      "type": "integer"
+    },
+    {
+      "name": "Aurora_fwd_writer_errors_session_limit",
+      "type": "integer"
+    },
+    {
+      "name": "Aurora_fwd_writer_errors_session_timeout",
+      "type": "integer"
+    },
+    {
+      "name": "Aurora_fwd_writer_open_sessions",
+      "type": "integer"
+    },
+    {
+      "name": "Aurora_fwd_writer_select_stmt_count",
+      "type": "integer"
+    },
+    {
+      "name": "Aurora_fwd_writer_select_stmt_duration",
+      "type": "integer"
+    },
+    {
+      "name": "Aurora_lockmgr_buffer_pool_memory_used"
+    },
+    {
+      "name": "Aurora_lockmgr_memory_used",
+      "type": "byte"
+    },
+    {
+      "name": "Aurora_ml_actual_request_cnt",
+      "type": "integer"
+    },
+    {
+      "name": "Aurora_ml_actual_response_cnt",
+      "type": "integer"
+    },
+    {
+      "name": "Aurora_ml_cache_hit_cnt",
+      "type": "integer"
+    },
+    {
+      "name": "Aurora_ml_logical_request_cnt",
+      "type": "integer"
+    },
+    {
+      "name": "Aurora_ml_logical_response_cnt",
+      "type": "integer"
+    },
+    {
+      "name": "Aurora_ml_retry_request_cnt",
+      "type": "integer"
+    },
+    {
+      "name": "Aurora_ml_single_request_cnt",
+      "type": "integer"
+    },
+    {
+      "name": "aurora_oom_avoidance_recovery_state"
+    },
+    {
+      "name": "aurora_oom_reserved_mem_enter_kb"
+    },
+    {
+      "name": "aurora_oom_reserved_mem_exit_kb"
+    },
+    {
+      "name": "aurora_oom_status"
+    },
+    {
+      "name": "Aurora_pq_bytes_returned",
+      "type": "byte"
+    },
+    {
+      "name": "Aurora_pq_max_concurrent_requests",
+      "type": "integer"
+    },
+    {
+      "name": "Aurora_pq_pages_pushed_down",
+      "type": "integer"
+    },
+    {
+      "name": "Aurora_pq_request_attempted",
+      "type": "integer"
+    },
+    {
+      "name": "Aurora_pq_request_executed",
+      "type": "integer"
+    },
+    {
+      "name": "Aurora_pq_request_failed",
+      "type": "integer"
+    },
+    {
+      "name": "Aurora_pq_request_in_progress",
+      "type": "integer"
+    },
+    {
+      "name": "Aurora_pq_request_not_chosen",
+      "type": "integer"
+    },
+    {
+      "name": "Aurora_pq_request_not_chosen_below_min_rows",
+      "type": "integer"
+    },
+    {
+      "name": "Aurora_pq_request_not_chosen_column_bit",
+      "type": "integer"
+    },
+    {
+      "name": "Aurora_pq_request_not_chosen_column_geometry",
+      "type": "integer"
+    },
+    {
+      "name": "Aurora_pq_request_not_chosen_column_lob",
+      "type": "integer"
+    },
+    {
+      "name": "Aurora_pq_request_not_chosen_column_virtual",
+      "type": "integer"
+    },
+    {
+      "name": "Aurora_pq_request_not_chosen_custom_charset",
+      "type": "integer"
+    },
+    {
+      "name": "Aurora_pq_request_not_chosen_fast_ddl",
+      "type": "integer"
+    },
+    {
+      "name": "Aurora_pq_request_not_chosen_few_pages_outside_buffer_pool",
+      "type": "integer"
+    },
+    {
+      "name": "Aurora_pq_request_not_chosen_full_text_index",
+      "type": "integer"
+    },
+    {
+      "name": "Aurora_pq_request_not_chosen_high_buffer_pool_pct",
+      "type": "integer"
+    },
+    {
+      "name": "Aurora_pq_request_not_chosen_index_hint",
+      "type": "integer"
+    },
+    {
+      "name": "Aurora_pq_request_not_chosen_innodb_table_format",
+      "type": "integer"
+    },
+    {
+      "name": "Aurora_pq_request_not_chosen_long_trx",
+      "type": "integer"
+    },
+    {
+      "name": "Aurora_pq_request_not_chosen_no_where_clause",
+      "type": "integer"
+    },
+    {
+      "name": "Aurora_pq_request_not_chosen_range_scan",
+      "type": "integer"
+    },
+    {
+      "name": "Aurora_pq_request_not_chosen_row_length_too_long",
+      "type": "integer"
+    },
+    {
+      "name": "Aurora_pq_request_not_chosen_small_table",
+      "type": "integer"
+    },
+    {
+      "name": "Aurora_pq_request_not_chosen_temporary_table",
+      "type": "integer"
+    },
+    {
+      "name": "Aurora_pq_request_not_chosen_tx_isolation",
+      "type": "integer"
+    },
+    {
+      "name": "Aurora_pq_request_not_chosen_update_delete_stmts",
+      "type": "integer"
+    },
+    {
+      "name": "Aurora_pq_request_not_chosen_unsupported_access",
+      "type": "integer"
+    },
+    {
+      "name": "Aurora_pq_request_not_chosen_unsupported_storage_type",
+      "type": "integer"
+    },
+    {
+      "name": "Aurora_pq_request_throttled",
+      "type": "integer"
+    },
+    {
+      "name": "Aurora_repl_bytes_received",
+      "type": "byte"
+    },
+    {
+      "name": "Aurora_reserved_mem_exceeded_incidents",
+      "type": "integer"
+    },
+    {
+      "name": "Aurora_thread_pool_thread_count",
+      "type": "integer"
+    },
+    {
+      "name": "Aurora_tmz_version",
+      "type": "string"
+    },
+    {
+      "name": "Aurora_zdr_oom_threshold"
+    },
+    {
+      "name": "server_aurora_das_running",
+      "type": "boolean"
+    }
+  ],
+  "name": "aws-rds-aurora-mysql",
+  "url": "https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/AuroraMySQL.Reference.ParameterGroups.html#AuroraMySQL.Reference.GlobalStatusVars"
+}

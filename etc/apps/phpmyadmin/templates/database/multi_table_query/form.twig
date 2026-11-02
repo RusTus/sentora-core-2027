@@ -1,12 +1,12 @@
 <ul class="nav nav-pills m-2">
   <li class="nav-item">
-    <a class="nav-link active" href="{{ url('/database/multi-table-query', {'db': db}) }}">
+    <a class="nav-link active disableAjax" href="{{ url('/database/multi-table-query', {'db': db}) }}">
       {% trans 'Multi-table query' %}
     </a>
   </li>
 
   <li class="nav-item">
-    <a class="nav-link" href="{{ url('/database/qbe', {'db': db}) }}">
+    <a class="nav-link disableAjax" href="{{ url('/database/qbe', {'db': db}) }}">
       {% trans 'Query by example' %}
     </a>
   </li>
@@ -53,7 +53,7 @@
                 <br>
                 <input type="checkbox"
                     title="{% trans 'Use this column in criteria' %}"
-                    class="criteria_col">
+                    class="criteria_col" data-bs-toggle="collapse" data-bs-target="#criteriaOptions{{ id }}" aria-expanded="false" aria-controls="criteriaOptions{{ id }}">
 
                 <button class="btn btn-link p-0 jsCriteriaButton" type="button" data-bs-toggle="collapse" data-bs-target="#criteriaOptions{{ id }}" aria-expanded="false" aria-controls="criteriaOptions{{ id }}">
                   {% trans 'criteria' %}
@@ -85,6 +85,15 @@
                                     value="OR"
                                     class="logical_op">
                                 OR
+                            </td>
+                        </tr>
+
+                        <tr>
+                            <td>Column</td>
+                            <td colspan="2">
+                                <select class="columnNameSelect query-form__select--inline opColumn">
+                                    <option value="">{% trans 'select column' %}</option>
+                                </select>
                             </td>
                         </tr>
 

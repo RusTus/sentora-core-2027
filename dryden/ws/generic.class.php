@@ -58,6 +58,8 @@ class ws_generic {
         if (!$fp) {
 //$ws_log->detail = "Problem with " .$url. ", ".$php_errormsg."";
 //$ws_log->writeLog();
+            // PHP 8 throws a TypeError if stream_get_contents() gets false, which stopped the daemon
+            return false;
         }
         $response = @stream_get_contents($fp);
         if ($response == false) {
@@ -108,7 +110,7 @@ class ws_generic {
         xml_parser_set_option($parser, XML_OPTION_CASE_FOLDING, 0);
         xml_parser_set_option($parser, XML_OPTION_SKIP_WHITE, 1);
         xml_parse_into_struct($parser, trim($contents), $xml_values);
-        xml_parser_free($parser);
+        unset($parser);
         if (!$xml_values)
             return; //Hmm...
         $xml_array = array();

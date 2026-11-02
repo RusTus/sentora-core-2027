@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ruleset xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="vendor/squizlabs/php_codesniffer/phpcs.xsd">
+
+    <!-- Show progress and sniff codes -->
+    <arg value="ps"/>
+    <!-- Cache file -->
+    <arg name="cache" value=".php_cs.cache"/>
+    <!-- Enable colors -->
+    <arg name="colors"/>
+    <!-- Make sniff report relative -->
+    <arg name="basepath" value="."/>
+
+    <file>.</file>
+    <exclude-pattern>*/tmp/*</exclude-pattern>
+    <exclude-pattern>*/vendor/*</exclude-pattern>
+    <exclude-pattern>*/dist/*</exclude-pattern>
+    <exclude-pattern>*/build/*</exclude-pattern>
+    <exclude-pattern>*/node_modules/*</exclude-pattern>
+    <rule ref="Wdes"></rule>
+
+    <rule ref="PSR1.Files.SideEffects.FoundWithSymbols">
+        <exclude-pattern>*/src/merge.php</exclude-pattern>
+    </rule>
+    <rule ref="Generic.Files.LineLength.TooLong">
+        <exclude-pattern>*/src/merge.php</exclude-pattern>
+    </rule>
+    <rule ref="PEAR.ControlStructures.MultiLineCondition.Alignment">
+        <exclude-pattern>*/src/merge.php</exclude-pattern>
+    </rule>
+    <rule ref="PSR2.ControlStructures.ControlStructureSpacing.SpacingAfterOpenBrace">
+        <exclude-pattern>*/src/merge.php</exclude-pattern>
+    </rule>
+    <rule ref="PEAR.ControlStructures.MultiLineCondition.SpacingAfterOpenBrace">
+        <exclude-pattern>*/src/merge.php</exclude-pattern>
+    </rule>
+    <rule ref="PEAR.ControlStructures.MultiLineCondition.StartWithBoolean">
+        <exclude-pattern>*/src/merge.php</exclude-pattern>
+    </rule>
+    <rule ref="Generic.Metrics.NestingLevel.TooHigh">
+        <exclude-pattern>*/src/SlimData.php</exclude-pattern>
+    </rule>
+
+</ruleset>

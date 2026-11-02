@@ -570,6 +570,7 @@ AJAX.registerOnload('server/status/monitor.js', function () {
             saveMonitor(); // Save settings
 
             $('#closeModalButton').off('click');
+            $('#addChartButton').off('click');
         });
 
         $('#closeModalButton').on('click', function () {
@@ -577,6 +578,7 @@ AJAX.registerOnload('server/status/monitor.js', function () {
             $('span#clearSeriesLink').hide();
             $('#seriesPreview').html('');
             $('#closeModalButton').off('click');
+            $('#addChartButton').off('click');
         });
 
         var $presetList = $('#addChartModal').find('select[name="presetCharts"]');
@@ -716,7 +718,9 @@ AJAX.registerOnload('server/status/monitor.js', function () {
 
                 $('#emptyDialog').dialog('close');
             };
-            reader.readAsText(input.files[0]);
+            if (input.files[0]) {
+                reader.readAsText(input.files[0]);
+            }
         };
 
         dlgBtns[Messages.strCancel].click = function () {
@@ -1164,7 +1168,7 @@ AJAX.registerOnload('server/status/monitor.js', function () {
 
         chartSize = {
             width: Math.floor(wdt),
-            height: Math.floor(0.75 * wdt)
+            height: Math.floor(0.55 * wdt)
         };
     }
 
@@ -2079,19 +2083,16 @@ AJAX.registerOnload('server/status/monitor.js', function () {
                     '</span></th><th class="text-end">' + data.sum.TOTAL + '</th></tr></tfoot>');
 
         // Append a tooltip to the count column, if there exist one
-        if ($('#logTable').find('tr').first().find('th').last().text().indexOf('#') > -1) {
-            $('#logTable').find('tr').first().find('th').last().append('&nbsp;' + Functions.getImage('b_help', '', { 'class': 'qroupedQueryInfoIcon' }));
+        const amountColumn = $('#logTable').find('tr').first().find('th').last();
+        if (amountColumn.text().indexOf('#') > -1) {
+            amountColumn.append('&nbsp;' + Functions.getImage('b_help'));
 
-            var tooltipContent = Messages.strCountColumnExplanation;
+            let tooltipContent = Messages.strCountColumnExplanation;
             if (groupInserts) {
-                tooltipContent += '<p>' + Messages.strMoreCountColumnExplanation + '</p>';
+                tooltipContent += '<br>' + Messages.strMoreCountColumnExplanation;
             }
 
-            Functions.tooltip(
-                $('img.qroupedQueryInfoIcon'),
-                'img',
-                tooltipContent
-            );
+            Functions.tooltip(amountColumn, 'th', tooltipContent);
         }
 
         $('#logTable').find('table').tablesorter({

@@ -18,12 +18,14 @@ class webservice extends ws_xmws
         'http' => 80,
 		'https' => 443,
         'ftp' => 21,
+        'dns' => 53,
         'smtp' => 25,
         'pop3' => 110,
         'imap' => 143,
-		'smtptls' => 587,
+        'imaps' => 993,
+        'pop3s' => 995,
+        'submission' => 587,
         'mysql' => 3306,
-        'dns' => 53,
     );
 
     /**

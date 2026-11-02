@@ -75,7 +75,7 @@ class ui_templateparser
     static private function CompilePHPTags($value, $data)
     {
         $match = null;
-        preg_match_all($value, $data, $match);
+        preg_match_all($value, (string) $data, $match);
         if (($match) && (!empty($match[1]))) {
             $i = 0;
             foreach ($match[1] as $string) {
@@ -97,11 +97,11 @@ class ui_templateparser
     static private function CompileLoop($value, $data)
     {
         $match = null;
-        preg_match_all($value, $data, $match);
+        preg_match_all($value, (string) $data, $match);
         if (($match) && (!empty($match[1]))) {
             $i = 0;
             foreach ($match[1] as $function) {
-                $data = str_replace($match[0][$i], '<?php foreach(module_controller::get' . $function . '() as $key => $value){ ?>', $data);
+                $data = str_replace($match[0][$i], '<?php foreach((module_controller::get' . $function . '() ?: array()) as $key => $value){ ?>', $data);
                 $i++;
             }
         }
@@ -115,7 +115,7 @@ class ui_templateparser
     static private function CompileEchoLoop($value, $data)
     {
         $match = null;
-        preg_match_all($value, $data, $match);
+        preg_match_all($value, (string) $data, $match);
         if (($match) && (!empty($match[1]))) {
             $i = 0;
             foreach ($match[1] as $key) {
@@ -133,7 +133,7 @@ class ui_templateparser
     static private function CompileEndLoop($value, $data)
     {
         $match = null;
-        preg_match_all($value, $data, $match);
+        preg_match_all($value, (string) $data, $match);
         if (($match) && (!empty($match[1]))) {
             $i = 0;
             foreach ($match[1] as $string) {
@@ -151,7 +151,7 @@ class ui_templateparser
     static private function CompileIf($value, $data)
     {
         $match = null;
-        preg_match_all($value, $data, $match);
+        preg_match_all($value, (string) $data, $match);
         if (($match) && (!empty($match[1]))) {
             $i = 0;
             foreach ($match[1] as $function) {
@@ -169,7 +169,7 @@ class ui_templateparser
     static private function CompileEndIf($value, $data)
     {
         $match = null;
-        preg_match_all($value, $data, $match);
+        preg_match_all($value, (string) $data, $match);
         if ($match) {
             $i = 0;
             foreach ($match[1] as $string) {
@@ -187,7 +187,7 @@ class ui_templateparser
     static private function CompileLanuage($value, $data)
     {
         $match = null;
-        preg_match_all($value, $data, $match);
+        preg_match_all($value, (string) $data, $match);
         if ($match) {
             $i = 0;
             foreach ($match[1] as $string) {
@@ -206,7 +206,7 @@ class ui_templateparser
     static private function CompileFunctionEcho($value, $data)
     {
         $match = null;
-        preg_match_all($value, $data, $match);
+        preg_match_all($value, (string) $data, $match);
         if ($match) {
             $i = 0;
             foreach ($match[1] as $classes) {
@@ -226,7 +226,7 @@ class ui_templateparser
     static private function CompileElse($value, $data)
     {
         $match = null;
-        preg_match_all($value, $data, $match);
+        preg_match_all($value, (string) $data, $match);
         if ($match) {
             $i = 0;
             foreach ($match[1] as $string) {
@@ -244,14 +244,14 @@ class ui_templateparser
     static private function CompileTemplateClass($value, $data)
     {
         $match = null;
-        preg_match_all($value, $data, $match);
+        preg_match_all($value, (string) $data, $match);
         if ($match) {
             $i = 0;
             foreach ($match[1] as $classes) {
                 if (class_exists('' . $classes . '')) {
                     $moduleTemplate = call_user_func(array($classes, 'Template'));
                     $codeToInsert = ui_templateparser::CompileFunctions($moduleTemplate);
-                    $data = str_replace($match[0][$i], $codeToInsert, $data);
+                    $data = str_replace($match[0][$i], (string) $codeToInsert, $data);
                 }
                 $i++;
             }
@@ -326,16 +326,14 @@ class ui_templateparser
                         if (!is_dir($cacheFile)) {
                             $time = time() - $deathAfter;
                             if (filemtime($cacheFile) <= $time) {
-                                //Delete cache files
-                                $path = pathinfo($cacheFile);
-                                chdir($path['dirname']);
-                                unlink($path['filename'] . '.cache');
+                                //Delete cache files (full path, no chdir: changing the working
+                                //directory broke the class autoloader for the rest of the request)
+                                unlink($cacheFile);
                             }
                         }
                     }
                 }
             }
-            chdir('/');
         }
     }
 

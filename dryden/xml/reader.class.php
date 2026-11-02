@@ -90,16 +90,16 @@ class xml_reader {
         $this->parser = xml_parser_create();
 
         //Set the handlers
-        xml_set_object($this->parser, $this);
-        xml_set_element_handler($this->parser, 'StartElement', 'EndElement');
-        xml_set_character_data_handler($this->parser, 'CharacterData');
+        // xml_set_object() and string handler names are deprecated in PHP 8.4
+        xml_set_element_handler($this->parser, array($this, 'StartElement'), array($this, 'EndElement'));
+        xml_set_character_data_handler($this->parser, array($this, 'CharacterData'));
 
         //Error handling
         if (!xml_parse($this->parser, $this->xml))
             $this->HandleError(xml_get_error_code($this->parser), xml_get_current_line_number($this->parser), xml_get_current_column_number($this->parser));
 
         //Free the parser
-        xml_parser_free($this->parser);
+        unset($this->parser);
     }
 
     /**
@@ -211,6 +211,8 @@ class xml_reader {
  *
  * @version 1.3.0
  */
+// Tags store their child elements as dynamic properties (deprecated without this attribute since PHP 8.2)
+#[\AllowDynamicProperties]
 class XMLTag {
 
     /**
@@ -286,7 +288,7 @@ class XMLTag {
     public function AddChild($name, $attrs, $parents, $cleanTagName = true) {
         //If the tag is a reserved name, output an error
         if (in_array($name, array('tagChildren', 'tagAttrs', 'tagParents', 'tagData', 'tagName'))) {
-            trigger_error('You have used a reserved name as the name of an XML tag. Please consult the documentation (http://www.criticaldevelopment.net/xml/) and rename the tag named "' . $name . '" to something other than a reserved name.', E_USER_ERROR);
+            trigger_error('You have used a reserved name as the name of an XML tag. Please consult the documentation (http://www.criticaldevelopment.net/xml/) and rename the tag named "' . $name . '" to something other than a reserved name.', E_USER_WARNING);
 
             return;
         }

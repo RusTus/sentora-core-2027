@@ -1,0 +1,77 @@
+name: Run sudo-bot to update files
+
+permissions:
+  contents: read
+
+on:
+    repository_dispatch:
+        types: run-cron
+    workflow_dispatch:
+    schedule:
+        - cron: "30 13 * * 6"
+
+jobs:
+    run-sudo-bot-cron:
+        environment:
+            name: sudo-bot
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 20
+            - name: Get yarn cache directory path
+              id: yarn-cache-dir-path
+              run: echo "dir=$(yarn cache dir)" >> $GITHUB_OUTPUT
+            - name: yarn cache
+              uses: actions/cache@v4
+              with:
+                  path: ${{ steps.yarn-cache-dir-path.outputs.dir }}
+                  key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
+                  restore-keys: |
+                      ${{ runner.os }}-yarn-
+            - name: composer cache module
+              uses: actions/cache@v4
+              with:
+                  path: ~/.composer/cache/
+                  key: composer-cache
+            - name: Cache cargo binaries
+              uses: actions/cache@v4
+              id: cache-mariadb-mysql-kbs
+              with:
+                  path: ~/.cargo/bin/mariadb-mysql-kbs
+                  key: ${{ runner.os }}-cargo-bin-mariadb-mysql-kbs-1.3.0-rc6
+            - name: Set up toolchain
+              if: steps.cache-mariadb-mysql-kbs.outputs.cache-hit != 'true'
+              uses: actions-rs/toolchain@v1
+              with:
+                  profile: minimal
+                  toolchain: 1.74
+                  override: true
+            - name: Install mariadb-mysql-kbs
+              if: steps.cache-mariadb-mysql-kbs.outputs.cache-hit != 'true'
+              run: cargo install mariadb-mysql-kbs@1.3.0-rc5
+            - name: Install
+              run: |
+                  yarn install
+                  composer install --no-interaction
+            - name: Build
+              run: |
+                  mariadb-mysql-kbs extract
+                  composer run build
+            - name: Install sudo-bot
+              run: yarn global add sudo-bot
+            - name: Run sudo-bot
+              env:
+                INSTALLATION_ID: ${{ secrets.INSTALLATION_ID }}
+                GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+                GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+                GH_APP_JWT_PRIV_PEM_CONTENTS: ${{ secrets.GH_APP_JWT_PRIV_PEM_CONTENTS }}
+                TARGET_BRANCH: "main"
+                SKIP_DOCS_STEPS: "yes"
+                TEMPLATE_FILE: "template.js"
+              run: ./scripts/sudo-bot/create-pr.sh
+            - name: Run test
+              run: |
+                  yarn run test
+                  composer run test

@@ -551,7 +551,7 @@ class module_controller extends ctrl_module
         return $htaccessString;
     }
     
-    static function writeHtaccessLink($realPath, $append=false, $message)
+    static function writeHtaccessLink($realPath, $append, $message)
     {
         $htpasswdFile = self::getHostDir() . self::getCurrentUsername() . '/htpasswd/' . 'htpasswd-' . md5($realPath);
         $htaccessString = self::buildHtaccessLink($message, $htpasswdFile);

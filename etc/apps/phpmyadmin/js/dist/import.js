@@ -13,10 +13,12 @@ function changePluginOpts() {
   });
   var selectedPluginName = $('#plugins').find('option:selected').val();
   $('#' + selectedPluginName + '_options').fadeIn('slow');
-  const importNotification = document.getElementById('import_notification');
-  importNotification.innerText = '';
-  if (selectedPluginName === 'csv') {
-    importNotification.innerHTML = '<div class="alert alert-info mb-0 mt-3" role="alert">' + Messages.strImportCSV + '</div>';
+  var importNotification = document.getElementById('import_notification');
+  if (importNotification) {
+    importNotification.innerText = '';
+    if (selectedPluginName === 'csv') {
+      importNotification.innerHTML = '<div class="alert alert-info mb-0 mt-3" role="alert">' + Messages.strImportCSV + '</div>';
+    }
   }
 }
 

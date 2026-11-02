@@ -23,9 +23,9 @@ class ui_tpl_breadcrumbs {
 
             $module = $controller->GetControllerRequest('URL', 'module');
             $moduleRow = ui_module::GetModuleCategoryName();
-            $catUrl = strtolower(str_replace(' ', '-', $moduleRow['mc_name_vc']));
 
             if($moduleRow){
+                $catUrl = strtolower(str_replace(' ', '-', $moduleRow['mc_name_vc']));
                 $line .= '<ul class="breadcrumb">';
                 $line .= '  <li><a href=".">Home</a></li>';
                 $line .= '  <li><a href="./#' .$catUrl. '">' .$moduleRow['mc_name_vc']. '</a></li>';

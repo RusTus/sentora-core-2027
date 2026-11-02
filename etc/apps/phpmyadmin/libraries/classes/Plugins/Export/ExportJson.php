@@ -113,7 +113,7 @@ class ExportJson extends ExportPlugin
         $data = $this->encode([
             'type' => 'header',
             'version' => Version::VERSION,
-            'comment' => 'Export to JSON plugin for PHPMyAdmin',
+            'comment' => 'Export to JSON plugin for phpMyAdmin',
         ]);
         if ($data === false) {
             return false;
@@ -224,15 +224,15 @@ class ExportJson extends ExportPlugin
     /**
      * Export to JSON
      *
-     * @phpstan-param array{
-     * string: array{
-     *           'tables': array{
-     *              string: array{
-     *                  'columns': array{string: string}
-     *              }
-     *           }
-     *        }
-     * }|array|null $aliases
+     * @phpstan-param array<
+     *   string,
+     *   array{
+     *     tables: array<
+     *       string,
+     *       array{columns: array<string, string>}
+     *     >
+     *   }
+     * >|null $aliases
      */
     protected function doExportForQuery(
         DatabaseInterface $dbi,

@@ -1,7 +1,7 @@
 <?php
 /**
 	* Controller for sencrypt module for sentora version 2.0.0
-	* Version : 3.0.1
+	* Version : 3.0.0
 	* Author : TGates
 	* Additional work by Diablo925, Jettaman
  */
@@ -23,7 +23,7 @@
 # for LEscript you can use any logger according to Psr\Log\LoggerInterface
 class Logger {
 	function __call($name, $arguments) {
-		echo date('Y-m-d H:i:s')." [$name] ${arguments[0]}\n";
+		echo date('Y-m-d H:i:s')." [$name] {$arguments[0]}\n";
 	}
 }
 $logger = new Logger();
@@ -33,7 +33,11 @@ if (ui_module::CheckModuleEnabled('Sencrypt SSL')) {
 	
     echo "Sencrypt Manager module ENABLED..." . fs_filehandler::NewLine();
 	
-	if ( ctrl_options::GetSystemOption('panel_ssl_tx') != null) {
+	if ( ctrl_options::GetSystemOption('panel_ssl_tx') != null && strpos(ctrl_options::GetSystemOption('panel_ssl_tx'), '/ssl/sencrypt/') === false ) {
+		// The panel uses its own certificate (the installer's self-signed one, or one
+		// you installed by hand), not a Sencrypt one: nothing to renew here
+		echo fs_filehandler::NewLine() . "Control Panel uses its own certificate (not from Sencrypt), skipping panel renewal." . fs_filehandler::NewLine();
+	} elseif ( ctrl_options::GetSystemOption('panel_ssl_tx') != null) {
 		
 		echo fs_filehandler::NewLine() . "RENEWING Control Panel certificates..." . fs_filehandler::NewLine();
 			# Run renew panel cert function
@@ -145,7 +149,9 @@ function renewCertificates() {
 				try {
 					//$le = new Analogic\ACME\Lescript($accountDir, $certlocation, $webroot, $logger);
 					# or without logger:
-					$le = new Analogic\ACME\Lescript($accountDir, $certlocation, $webroot, $logger = NULL, $countryCode, $state);
+					// Pass the logger itself: "$logger = NULL" here set $logger to null, so the
+					// catch block below crashed with a fatal error and stopped the whole daemon run
+					$le = new Analogic\ACME\Lescript($accountDir, $certlocation, $webroot, $logger, $countryCode, $state);
 					$le->initAccount();
 
 					# Check if domain is a subdomain
@@ -268,7 +274,9 @@ function renewPanelCertificates() {
 				try {
 					//$le = new Analogic\ACME\Lescript($accountDir, $certlocation, $webroot, $logger);
 					# or without logger:
-					$le = new Analogic\ACME\Lescript($accountDir, $certlocation, $webroot, $logger = NULL, $countryCode, $state);
+					// Pass the logger itself: "$logger = NULL" here set $logger to null, so the
+					// catch block below crashed with a fatal error and stopped the whole daemon run
+					$le = new Analogic\ACME\Lescript($accountDir, $certlocation, $webroot, $logger, $countryCode, $state);
 					$le->initAccount();
 									
 					# Create panel SSL if no other sub domains are listed

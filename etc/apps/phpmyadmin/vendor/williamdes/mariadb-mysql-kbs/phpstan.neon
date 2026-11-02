@@ -1,0 +1,12 @@
+parameters:
+        level: max
+        paths:
+            - src
+            - test
+        excludePaths:
+            - src/merge.php
+            - dist/*
+            - tmp/*
+            - build/*
+            - nodes_modules/*
+            - vendor/*

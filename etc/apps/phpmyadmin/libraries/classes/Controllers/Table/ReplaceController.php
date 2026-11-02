@@ -162,6 +162,7 @@ final class ReplaceController extends AbstractController
             'VERSION',
         ];
         $func_optional_param = [
+            'NOW',
             'RAND',
             'UNIX_TIMESTAMP',
         ];
@@ -379,7 +380,7 @@ final class ReplaceController extends AbstractController
                 $value_sets[] = implode(', ', $query_values);
             } else {
                 // build update query
-                $clauseIsUnique = $_POST['clause_is_unique'] ?? '';// Should contain 0 or 1
+                $clauseIsUnique = $_POST['clause_is_unique'] ?? $_GET['clause_is_unique'] ?? '';// Should contain 0 or 1
                 $query[] = 'UPDATE ' . Util::backquote($table)
                     . ' SET ' . implode(', ', $query_values)
                     . ' WHERE ' . $where_clause

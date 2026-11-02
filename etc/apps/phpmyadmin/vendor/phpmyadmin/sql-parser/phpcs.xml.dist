@@ -1,0 +1,49 @@
+<?xml version="1.0"?>
+<ruleset xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="vendor/squizlabs/php_codesniffer/phpcs.xsd">
+    <!-- Show progress and sniff codes -->
+    <arg value="ps"/>
+
+    <arg name="cache" value=".php_cs.cache"/>
+    <arg name="colors"/>
+    <arg name="extensions" value="php"/>
+
+    <file>src</file>
+    <file>tests</file>
+    <file>tools</file>
+
+    <exclude-pattern>tools/doctum-config.php</exclude-pattern>
+
+    <rule ref="PhpMyAdmin">
+        <exclude name="SlevomatCodingStandard.TypeHints.ParameterTypeHint.MissingNativeTypeHint"/>
+        <exclude name="SlevomatCodingStandard.TypeHints.ReturnTypeHint.MissingNativeTypeHint"/>
+        <exclude name="Squiz.NamingConventions.ValidVariableName.MemberNotCamelCaps"/>
+    </rule>
+
+    <rule ref="Generic.Files.LineLength.TooLong">
+        <exclude-pattern>src/Contexts/*</exclude-pattern>
+    </rule>
+
+    <rule ref="SlevomatCodingStandard.ControlStructures.RequireSingleLineCondition"/>
+    <rule ref="SlevomatCodingStandard.Functions.RequireSingleLineCall"/>
+    <rule ref="SlevomatCodingStandard.Whitespaces.DuplicateSpaces">
+        <properties>
+            <property name="ignoreSpacesInComment" value="true"/>
+        </properties>
+    </rule>
+
+    <rule ref="Squiz.Arrays.ArrayDeclaration.IndexNoNewline">
+        <exclude-pattern>src/Contexts/*</exclude-pattern>
+        <exclude-pattern>tests/Tools/templates/*</exclude-pattern>
+    </rule>
+
+    <rule ref="PSR1.Files.SideEffects.FoundWithSymbols">
+        <exclude-pattern>src/Context.php</exclude-pattern>
+    </rule>
+
+    <rule ref="SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFullyQualifiedName">
+        <exclude-pattern>src/TokensList.php</exclude-pattern>
+        <exclude-pattern>src/UtfString.php</exclude-pattern>
+        <exclude-pattern>src/Components/Expression.php</exclude-pattern>
+        <exclude-pattern>src/Statement.php</exclude-pattern>
+    </rule>
+</ruleset>

@@ -1,0 +1,49 @@
+name: Lint and analyse PHP files
+
+on:
+  push:
+  pull_request:
+
+jobs:
+    lint-php:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            - name: Set up PHP 7.2
+              uses: shivammathur/setup-php@v2
+              with:
+                  php-version: 7.2
+                  tools: composer:v2
+
+            - name: Validate composer.json and composer.lock
+              run: composer validate --strict
+
+            - name: Install Composer dependencies
+              uses: ramsey/composer-install@v2
+              with:
+                dependency-versions: highest
+
+            - name: Lint files
+              run: composer run phpcs
+
+    analyse-php:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            - name: Set up PHP 7.2
+              uses: shivammathur/setup-php@v2
+              with:
+                  php-version: 7.2
+                  tools: composer:v2
+
+            - name: Install Composer dependencies
+              uses: ramsey/composer-install@v2
+              with:
+                dependency-versions: highest
+
+            - name: Analyse files
+              run: composer run phpstan

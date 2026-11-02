@@ -61,9 +61,11 @@ class sys_monitoring {
      */
     static function ServerUptime() {
         if (sys_versions::ShowOSPlatformVersion() == "Linux") {
-            $uptime = trim(exec("cat /proc/uptime"));
+            // Read /proc/uptime directly and cast to a number: an empty result
+            // here used to be a fatal TypeError on every panel page under PHP 8
+            $uptime = trim((string) @file_get_contents('/proc/uptime'));
             $uptime = explode(" ", $uptime);
-            $uptime = $uptime[0];
+            $uptime = (float) $uptime[0];
             $day = 86400;
             $days = floor($uptime / $day);
             $utdelta = $uptime - ($days * $day);

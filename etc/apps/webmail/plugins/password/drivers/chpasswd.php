@@ -9,6 +9,7 @@
  * For installation instructions please read the README file.
  *
  * @version 2.0
+ *
  * @author Alex Cartwright <acartwright@mutinydesign.co.uk>
  *
  * Copyright (C) The Roundcube Dev Team
@@ -24,7 +25,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program. If not, see http://www.gnu.org/licenses/.
+ * along with this program. If not, see https://www.gnu.org/licenses/.
  */
 
 class rcube_chpasswd_password
@@ -33,20 +34,14 @@ class rcube_chpasswd_password
     {
         $cmd = rcmail::get_instance()->config->get('password_chpasswd_cmd');
 
-        $handle = popen($cmd, "w");
-        fwrite($handle, "$username:$newpass\n");
+        $handle = popen($cmd, 'w');
+        fwrite($handle, "{$username}:{$newpass}\n");
 
         if (pclose($handle) == 0) {
             return PASSWORD_SUCCESS;
         }
 
-        rcube::raise_error([
-                'code' => 600,
-                'file' => __FILE__,
-                'line' => __LINE__,
-                'message' => "Password plugin: Unable to execute $cmd"
-            ], true, false
-        );
+        rcube::raise_error("Password plugin: Unable to execute {$cmd}", true);
 
         return PASSWORD_ERROR;
     }

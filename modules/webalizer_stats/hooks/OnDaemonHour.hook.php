@@ -35,16 +35,10 @@ function GenerateWebalizerStats()
                 'modules/webalizer_stats/bin/webalizer.exe';
         }
         else {
-            chmod( ctrl_options::GetSystemOption( 'sentora_root' ) . "modules/webalizer_stats/bin/webalizer", 4777 );
-            $command = "webalizer";
+            // The installer builds webalizer into /usr/local/bin on Ubuntu 26.04,
+            // older systems may still have the packaged /usr/bin/webalizer.
+            $command = file_exists( '/usr/local/bin/webalizer' ) ? '/usr/local/bin/webalizer' : 'webalizer';
         }
-
-        /** all other args and flags are the same so keep them outsite to avoid duplication */
-        $flag        = '-o';
-        
-        $secondFlags = '-d -p -F clf';
-
-        $domain = '-n ' . $rowvhost[ 'vh_name_vc' ];
 
         $logFile = realpath( ctrl_options::GetSystemOption( 'log_dir' ) .
             'domains/' .
@@ -53,20 +47,30 @@ function GenerateWebalizerStats()
             $rowvhost[ 'vh_name_vc' ] .
             '-access.log' );
 
+        // No traffic yet: without a log file webalizer would wait on stdin
+        if ( $logFile === false ) {
+            echo "No access log yet for: " . $rowvhost[ 'ac_user_vc' ] . "/" . $rowvhost[ 'vh_name_vc' ] . fs_filehandler::NewLine();
+            continue;
+        }
+
         $statsPath = ctrl_options::GetSystemOption( 'sentora_root' ) .
             "modules/webalizer_stats/stats/" .
             $rowvhost[ 'ac_user_vc' ] .
             '/' .
             $rowvhost[ 'vh_name_vc' ];
 
-        /** build arg array, this is in the required order! do not just change the order of this array */
+        /**
+         * Every option and value is its own argument, because each one is
+         * shell-escaped separately. -Q quiet, -p incremental (keeps history
+         * across log rotation), -F clf reads Apache's combined log format.
+         */
         $args = array(
+            '-Q',
+            '-p',
+            '-F', 'clf',
+            '-n', $rowvhost[ 'vh_name_vc' ],
+            '-o', $statsPath,
             $logFile,
-            $flag,
-            $statsPath,
-			$domain,
-            $secondFlags,
-            
         );
 
         echo "Generating stats for: " . $rowvhost[ 'ac_user_vc' ] . "/" . $rowvhost[ 'vh_name_vc' ] . fs_filehandler::NewLine();

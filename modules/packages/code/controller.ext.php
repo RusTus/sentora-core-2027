@@ -95,7 +95,8 @@ class module_controller extends ctrl_module
                 array_push($res, array(
 					'packageid' => $rowpackages['pk_id_pk'],
                     'created' => date(ctrl_options::GetSystemOption('sentora_df'), $rowpackages['pk_created_ts']),
-                    'clients' => $Column[0],
+                    // fetchColumn() returns the count itself, [0] on it always gave null
+                    'clients' => $Column,
                     'packagename' => ui_language::translate($rowpackages['pk_name_vc']),
 					# get package quotas - tgates
 					$pkg_quotas = self::ListCurrentPackage($rowpackages['pk_id_pk']),

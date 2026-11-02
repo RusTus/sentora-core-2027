@@ -242,6 +242,7 @@ class StructureController extends AbstractController
         $hiddenFields = [];
         $overallApproxRows = false;
         $structureTableRows = [];
+        $trackedTables = Tracker::getTrackedTables($GLOBALS['db']);
         foreach ($this->tables as $currentTable) {
             // Get valid statistics whatever is the table type
 
@@ -355,16 +356,13 @@ class StructureController extends AbstractController
             if (! $this->dbIsSystemSchema) {
                 $dropQuery = sprintf(
                     'DROP %s %s',
-                    $tableIsView || $currentTable['ENGINE'] == null ? 'VIEW'
-                    : 'TABLE',
+                    $tableIsView ? 'VIEW' : 'TABLE',
                     Util::backquote(
                         $currentTable['TABLE_NAME']
                     )
                 );
                 $dropMessage = sprintf(
-                    ($tableIsView || $currentTable['ENGINE'] == null
-                        ? __('View %s has been dropped.')
-                        : __('Table %s has been dropped.')),
+                    ($tableIsView ? __('View %s has been dropped.') : __('Table %s has been dropped.')),
                     str_replace(
                         ' ',
                         '&nbsp;',
@@ -417,7 +415,7 @@ class StructureController extends AbstractController
                         )
                     )
                 ),
-                'tracking_icon' => $this->getTrackingIcon($truename),
+                'tracking_icon' => $this->getTrackingIcon($truename, $trackedTables[$truename] ?? null),
                 'server_replica_status' => $replicaInfo['status'],
                 'table_url_params' => $tableUrlParams,
                 'db_is_system_schema' => $this->dbIsSystemSchema,
@@ -521,20 +519,20 @@ class StructureController extends AbstractController
     /**
      * Returns the tracking icon if the table is tracked
      *
-     * @param string $table table name
+     * @param string     $table        table name
+     * @param array|null $trackedTable
      *
      * @return string HTML for tracking icon
      */
-    protected function getTrackingIcon(string $table): string
+    protected function getTrackingIcon(string $table, $trackedTable): string
     {
         $trackingIcon = '';
         if (Tracker::isActive()) {
-            $isTracked = Tracker::isTracked($this->db, $table);
-            if ($isTracked || Tracker::getVersion($this->db, $table) > 0) {
+            if ($trackedTable !== null) {
                 $trackingIcon = $this->template->render('database/structure/tracking_icon', [
                     'db' => $this->db,
                     'table' => $table,
-                    'is_tracked' => $isTracked,
+                    'is_tracked' => $trackedTable['active'],
                 ]);
             }
         }
@@ -565,7 +563,7 @@ class StructureController extends AbstractController
         if (isset($currentTable['TABLE_ROWS']) && ($currentTable['ENGINE'] != null || $tableIsView)) {
             // InnoDB/TokuDB table: we did not get an accurate row count
             $approxRows = ! $tableIsView
-                && in_array($currentTable['ENGINE'], ['InnoDB', 'TokuDB'])
+                && in_array($currentTable['ENGINE'], ['CSV', 'InnoDB', 'TokuDB'])
                 && ! $currentTable['COUNTED'];
 
             if ($tableIsView && $currentTable['TABLE_ROWS'] >= $GLOBALS['cfg']['MaxExactCountViews']) {
@@ -607,16 +605,19 @@ class StructureController extends AbstractController
             $searchDoDBInTruename = array_search($table, $replicaInfo['Do_DB']);
             $searchDoDBInDB = array_search($this->db, $replicaInfo['Do_DB']);
 
-            $do = (is_string($searchDoDBInTruename) && strlen($searchDoDBInTruename) > 0)
-                || (is_string($searchDoDBInDB) && strlen($searchDoDBInDB) > 0)
-                || ($nbServReplicaDoDb == 0 && $nbServReplicaIgnoreDb == 0)
-                || $this->hasTable($replicaInfo['Wild_Do_Table'], $table);
-
             $searchDb = array_search($this->db, $replicaInfo['Ignore_DB']);
             $searchTable = array_search($table, $replicaInfo['Ignore_Table']);
             $ignored = (is_string($searchTable) && strlen($searchTable) > 0)
                 || (is_string($searchDb) && strlen($searchDb) > 0)
                 || $this->hasTable($replicaInfo['Wild_Ignore_Table'], $table);
+
+            // Only set do = true if table is not ignored
+            if (! $ignored) {
+                $do = (is_string($searchDoDBInTruename) && strlen($searchDoDBInTruename) > 0)
+                    || (is_string($searchDoDBInDB) && strlen($searchDoDBInDB) > 0)
+                    || ($nbServReplicaDoDb == 0 && $nbServReplicaIgnoreDb == 0)
+                    || $this->hasTable($replicaInfo['Wild_Do_Table'], $table);
+            }
         }
 
         return [
@@ -632,10 +633,8 @@ class StructureController extends AbstractController
      */
     protected function checkFavoriteTable(string $currentTable): bool
     {
-        // ensure $_SESSION['tmpval']['favoriteTables'] is initialized
-        RecentFavoriteTable::getInstance('favorite');
-        $favoriteTables = $_SESSION['tmpval']['favoriteTables'][$GLOBALS['server']] ?? [];
-        foreach ($favoriteTables as $value) {
+        $recentFavoriteTables = RecentFavoriteTable::getInstance('favorite');
+        foreach ($recentFavoriteTables->getTables() as $value) {
             if ($value['db'] == $this->db && $value['table'] == $currentTable) {
                 return true;
             }
@@ -721,10 +720,17 @@ class StructureController extends AbstractController
             case 'InnoDB':
             case 'PBMS':
             case 'TokuDB':
+            case 'ROCKSDB':
                 // InnoDB table: Row count is not accurate but data and index sizes are.
                 // PBMS table in Drizzle: TABLE_ROWS is taken from table cache,
                 // so it may be unavailable
                 [$currentTable, $formattedSize, $unit, $sumSize] = $this->getValuesForInnodbTable(
+                    $currentTable,
+                    $sumSize
+                );
+                break;
+            case 'CSV':
+                [$currentTable, $formattedSize, $unit, $sumSize] = $this->getValuesForCsvTable(
                     $currentTable,
                     $sumSize
                 );
@@ -884,6 +890,70 @@ class StructureController extends AbstractController
             $unit,
             $sumSize,
         ];
+    }
+
+    /**
+     * Get values for CSV table
+     *
+     * https://bugs.mysql.com/bug.php?id=53929
+     *
+     * @param array $currentTable current table
+     * @param int   $sumSize      sum size
+     *
+     * @return array
+     */
+    protected function getValuesForCsvTable(
+        array $currentTable,
+        $sumSize
+    ) {
+        $formattedSize = $unit = '';
+
+        if ($currentTable['ENGINE'] === 'CSV') {
+            $currentTable['COUNTED'] = true;
+            $currentTable['TABLE_ROWS'] = $this->dbi
+                ->getTable($this->db, $currentTable['TABLE_NAME'])
+                ->countRecords(true);
+        } else {
+            $currentTable['COUNTED'] = false;
+        }
+
+        if ($this->isShowStats) {
+            // Only count columns that have double quotes
+            $columnCount = (int) $this->dbi->fetchValue(
+                'SELECT COUNT(COLUMN_NAME) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = \''
+                . $this->dbi->escapeString($this->db) . '\' AND TABLE_NAME = \''
+                . $this->dbi->escapeString($currentTable['TABLE_NAME']) . '\' AND NUMERIC_SCALE IS NULL;'
+            );
+
+            // Get column names
+            $columnNames = $this->dbi->fetchValue(
+                'SELECT GROUP_CONCAT(COLUMN_NAME) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = \''
+                . $this->dbi->escapeString($this->db) . '\' AND TABLE_NAME = \''
+                . $this->dbi->escapeString($currentTable['TABLE_NAME']) . '\';'
+            );
+
+            // 10Mb buffer for CONCAT_WS
+            // not sure if is needed
+            $this->dbi->query('SET SESSION group_concat_max_len = 10 * 1024 * 1024');
+
+            // Calculate data length
+            $dataLength = (int) $this->dbi->fetchValue('
+                SELECT SUM(CHAR_LENGTH(REPLACE(REPLACE(REPLACE(
+                    CONCAT_WS(\',\', ' . $columnNames . '),
+                    UNHEX(\'0A\'), \'nn\'), UNHEX(\'22\'), \'nn\'), UNHEX(\'5C\'), \'nn\'
+                ))) FROM ' . Util::backquote($this->db) . '.' . Util::backquote($currentTable['TABLE_NAME']));
+
+            // Calculate quotes length
+            $quotesLength = $currentTable['TABLE_ROWS'] * $columnCount * 2;
+
+            /** @var int $tblsize */
+            $tblsize = $dataLength + $quotesLength + $currentTable['TABLE_ROWS'];
+
+            $sumSize += $tblsize;
+            [$formattedSize, $unit] = Util::formatByteDown($tblsize, 3, $tblsize > 0 ? 1 : 0);
+        }
+
+        return [$currentTable, $formattedSize, $unit, $sumSize];
     }
 
     /**

@@ -1,5 +1,6 @@
 #!/usr/bin/env php
 <?php
+
 /*
  +-----------------------------------------------------------------------+
  | This file is part of the Roundcube Webmail client                     |
@@ -17,20 +18,19 @@
  +-----------------------------------------------------------------------+
 */
 
-define('INSTALL_PATH', realpath(__DIR__ . '/..') . '/' );
+define('INSTALL_PATH', realpath(__DIR__ . '/..') . '/');
 
-require INSTALL_PATH.'program/include/clisetup.php';
+require INSTALL_PATH . 'program/include/clisetup.php';
 
 $rcmail = rcube::get_instance();
 
-$session_driver   = $rcmail->config->get('session_storage', 'db');
-$session_lifetime = $rcmail->config->get('session_lifetime', 0) * 60 * 2;
+$session_driver = $rcmail->config->get('session_storage', 'db');
 
 // Clean expired SQL sessions
-if ($session_driver == 'db' && $session_lifetime) {
+if ($session_driver == 'db') {
     $db = $rcmail->get_dbh();
-    $db->query("DELETE FROM " . $db->table_name('session')
-        . " WHERE changed < " . $db->now(-$session_lifetime));
+    $db->query('DELETE FROM ' . $db->table_name('session')
+        . ' WHERE expires_at < ' . $db->now());
 }
 
 // Clean caches and temp directory

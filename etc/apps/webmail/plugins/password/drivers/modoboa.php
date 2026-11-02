@@ -6,7 +6,8 @@
  * Payload is json string containing username, oldPassword and newPassword
  * Return value is a json string saying result: true if success.
  *
- * @version 1.0.1
+ * @version 2.0
+ *
  * @author stephane @actionweb.fr
  *
  * Copyright (C) The Roundcube Dev Team
@@ -22,9 +23,9 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program. If not, see http://www.gnu.org/licenses/.
+ * along with this program. If not, see https://www.gnu.org/licenses/.
  *
- * The driver need modoboa core 1.10.6 or later 
+ * The driver need modoboa core 1.10.6 or later
  *
  * You need to define theses variables in plugin/password/config.inc.php
  *
@@ -35,38 +36,36 @@
 
 class rcube_modoboa_password
 {
-    function save($curpass, $passwd)
+    public function save($curpass, $passwd, $username)
     {
         // Init config access
-        $rcmail           = rcmail::get_instance();
-        $ModoboaToken     = $rcmail->config->get('password_modoboa_api_token');
-        $RoudCubeUsername = $_SESSION['username'];
-        $IMAPhost         = $_SESSION['imap_host'];
+        $rcmail = rcmail::get_instance();
+        $token = $rcmail->config->get('password_modoboa_api_token');
+        $host = $rcmail->config->get('password_modoboa_api_host');
+
+        // We don't allow replacement variables when the host name(s) come from the user
+        if (!empty($rcmail->config->get('imap_host'))) {
+            $host = rcube_utils::parse_host($host);
+        }
+
+        $client = password::get_http_client();
+        $url = "https://{$host}/api/v1/accounts/?search=" . urlencode($username);
+
+        $options = [
+            'http_errors' => true,
+            'headers' => [
+                'Authorization' => "Token {$token}",
+                'Cache-Control' => 'no-cache',
+                'Content-Type' => 'application/json',
+            ],
+        ];
 
         // Call GET to fetch values from modoboa server
-        $curl = curl_init();
-
-        curl_setopt_array($curl, [
-            CURLOPT_URL            => "https://" . $IMAPhost . "/api/v1/accounts/?search=" . urlencode($RoudCubeUsername),
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_ENCODING       => "",
-            CURLOPT_MAXREDIRS      => 10,
-            CURLOPT_TIMEOUT        => 30,
-            CURLOPT_HTTP_VERSION   => CURL_HTTP_VERSION_1_1,
-            CURLOPT_CUSTOMREQUEST  => "GET",
-            CURLOPT_HTTPHEADER     => [
-                "Authorization: Token " . $ModoboaToken,
-                "Cache-Control: no-cache",
-                "Content-Type: application/json"
-            ],
-        ]);
-
-        $response = curl_exec($curl);
-        $err      = curl_error($curl);
-
-        curl_close($curl);
-
-        if ($err) {
+        try {
+            $response = $client->get($url, $options);
+            $response = $response->getBody()->getContents();
+        } catch (\Exception $e) {
+            rcube::raise_error("Password plugin: Error fetching {$url} : {$e->getMessage()}", true);
             return PASSWORD_CONNECT_ERROR;
         }
 
@@ -78,40 +77,36 @@ class rcube_modoboa_password
         }
 
         // Get user ID (pk)
-        $userid = $decoded[0]->pk;
+        $userid = null;
+        $user = null;
+        foreach ($decoded as $account) {
+            if (isset($account->username) && $account->username === $username) {
+                $userid = $account->pk;
+                $user = [
+                    'username' => $account->username,
+                    'mailbox' => $account->mailbox,
+                    'role' => $account->role,
+                ];
+                break;
+            }
+        }
+
+        if ($user === null) {
+            return PASSWORD_CONNECT_ERROR;
+        }
 
         // Encode json with new password
-        $ret['username'] = $decoded[0]->username;
-        $ret['mailbox']  = $decoded[0]->mailbox;
-        $ret['role']     = $decoded[0]->role;
-        $ret['password'] = $passwd; // new password
-        $encoded         = json_encode($ret);
+        $user['password'] = $passwd;
+        $options['body'] = json_encode($user);
+
+        $url = "https://{$host}/api/v1/accounts/{$userid}/";
 
         // Call HTTP API Modoboa
-        $curl = curl_init();
-
-        curl_setopt_array($curl, [
-            CURLOPT_URL            => "https://" . $IMAPhost . "/api/v1/accounts/" . $userid . "/",
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_ENCODING       => "",
-            CURLOPT_MAXREDIRS      => 10,
-            CURLOPT_TIMEOUT        => 30,
-            CURLOPT_HTTP_VERSION   => CURL_HTTP_VERSION_1_1,
-            CURLOPT_CUSTOMREQUEST  => "PUT",
-            CURLOPT_POSTFIELDS     => "" . $encoded . "",
-            CURLOPT_HTTPHEADER     => [
-                "Authorization: Token " . $ModoboaToken,
-                "Cache-Control: no-cache",
-                "Content-Type: application/json"
-            ],
-        ]);
-
-        $response = curl_exec($curl);
-        $err      = curl_error($curl);
-
-        curl_close($curl);
-
-        if ($err) {
+        try {
+            $response = $client->put($url, $options);
+            $response = $response->getBody()->getContents();
+        } catch (\Exception $e) {
+            rcube::raise_error("Password plugin: Error on {$url} : {$e->getMessage()}", true);
             return PASSWORD_CONNECT_ERROR;
         }
 

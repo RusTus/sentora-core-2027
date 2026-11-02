@@ -22,7 +22,7 @@ class pCacheFile implements pCacheInterface
 	var $Id;
 
 	/* Class creator */
-	function __construct(array $Settings = [], string $uniqueId)
+	function __construct(array $Settings, string $uniqueId)
 	{
 		$CacheFolder = isset($Settings["CacheFolder"]) ? $Settings["CacheFolder"] : "cache";
 

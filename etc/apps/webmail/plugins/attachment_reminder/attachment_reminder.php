@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Attachment Reminder
  *
@@ -21,21 +22,21 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program. If not, see <http://www.gnu.org/licenses/>
+ * along with this program. If not, see <https://www.gnu.org/licenses/>
  */
 
 class attachment_reminder extends rcube_plugin
 {
-    public $task   = 'mail|settings';
+    public $task = 'mail|settings';
     public $noajax = true;
-
 
     /**
      * Plugin initialization
      */
-    function init()
+    #[\Override]
+    public function init()
     {
-        $rcmail = rcube::get_instance();
+        $rcmail = rcmail::get_instance();
 
         if ($rcmail->task == 'mail' && $rcmail->action == 'compose') {
             if ($rcmail->config->get('attachment_reminder')) {
@@ -62,7 +63,7 @@ class attachment_reminder extends rcube_plugin
      *
      * @return array Hook arguments
      */
-    function prefs_list($args)
+    public function prefs_list($args)
     {
         if ($args['section'] == 'compose') {
             $this->add_texts('localization/');
@@ -71,7 +72,7 @@ class attachment_reminder extends rcube_plugin
             $checkbox = new html_checkbox(['name' => '_attachment_reminder', 'id' => $field_id, 'value' => 1]);
 
             $args['blocks']['main']['options']['attachment_reminder'] = [
-                'title'   => html::label($field_id, rcube::Q($this->gettext('reminderoption'))),
+                'title' => html::label($field_id, rcube::Q($this->gettext('reminderoption'))),
                 'content' => $checkbox->show($reminder ? 1 : 0),
             ];
         }
@@ -86,7 +87,7 @@ class attachment_reminder extends rcube_plugin
      *
      * @return array Hook arguments
      */
-    function prefs_save($args)
+    public function prefs_save($args)
     {
         if ($args['section'] == 'compose') {
             $dont_override = rcube::get_instance()->config->get('dont_override', []);

@@ -102,7 +102,14 @@ class sys_versions {
             }
         );
         if (!empty($os)) {
-            return $os;
+            return trim($os);
+        }
+        // lsb_release is not always installed, fall back to /etc/os-release
+        if (is_readable('/etc/os-release')) {
+            $osr = parse_ini_file('/etc/os-release');
+            if (!empty($osr['NAME'])) {
+                return $osr['NAME'];
+            }
         }
            
         return "Unknown";

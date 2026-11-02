@@ -200,7 +200,7 @@ class pData
 	}
 
 	/* Set the display mode of the  X Axis */
-	function setXAxisDisplay(int $Mode, string $Format = NULL)
+	function setXAxisDisplay(int $Mode, ?string $Format = NULL)
 	{
 		$this->Data["XAxisDisplay"] = $Mode;
 		$this->Data["XAxisFormat"] = $Format;
@@ -301,7 +301,7 @@ class pData
 	}
 
 	/* Define if a scatter serie should be draw with ticks */
-	function setScatterSerieTicks(int $ID, int $Ticks = NULL)
+	function setScatterSerieTicks(int $ID, ?int $Ticks = NULL)
 	{
 		if (isset($this->Data["ScatterSeries"][$ID])) {
 			$this->Data["ScatterSeries"][$ID]["Ticks"] = $Ticks;
@@ -311,7 +311,7 @@ class pData
 	}
 
 	/* Define if a scatter serie should be draw with a special weight */
-	function setScatterSerieWeight(int $ID, int $Weight = NULL) # UNUSED
+	function setScatterSerieWeight(int $ID, ?int $Weight = NULL) # UNUSED
 	{
 		if (isset($this->Data["ScatterSeries"][$ID])) {
 			$this->Data["ScatterSeries"][$ID]["Weight"] = $Weight;
@@ -580,7 +580,7 @@ class pData
 	}
 
 	/* Define if a serie should be draw with ticks */
-	function setSerieTicks(string $Serie, int $Ticks = NULL)
+	function setSerieTicks(string $Serie, ?int $Ticks = NULL)
 	{
 		if (isset($this->Data["Series"][$Serie])) {
 			$this->Data["Series"][$Serie]["Ticks"] = $Ticks;
@@ -590,7 +590,7 @@ class pData
 	}
 
 	/* Define if a serie should be draw with a special weight */
-	function setSerieWeight(string $Serie, int $Weight = NULL)
+	function setSerieWeight(string $Serie, ?int $Weight = NULL)
 	{
 		if (isset($this->Data["Series"][$Serie])) {
 			$this->Data["Series"][$Serie]["Weight"] = $Weight;

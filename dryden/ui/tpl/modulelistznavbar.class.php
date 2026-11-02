@@ -57,8 +57,11 @@ class ui_tpl_modulelistznavbar
 // IF Account, show Gravatar Image
                 if ($shortName == '<: Account :>') {
 
-                    $currentuser = ctrl_users::GetUserDetail();
-                    $image = self::get_gravatar($currentuser['email'], 22, 'mm', 'g', true);
+                    // Local person icon instead of Gravatar: no request to an outside site
+                    // (which also sent a hash of the user's email address) and no broken
+                    // image when the server has no internet access
+                    $image = '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="vertical-align:-3px">'
+                        . '<circle cx="12" cy="8" r="4.2"/><path d="M3.5 21c0-4.4 3.8-7.4 8.5-7.4s8.5 3 8.5 7.4z"/></svg>';
                     $line .= '<a href="#" class="dropdown-toggle" data-toggle="dropdown">' . $image . ' ' . $shortName . ' <b class="caret"></b></a>';
                 } else {
                     $line .= '<a href="#" class="dropdown-toggle" data-toggle="dropdown">' . $shortName . ' <b class="caret"></b></a>';

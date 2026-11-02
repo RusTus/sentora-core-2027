@@ -7,6 +7,7 @@
  * Return value is a json string saying result: true if success.
  *
  * @version 1.0
+ *
  * @author Mohammad Anwari <mdamt@mdamt.net>
  *
  * Copyright (C) The Roundcube Dev Team
@@ -22,47 +23,34 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program. If not, see http://www.gnu.org/licenses/.
+ * along with this program. If not, see https://www.gnu.org/licenses/.
  */
 
 class rcube_gearman_password
 {
-    function save($currpass, $newpass, $username)
+    public function save($currpass, $newpass, $username)
     {
         if (extension_loaded('gearman')) {
-            $rcmail  = rcmail::get_instance();
+            $rcmail = rcmail::get_instance();
             $payload = [
-                'username'    => $username,
+                'username' => $username,
                 'oldPassword' => $currpass,
                 'newPassword' => $newpass,
             ];
 
-            $gmc = new GearmanClient();
+            $gmc = new \GearmanClient();
             $gmc->addServer($rcmail->config->get('password_gearman_host', 'localhost'));
 
-            $result  = $gmc->doNormal('setPassword', json_encode($payload));
+            $result = $gmc->doNormal('setPassword', json_encode($payload));
             $success = json_decode($result);
 
             if ($success && $success->result == 1) {
                 return PASSWORD_SUCCESS;
             }
 
-            rcube::raise_error([
-                    'code' => 600,
-                    'file' => __FILE__,
-                    'line' => __LINE__,
-                    'message' => "Password plugin: Gearman authentication failed for user $username"
-                ], true, false
-            );
-        }
-        else {
-            rcube::raise_error([
-                    'code' => 600,
-                    'file' => __FILE__,
-                    'line' => __LINE__,
-                    'message' => "Password plugin: PECL Gearman module not loaded"
-                ], true, false
-            );
+            rcube::raise_error("Password plugin: Gearman authentication failed for user {$username}", true);
+        } else {
+            rcube::raise_error('Password plugin: PECL Gearman module not loaded', true);
         }
 
         return PASSWORD_ERROR;

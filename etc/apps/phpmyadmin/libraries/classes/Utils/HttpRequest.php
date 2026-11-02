@@ -267,6 +267,10 @@ class HttpRequest
             stream_context_create($context)
         );
 
+        if (function_exists('http_get_last_response_headers')) {
+            $http_response_header = http_get_last_response_headers();
+        }
+
         if (! isset($http_response_header)) {
             return null;
         }
@@ -295,7 +299,7 @@ class HttpRequest
         $content = null,
         $header = ''
     ) {
-        if (function_exists('curl_init')) {
+        if (function_exists('curl_init') && function_exists('curl_exec')) {
             return $this->curl($url, $method, $returnOnlyStatus, $content, $header);
         }
 

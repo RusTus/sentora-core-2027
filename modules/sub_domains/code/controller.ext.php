@@ -116,21 +116,6 @@ class module_controller extends ctrl_module
     static function ExecuteDeleteSubDomain($id)
     {
         global $zdbh;
-		// NEW - Delete Snuff files for domain
-		$sql2 = $zdbh->prepare("SELECT * FROM x_vhosts WHERE vh_id_pk=:id");
-		$sql2->bindParam(':id', $id);
-    	$sql2->execute();
-    	while ($rowvhost = $sql2->fetch()) {
-				
-		$vhostuser = ctrl_users::GetUserDetail($rowvhost['vh_acc_fk']);
-		$vhostusername = $vhostuser['username'];
-		$vh_snuff_path = "/etc/sentora/configs/php/sp/";
-		
-			if (file_exists($vh_snuff_path . $vhostusername . "/" . $rowvhost['vh_name_vc'] . '.rules')) {
-				unlink($vh_snuff_path . $vhostusername . "/" . $rowvhost['vh_name_vc'] . '.rules') or print fs_filehandler::NewLine() . "Couldn't delete " . $rowvhost['vh_name_vc'] . "vhost sp file" . fs_filehandler::NewLine();
-			}
-		}
-		
 		// Delete Domain
         runtime_hook::Execute('OnBeforeDeleteSubDomain');
         $sql = $zdbh->prepare("UPDATE x_vhosts

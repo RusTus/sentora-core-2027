@@ -222,25 +222,25 @@ class module_controller extends ctrl_module
         $line .= "<form name=\"launchbindlog\" action=\"modules/dns_admin/code/getbindlog.php\" target=\"bindlogwindow\" method=\"post\" onsubmit=\"window.open('', 'bindlogwindow', 'scrollbars=yes,menubar=no,height=525,width=825,resizable=no,toolbar=no,location=no,status=no')\">";
         $line .= "<table class=\"table table-striped\">";
         $line .= "<tr>";
-        if (count(self::$logerror) > 0) {
+        if (count((array) self::$logerror) > 0) {
             $logerrorcolor = "red";
         } else {
             $logerrorcolor = NULL;
         }
-        $line .= "<th style=\"width:350px;\">" . ui_language::translate("View Errors") . " (<font color=\"" . $logerrorcolor . "\">" . count(self::$logerror) . "</font>)</th>";
+        $line .= "<th style=\"width:350px;\">" . ui_language::translate("View Errors") . " (<font color=\"" . $logerrorcolor . "\">" . count((array) self::$logerror) . "</font>)</th>";
         $line .= "<td><button class=\"btn btn-primary\" type=\"submit\" id=\"logerror_a\" name=\"inViewErrors\" value=\"1\">" . ui_language::translate("View") . "</button></td>";
         $line .= "</tr>";
         $line .= "<tr>";
-        if (count(self::$logwarning) > 0) {
+        if (count((array) self::$logwarning) > 0) {
             $logwarningcolor = "red";
         } else {
             $logwarningcolor = NULL;
         }
-        $line .= "<th>" . ui_language::translate("View warnings") . " (<font color=\"" . $logwarningcolor . "\">" . count(self::$logwarning) . "</font>)</th>";
+        $line .= "<th>" . ui_language::translate("View warnings") . " (<font color=\"" . $logwarningcolor . "\">" . count((array) self::$logwarning) . "</font>)</th>";
         $line .= "<td><button class=\"btn btn-primary\" type=\"submit\" id=\"logwarning_a\" name=\"inViewWarnings\" value=\"1\">" . ui_language::translate("View") . "</button></td>";
         $line .= "</tr>";
         $line .= "<tr>";
-        $line .= "<th>" . ui_language::translate("View logs") . " (" . count(self::$getlog) . ")</th>";
+        $line .= "<th>" . ui_language::translate("View logs") . " (" . count((array) self::$getlog) . ")</th>";
         $line .= "<td><input type=\"hidden\" name=\"inBindLog\" value=\"" . ctrl_options::GetSystemOption('bind_log') . "\" /><button class=\"btn btn-primary\" type=\"submit\" id=\"button\" name=\"inViewLogs\" value=\"1\">" . ui_language::translate("View") . "</button></td>";
         $line .= "</tr>";
         $line .= "</table>";

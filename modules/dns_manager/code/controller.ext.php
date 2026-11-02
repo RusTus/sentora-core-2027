@@ -34,7 +34,7 @@ class module_controller extends ctrl_module
     static $ResultOk;
     static $ResultErr;
 
-    private function SetError($ErrorText)
+    private static function SetError($ErrorText)
     {
         if (empty(self::$ResultErr))
             self::$ResultErr = $ErrorText;
@@ -399,7 +399,7 @@ class module_controller extends ctrl_module
         }
         $line .= "</select></td>";
         $line .= "<td>";
-        $line .= '<button type="submit" class="btn btn-large btn-primary" name="inSelect" value="' . $rowdomains['vh_id_pk'] . '"><i class="glyphicon glyphicon-pencil"></i>  ' . ui_language::translate("Edit") . '</button>';
+        $line .= '<button type="submit" class="btn btn-large btn-primary" name="inSelect" value="1"><i class="glyphicon glyphicon-pencil"></i>  ' . ui_language::translate("Edit") . '</button>';
         $line .= '</td>';
         $line .= '</tr>';
         $line .= '</table>';
