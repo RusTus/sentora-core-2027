@@ -1,6 +1,9 @@
-# Sentora
+# Sentora - Ubuntu 26.04
+THIS branch will not keep syncwith Sentora master branch.  I am updating all files and installer scripts to work with Ubuntu 26.04.  I will handle all updates, new modules or bugfixes here in this branch.
 
-* Version: 2.0.2 - In Development
+* Version: 26.04.1 - In Development - Code is working and I will have the installer scripts shortly
+
+
 * [Website](http://sentora.org/)
 * [Forums](https://forums.sentora.org/) for comments, discussion and community support.
 * [Bug Tracker](https://github.com/sentora/sentora-core/issues) for any bugs or security related issues.
