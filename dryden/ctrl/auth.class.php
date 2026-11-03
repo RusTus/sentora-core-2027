@@ -26,17 +26,8 @@ class ctrl_auth
     {
         global $zdbh;
         if (!isset($_SESSION['zpuid'])) {
-            if (isset($_COOKIE['zUser'])) {
-                if (isset($_COOKIE['zSec'])) {
-                    if ($_COOKIE['zSec'] == false) {
-                        $secure = false;
-                    } else {
-                        $secure = true;
-                    }
-                } else {
-                    $secure = true;
-                }
-                self::Authenticate($_COOKIE['zUser'], $_COOKIE['zPass'], false, true, $secure);
+            if (ctrl_loginguard::LoginFromCookie()) {
+                return true;
             }
             runtime_hook::Execute('OnRequireUserLogin');
             $sqlQuery = "SELECT ac_usertheme_vc, ac_usercss_vc FROM
@@ -61,6 +52,10 @@ class ctrl_auth
     {
         $sessionSecuirty = runtime_sessionsecurity::getSessionSecurityEnabled();
         if (isset($zpuid)) {
+            // New session id at login, so an id planted before login is worthless
+            if (session_status() === PHP_SESSION_ACTIVE && !headers_sent()) {
+                session_regenerate_id(true);
+            }
             $_SESSION['zpuid'] = $zpuid;
             if ($sessionSecuirty) {
                 //Implamentation of session security
@@ -131,12 +126,10 @@ class ctrl_auth
             //runtime_sessionsecurity::sessionRegen();
 
             ctrl_auth::SetUserSession($row['ac_id_pk'], $sessionSecurity);
-            $log_logon = $zdbh->prepare("UPDATE x_accounts SET ac_lastlogon_ts=" . time() . " WHERE ac_id_pk=" . $row['ac_id_pk'] . "");
-            $log_logon->execute();
+            $log_logon = $zdbh->prepare("UPDATE x_accounts SET ac_lastlogon_ts = :t WHERE ac_id_pk = :id");
+            $log_logon->execute(array(':t' => time(), ':id' => $row['ac_id_pk']));
             if ($rememberMe) {
-                setcookie("zUser", $username, time() + 60 * 60 * 24 * 30, "/");
-                setcookie("zPass", $password, time() + 60 * 60 * 24 * 30, "/");
-                //setcookie("zSec", $sessionSecuirty, time() + 60 * 60 * 24 * 30, "/");
+                ctrl_loginguard::Remember($row['ac_id_pk']);
             }
 
             runtime_hook::Execute('OnGoodUserLogin');
@@ -170,6 +163,7 @@ class ctrl_auth
      */
     static function KillCookies()
     {
+        ctrl_loginguard::Forget();
         setcookie("zUser", '', time() - 3600, "/");
         setcookie("zPass", '', time() - 3600, "/");
         unset($_COOKIE['zUser']);

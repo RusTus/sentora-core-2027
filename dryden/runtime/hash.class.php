@@ -110,7 +110,7 @@ class runtime_hash {
         $chars = './ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
         $randomsalt = (string) null;
         for ($i = 0; $i < 22; $i++)
-            $randomsalt.=$chars[rand(0, 63)];
+            $randomsalt.=$chars[random_int(0, 63)]; // was rand(): predictable
         return $randomsalt;
     }
 

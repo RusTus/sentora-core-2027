@@ -315,6 +315,10 @@ class module_controller extends ctrl_module
         runtime_csfr::Protect();
 //        $currentuser = ctrl_users::GetUserDetail();
         $formvars = $controller->GetAllControllerRequests('FORM');
+        // Only this account's own records (the id comes from the form)
+        if (!isset($formvars['inDelete']) || !ctrl_ownership::Owns('x_vhosts', 'vh_id_pk', 'vh_acc_fk', $formvars['inDelete'], ' AND vh_type_in = 3 AND vh_deleted_ts IS NULL')) {
+            return false;
+        }
         if (isset($formvars['inDelete'])) {
             if (self::ExecuteDeleteParkedDomain($formvars['inDelete'])) {
                 self::$ok = TRUE;

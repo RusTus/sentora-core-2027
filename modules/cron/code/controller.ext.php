@@ -69,7 +69,7 @@ class module_controller extends ctrl_module
                     $line .= "<tr>";
                     $line .= "<td>" . $rowcrons['ct_script_vc'] . "</td>";
                     $line .= "<td>" . ui_language::translate(self::TranslateTiming($rowcrons['ct_timing_vc'])) . "</td>";
-                    $line .= "<td>" . $rowcrons['ct_description_tx'] . "</td>";
+                    $line .= "<td>" . htmlspecialchars((string) $rowcrons['ct_description_tx'], ENT_QUOTES, 'UTF-8') . "</td>";
                     $line .= "<td><button class=\"button-loader delete btn btn-danger\" type=\"submit\" name=\"inDelete_" . $rowcrons['ct_id_pk'] . "\" id=\"button\" value=\"inDelete_" . $rowcrons['ct_id_pk'] . "\">" . ui_language::translate("Delete") . "</button></td>";
                     $line .= "</tr>";
                 }
@@ -142,7 +142,8 @@ class module_controller extends ctrl_module
         if (fs_director::CheckForEmptyValue(self::CheckCronForErrors())) {
             // If the user submitted a 'new' request then we will simply add the cron task to the database...
             $sql = $zdbh->prepare("INSERT INTO x_cronjobs (ct_acc_fk, ct_script_vc, ct_description_tx, ct_timing_vc, ct_fullpath_vc, ct_created_ts) VALUES (:userid, :script, :desc, :timing, :fullpath, " . time() . ")");
-            $sql->bindParam(':userid', $controller->GetControllerRequest('FORM', 'inUserID'));
+            // The job always belongs to the logged-in account (this took inUserID from the form)
+            $sql->bindParam(':userid', $currentuser['userid']);
             $sql->bindParam(':script', $controller->GetControllerRequest('FORM', 'inScript'));
             $sql->bindParam(':desc', $controller->GetControllerRequest('FORM', 'inDescription'));
             $sql->bindParam(':timing', $controller->GetControllerRequest('FORM', 'inTiming'));
@@ -188,6 +189,18 @@ class module_controller extends ctrl_module
         return;
     }
 
+    static function ValidScript($script)
+    {
+        $script = (string) $script;
+        return preg_match('#^[A-Za-z0-9_][A-Za-z0-9_./-]{0,250}\.php$#', $script) === 1
+            && strpos($script, '..') === false && strpos($script, '//') === false;
+    }
+
+    static function ValidTiming($timing)
+    {
+        return preg_match('#^[0-9*/,-]{1,40}( [0-9*/,-]{1,40}){4}$#', (string) $timing) === 1;
+    }
+
     static function CheckCronForErrors()
     {
         global $zdbh;
@@ -201,6 +214,13 @@ class module_controller extends ctrl_module
         // Check to make sure the cron is not blank before we go any further...
         if ($controller->GetControllerRequest('FORM', 'inScript') == '') {
             self::$blank = TRUE;
+            $retval = TRUE;
+        }
+        // A script path inside public_html and a plain five-field timing only: a
+        // newline, "..", quotes or spaces could otherwise write other crontab lines
+        if (!self::ValidScript($controller->GetControllerRequest('FORM', 'inScript'))
+            || !self::ValidTiming($controller->GetControllerRequest('FORM', 'inTiming'))) {
+            self::$noexists = TRUE;
             $retval = TRUE;
         }
         // Check to make sure the cron script exists before we go any further...
@@ -274,9 +294,19 @@ class module_controller extends ctrl_module
                 $fetchRows->bindParam(':userid', $rowcron['ct_acc_fk']);
                 $fetchRows->execute();
                 $rowclient = $fetchRows->fetch();
-                if ($rowclient && $rowclient['ac_enabled_in'] <> 0) {
+                // Each job runs with its own owner's open_basedir (this used the user who
+                // saved last), and a job whose timing or path is not well formed is
+                // never written (a newline in either used to add any line to the crontab)
+                $jobuser = $rowclient ? (string) $rowclient['ac_user_vc'] : '';
+                $jobbase = ctrl_options::GetSystemOption('hosted_dir') . $jobuser . "/";
+                $jobOk = self::ValidTiming($rowcron['ct_timing_vc'])
+                    && preg_match('/^[A-Za-z0-9_-]{1,64}$/', $jobuser)
+                    && strpos($rowcron['ct_fullpath_vc'], $jobbase . 'public_html/') === 0
+                    && self::ValidScript(substr($rowcron['ct_fullpath_vc'], strlen($jobbase . 'public_html/')));
+                if ($rowclient && $rowclient['ac_enabled_in'] <> 0 && $jobOk) {
+                    $jobrestrict = ctrl_options::GetSystemOption('php_exer') . " -d open_basedir=\"" . $jobbase . ctrl_options::GetSystemOption('openbase_seperator') . ctrl_options::GetSystemOption('openbase_temp') . "\" ";
                     $line .= "# CRON ID: " . $rowcron['ct_id_pk'] . fs_filehandler::NewLine();
-                    $line .= $rowcron['ct_timing_vc'] . " " . $restrictinfos . $rowcron['ct_fullpath_vc'] . fs_filehandler::NewLine();
+                    $line .= $rowcron['ct_timing_vc'] . " " . $jobrestrict . escapeshellarg($rowcron['ct_fullpath_vc']) . fs_filehandler::NewLine();
                     $line .= "# END CRON ID: " . $rowcron['ct_id_pk'] . fs_filehandler::NewLine();
                 }
             }

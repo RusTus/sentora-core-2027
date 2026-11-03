@@ -299,7 +299,11 @@ if ((isset($argv[1])) && ($argv[1] == 'update')) {
                     $plines = preg_split('/\r\n|\r|\n/', $packagects);
                     $newconf = "";
                     foreach ($plines as $pline) {
-                        if ((substr($line, 1, 1) != "#") || ($line != "")) {
+                        // Skip blank lines and comments in the repository's packages.txt
+                        // (this checked the repository name instead, so every blank
+                        // line became an empty package entry)
+                        $pline = trim($pline);
+                        if (($pline != "") && (substr($pline, 0, 1) != "#")) {
                             $newconf .= $pline . "\t" . $line . "\n";
                         }
                     }

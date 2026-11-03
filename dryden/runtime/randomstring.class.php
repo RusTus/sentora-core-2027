@@ -24,94 +24,19 @@ class runtime_randomstring{
      * @return string A random string
      */    
      static public function randomHash($size = 50, $characters='1234567890qwertyuiopasdfghjklzxcvbnm', $hash = false) {
-        //declare varables
-        $seed = '';
-        $hashMixed = '';
-        $charachters = $characters;
-        $loop = $size / 5;
-        
-        //loop X times random number
-        for($m = 0; $m < $loop; $m++){
-            //random string
-            $seed .= str_replace('-','',crc32(uniqid(sha1(microtime(true) . getmypid() . rand(10000,99999999)), true)));
+        // Cryptographically secure (was built from crc32(uniqid(microtime... rand)),
+        // which made password-reset keys and other tokens guessable)
+        $size = ($size === false || (int) $size < 1) ? 50 : (int) $size;
+        $characters = (string) $characters;
+        $max = strlen($characters) - 1;
+        $out = '';
+        for ($i = 0; $i < $size; $i++) {
+            $out .= $characters[random_int(0, $max)];
         }
-        
-        //randomise string again
-		//mt_srand($seed);
-        mt_srand();
-        mt_rand();
-        
-        //Make the random number into a random string
-        $loopNow = strlen($seed);
-        //loop 
-        for ($i = 0; $i < $loopNow; $i++) {
-            //search for char in chracter list 
-           $char = mt_rand($seed[$i], strlen($charachters));
-           //add it to hash
-           $hashMixed .= @$charachters[$char];
+        if ($hash != false) {
+            return hash('sha256', $out);
         }
-        
-        //Just incase php is Pseudo based. I dont think so but double check 
-        $hashMixed = substr($hashMixed, 10);
-        $length = strlen($hashMixed)-10;
-        $hashMixed = substr($hashMixed, 0,$length);
-        
-        //Now we check if size matters
-        if($size != false){
-            //check hash against demanded size
-            if(strlen($hashMixed) >= $size){
-                //trim the hash down to size
-                $hashMixed = substr($hashMixed, 0, $size);
-            }else if(strlen($hashMixed) <= $size){
-                //increase hash length here
-                //Declare varables
-                $needed = $size - strlen($hashMixed);
-                $decimalLoop = $needed / 5;
-                $loops = round($decimalLoop, 0);
-                $seed = '';
-                $hashMixedAdditon = '';
-                
-                //Loop X times Make random number
-                for($m = 0; $m < $loops; $m++){
-                    //random string
-                    $seed .= str_replace('-','',crc32(uniqid(sha1(microtime(true) . getmypid() . rand(10000,99999999)), true)));
-                }
-                //randomise string again
-				//mt_srand($seed);
-                mt_srand();
-                mt_rand();
-                
-                //Change random number into string
-                for ($i = 0; $i < strlen($seed); $i++) {
-                    //search for char in chracter list 
-                   $char = mt_rand($seed[$i], strlen($charachters));
-                   //add it to hash
-                   $hashMixedAdditon .= @$charachters[$char];
-                }
-                
-                //trim to need number of chars
-                $additionalHash = substr($hashMixedAdditon, 0, $needed);
-                
-                //Add the additional hash onto the end to make the correct size
-                $hashMixed = $hashMixed . $additionalHash;
-            }
-        }
-            
-        //check if hashing is needed
-        if($hash == false){
-            //do not hash
-            $hash = $hashMixed;
-        }else{
-            if($hash == true){ $hash = 'sha256'; }
-            //Then hash the hash is sha256
-            $hash = hash($hash, $hashMixed);
-        }
-        
-        //Randomise string again
-        $hash = str_shuffle($hash);
-        
-        //return hash
-        return $hash;
+        return $out;
     }
 
     

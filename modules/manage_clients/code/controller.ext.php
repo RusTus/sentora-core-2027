@@ -216,7 +216,7 @@ class module_controller extends ctrl_module
                     if (strtoupper($rowgroups['ug_name_vc']) == "USERS") {
                         array_push($res, array('groupid' => $rowgroups['ug_id_pk'],
                             'groupname' => runtime_xss::xssClean(ui_language::translate($rowgroups['ug_name_vc'])),
-                            'groupselected' => $selected));
+                            'groupselected' => ''));
                     }
                 }
             }
@@ -248,7 +248,7 @@ class module_controller extends ctrl_module
                         $selected = " selected";
                     }
                     array_push($res, array('groupid' => $rowgroups['ug_id_pk'],
-                        'groupname' => ui_language::translate($rowgroups['ug_name_vc']),
+                        'groupname' => htmlspecialchars(ui_language::translate($rowgroups['ug_name_vc']), ENT_QUOTES, 'UTF-8'),
                         'groupselected' => $selected));
                 } else {
                     if (strtoupper($rowgroups['ug_name_vc']) == "USERS") {
@@ -257,7 +257,7 @@ class module_controller extends ctrl_module
                             $selected = " selected";
                         }
                         array_push($res, array('groupid' => $rowgroups['ug_id_pk'],
-                            'groupname' => ui_language::translate($rowgroups['ug_name_vc']),
+                            'groupname' => htmlspecialchars(ui_language::translate($rowgroups['ug_name_vc']), ENT_QUOTES, 'UTF-8'),
                             'groupselected' => $selected));
                     }
                 }
@@ -801,6 +801,11 @@ class module_controller extends ctrl_module
         runtime_csfr::Protect();
         $currentuser = ctrl_users::GetUserDetail();
         $formvars = $controller->GetAllControllerRequests('FORM');
+        // A reseller may only use its own packages and the groups it is offered; only an
+        // administrator may create administrators (any reseller could, by sending group 1)
+        if (!isset($formvars['inNewPackage'], $formvars['inNewGroup']) || !ctrl_ownership::Owns('x_packages', 'pk_id_pk', 'pk_reseller_fk', $formvars['inNewPackage'], ' AND pk_deleted_ts IS NULL') || !self::AllowedGroup($formvars['inNewGroup'])) {
+            return false;
+        }
         if (isset($formvars['inSWE'])) {
             $sendemail = $formvars['inSWE'];
         } else {
@@ -857,6 +862,11 @@ class module_controller extends ctrl_module
         global $controller;
         runtime_csfr::Protect();
         $formvars = $controller->GetAllControllerRequests('FORM');
+        // Only this reseller's own clients, moved to another of its own clients
+        if (!isset($formvars['inDelete']) || !ctrl_ownership::Owns('x_accounts', 'ac_id_pk', 'ac_reseller_fk', $formvars['inDelete'], ' AND ac_deleted_ts IS NULL')
+            || (!empty($formvars['inMoveClient']) && (string) $formvars['inMoveClient'] !== (string) ctrl_users::GetUserDetail()['userid'] && !ctrl_ownership::Owns('x_accounts', 'ac_id_pk', 'ac_reseller_fk', $formvars['inMoveClient'], ' AND ac_deleted_ts IS NULL'))) {
+            return false;
+        }
         if (self::ExecuteDeleteClient($formvars['inDelete'], $formvars['inMoveClient']))
             return true;
         return false;
@@ -868,6 +878,10 @@ class module_controller extends ctrl_module
         runtime_csfr::Protect();
         $currentuser = ctrl_users::GetUserDetail();
         $formvars = $controller->GetAllControllerRequests('FORM');
+        // Only this reseller's own clients, packages and groups
+        if (!isset($formvars['inClientID'], $formvars['inPackage'], $formvars['inGroup']) || !ctrl_ownership::Owns('x_accounts', 'ac_id_pk', 'ac_reseller_fk', $formvars['inClientID'], ' AND ac_deleted_ts IS NULL') || !ctrl_ownership::Owns('x_packages', 'pk_id_pk', 'pk_reseller_fk', $formvars['inPackage'], ' AND pk_deleted_ts IS NULL') || !self::AllowedGroup($formvars['inGroup'])) {
+            return false;
+        }
         if (self::ExecuteUpdateClient($formvars['inClientID'], $formvars['inPackage'], $formvars['inEnabled'], $formvars['inGroup'], $formvars['inFullName'], $formvars['inEmailAddress'], $formvars['inAddress'], $formvars['inPostCode'], $formvars['inPhone'], $formvars['inNewPassword']))
             return true;
         return false;
@@ -920,11 +934,35 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * A group this account may give a client: one of the groups it is offered
+     * (owned by its reseller), and never Administrators unless it is an administrator.
+     */
+    static function AllowedGroup($gid)
+    {
+        $currentuser = ctrl_users::GetUserDetail();
+        if (!preg_match('/^[0-9]{1,10}$/', (string) $gid)) {
+            return false;
+        }
+        foreach ((array) self::ListGroups($currentuser['userid']) as $group) {
+            if ((string) $group['groupid'] === (string) $gid) {
+                return ((int) $gid !== 1) || ((int) $currentuser['usergroupid'] === 1);
+            }
+        }
+        return false;
+    }
+
     static function getGroupList()
     {
         global $controller;
         $currentuser = ctrl_users::GetUserDetail();
-        return self::ListGroups($currentuser['userid']);
+        $groups = array();
+        foreach ((array) self::ListGroups($currentuser['userid']) as $group) {
+            if (self::AllowedGroup($group['groupid'])) {
+                $groups[] = $group;
+            }
+        }
+        return count($groups) ? $groups : false;
     }
 
     static function getCurrentGroupList()

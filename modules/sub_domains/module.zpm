@@ -40,6 +40,7 @@
                     <th><: Sub-domain :></th>
                     <th><: Home directory :></th>
                     <th><: Status :></th>
+                    <th><: PHP :></th>
                     <th></th>
                     <th></th>
                 </tr>
@@ -48,12 +49,27 @@
                     <td><a href="http://<& subname &>/" target="_blank"><& subname &></a></td>
                     <td><& subdirectory &></td>
                     <& substatus &>
+                    <td><& subphp &></td>
                     <td><button class="button-loader delete btn btn-danger" type="submit" id="button" name="inDelete_<& subid &>" id="inDelete_<& subid &>" value="inDelete_<& subid &>"><: Delete :></button></td>
                 </tr>
                 <% endloop %>
             </table>
             <@ CSFR_Tag @>
         </form>
+        <% if HasPhpVersions %>
+        <form action="./?module=sub_domains&action=SetPhpVersion" method="post" class="form-inline">
+            <: Change PHP version for :>
+            <select name="inSubDomainId">
+                <% loop SubDomainList %>
+                <option value="<& subid &>"><& subname &></option>
+                <% endloop %>
+            </select>
+            <: to :>
+            <select name="inPhpVersion"><@ PhpVersionOptions @></select>
+            <button class="btn btn-primary" type="submit"><: Change :></button>
+            <@ CSFR_Tag @>
+        </form>
+        <% endif %>
         <% else %>
         <: You currently do not have any Sub-domains configured. Create a Sub-domain using the form below. :>
         <% endif %>
@@ -97,6 +113,12 @@
                                     </div>
                                 </td>
                             </tr>
+                            <% if HasPhpVersions %>
+                            <tr>
+                                <th nowrap="nowrap"><: PHP version :>:</th>
+                                <td><select name="inPhpVersion" id="inPhpVersion"><@ PhpVersionOptions @></select></td>
+                            </tr>
+                            <% endif %>
                             <tr>
                                 <th></th>
                                 <td align="right"><button class="button-loader btn btn-primary" type="submit" id="button" name="CreateSubDomain" value="1">Create</button></td>

@@ -75,6 +75,10 @@ class module_controller extends ctrl_module
         $email = $controller->GetControllerRequest('FORM', 'inEmail');
         $fullname = $controller->GetControllerRequest('FORM', 'inFullname');
         $language = $controller->GetControllerRequest('FORM', 'inLanguage');
+        // Only a language the panel has (it is used as part of a column name)
+        if (!preg_match('/^[a-z]{2}$/', (string) $language)) {
+            $language = 'en';
+        }
         $phone = $controller->GetControllerRequest('FORM', 'inPhone');
         $address = $controller->GetControllerRequest('FORM', 'inAddress');
         $postalCode = $controller->GetControllerRequest('FORM', 'inPostalCode');

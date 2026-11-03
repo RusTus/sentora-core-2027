@@ -77,7 +77,7 @@ class module_controller extends ctrl_module
                 $line .= "<th style=\"text-align:center\">" . ui_language::translate("Up-to-date?") . "</th>";
                 $groupssql = $zdbh->query("SELECT * FROM x_groups ORDER BY ug_name_vc ASC");
                 while ($groups = $groupssql->fetch()) {
-                    $line .= "<th style=\"text-align:center\">" . $groups['ug_name_vc'] . "</th>";
+                    $line .= "<th style=\"text-align:center\">" . htmlspecialchars((string) $groups['ug_name_vc'], ENT_QUOTES, 'UTF-8') . "</th>";
                 }
 
                 $line .= "</tr>";
@@ -92,7 +92,7 @@ class module_controller extends ctrl_module
                         $line .= "<th style=\"text-align:center\">" . ui_language::translate("Up-to-date?") . "</th>";
                         $groupssql = $zdbh->query("SELECT * FROM x_groups ORDER BY ug_name_vc ASC");
                         while ($groups = $groupssql->fetch()) {
-                            $line .= "<th style=\"text-align:center\">" . $groups['ug_name_vc'] . "</th>";
+                            $line .= "<th style=\"text-align:center\">" . htmlspecialchars((string) $groups['ug_name_vc'], ENT_QUOTES, 'UTF-8') . "</th>";
                         }
                         $line .= "</tr>";
                     }
@@ -374,39 +374,39 @@ class module_controller extends ctrl_module
 
     static function doInstallModule()
     {
+        global $controller;
+        runtime_csfr::Protect();
+        require_once ctrl_options::GetSystemOption('sentora_root') . 'modules/repo_browser/code/repohelper.php';
         self::$error_message = "";
         self::$error = false;
-        if ($_FILES['modulefile']['error'] > 0) {
-            self::$error_message = "Couldn't upload the file, " . $_FILES['modulefile']['error'] . "";
+        if (!isset($_FILES['modulefile']) || $_FILES['modulefile']['error'] > 0) {
+            self::$error_message = "Couldn't upload the file.";
         } else {
             $archive_ext = fs_director::GetFileExtension($_FILES['modulefile']['name']);
             $module_folder = fs_director::GetFileNameNoExtentsion($_FILES['modulefile']['name']);
-            $module_dir = ctrl_options::GetSystemOption('sentora_root') . 'modules/' . $module_folder;
-            if (!fs_director::CheckFolderExists($module_dir)) {
-                if ($archive_ext != 'zpp') {
-                    self::$error_message = "Package type was not detected as a .zpp (Sentora Package) archive.";
-                } else {
-                    if (fs_director::CreateDirectory($module_dir)) {
-                        if (sys_archive::Unzip($_FILES['modulefile']['tmp_name'], $module_dir . '/')) {
-                            if (!fs_director::CheckFileExists($module_dir . '/module.xml')) {
-                                self::$error_message = "No module.xml file found in the unzipped archive.";
-                            } else {
-                                ui_module::ModuleInfoToDB($module_folder);
-                                $extra_config = $module_dir . "/deploy/install.run";
-                                if (fs_director::CheckFileExists($extra_config))
-                                    exec(ctrl_options::GetSystemOption('php_exer') . " " . $extra_config . "");
-                                self::$ok = true;
-                            }
-                        } else {
-                            self::$error_message = "Couldn't unzip the archive (" . $_FILES['modulefile']['tmp_name'] . ") to " . $module_dir . '/';
-                        }
-                    } else {
-                        self::$error_message = "Couldn't create module folder in " . $module_dir;
-                    }
-                }
+            if ($archive_ext != 'zpp') {
+                self::$error_message = "Package type was not detected as a .zpp (Sentora Package) archive.";
+            } elseif (!repo_browser_helper::ValidModule($module_folder) || repo_browser_helper::IsCoreModule($module_folder)) {
+                self::$error_message = "The package name must be a module folder name (letters, numbers, _ and -) and not one of the panel's own modules.";
+            } elseif (fs_director::CheckFolderExists(ctrl_options::GetSystemOption('sentora_root') . 'modules/' . $module_folder)) {
+                self::$error_message = "The module folder already exists!";
             } else {
-                self::$error_message = "The module " . $module_folder . " is already installed on this server!";
+                // Modules are installed by root (the modules folder is not writable by the
+                // panel): keep the upload for the root job and queue it
+                $dir = repo_browser_helper::UPLOAD_DIR;
+                if (!is_dir($dir)) {
+                    @mkdir($dir, 0700, true);
+                }
+                if (move_uploaded_file($_FILES['modulefile']['tmp_name'], $dir . $module_folder . '.zpp')
+                    && repo_browser_helper::Enqueue(array('install-upload', $module_folder))) {
+                    self::$ok = true;
+                } else {
+                    self::$error_message = "The package could not be queued for installation.";
+                }
             }
+        }
+        if (self::$error_message != "") {
+            self::$error = true;
         }
         return;
     }

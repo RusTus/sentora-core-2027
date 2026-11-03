@@ -90,7 +90,7 @@ class runtime_sessionsecurity {
             //already set
         }else{
             $_SESSION['zUserSalt'] = $random;
-            setcookie("zUserSaltCookie", $random, time() + 60 * 60 * 24 * 30, "/"); 
+            setcookie("zUserSaltCookie", $random, array('expires' => time() + 60 * 60 * 24 * 30, 'path' => '/', 'secure' => ctrl_loginguard::IsHttps(), 'httponly' => true, 'samesite' => 'Lax')); 
         }
         return true;            
     }

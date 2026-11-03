@@ -189,6 +189,10 @@ class module_controller extends ctrl_module
 
     static function ListCurrentUser($mid)
     {
+        // Only this account's own records (the id comes from ?other= or the form)
+        if (!ctrl_ownership::Owns('x_mysql_users', 'mu_id_pk', 'mu_acc_fk', $mid)) {
+            return false;
+        }
         global $zdbh;
         $numrows = $zdbh->prepare("SELECT * FROM x_mysql_users WHERE mu_id_pk=:mid AND mu_deleted_ts IS NULL");
         $numrows->bindParam(':mid', $mid);
@@ -629,6 +633,12 @@ class module_controller extends ctrl_module
         runtime_csfr::Protect();
         $currentuser = ctrl_users::GetUserDetail();
         $formvars = $controller->GetAllControllerRequests('FORM');
+        // Only this account's own records (the id comes from the form)
+        if (!isset($formvars['inUser'], $formvars['inDatabase'])
+            || !ctrl_ownership::Owns('x_mysql_users', 'mu_id_pk', 'mu_acc_fk', $formvars['inUser'], ' AND mu_deleted_ts IS NULL')
+            || !ctrl_ownership::Owns('x_mysql_databases', 'my_id_pk', 'my_acc_fk', $formvars['inDatabase'], ' AND my_deleted_ts IS NULL')) {
+            return false;
+        }
         if (self::ExecuteAddDB($currentuser['userid'], $formvars['inUser'], $formvars['inDatabase']))
             return true;
         return false;
@@ -640,6 +650,10 @@ class module_controller extends ctrl_module
         runtime_csfr::Protect();
         $currentuser = ctrl_users::GetUserDetail();
         $formvars = $controller->GetAllControllerRequests('FORM');
+        // Only this account's own records (the id comes from the form)
+        if (!isset($formvars['inUser']) || !ctrl_ownership::Owns('x_mysql_users', 'mu_id_pk', 'mu_acc_fk', $formvars['inUser'], ' AND mu_deleted_ts IS NULL')) {
+            return false;
+        }
         foreach (self::ListUserDatabases($formvars['inUser']) as $row) {
             if (isset($formvars['inRemove_' . $row['mmid'] . ''])) {
                 if (self::ExecuteRemoveDB($formvars['inUser'], $formvars['inRemove_' . $row['mmid'] . ''])) {
@@ -657,6 +671,10 @@ class module_controller extends ctrl_module
         global $controller;
         runtime_csfr::Protect();
         $formvars = $controller->GetAllControllerRequests('FORM');
+        // Only this account's own records (the id comes from the form)
+        if (!isset($formvars['inDelete']) || !ctrl_ownership::Owns('x_mysql_users', 'mu_id_pk', 'mu_acc_fk', $formvars['inDelete'], ' AND mu_deleted_ts IS NULL')) {
+            return false;
+        }
         if (self::ExecuteDeleteUser($formvars['inDelete']))
             return true;
         return false;
@@ -667,6 +685,10 @@ class module_controller extends ctrl_module
         global $controller;
         runtime_csfr::Protect();
         $formvars = $controller->GetAllControllerRequests('FORM');
+        // Only this account's own records (the id comes from the form)
+        if (!isset($formvars['inUser']) || !ctrl_ownership::Owns('x_mysql_users', 'mu_id_pk', 'mu_acc_fk', $formvars['inUser'], ' AND mu_deleted_ts IS NULL')) {
+            return false;
+        }
         if (self::ExecuteResetPassword($formvars['inUser'], $formvars['inResetPW']))
             return true;
         return false;

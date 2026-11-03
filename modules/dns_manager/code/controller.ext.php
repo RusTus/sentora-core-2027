@@ -437,6 +437,10 @@ class module_controller extends ctrl_module
         global $zdbh;
         global $controller;
         runtime_csfr::Protect();
+        // Only this account's own domains
+        if (!ctrl_ownership::Owns('x_vhosts', 'vh_id_pk', 'vh_acc_fk', $controller->GetControllerRequest('FORM', 'inDomain'), ' AND vh_type_in != 2 AND vh_deleted_ts IS NULL')) {
+            return;
+        }
         self::$editdomain = $controller->GetControllerRequest('FORM', 'inDomain');
         return;
     }
@@ -446,6 +450,10 @@ class module_controller extends ctrl_module
         global $zdbh;
         global $controller;
         runtime_csfr::Protect();
+        // Records can only be added to or changed on this account's own domains
+        if (!ctrl_ownership::Owns('x_vhosts', 'vh_id_pk', 'vh_acc_fk', $controller->GetControllerRequest('FORM', 'domainID'), ' AND vh_type_in != 2 AND vh_deleted_ts IS NULL')) {
+            return;
+        }
         if (!fs_director::CheckForEmptyValue(self::CheckForErrors())) {
             self::SaveDNS();
             //self::WriteRecord();
@@ -514,6 +522,11 @@ class module_controller extends ctrl_module
         runtime_csfr::Protect();
 
         $domainID = $controller->GetControllerRequest('FORM', 'inDomain');
+        // Only this account's own domains, for this account
+        $currentuser = ctrl_users::GetUserDetail();
+        if (!ctrl_ownership::Owns('x_vhosts', 'vh_id_pk', 'vh_acc_fk', $domainID, ' AND vh_type_in != 2 AND vh_deleted_ts IS NULL') || (string) $controller->GetControllerRequest('FORM', 'inUserID') !== (string) $currentuser['userid']) {
+            return;
+        }
         $numrows = $zdbh->prepare('SELECT * FROM x_vhosts WHERE vh_id_pk=:domainID AND vh_type_in !=2 AND vh_deleted_ts IS NULL');
         $numrows->bindParam(':domainID', $domainID);
         $numrows->execute();

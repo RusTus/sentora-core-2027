@@ -20,7 +20,7 @@ if (isset($_GET['id'])) {
     $userid = NULL;
 }
 session_start();
-if ($_SESSION['zpuid'] == $userid) {
+if (!empty($_SESSION['zpuid']) && ctype_digit((string) $userid) && (int) $_SESSION['zpuid'] === (int) $userid) {
     $currentuser = ctrl_users::GetUserDetail($userid);
     ?>
     <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
@@ -30,7 +30,7 @@ if ($_SESSION['zpuid'] == $userid) {
             <title>Sentora &gt; Back-Ups</title>
             <link href="../../../etc/styles/<?php echo $currentuser['usertheme']; ?>/css/<?php echo $currentuser['usercss']; ?>.css" rel="stylesheet" type="text/css">
             <script src="../assets/ajaxsbmt.js" type="text/javascript"></script>
-            <script src="http://code.jquery.com/jquery-latest.js"></script>
+            <script src="../../../etc/styles/Sentora_Default/js/jquery.js"></script>
             <script type="text/javascript"></script>
             
 			<script>

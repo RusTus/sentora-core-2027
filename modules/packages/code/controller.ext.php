@@ -111,6 +111,10 @@ class module_controller extends ctrl_module
 
     static function ListCurrentPackage($id)
     {
+        // Only this account's own records (the id comes from ?other= or the form)
+        if (!ctrl_ownership::Owns('x_packages', 'pk_id_pk', 'pk_reseller_fk', $id)) {
+            return false;
+        }
         global $zdbh;
         $sql = "SELECT * FROM x_packages
 				LEFT JOIN x_quotas  ON (x_packages.pk_id_pk=x_quotas.qt_package_fk)
@@ -436,6 +440,10 @@ class module_controller extends ctrl_module
         runtime_csfr::Protect();
         $currentuser = ctrl_users::GetUserDetail();
         $formvars = $controller->GetAllControllerRequests('FORM');
+        // Only this reseller's own packages
+        if (!isset($formvars['inPackageID']) || !ctrl_ownership::Owns('x_packages', 'pk_id_pk', 'pk_reseller_fk', $formvars['inPackageID'], ' AND pk_deleted_ts IS NULL')) {
+            return false;
+        }
         if (isset($formvars['inEnablePHP'])) {
             $EnablePHP = fs_director::GetCheckboxValue($formvars['inEnablePHP']);
         } else {
@@ -470,6 +478,11 @@ class module_controller extends ctrl_module
         global $controller;
         runtime_csfr::Protect();
         $formvars = $controller->GetAllControllerRequests('FORM');
+        // Only this reseller's own packages (and move its clients to another of its own)
+        if (!isset($formvars['inPackageID']) || !ctrl_ownership::Owns('x_packages', 'pk_id_pk', 'pk_reseller_fk', $formvars['inPackageID'], ' AND pk_deleted_ts IS NULL')
+            || (!empty($formvars['inMovePackage']) && !ctrl_ownership::Owns('x_packages', 'pk_id_pk', 'pk_reseller_fk', $formvars['inMovePackage'], ' AND pk_deleted_ts IS NULL'))) {
+            return false;
+        }
         if (self::ExecuteDeletePackage($formvars['inPackageID'], $formvars['inMovePackage']))
             return true;
         return false;

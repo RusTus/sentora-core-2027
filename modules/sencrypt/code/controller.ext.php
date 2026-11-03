@@ -444,11 +444,34 @@ class module_controller extends ctrl_module {
 		header('Location: ' . $_SERVER['HTTP_REFERER']);
 	}
 	
+	/** a domain or subdomain name that belongs to the logged-in account */
+	static function OwnsDomainName($domain) {
+		global $zdbh;
+		$domain = (string) $domain;
+		if (!preg_match('/^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$/', $domain) || strpos($domain, '..') !== false) {
+			return false;
+		}
+		$currentuser = ctrl_users::GetUserDetail();
+		if ($domain === (string) ctrl_options::GetSystemOption('sentora_domain') && (int) $currentuser['usergroupid'] === 1) {
+			return true;
+		}
+		$sql = $zdbh->prepare("SELECT COUNT(*) FROM x_vhosts WHERE vh_name_vc = :domain AND vh_acc_fk = :uid AND vh_deleted_ts IS NULL");
+		$sql->bindParam(':domain', $domain);
+		$sql->bindParam(':uid', $currentuser['userid']);
+		$sql->execute();
+		return (int) $sql->fetchColumn() > 0;
+	}
+
 	static function doDownload() {
 		
         global $controller;
         $currentuser = ctrl_users::GetUserDetail();
         $formvars = $controller->GetAllControllerRequests('FORM');
+		// Only this account's own domains (the name comes from the form, and is also
+		// used in file paths, so a "../" or another account's domain must never get through)
+		if (!self::OwnsDomainName(isset($formvars['inDomain']) ? $formvars['inDomain'] : '')) {
+			return false;
+		}
         if (self::ExecuteDownload($formvars['inName'], $currentuser["username"])) {
             return true;
 		}
@@ -459,6 +482,11 @@ class module_controller extends ctrl_module {
 		runtime_csfr::Protect();
 		$currentuser = ctrl_users::GetUserDetail();
 		$formvars = $controller->GetAllControllerRequests('FORM');
+		// Only this account's own domains (the name comes from the form, and is also
+		// used in file paths, so a "../" or another account's domain must never get through)
+		if (!self::OwnsDomainName(isset($formvars['inDomain']) ? $formvars['inDomain'] : '')) {
+			return false;
+		}
 		if (empty($formvars['inDomain']) || empty($formvars['inName']) || empty($formvars['inAddress']) || empty($formvars['inCity']) || empty($formvars['inCountry']) || empty($formvars['inCompany'])) { 
 			self::$empty = true;
 			return false;
@@ -523,9 +551,14 @@ class module_controller extends ctrl_module {
 
 	static function doTPDelete() {
         global $controller;
-        //runtime_csfr::Protect();
+        runtime_csfr::Protect(); // Sentora: was commented out
         $currentuser = ctrl_users::GetUserDetail();
         $formvars = $controller->GetAllControllerRequests('FORM');
+		// Only this account's own domains (the name comes from the form, and is also
+		// used in file paths, so a "../" or another account's domain must never get through)
+		if (!self::OwnsDomainName(isset($formvars['inDomain']) ? $formvars['inDomain'] : '')) {
+			return false;
+		}
 		
 		$sub_module = "third_party";
 		
@@ -739,6 +772,11 @@ class module_controller extends ctrl_module {
 		global $controller;
 		$currentuser = ctrl_users::GetUserDetail();
 		$formvars = $controller->GetAllControllerRequests('FORM');
+		// Only this account's own domains (the name comes from the form, and is also
+		// used in file paths, so a "../" or another account's domain must never get through)
+		if (!self::OwnsDomainName(isset($formvars['inDomain']) ? $formvars['inDomain'] : '')) {
+			return false;
+		}
 		$domain = $formvars["inDomain"];
 
 		if (empty($_FILES["inkey"]["name"]) || empty($_FILES["inWCA"]["name"])) { 
@@ -880,6 +918,11 @@ class module_controller extends ctrl_module {
         runtime_csfr::Protect();
         $currentuser = ctrl_users::GetUserDetail();
         $formvars = $controller->GetAllControllerRequests('FORM');
+		// Only this account's own domains (the name comes from the form, and is also
+		// used in file paths, so a "../" or another account's domain must never get through)
+		if (!self::OwnsDomainName(isset($formvars['inDomain']) ? $formvars['inDomain'] : '')) {
+			return false;
+		}
 		if (empty($formvars['inDomain']) || empty($formvars['inName']) || empty($formvars['inAddress']) || empty($formvars['inCity']) || empty($formvars['inCountry']) || empty($formvars['inCompany'])) { 
 			self::$empty = true;
 			return false;
@@ -1188,6 +1231,11 @@ class module_controller extends ctrl_module {
 		
 		$currentuser = ctrl_users::GetUserDetail();
 		$formvars = $controller->GetAllControllerRequests('FORM');
+		// Only this account's own domains (the name comes from the form, and is also
+		// used in file paths, so a "../" or another account's domain must never get through)
+		if (!self::OwnsDomainName(isset($formvars['inDomain']) ? $formvars['inDomain'] : '')) {
+			return false;
+		}
 
 		if (self::ExecuteMakeSSL($formvars['inDomain'], $currentuser["username"], $sub_module))
 		return true;
@@ -1201,6 +1249,11 @@ class module_controller extends ctrl_module {
 		
 		$currentuser = ctrl_users::GetUserDetail();
 		$formvars = $controller->GetAllControllerRequests('FORM');
+		// The panel's own certificate: administrators only, for the panel domain only
+		$sentoraUser = ctrl_users::GetUserDetail();
+		if ((int) $sentoraUser['usergroupid'] !== 1 || !isset($formvars['inDomain']) || (string) $formvars['inDomain'] !== (string) ctrl_options::GetSystemOption('sentora_domain')) {
+			return false;
+		}
 		if (self::ExecuteMakePanelSSL($formvars['inDomain'], $currentuser["username"], $sub_module))
 		return true;
 	}
@@ -1529,6 +1582,11 @@ class module_controller extends ctrl_module {
 		global $controller;
 		$currentuser = ctrl_users::GetUserDetail();
 		$formvars = $controller->GetAllControllerRequests('FORM');
+		// Only this account's own domains (the name comes from the form, and is also
+		// used in file paths, so a "../" or another account's domain must never get through)
+		if (!self::OwnsDomainName(isset($formvars['inDomain']) ? $formvars['inDomain'] : '')) {
+			return false;
+		}
 		
 		$sub_module = "letsencrypt";
 		
@@ -1599,6 +1657,11 @@ class module_controller extends ctrl_module {
 		global $controller;
 		$currentuser = ctrl_users::GetUserDetail();
 		$formvars = $controller->GetAllControllerRequests('FORM');			
+		// The panel's own certificate: administrators only, for the panel domain only
+		$sentoraUser = ctrl_users::GetUserDetail();
+		if ((int) $sentoraUser['usergroupid'] !== 1 || !isset($formvars['inDomain']) || (string) $formvars['inDomain'] !== (string) ctrl_options::GetSystemOption('sentora_domain')) {
+			return false;
+		}
 		//if (self::ExecuteDeletePanelSSL($formvars['inDomain'], $currentuser["username"]))
 		if (self::ExecuteDeletePanelSSL(ctrl_options::GetSystemOption('sentora_domain'), $currentuser["username"]))
 		return true;
@@ -1679,6 +1742,11 @@ class module_controller extends ctrl_module {
 		$sub_module = "letsencrypt";
 		$currentuser = ctrl_users::GetUserDetail();
 		$formvars = $controller->GetAllControllerRequests('FORM');
+		// Only this account's own domains (the name comes from the form, and is also
+		// used in file paths, so a "../" or another account's domain must never get through)
+		if (!self::OwnsDomainName(isset($formvars['inDomain']) ? $formvars['inDomain'] : '')) {
+			return false;
+		}
 		
 		if (self::ExecuteRevokeSSL($formvars['inDomain'], $currentuser["username"], $sub_module))
 		return true;

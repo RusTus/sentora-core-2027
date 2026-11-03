@@ -32,7 +32,10 @@ class ui_language {
             $sql = $zdbh->prepare('SELECT ud_language_vc FROM x_profiles WHERE ud_user_fk=' . $uid);
             $sql->execute();
             $lang = $sql->fetch();
-            self::$LangCol = 'tr_' . $lang['ud_language_vc'] . '_tx';
+            // The language becomes part of a column name: two letters only (anything
+            // else, from an old or hand-edited profile, falls back to English)
+            $code = (is_array($lang) && preg_match('/^[a-z]{2}$/', (string) $lang['ud_language_vc'])) ? $lang['ud_language_vc'] : 'en';
+            self::$LangCol = 'tr_' . $code . '_tx';
         }
         if (self::$LangCol == 'tr_en_tx')
             return $message; //no translation required, english used

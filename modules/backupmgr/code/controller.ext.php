@@ -77,14 +77,15 @@ class module_controller extends ctrl_module
         $currentuser = ctrl_users::GetUserDetail($userid);
         $datafolder = ctrl_options::GetSystemOption('hosted_dir') . $currentuser['username'] . "/public_html/";
         $dirFiles = array();
-        if ($handle = opendir($datafolder)) {
+        if (is_dir($datafolder) && ($handle = opendir($datafolder))) {
             while (false !== ($file = readdir($handle))) {
                 if ($file != "." && $file != "..") {
                     $dirFiles[] = $file;
                 }
             }
+            closedir($handle);
         }
-        closedir($handle);
+        
         if (!fs_director::CheckForEmptyValue($dirFiles)) {
             return true;
         }

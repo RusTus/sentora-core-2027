@@ -1,4 +1,5 @@
 <?php
+defined('SENTORA_PANEL_FPM_SOCKET') || define('SENTORA_PANEL_FPM_SOCKET', '/run/php/sentora-panel.sock');
 
 echo fs_filehandler::NewLine() . "START Apache Config Hook." . fs_filehandler::NewLine();
 if (ui_module::CheckModuleEnabled('Apache Config')) {
@@ -47,6 +48,9 @@ function BuildVhostPortForward($vhostName, $customPort, $userEmail) {
 		$line .= "ServerAlias www." . $vhostName . fs_filehandler::NewLine();
     $line .= "ServerAdmin " . $userEmail . fs_filehandler::NewLine();
     $line .= "RewriteEngine on" . fs_filehandler::NewLine();
+    // Apache's own status page stays on plain http for requests from this server
+    // (Require local), so the Apache Status module can read it
+    $line .= "RewriteCond %{REQUEST_URI} !^/server-status" . fs_filehandler::NewLine();
     $line .= "ReWriteCond %{SERVER_PORT} !^" . $customPort_in . "$" . fs_filehandler::NewLine();
     $line .= ( $customPort_in === "443" ) ? "RewriteRule ^/(.*) https://%{HTTP_HOST}/$1 [NC,R,L] " . fs_filehandler::NewLine() : "RewriteRule ^/(.*) http://%{HTTP_HOST}:" . $customPort . "/$1 [NC,R,L] " . fs_filehandler::NewLine();
     $line .= "</virtualhost>" . fs_filehandler::NewLine();
@@ -70,6 +74,9 @@ function BuildVhostReWriteSSL($vhostName, $userEmail) {
     $line .= "ServerAdmin " . $userEmail . fs_filehandler::NewLine();
     $line .= "RewriteEngine On" . fs_filehandler::NewLine();
 	$line .= "RewriteCond %{HTTPS} !=on" . fs_filehandler::NewLine();
+	// Apache's own status page stays on plain http for requests from this server
+    // (Require local), so the Apache Status module can read it
+    $line .= "RewriteCond %{REQUEST_URI} !^/server-status" . fs_filehandler::NewLine();
 	$line .= "RewriteRule ^/?(.*) https://%{SERVER_NAME}/$1 [R,L]" . fs_filehandler::NewLine();
     $line .= "</virtualhost>" . fs_filehandler::NewLine();
     //$line .= "# END DOMAIN: " . $vhostName . fs_filehandler::NewLine() . fs_filehandler::NewLine();
@@ -81,8 +88,30 @@ function BuildVhostReWriteSSL($vhostName, $userEmail) {
     return $line;
 }
 
+/**
+ * PHP handler lines for a regular domain or subdomain: the system PHP (mod_php,
+ * the php_handler setting) or the PHP-FPM version chosen for the domain.
+ */
+function BuildVhostPhpHandler($rowvhost, $vhostuser) {
+    $version = isset($rowvhost['vh_php_version_vc']) ? (string) $rowvhost['vh_php_version_vc'] : '';
+    if ($version === '' || !sys_phpversions::IsEnabled($version)) {
+        return ctrl_options::GetSystemOption('php_handler');
+    }
+    $openBasedir = '';
+    if (ctrl_options::GetSystemOption('use_openbase') == "true" && $rowvhost['vh_obasedir_in'] <> 0) {
+        $openBasedir = ctrl_options::GetSystemOption('hosted_dir') . $vhostuser['username'] . "/public_html"
+            . $rowvhost['vh_directory_vc'] . '/' . ctrl_options::GetSystemOption('openbase_seperator')
+            . ctrl_options::GetSystemOption('openbase_temp');
+    }
+    $tmpDir = ctrl_options::GetSystemOption('hosted_dir') . $vhostuser['username'] . "/tmp/";
+    return sys_phpversions::ApacheHandler($version, $openBasedir, $tmpDir);
+}
+
 function WriteVhostConfigFile() {
     global $zdbh;
+
+    // Start enabled extra PHP versions and stop disabled ones (PHP Versions module)
+    sys_phpversions::SyncServices();
 
     // Apache refuses the whole config if a log folder is missing, so make sure
     // the panel and per-domain log folders exist before writing the vhosts
@@ -162,14 +191,19 @@ function WriteVhostConfigFile() {
 		$line .= "ServerName " . ctrl_options::GetSystemOption('sentora_domain') . fs_filehandler::NewLine();
 		
 		# Vhost PHP settings
-		$line .= ctrl_options::GetSystemOption('php_handler') . fs_filehandler::NewLine();
+		// The panel runs as its own user through PHP-FPM (pool "sentora"), never as the
+		// web server user that every hosted site's PHP runs as. Its session and upload
+		// folders are set in that pool, out of reach of the sites.
+		$line .= '<FilesMatch "\.(php|phtml)$">' . fs_filehandler::NewLine();
+		$line .= '    SetHandler "proxy:unix:' . SENTORA_PANEL_FPM_SOCKET . '|fcgi://localhost/"' . fs_filehandler::NewLine();
+		$line .= '</FilesMatch>' . fs_filehandler::NewLine();
 		//$line .= "php_admin_value open_basedir " . '"' . ctrl_options::GetSystemOption('sentora_root') . ctrl_options::GetSystemOption('openbase_seperator') 
 				//. '/etc/sentora/configs/' . ctrl_options::GetSystemOption('openbase_seperator')
 				//. ctrl_options::GetSystemOption('temp_dir') . ctrl_options::GetSystemOption('openbase_seperator')  
 				//. ctrl_options::GetSystemOption('hosted_dir') . '"' . fs_filehandler::NewLine();
 				
 				
-		$line .= "php_admin_value session.save_path " . '"/var/sentora/sessions"' . fs_filehandler::NewLine();
+
 		
 		$line .= 'ErrorLog "' . ctrl_options::GetSystemOption('log_dir') . 'sentora-error.log" ' . fs_filehandler::NewLine();
 		$line .= 'CustomLog "' . ctrl_options::GetSystemOption('log_dir') . 'sentora-access.log" ' . ctrl_options::GetSystemOption('access_log_format') . fs_filehandler::NewLine();
@@ -236,14 +270,19 @@ function WriteVhostConfigFile() {
 		$line .= "ServerName " . ctrl_options::GetSystemOption('sentora_domain') . fs_filehandler::NewLine();
 		
 		# Vhost PHP settings
-		$line .= ctrl_options::GetSystemOption('php_handler') . fs_filehandler::NewLine();
+		// The panel runs as its own user through PHP-FPM (pool "sentora"), never as the
+		// web server user that every hosted site's PHP runs as. Its session and upload
+		// folders are set in that pool, out of reach of the sites.
+		$line .= '<FilesMatch "\.(php|phtml)$">' . fs_filehandler::NewLine();
+		$line .= '    SetHandler "proxy:unix:' . SENTORA_PANEL_FPM_SOCKET . '|fcgi://localhost/"' . fs_filehandler::NewLine();
+		$line .= '</FilesMatch>' . fs_filehandler::NewLine();
 		//$line .= "php_admin_value open_basedir " . '"' . ctrl_options::GetSystemOption('sentora_root') . ctrl_options::GetSystemOption('openbase_seperator') 
 				//. '/etc/sentora/configs/' . ctrl_options::GetSystemOption('openbase_seperator')
 				//. ctrl_options::GetSystemOption('temp_dir') . ctrl_options::GetSystemOption('openbase_seperator')  
 				//. ctrl_options::GetSystemOption('hosted_dir') . '"' . fs_filehandler::NewLine();
 				
 		
-		$line .= "php_admin_value session.save_path " . '"/var/sentora/sessions"' . fs_filehandler::NewLine();
+
 	
 		$line .= 'ErrorLog "' . ctrl_options::GetSystemOption('log_dir') . 'sentora-error.log" ' . fs_filehandler::NewLine();
 		$line .= 'CustomLog "' . ctrl_options::GetSystemOption('log_dir') . 'sentora-access.log" ' . ctrl_options::GetSystemOption('access_log_format') . fs_filehandler::NewLine();
@@ -721,7 +760,8 @@ function WriteVhostConfigFile() {
 				//}
 		
 				
-				$line .= ctrl_options::GetSystemOption('php_handler') . fs_filehandler::NewLine();
+				// Default PHP (mod_php) or the domain's chosen PHP-FPM version
+				$line .= BuildVhostPhpHandler($rowvhost, $vhostuser) . fs_filehandler::NewLine();
 		
 				// Enable Gzip until we set this as an option , we might commenbt this too and allow manual switch
 				$line .= "AddOutputFilterByType DEFLATE text/html text/plain text/xml text/css text/javascript application/javascript" . fs_filehandler::NewLine();
@@ -841,7 +881,8 @@ function WriteVhostConfigFile() {
 					//$line .= BuildVhostPHPHandler($packageinfo['pk_enablephp_in'], $rowchost['vh_phphandler_id']);
 				//}
 				
-				$line .= ctrl_options::GetSystemOption('php_handler') . fs_filehandler::NewLine();
+				// Default PHP (mod_php) or the domain's chosen PHP-FPM version
+				$line .= BuildVhostPhpHandler($rowvhost, $vhostuser) . fs_filehandler::NewLine();
 		
 				// Enable Gzip until we set this as an option , we might commenbt this too and allow manual switch
 				$line .= "AddOutputFilterByType DEFLATE text/html text/plain text/xml text/css text/javascript application/javascript" . fs_filehandler::NewLine();

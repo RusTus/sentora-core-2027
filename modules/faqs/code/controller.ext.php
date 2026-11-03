@@ -44,8 +44,8 @@ class module_controller extends ctrl_module
             $sql->execute();
             while ($rowfaqs = $sql->fetch()) {
                 array_push($res, array(
-                    'question' => $rowfaqs['fq_question_tx'],
-                    'answer' => $rowfaqs['fq_answer_tx'],
+                    'question' => htmlspecialchars((string) $rowfaqs['fq_question_tx'], ENT_QUOTES, 'UTF-8'),
+                    'answer' => nl2br(htmlspecialchars((string) $rowfaqs['fq_answer_tx'], ENT_QUOTES, 'UTF-8')),
                     'reseller' => $rowfaqs['fq_acc_fk'],
                     'global' => $rowfaqs['fq_global_in'],
                     'id' => $rowfaqs['fq_id_pk']));
@@ -71,8 +71,8 @@ class module_controller extends ctrl_module
             $sql->execute();
             while ($rowfaqs = $sql->fetch()) {
                 array_push($res, array(
-                    'question' => $rowfaqs['fq_question_tx'],
-                    'answer' => $rowfaqs['fq_answer_tx'],
+                    'question' => htmlspecialchars((string) $rowfaqs['fq_question_tx'], ENT_QUOTES, 'UTF-8'),
+                    'answer' => nl2br(htmlspecialchars((string) $rowfaqs['fq_answer_tx'], ENT_QUOTES, 'UTF-8')),
                     'reseller' => $rowfaqs['fq_acc_fk'],
                     'global' => $rowfaqs['fq_global_in'],
                     'id' => $rowfaqs['fq_id_pk']));

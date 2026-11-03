@@ -68,6 +68,10 @@ class module_controller extends ctrl_module
 
     static function ListCurrentAlias($aid)
     {
+        // Only this account's own records (the id comes from ?other= or the form)
+        if (!ctrl_ownership::Owns('x_aliases', 'al_id_pk', 'al_acc_fk', $aid)) {
+            return false;
+        }
         global $zdbh;
         global $controller;
         $sql = "SELECT * FROM x_aliases WHERE al_id_pk=:aid AND al_deleted_ts IS NULL";
@@ -338,6 +342,10 @@ class module_controller extends ctrl_module
         global $controller;
         runtime_csfr::Protect();
         $formvars = $controller->GetAllControllerRequests('FORM');
+        // Only this account's own records (the id comes from the form)
+        if (!isset($formvars['inDelete']) || !ctrl_ownership::Owns('x_aliases', 'al_id_pk', 'al_acc_fk', $formvars['inDelete'], ' AND al_deleted_ts IS NULL')) {
+            return false;
+        }
         if (self::ExecuteDeleteAlias($formvars['inDelete']))
             return true;
         return false;

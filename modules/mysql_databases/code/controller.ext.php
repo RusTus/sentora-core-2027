@@ -252,6 +252,10 @@ class module_controller extends ctrl_module
         global $controller;
         runtime_csfr::Protect();
         $formvars = $controller->GetAllControllerRequests('FORM');
+        // Only this account's own records (the id comes from the form)
+        if (!isset($formvars['inDelete']) || !ctrl_ownership::Owns('x_mysql_databases', 'my_id_pk', 'my_acc_fk', $formvars['inDelete'], ' AND my_deleted_ts IS NULL')) {
+            return false;
+        }
         return self::ExecuteDeleteDatabase($formvars['inDelete']);
     }
 

@@ -10,6 +10,7 @@ include($_SERVER["DOCUMENT_ROOT"] . 'dryden/ctrl/auth.class.php');
 include($_SERVER["DOCUMENT_ROOT"] . 'dryden/ctrl/users.class.php');
 include($_SERVER["DOCUMENT_ROOT"] . 'dryden/fs/director.class.php');
 include($_SERVER["DOCUMENT_ROOT"] . 'inc/dbc.inc.php');
+include($_SERVER["DOCUMENT_ROOT"] . 'dryden/sys/backup.class.php');
 
 try {
     $zdbh = new db_driver("mysql:host=" . $host . ";dbname=" . $dbname . "", $user, $pass);
@@ -24,25 +25,22 @@ if (isset($_GET['id'])) {
 }
 
 session_start();
-if ($_SESSION['zpuid'] == $userid) {
+// Strict: a missing session id must never match (loose == let null equal null)
+if (!empty($_SESSION['zpuid']) && ctype_digit((string) $userid) && (int) $_SESSION['zpuid'] === (int) $userid) {
 
 	# Get username from Logged in userID
 	$currentuser = ctrl_users::GetUserDetail($userid);
     $username = $currentuser['username'];
 	
 	# Get username from file name.  
-	$input = $_GET["file"];
-	$result = explode('_',$input);
-
-	# Check if backup file belongs to user
-	if ($username == $result[0]) {
+	$input = isset($_GET["file"]) ? (string) $_GET["file"] : '';
+	# Only one of this account's own backup files, by name (no paths)
+	if (sys_backup::ValidFile($username, $input)) {
 
 		# Check file name is set
 		if (isset($_GET["file"])){
 				
-			$temp_dir = $_SERVER["DOCUMENT_ROOT"] . "etc/tmp/";
-			$backupname = urldecode($_GET["file"]); // Decode URL-encoded string
-			$filepath = $temp_dir . $backupname;
+			$filepath = sys_backup::BackupDir($username) . $input;
 			
 			# Check file name exists then download
 			if(file_exists($filepath)) {

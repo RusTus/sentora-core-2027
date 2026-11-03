@@ -1,4 +1,5 @@
 <?php
+defined( 'WEBALIZER_STATS_DIR' ) || define( 'WEBALIZER_STATS_DIR', '/var/sentora/stats/webalizer/' );
 
 /**
  * @copyright 2014-2023 Sentora Project (http://www.sentora.org/) 
@@ -24,7 +25,23 @@ function GenerateWebalizerStats()
     $sql->execute();
     echo "Generating webalizer stats html..." . fs_filehandler::NewLine();
     while ( $rowvhost = $sql->fetch() ) {
-      $basedir = ctrl_options::GetSystemOption( 'sentora_root' ) . "modules/webalizer_stats/stats/" . $rowvhost[ 'ac_user_vc' ] . "/" . $rowvhost[ 'vh_name_vc' ];
+      // Reports live outside the web root (they used to be readable by anyone who
+      // guessed modules/webalizer_stats/stats/<user>/<domain>/) and are shown by
+      // code/report.php to the domain's owner only.
+      if ( !preg_match( '/^[A-Za-z0-9_-]{1,64}$/', (string) $rowvhost[ 'ac_user_vc' ] )
+          || !preg_match( '/^[A-Za-z0-9.-]{1,253}$/', (string) $rowvhost[ 'vh_name_vc' ] ) ) {
+          continue;
+      }
+      $basedir = WEBALIZER_STATS_DIR . $rowvhost[ 'ac_user_vc' ] . "/" . $rowvhost[ 'vh_name_vc' ];
+      // Move reports made before this change (keeps the history webalizer builds on)
+      $olddir = ctrl_options::GetSystemOption( 'sentora_root' ) . "modules/webalizer_stats/stats/" . $rowvhost[ 'ac_user_vc' ] . "/" . $rowvhost[ 'vh_name_vc' ];
+      if ( is_dir( $olddir ) && !file_exists( $basedir . '/webalizer.hist' ) ) {
+          @mkdir( dirname( $basedir ), 0755, TRUE );
+          if ( is_dir( $basedir ) ) {
+              exec( 'rm -rf ' . escapeshellarg( $basedir ) );
+          }
+          @rename( $olddir, $basedir );
+      }
       if ( !file_exists( $basedir ) ) {
           @mkdir( $basedir, 0755, TRUE );
         }
@@ -47,17 +64,14 @@ function GenerateWebalizerStats()
             $rowvhost[ 'vh_name_vc' ] .
             '-access.log' );
 
-        // No traffic yet: without a log file webalizer would wait on stdin
-        if ( $logFile === false ) {
-            echo "No access log yet for: " . $rowvhost[ 'ac_user_vc' ] . "/" . $rowvhost[ 'vh_name_vc' ] . fs_filehandler::NewLine();
+        // No traffic yet: without a log file webalizer would wait on stdin, and with
+        // an empty one it stops with "No valid records found" (reported as Failed)
+        if ( $logFile === false || filesize( $logFile ) == 0 ) {
+            echo "No traffic yet, skipping: " . $rowvhost[ 'ac_user_vc' ] . "/" . $rowvhost[ 'vh_name_vc' ] . fs_filehandler::NewLine();
             continue;
         }
 
-        $statsPath = ctrl_options::GetSystemOption( 'sentora_root' ) .
-            "modules/webalizer_stats/stats/" .
-            $rowvhost[ 'ac_user_vc' ] .
-            '/' .
-            $rowvhost[ 'vh_name_vc' ];
+        $statsPath = $basedir;
 
         /**
          * Every option and value is its own argument, because each one is
@@ -76,6 +90,12 @@ function GenerateWebalizerStats()
         echo "Generating stats for: " . $rowvhost[ 'ac_user_vc' ] . "/" . $rowvhost[ 'vh_name_vc' ] . fs_filehandler::NewLine();
         $returnValue = ctrl_system::systemCommand( $command, $args );
         echo (0 === $returnValue ? 'Succeeded' : 'Failed') . fs_filehandler::NewLine();
+    }
+    // Whatever is left in the old public folder (deleted domains) is removed
+    $oldroot = ctrl_options::GetSystemOption( 'sentora_root' ) . "modules/webalizer_stats/stats";
+    if ( is_dir( $oldroot ) ) {
+        exec( 'rm -rf ' . escapeshellarg( $oldroot ) );
+        echo "Removed the old public stats folder." . fs_filehandler::NewLine();
     }
 }
 

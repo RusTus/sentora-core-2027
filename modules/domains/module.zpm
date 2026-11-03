@@ -40,6 +40,7 @@
                     <th><: Domain name :></th>
                     <th><: Home directory :></th>
                     <th><: Status :></th>
+                    <th><: PHP :></th>
                     <th></th>
                     <th></th>
                 </tr>
@@ -48,12 +49,27 @@
                     <td><a href="http://<& name &>/" target="_blank"><& name &></a></td>
                     <td><& directory &></td>
                     <& status &>
+                    <td><& php &></td>
                     <td><button class="delete btn btn-danger" type="submit" id="button" name="inDelete_<& id &>" id="inDelete_<& id &>" value="inDelete_<& id &>"><: Delete :></button></td>
                 </tr>
                 <% endloop %>
             </table>
             <@ CSFR_Tag @>
         </form>
+        <% if HasPhpVersions %>
+        <form action="./?module=domains&action=SetPhpVersion" method="post" class="form-inline">
+            <: Change PHP version for :>
+            <select name="inDomainId">
+                <% loop DomainList %>
+                <option value="<& id &>"><& name &></option>
+                <% endloop %>
+            </select>
+            <: to :>
+            <select name="inPhpVersion"><@ PhpVersionOptions @></select>
+            <button class="btn btn-primary" type="submit"><: Change :></button>
+            <@ CSFR_Tag @>
+        </form>
+        <% endif %>
         <% else %>
         <: You currently do not have any domains configured. Create a domain using the form below. :>
         <% endif %>
@@ -92,6 +108,12 @@
                                 </div>
                             </td>
                         </tr>
+                        <% if HasPhpVersions %>
+                        <tr>
+                            <th nowrap="nowrap"><: PHP version :>:</th>
+                            <td><select name="inPhpVersion" id="inPhpVersion"><@ PhpVersionOptions @></select></td>
+                        </tr>
+                        <% endif %>
                         <tr>
                             <th></th>
                             <td align="right"><button class="button-loader btn btn-primary" type="submit" id="button" name="CreateDomain" value="1">Create</button></td>

@@ -50,7 +50,12 @@ if (isset($_POST['inForgotPassword'])) {
     $rows = $sth->fetchAll();
     if ($rows) {
         $result = $rows['0'];
-        $zdbh->exec("UPDATE x_accounts SET ac_resethash_tx = '" . $randomkey . "' WHERE ac_id_pk=" . $result['ac_id_pk'] . "");
+        // The key is stored with the time it was made; it works for one hour and once
+        $stored = $randomkey . '.' . time();
+        $upd = $zdbh->prepare("UPDATE x_accounts SET ac_resethash_tx = :hash WHERE ac_id_pk = :uid");
+        $upd->bindParam(':hash', $stored);
+        $upd->bindParam(':uid', $result['ac_id_pk']);
+        $upd->execute();
         if (isset($_SERVER['HTTPS'])) {
             $protocol = 'https://';
         } else {
@@ -83,11 +88,23 @@ If you wish to proceed with the password reset on your account, please use the l
 
 if (isset($_POST['inConfEmail'])) {
     runtime_csfr::Protect();
-    $sql = $zdbh->prepare("SELECT ac_id_pk FROM x_accounts WHERE ac_email_vc = :email AND ac_resethash_tx = :resetkey AND ac_resethash_tx IS NOT NULL AND ac_deleted_ts IS NULL");
+    $sql = $zdbh->prepare("SELECT ac_id_pk, ac_resethash_tx FROM x_accounts WHERE ac_email_vc = :email AND ac_resethash_tx IS NOT NULL AND ac_resethash_tx <> '' AND ac_deleted_ts IS NULL");
     $sql->bindParam(':email', $_POST['inConfEmail']);
-    $sql->bindParam(':resetkey', $_GET['resetkey']);
     $sql->execute();
-    $result = $sql->fetch();
+    $result = false;
+    $givenKey = isset($_GET['resetkey']) ? (string) $_GET['resetkey'] : '';
+    while ($row = $sql->fetch()) {
+        $parts = explode('.', (string) $row['ac_resethash_tx'], 2);
+        // Constant-time compare, and only within an hour of the request
+        if ($givenKey !== '' && count($parts) == 2 && hash_equals($parts[0], $givenKey) && (time() - (int) $parts[1]) <= 3600) {
+            $result = $row;
+            break;
+        }
+    }
+    // Same rule as the panel's own password change: at least 8 characters
+    if (strlen((string) $_POST['inNewPass']) < 8) {
+        $result = false;
+    }
 
     $crypto = new runtime_hash;
     $crypto->SetPassword($_POST['inNewPass']);
@@ -116,6 +133,14 @@ if (isset($_POST['inUsername'])) {
     $rememberdetails = isset($_POST['inRemember']);
     $inSessionSecuirty = isset($_POST['inSessionSecuirty']);
 
+    // Too many wrong passwords for this account or from this address: refuse for
+    // 15 minutes (same answer as a wrong password, so it reveals nothing)
+    if (ctrl_loginguard::IsLocked($_POST['inUsername'])) {
+        runtime_hook::Execute('OnBadUserLogin');
+        header("location: ./?invalidlogin");
+        exit();
+    }
+
     $sql = $zdbh->prepare("SELECT ac_passsalt_vc FROM x_accounts WHERE ac_user_vc = :username AND ac_deleted_ts IS NULL");
     $sql->bindParam(':username', $_POST['inUsername']);
     $sql->execute();
@@ -126,24 +151,16 @@ if (isset($_POST['inUsername'])) {
     $secure_password = $crypto->CryptParts($crypto->Crypt())->Hash;
 
     if (!ctrl_auth::Authenticate($_POST['inUsername'], $secure_password, $rememberdetails, false, $inSessionSecuirty)) {
+        ctrl_loginguard::Failed($_POST['inUsername']);
         header("location: ./?invalidlogin");
         exit();
     }
+    ctrl_loginguard::Succeeded($_POST['inUsername']);
 }
 
-if (isset($_COOKIE['zUser'])) {
-
-    if (isset($_COOKIE['zSec'])) {
-        if ($_COOKIE['zSec'] == false) {
-            $secure = false;
-        } else {
-            $secure = true;
-        }
-    } else {
-        $secure = true;
-    }
-
-    ctrl_auth::Authenticate($_COOKIE['zUser'], $_COOKIE['zPass'], false, true, $secure);
+// "Remember me": a random token (the old cookies held the password hash)
+if (!isset($_SESSION['zpuid'])) {
+    ctrl_loginguard::LoginFromCookie();
 }
 
 if (!isset($_SESSION['zpuid'])) {

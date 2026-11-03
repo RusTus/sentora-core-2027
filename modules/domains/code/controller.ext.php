@@ -70,6 +70,7 @@ class module_controller extends ctrl_module
                     'directory' => $rowdomains['vh_directory_vc'],
                     'active' => $rowdomains['vh_active_in'],
                     'id' => $rowdomains['vh_id_pk'],
+                    'php' => isset($rowdomains['vh_php_version_vc']) ? (string) $rowdomains['vh_php_version_vc'] : '',
                 ));
             }
             return $res;
@@ -121,7 +122,7 @@ class module_controller extends ctrl_module
 	
 	
 	
-    static function ExecuteAddDomain($uid, $domain, $destination, $autohome)
+    static function ExecuteAddDomain($uid, $domain, $destination, $autohome, $phpversion = '')
     {
         global $zdbh;
         $retval = FALSE;
@@ -166,17 +167,23 @@ class module_controller extends ctrl_module
 														 vh_name_vc,
 														 vh_directory_vc,
 														 vh_type_in,
+														 vh_php_version_vc,
 														 vh_created_ts) VALUES (
 														 :userid,
 														 :domain,
 														 :destination,
 														 1,
+														 :phpversion,
 														 :time)"); //CLEANER FUNCTION ON $domain and $homedirectory_to_use (Think I got it?)
             $time = time();
             $sql->bindParam(':time', $time);
             $sql->bindParam(':userid', $currentuser['userid']);
             $sql->bindParam(':domain', $domain);
             $sql->bindParam(':destination', $destination);
+            // '' = the default PHP; anything else must be an enabled extra version
+            $phpversion = sys_phpversions::Clean($phpversion);
+            $phpversion = ($phpversion === '') ? null : $phpversion;
+            $sql->bindParam(':phpversion', $phpversion);
             $sql->execute();
             // Only run if the Server platform is Windows.
             if (sys_versions::ShowOSPlatformVersion() == 'Windows') {
@@ -324,6 +331,7 @@ class module_controller extends ctrl_module
                     'directory' => $row['directory'],
                     'active' => $row['active'],
                     'status' => $status,
+                    'php' => sys_phpversions::Label($row['php']),
                     'id' => $row['id']);
             }
             return $res;
@@ -356,7 +364,7 @@ class module_controller extends ctrl_module
         runtime_csfr::Protect();
         $currentuser = ctrl_users::GetUserDetail();
         $formvars = $controller->GetAllControllerRequests('FORM');
-        if (self::ExecuteAddDomain($currentuser['userid'], $formvars['inDomain'], $formvars['inDestination'], $formvars['inAutoHome'])) {
+        if (self::ExecuteAddDomain($currentuser['userid'], $formvars['inDomain'], $formvars['inDestination'], $formvars['inAutoHome'], isset($formvars['inPhpVersion']) ? $formvars['inPhpVersion'] : '')) {
             self::$ok = TRUE;
             return true;
         } else {
@@ -370,6 +378,10 @@ class module_controller extends ctrl_module
         global $controller;
         runtime_csfr::Protect();
         $formvars = $controller->GetAllControllerRequests('FORM');
+        // Only this account's own records (the id comes from the form)
+        if (!isset($formvars['inDelete']) || !ctrl_ownership::Owns('x_vhosts', 'vh_id_pk', 'vh_acc_fk', $formvars['inDelete'], ' AND vh_type_in = 1 AND vh_deleted_ts IS NULL')) {
+            return false;
+        }
         if (isset($formvars['inDelete'])) {
             if (self::ExecuteDeleteDomain($formvars['inDelete'])) {
                 self::$ok = TRUE;
@@ -461,6 +473,47 @@ class module_controller extends ctrl_module
                     . 'title="' . ui_language::translate('Your domain will become active at the next scheduled update.  This can take up to one hour.') . '">'
                     . '<img src="/modules/' . $controller->GetControllerRequest('URL', 'module') . '/assets/help_small.png" border="0" /></a>';
         }
+    }
+
+    /**
+     * PHP version choices (default first, then enabled extra versions).
+     */
+    static function getPhpVersionOptions()
+    {
+        return sys_phpversions::SelectOptions('');
+    }
+
+    /**
+     * Show the PHP version controls only when extra versions are enabled.
+     */
+    static function getHasPhpVersions()
+    {
+        return count(sys_phpversions::Enabled()) > 0;
+    }
+
+    /**
+     * Change the PHP version of one of the current user's domains.
+     */
+    static function doSetPhpVersion()
+    {
+        global $controller, $zdbh;
+        runtime_csfr::Protect();
+        $currentuser = ctrl_users::GetUserDetail();
+        $formvars = $controller->GetAllControllerRequests('FORM');
+        if (!isset($formvars['inDomainId'])) {
+            return false;
+        }
+        $version = sys_phpversions::Clean(isset($formvars['inPhpVersion']) ? $formvars['inPhpVersion'] : '');
+        $version = ($version === '') ? null : $version;
+        // Only domains (type 1) that belong to this user
+        $sql = $zdbh->prepare("UPDATE x_vhosts SET vh_php_version_vc = :php WHERE vh_id_pk = :id AND vh_acc_fk = :uid AND vh_type_in = 1 AND vh_deleted_ts IS NULL");
+        $sql->bindParam(':php', $version);
+        $sql->bindParam(':id', $formvars['inDomainId']);
+        $sql->bindParam(':uid', $currentuser['userid']);
+        $sql->execute();
+        self::SetWriteApacheConfigTrue();
+        self::$ok = true;
+        return true;
     }
 
     static function getResult()

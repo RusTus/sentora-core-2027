@@ -27,51 +27,10 @@ if (ui_module::CheckModuleEnabled('Backup Config')) {
             $bsql->execute();
             while ($rowclients = $bsql->fetch()) {
                 echo "Backing up client folder: " . $rowclients['ac_user_vc'] . "/public_html..." . fs_filehandler::NewLine();
-                // User loop
-                $username = $rowclients['ac_user_vc'];
-                $userid = $rowclients['ac_id_pk'];
-                $homedir = ctrl_options::GetSystemOption('hosted_dir') . $username;
-                $backupname = $username . "_" . date("M-d-Y_His", time());
-                $dbstamp = date("dmy_Gi", time());
-                // We now see what the OS is before we work out what compression command to use..
-                if (sys_versions::ShowOSPlatformVersion() == "Windows") {
-                    $resault = exec(fs_director::SlashesToWin(ctrl_options::GetSystemOption('zip_exe') . " a -tzip -y-r " . ctrl_options::GetSystemOption('temp_dir') . $backupname . ".zip " . $homedir . "/public_html"));
-                } else {//cd /var/sentora/hostdata/zadmin/; zip -r backups/backup.zip public_html/
-                    $resault = exec("cd " . $homedir . "/ && " . ctrl_options::GetSystemOption('zip_exe') . " -r9 " . ctrl_options::GetSystemOption('temp_dir') . $backupname . " public_html/*");
-                    @chmod(ctrl_options::GetSystemOption('temp_dir') . $backupname . ".zip", 0777);
-                }
-                // Now lets backup all MySQL datbases for the user and add them to the archive...
-                $sql = "SELECT COUNT(*) FROM x_mysql_databases WHERE my_acc_fk=" . $userid . " AND my_deleted_ts IS NULL";
-                if ($numrows = $zdbh->query($sql)) {
-                    if ($numrows->fetchColumn() <> 0) {
-                        $sql = $zdbh->prepare("SELECT * FROM x_mysql_databases WHERE my_acc_fk=:userid AND my_deleted_ts IS NULL");
-                        $sql->bindParam(':userid', $userid);
-                        $sql->execute();
-                        while ($row_mysql = $sql->fetch()) {
-                            $bkcommand = ctrl_options::GetSystemOption('mysqldump_exe') . " -h " . $host . " -u " . $user . " -p" . $pass . " --no-create-db " . $row_mysql['my_name_vc'] . " > " . ctrl_options::GetSystemOption('temp_dir') . $row_mysql['my_name_vc'] . "_" . $dbstamp . ".sql";
-                            passthru($bkcommand);
-                            // Add it to the ZIP archive...
-                            if (sys_versions::ShowOSPlatformVersion() == "Windows") {
-                                $resault = exec(fs_director::SlashesToWin(ctrl_options::GetSystemOption('zip_exe') . " u " . ctrl_options::GetSystemOption('temp_dir') . $backupname . ".zip " . ctrl_options::GetSystemOption('temp_dir') . $row_mysql['my_name_vc'] . "_" . $dbstamp . ".sql"));
-                            } else {
-                                $resault = exec("cd " . ctrl_options::GetSystemOption('temp_dir') . "/ && " . ctrl_options::GetSystemOption('zip_exe') . " " . ctrl_options::GetSystemOption('temp_dir') . $backupname . "  " . $row_mysql['my_name_vc'] . "_" . $dbstamp . ".sql");
-                            }
-                            unlink(ctrl_options::GetSystemOption('temp_dir') . $row_mysql['my_name_vc'] . "_" . $dbstamp . ".sql");
-                        }
-                    }
-                }
-                // We have the backup now lets output it to disk or download
-                if (file_exists(ctrl_options::GetSystemOption('temp_dir') . $backupname . ".zip")) {
-                    // Copy Backup to user home directory...
-                    $backupdir = $homedir . "/backups/";
-                    if (!is_dir($backupdir)) {
-                        mkdir($backupdir, 0777, TRUE);
-                    }
-                    copy(ctrl_options::GetSystemOption('temp_dir') . $backupname . ".zip", $backupdir . $backupname . ".zip");
-                    unlink(ctrl_options::GetSystemOption('temp_dir') . $backupname . ".zip");
-                    fs_director::SetFileSystemPermissions($backupdir . $backupname . ".zip", 0777);
-                    echo $backupdir . $backupname . ".zip" . fs_filehandler::NewLine();
-                }
+                // Same secure routine as the Backup module (dryden/sys/backup.class.php):
+                // built outside the web root, MySQL password never on a command line
+                $made = sys_backup::Create($rowclients['ac_id_pk'], $rowclients['ac_user_vc']);
+                echo ($made ? $made : "Backup FAILED for " . $rowclients['ac_user_vc']) . fs_filehandler::NewLine();
             }
         }
         runtime_hook::Execute('OnAfterScheduleBackup');

@@ -79,6 +79,10 @@ class module_controller extends ctrl_module
 
     static function ListCurrentMailboxes($mid)
     {
+        // Only this account's own records (the id comes from ?other= or the form)
+        if (!ctrl_ownership::Owns('x_mailboxes', 'mb_id_pk', 'mb_acc_fk', $mid)) {
+            return false;
+        }
         global $zdbh;
         $sql = "SELECT * FROM x_mailboxes WHERE mb_id_pk=:mid AND mb_deleted_ts IS NULL ORDER BY mb_address_vc ASC";
         //$numrows = $zdbh->query($sql);
@@ -384,6 +388,10 @@ class module_controller extends ctrl_module
         runtime_csfr::Protect();
         $currentuser = ctrl_users::GetUserDetail();
         $formvars = $controller->GetAllControllerRequests('FORM');
+        // Only this account's own records (the id comes from the form)
+        if (!isset($formvars['inSave']) || !ctrl_ownership::Owns('x_mailboxes', 'mb_id_pk', 'mb_acc_fk', $formvars['inSave'], ' AND mb_deleted_ts IS NULL')) {
+            return false;
+        }
         $enabled = (isset($formvars['inEnabled'])) ? fs_director::GetCheckboxValue($formvars['inEnabled']) : 0;
         if (self::ExecuteUpdateMailbox($formvars['inSave'], $formvars['inPassword'], $enabled))
             self::$ok = true;
@@ -395,6 +403,10 @@ class module_controller extends ctrl_module
         global $controller;
         runtime_csfr::Protect();
         $formvars = $controller->GetAllControllerRequests('FORM');
+        // Only this account's own records (the id comes from the form)
+        if (!isset($formvars['inDelete']) || !ctrl_ownership::Owns('x_mailboxes', 'mb_id_pk', 'mb_acc_fk', $formvars['inDelete'], ' AND mb_deleted_ts IS NULL')) {
+            return false;
+        }
         return self::ExecuteDeleteMailbox($formvars['inDelete']);
     }
 

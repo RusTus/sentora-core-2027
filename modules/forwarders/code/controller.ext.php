@@ -77,6 +77,10 @@ class module_controller extends ctrl_module
 
     static function ListCurrentForwarder($fid)
     {
+        // Only this account's own records (the id comes from ?other= or the form)
+        if (!ctrl_ownership::Owns('x_forwarders', 'fw_id_pk', 'fw_acc_fk', $fid)) {
+            return false;
+        }
         global $zdbh;
         $sql = "SELECT * FROM x_forwarders WHERE fw_id_pk=:fid AND fw_deleted_ts IS NULL";
         $numrows = $zdbh->prepare($sql);
@@ -271,6 +275,10 @@ class module_controller extends ctrl_module
         global $controller;
         runtime_csfr::Protect();
         $formvars = $controller->GetAllControllerRequests('FORM');
+        // Only this account's own records (the id comes from the form)
+        if (!isset($formvars['inDelete']) || !ctrl_ownership::Owns('x_forwarders', 'fw_id_pk', 'fw_acc_fk', $formvars['inDelete'], ' AND fw_deleted_ts IS NULL')) {
+            return false;
+        }
         return self::ExecuteDeleteForwarder($formvars['inDelete']);
     }
 

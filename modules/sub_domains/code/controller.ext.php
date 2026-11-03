@@ -58,6 +58,7 @@ class module_controller extends ctrl_module
                 array_push($res, array('subname' => $rowdomains['vh_name_vc'],
                     'subdirectory' => $rowdomains['vh_directory_vc'],
                     'subactive' => $rowdomains['vh_active_in'],
+                    'subphp' => isset($rowdomains['vh_php_version_vc']) ? (string) $rowdomains['vh_php_version_vc'] : '',
                     'subid' => $rowdomains['vh_id_pk']));
             }
             return $res;
@@ -131,7 +132,7 @@ class module_controller extends ctrl_module
         return $retval;
     }
 
-    static function ExecuteAddSubDomain($uid, $domain, $destination, $autohome)
+    static function ExecuteAddSubDomain($uid, $domain, $destination, $autohome, $phpversion = '')
     {
         global $zdbh;
         $retval = FALSE;
@@ -175,15 +176,21 @@ class module_controller extends ctrl_module
 														 vh_name_vc,
 														 vh_directory_vc,
 														 vh_type_in,
+														 vh_php_version_vc,
 														 vh_created_ts) VALUES (
 														 :userid,
 														 :domain,
 														 :destination,
 														 2,
+														 :phpversion,
 														 :time)"); //CLEANER FUNCTION ON $domain and $homedirectory_to_use (Think I got it?)
             $sql->bindParam(':userid', $currentuser['userid']);
             $sql->bindParam(':domain', $domain);
             $sql->bindParam(':destination', $destination);
+            // '' = the default PHP; anything else must be an enabled extra version
+            $phpversion = sys_phpversions::Clean($phpversion);
+            $phpversion = ($phpversion === '') ? null : $phpversion;
+            $sql->bindParam(':phpversion', $phpversion);
             $time = time();
             $sql->bindParam(':time', $time);
             $sql->execute();
@@ -294,6 +301,7 @@ class module_controller extends ctrl_module
                     'subdirectory' => $row['subdirectory'],
                     'subactive' => $row['subactive'],
                     'substatus' => $status,
+                    'subphp' => sys_phpversions::Label($row['subphp']),
                     'subid' => $row['subid']);
             }
             return $res;
@@ -339,7 +347,7 @@ class module_controller extends ctrl_module
         runtime_csfr::Protect();
         $currentuser = ctrl_users::GetUserDetail();
         $formvars = $controller->GetAllControllerRequests('FORM');
-        if (self::ExecuteAddSubDomain($currentuser['userid'], $formvars['inSub'] . "." . $formvars['inDomain'], $formvars['inDestination'], $formvars['inAutoHome'])) {
+        if (self::ExecuteAddSubDomain($currentuser['userid'], $formvars['inSub'] . "." . $formvars['inDomain'], $formvars['inDestination'], $formvars['inAutoHome'], isset($formvars['inPhpVersion']) ? $formvars['inPhpVersion'] : '')) {
             self::$ok = TRUE;
             return true;
         } else {
@@ -354,6 +362,10 @@ class module_controller extends ctrl_module
         runtime_csfr::Protect();
 //PP      $currentuser = ctrl_users::GetUserDetail();  assignment never used
         $formvars = $controller->GetAllControllerRequests('FORM');
+        // Only this account's own records (the id comes from the form)
+        if (!isset($formvars['inDelete']) || !ctrl_ownership::Owns('x_vhosts', 'vh_id_pk', 'vh_acc_fk', $formvars['inDelete'], ' AND vh_type_in = 2 AND vh_deleted_ts IS NULL')) {
+            return false;
+        }
         if (isset($formvars['inDelete'])) {
             if (self::ExecuteDeleteSubDomain($formvars['inDelete'])) {
                 self::$ok = TRUE;
@@ -445,6 +457,41 @@ class module_controller extends ctrl_module
                     . 'title="' . ui_language::translate('Your domain will become active at the next scheduled update.  This can take up to one hour.') . '">'
                     . '<img src="/modules/' . $controller->GetControllerRequest('URL', 'module') . '/assets/help_small.png" border="0" /></a></td>';
         }
+    }
+
+    static function getPhpVersionOptions()
+    {
+        return sys_phpversions::SelectOptions('');
+    }
+
+    static function getHasPhpVersions()
+    {
+        return count(sys_phpversions::Enabled()) > 0;
+    }
+
+    /**
+     * Change the PHP version of one of the current user's subdomains.
+     */
+    static function doSetPhpVersion()
+    {
+        global $controller, $zdbh;
+        runtime_csfr::Protect();
+        $currentuser = ctrl_users::GetUserDetail();
+        $formvars = $controller->GetAllControllerRequests('FORM');
+        if (!isset($formvars['inSubDomainId'])) {
+            return false;
+        }
+        $version = sys_phpversions::Clean(isset($formvars['inPhpVersion']) ? $formvars['inPhpVersion'] : '');
+        $version = ($version === '') ? null : $version;
+        // Only subdomains (type 2) that belong to this user
+        $sql = $zdbh->prepare("UPDATE x_vhosts SET vh_php_version_vc = :php WHERE vh_id_pk = :id AND vh_acc_fk = :uid AND vh_type_in = 2 AND vh_deleted_ts IS NULL");
+        $sql->bindParam(':php', $version);
+        $sql->bindParam(':id', $formvars['inSubDomainId']);
+        $sql->bindParam(':uid', $currentuser['userid']);
+        $sql->execute();
+        self::SetWriteApacheConfigTrue();
+        self::$ok = true;
+        return true;
     }
 
     static function getResult()

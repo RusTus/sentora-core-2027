@@ -763,8 +763,12 @@ class module_controller extends ctrl_module
     {
         global $zdbh;
         global $controller;
-        $domainID = $vh_acc_fk;
-        $domainName = $zdbh->query("SELECT * FROM x_vhosts WHERE vh_id_pk=" . $domainID . " AND vh_deleted_ts IS NULL")->Fetch();
+        // Prepared: the id can come from the inResetDomainID form field (was SQL injection)
+        $domainID = (int) $vh_acc_fk;
+        $domainQuery = $zdbh->prepare("SELECT * FROM x_vhosts WHERE vh_id_pk = :id AND vh_deleted_ts IS NULL");
+        $domainQuery->bindParam(':id', $domainID);
+        $domainQuery->execute();
+        $domainName = $domainQuery->fetch();
         $userID = $domainName['vh_acc_fk'];
         if (!fs_director::CheckForEmptyValue(ctrl_options::GetSystemOption('server_ip'))) {
             $target = ctrl_options::GetSystemOption('server_ip');

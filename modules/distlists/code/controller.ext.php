@@ -73,6 +73,10 @@ class module_controller extends ctrl_module
 
     static function ListCurrentDist($id)
     {
+        // Only this account's own records (the id comes from ?other= or the form)
+        if (!ctrl_ownership::Owns('x_distlists', 'dl_id_pk', 'dl_acc_fk', $id)) {
+            return false;
+        }
         global $zdbh;
         $sql = "SELECT * FROM x_distlists WHERE dl_id_pk=:id AND dl_deleted_ts IS NULL";
         $numrows = $zdbh->prepare($sql);
@@ -95,6 +99,10 @@ class module_controller extends ctrl_module
 
     static function ListDistUsers($id)
     {
+        // Only this account's own records (the id comes from ?other= or the form)
+        if (!ctrl_ownership::Owns('x_distlists', 'dl_id_pk', 'dl_acc_fk', $id)) {
+            return false;
+        }
         global $zdbh;
         $numrows = $zdbh->prepare("SELECT * FROM x_distlists WHERE dl_id_pk=:id AND dl_deleted_ts IS NULL");
         $numrows->bindParam(':id', $id);
@@ -444,6 +452,10 @@ class module_controller extends ctrl_module
         global $controller;
         runtime_csfr::Protect();
         $formvars = $controller->GetAllControllerRequests('FORM');
+        // Only this account's own records (the id comes from the form)
+        if (!isset($formvars['inDelete']) || !ctrl_ownership::Owns('x_distlists', 'dl_id_pk', 'dl_acc_fk', $formvars['inDelete'], ' AND dl_deleted_ts IS NULL')) {
+            return false;
+        }
         return self::ExecuteDeleteDistList($formvars['inDelete']);
     }
 
@@ -452,13 +464,17 @@ class module_controller extends ctrl_module
         global $controller;
         runtime_csfr::Protect();
         $formvars = $controller->GetAllControllerRequests('FORM');
+        // Only this account's own records (the id comes from the form)
+        if (!isset($formvars['inDLID']) || !ctrl_ownership::Owns('x_distlists', 'dl_id_pk', 'dl_acc_fk', $formvars['inDLID'], ' AND dl_deleted_ts IS NULL')) {
+            return false;
+        }
         if (isset($formvars['inAdd'])) {
             if (self::ExecuteAddDistListUser($formvars['inDLID'], $formvars['inAddAddress'], $formvars['inAddDomain'], $formvars['inDLAD'])) {
                 header("location: ./?module=" . $controller->GetCurrentModule() . "&show=Edit&other=" . $formvars['inDLID'] . "&status=ok");
                 exit;
             }
         }
-        foreach (self::ListDistUsers($formvars['inDLID']) as $row) {
+        foreach ((array) self::ListDistUsers($formvars['inDLID']) as $row) {
             if (isset($formvars['inDeleteUser_' . $row['id'] . ''])) {
                 if (self::ExecuteDeleteDistListUser($formvars['inDeleteUser_' . $row['id'] . ''])) {
                     header("location: ./?module=" . $controller->GetCurrentModule() . "&show=Edit&other=" . $formvars['inDLID'] . "&status=ok");
