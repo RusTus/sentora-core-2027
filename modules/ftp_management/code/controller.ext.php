@@ -210,7 +210,7 @@ class module_controller extends ctrl_module
                 // Create the new home directory... (If it doesnt already exist.)
                 if (!file_exists($full_path)) {
                     @mkdir($full_path, 777);
-                    @chmod($full_path, 0777);
+                    fs_director::SetFileSystemPermissions($full_path, 0770);
                 }
             } else if ($home == 3) {
                 $homedirectory_to_use = '/' . $domainDestination;

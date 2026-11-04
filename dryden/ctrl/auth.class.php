@@ -36,7 +36,8 @@ class ctrl_auth
             $bindArray = array(':zadmin' => 'zadmin');
             $zdbh->bindQuery($sqlQuery, $bindArray);
             $themeRow = $zdbh->returnRow();
-            include 'etc/styles/' . $themeRow['ac_usertheme_vc'] . '/login.ztml';
+            $loginTheme = ctrl_users::SafeTheme($themeRow['ac_usertheme_vc']);
+            include 'etc/styles/' . ($loginTheme !== '' ? $loginTheme : 'Sentora_Default') . '/login.ztml';
             exit;
         }
         return true;
@@ -149,6 +150,7 @@ class ctrl_auth
     {
         runtime_hook::Execute('OnUserLogout');
         $_SESSION['zpuid'] = null;
+        unset($_SESSION['zp2fa']);
         if (isset($_SESSION['ruid'])) {
             unset($_SESSION['ruid']);
         }

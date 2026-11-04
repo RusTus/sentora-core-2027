@@ -48,7 +48,7 @@ $sql = $zdbh->prepare("SELECT COUNT(*) FROM x_vhosts WHERE vh_acc_fk = :uid AND 
 $sql->bindParam(':uid', $user['userid']);
 $sql->bindParam(':domain', $domain);
 $sql->execute();
-if ((int) $sql->fetchColumn() === 0) {
+if ((int) $sql->fetchColumn() === 0 && !ctrl_statsdomains::IsPanelDomainOf($user['userid'], $domain)) {
     webalizer_report_deny(404, 'Unknown domain.');
 }
 

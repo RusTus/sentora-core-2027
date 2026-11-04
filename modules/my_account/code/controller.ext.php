@@ -140,6 +140,92 @@ class module_controller extends ctrl_module
         return true;
     }
 
+    static $tfmsg = null;
+
+    /* ---------- Two-factor login (only when switched on in Sentora Config) ---------- */
+
+    static function getTwoFactorAvailable()
+    {
+        return ctrl_twofactor::Enabled();
+    }
+
+    static function TwoFactorRow()
+    {
+        $currentuser = ctrl_users::GetUserDetail();
+        return ctrl_twofactor::Row($currentuser['userid']);
+    }
+
+    static function getTwoFactorOn()
+    {
+        $row = self::TwoFactorRow();
+        return $row && (int) $row['tf_enabled_in'] === 1;
+    }
+
+    static function getTwoFactorPending()
+    {
+        $row = self::TwoFactorRow();
+        return $row && (int) $row['tf_enabled_in'] === 0;
+    }
+
+    static function getTwoFactorOff()
+    {
+        return !self::TwoFactorRow();
+    }
+
+    static function getTwoFactorSecret()
+    {
+        $row = self::TwoFactorRow();
+        return ($row && (int) $row['tf_enabled_in'] === 0) ? trim(chunk_split($row['tf_secret_vc'], 4, ' ')) : '';
+    }
+
+    static function getTwoFactorUri()
+    {
+        $row = self::TwoFactorRow();
+        $currentuser = ctrl_users::GetUserDetail();
+        return ($row && (int) $row['tf_enabled_in'] === 0) ? htmlspecialchars(ctrl_twofactor::OtpauthUri($row['tf_secret_vc'], $currentuser['username']), ENT_QUOTES, 'UTF-8') : '';
+    }
+
+    static function doTwoFactorBegin()
+    {
+        runtime_csfr::Protect();
+        if (!ctrl_twofactor::Enabled()) {
+            return false;
+        }
+        $currentuser = ctrl_users::GetUserDetail();
+        ctrl_twofactor::Begin($currentuser['userid']);
+        return true;
+    }
+
+    static function doTwoFactorConfirm()
+    {
+        global $controller;
+        runtime_csfr::Protect();
+        $currentuser = ctrl_users::GetUserDetail();
+        if (ctrl_twofactor::Enabled() && ctrl_twofactor::Verify($currentuser['userid'], $controller->GetControllerRequest('FORM', 'inTwoFactorCode'), false)) {
+            ctrl_twofactor::Activate($currentuser['userid']);
+            self::$tfmsg = 'on';
+        } else {
+            self::$tfmsg = 'wrong';
+        }
+        return true;
+    }
+
+    static function doTwoFactorDisable()
+    {
+        global $controller;
+        runtime_csfr::Protect();
+        $currentuser = ctrl_users::GetUserDetail();
+        $row = ctrl_twofactor::Row($currentuser['userid']);
+        // Turning it off needs a current code (a pending, unconfirmed setup can just be cancelled)
+        if ($row && ((int) $row['tf_enabled_in'] === 0 || ctrl_twofactor::Verify($currentuser['userid'], $controller->GetControllerRequest('FORM', 'inTwoFactorCode')))) {
+            ctrl_twofactor::Disable($currentuser['userid']);
+            self::$tfmsg = 'off';
+        } else {
+            self::$tfmsg = 'wrong';
+        }
+        return true;
+    }
+
     static function getResult()
     {
         if (!fs_director::CheckForEmptyValue(self::$blank)) {
@@ -147,6 +233,15 @@ class module_controller extends ctrl_module
         }
         if (!fs_director::CheckForEmptyValue(self::$emailerror)) {
             return ui_sysmessage::shout(ui_language::translate("Your email address is not valid!"), "zannounceerror");
+        }
+        if (self::$tfmsg === 'on') {
+            return ui_sysmessage::shout(ui_language::translate("Two-factor login is now on: you will be asked for a code from your app when you log in."), "zannounceok");
+        }
+        if (self::$tfmsg === 'off') {
+            return ui_sysmessage::shout(ui_language::translate("Two-factor login is now off for your account."), "zannounceok");
+        }
+        if (self::$tfmsg === 'wrong') {
+            return ui_sysmessage::shout(ui_language::translate("That code is not right. Check the time on your phone and try the next code."), "zannounceerror");
         }
         if (!fs_director::CheckForEmptyValue(self::$ok)) {
             return ui_sysmessage::shout(ui_language::translate("Changes to your account settings have been saved successfully!"), "zannounceok");

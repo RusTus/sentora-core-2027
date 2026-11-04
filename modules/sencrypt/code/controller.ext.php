@@ -422,7 +422,7 @@ class module_controller extends ctrl_module {
 		$homedir = ctrl_options::GetSystemOption('hosted_dir') . $username;
     	$backupname = $rootdir;
 		$resault = exec("cd " . $homedir . "/ssl/sencrypt/third_party/" . $domain . "/ && " . ctrl_options::GetSystemOption('zip_exe') . " -r9 " . $temp_dir . $backupname . " *");
-        @chmod($temp_dir . $backupname . ".zip", 0777);
+        @chmod($temp_dir . $backupname . ".zip", 0600);
 		$filename = $backupname . ".zip";
 		$filepath = $temp_dir;
 		header("Pragma: public");

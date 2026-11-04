@@ -131,6 +131,13 @@ class fs_director {
     static function SetFileSystemPermissions($path, $mode) {
         if (file_exists($path)) {
             runtime_hook::Execute('OnBeforeSetFileSystemPerms');
+            // Inside hosting folders nobody but the account, the panel and Apache
+            // (through the folder's access lists) may get in: no "others" bits,
+            // and folders keep their group for new files
+            $hosted = (string) ctrl_options::GetSystemOption('hosted_dir');
+            if ($hosted !== '' && strpos(realpath($path) . '/', rtrim(realpath($hosted), '/') . '/') === 0) {
+                $mode = is_dir($path) ? (($mode & 0770) | 02000) : ($mode & 0660);
+            }
             @chmod($path, $mode);
             runtime_hook::Execute('OnAfterSetFileSystemPerms');
             $retval = true;

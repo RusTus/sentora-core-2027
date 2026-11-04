@@ -35,4 +35,15 @@ class module_controller extends ctrl_module
         return $message;
     }
 
+
+    static function getHasSOGo()
+    {
+        return is_file('/usr/sbin/sogod');
+    }
+
+    static function getSOGoServer()
+    {
+        return htmlspecialchars((string) ctrl_options::GetSystemOption('sentora_domain'), ENT_QUOTES, 'UTF-8');
+    }
+
 }

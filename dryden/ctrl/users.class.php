@@ -15,6 +15,17 @@
  */
 class ctrl_users {
 
+    /** an existing theme folder name, or '' (the caller then uses the reseller's or the default) */
+    static function SafeTheme($theme)
+    {
+        $theme = (string) $theme;
+        if ($theme === '' || !preg_match('/^[A-Za-z0-9_-]{1,64}$/', $theme) || !is_dir(dirname(dirname(__DIR__)) . '/etc/styles/' . $theme)) {
+            return ($theme === '') ? '' : 'Sentora_Default';
+        }
+        return $theme;
+    }
+
+
     /**
      * Returns an array of infomation for the account details, package, groups and quota limits for a given UID.
      * @author Bobby Allen (ballen@bobbyallen.me)
@@ -46,8 +57,10 @@ class ctrl_users {
         $userdetail->addItemValue('resellerid', $dbvals['ac_reseller_fk']);
         $userdetail->addItemValue('packageid', $dbvals['ac_package_fk']);
         $userdetail->addItemValue('enabled', $dbvals['ac_enabled_in']);
-        $userdetail->addItemValue('usertheme', $dbvals['ac_usertheme_vc']);
-        $userdetail->addItemValue('usercss', $dbvals['ac_usercss_vc']);
+        // Theme and CSS names become file paths (the theme's templates are compiled
+        // to PHP): only an existing theme folder and a plain CSS name are used
+        $userdetail->addItemValue('usertheme', self::SafeTheme($dbvals['ac_usertheme_vc']));
+        $userdetail->addItemValue('usercss', preg_match('/^[A-Za-z0-9_-]{1,64}$/', (string) $dbvals['ac_usercss_vc']) ? $dbvals['ac_usercss_vc'] : '');
         $userdetail->addItemValue('lastlogon', $dbvals['ac_lastlogon_ts']);
         $userdetail->addItemValue('fullname', $dbvals['ud_fullname_vc']);
         $userdetail->addItemValue('packagename', $dbvals['pk_name_vc']);

@@ -161,12 +161,14 @@ class module_controller extends ctrl_module
 		return self::$CurrentLogFile;
 	}
 	static function getPreviewBuffer(){
-		return self::$PreviewBuffer;
+		// Log lines contain whatever visitors sent (URLs, user agents): shown as text
+		return htmlspecialchars((string) self::$PreviewBuffer, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 	}
 	static function ActionProcess($mode){
 		$currentuser = ctrl_users::GetUserDetail();
 		global $controller;
 		global $zdbh;	
+		$download = false;
 		$id = $controller->GetControllerRequest('FORM', 'inPreview');
 		if($id <= 0){
 			$id = $controller->GetControllerRequest('FORM', 'inDownload');

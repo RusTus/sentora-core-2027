@@ -15,6 +15,7 @@ class ctrl_loginguard
     const ADDRESS_LIMIT = 20;     // ... or per address ...
     const WINDOW = 900;           // ... within 15 minutes locks for 15 minutes
     const REMEMBER_DAYS = 30;
+    const AUTH_LOG = '/var/lib/sentora/sentora-auth.log';
 
     static function Ensure()
     {
@@ -71,6 +72,10 @@ class ctrl_loginguard
         $sql->bindParam(':ip', $ip);
         $sql->bindParam(':t', $now);
         $sql->execute();
+        // One line per failure for fail2ban (jail sentora-panel), which blocks the address
+        // at the firewall; the user name is cleaned so it can not forge other lines
+        $clean = preg_replace('/[^A-Za-z0-9_.@:-]/', '?', substr((string) $username, 0, 64));
+        @file_put_contents(self::AUTH_LOG, date('Y-m-d H:i:s') . " Sentora panel login failed for '" . $clean . "' from " . $ip . "\n", FILE_APPEND | LOCK_EX);
         $old = $now - 86400;
         $zdbh->prepare("DELETE FROM x_login_failures WHERE lf_time_in < :old")->execute(array(':old' => $old));
     }

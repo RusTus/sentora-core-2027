@@ -3,6 +3,9 @@ defined('SENTORA_PANEL_FPM_SOCKET') || define('SENTORA_PANEL_FPM_SOCKET', '/run/
 
 echo fs_filehandler::NewLine() . "START Apache Config Hook." . fs_filehandler::NewLine();
 if (ui_module::CheckModuleEnabled('Apache Config')) {
+    // Account users, PHP pools, FTP owners and cron jobs: every run (cheap when
+    // nothing changed), so a new account, cron job or FTP login is ready within 5 minutes
+    sys_accountphp::Sync();
     echo "Apache Admin module ENABLED..." . fs_filehandler::NewLine();
     TriggerApacheQuotaUsage();
     if (ctrl_options::GetSystemOption('apache_changed') == strtolower("true")) {
@@ -92,19 +95,27 @@ function BuildVhostReWriteSSL($vhostName, $userEmail) {
  * PHP handler lines for a regular domain or subdomain: the system PHP (mod_php,
  * the php_handler setting) or the PHP-FPM version chosen for the domain.
  */
+/**
+ * Custom vhost entries written for mod_php ("php_value ...", "php_admin_flag ...")
+ * would stop Apache now that PHP runs in PHP-FPM: they are kept, commented out.
+ * (In PHP-FPM, per-site PHP settings go in a .user.ini file in the site's folder.)
+ */
+function SentoraNoModPhp($text) {
+    return preg_replace('/^(\s*)(php_(?:admin_)?(?:value|flag)\b.*)$/mi', '$1# Not used with PHP-FPM (use .user.ini): $2', (string) $text);
+}
+
 function BuildVhostPhpHandler($rowvhost, $vhostuser) {
+    // Every domain's PHP runs in its account's own PHP-FPM pool (user web<id>),
+    // in the version chosen for the domain (or the default)
     $version = isset($rowvhost['vh_php_version_vc']) ? (string) $rowvhost['vh_php_version_vc'] : '';
-    if ($version === '' || !sys_phpversions::IsEnabled($version)) {
-        return ctrl_options::GetSystemOption('php_handler');
-    }
+    $version = sys_phpversions::Effective($version);
+    $home = sys_accountphp::HomeDir($vhostuser['username']);
     $openBasedir = '';
     if (ctrl_options::GetSystemOption('use_openbase') == "true" && $rowvhost['vh_obasedir_in'] <> 0) {
-        $openBasedir = ctrl_options::GetSystemOption('hosted_dir') . $vhostuser['username'] . "/public_html"
-            . $rowvhost['vh_directory_vc'] . '/' . ctrl_options::GetSystemOption('openbase_seperator')
-            . ctrl_options::GetSystemOption('openbase_temp');
+        // The domain's own folder and the account's temp folder (not the shared /var/sentora/temp)
+        $openBasedir = $home . "public_html" . $rowvhost['vh_directory_vc'] . '/' . ctrl_options::GetSystemOption('openbase_seperator') . $home . 'tmp/';
     }
-    $tmpDir = ctrl_options::GetSystemOption('hosted_dir') . $vhostuser['username'] . "/tmp/";
-    return sys_phpversions::ApacheHandler($version, $openBasedir, $tmpDir);
+    return sys_accountphp::ApacheHandler($vhostuser['userid'], $vhostuser['username'], $version, $openBasedir);
 }
 
 function WriteVhostConfigFile() {
@@ -112,6 +123,9 @@ function WriteVhostConfigFile() {
 
     // Start enabled extra PHP versions and stop disabled ones (PHP Versions module)
     sys_phpversions::SyncServices();
+    // One Linux user and PHP-FPM pool per account, for the versions its domains use
+    // (again here, after any PHP version changes above)
+    sys_accountphp::Sync();
 
     // Apache refuses the whole config if a log folder is missing, so make sure
     // the panel and per-domain log folders exist before writing the vhosts
@@ -431,11 +445,11 @@ function WriteVhostConfigFile() {
 				$line .= "    AllowOverride All" . fs_filehandler::NewLine();
 				$line .= "    Require all granted" . fs_filehandler::NewLine();
 				$line .= "</Directory>" . fs_filehandler::NewLine();
-				$line .= ctrl_options::GetSystemOption('php_handler') . fs_filehandler::NewLine();
+				$line .= sys_accountphp::PanelHandler();
 				$line .= ctrl_options::GetSystemOption('dir_index') . fs_filehandler::NewLine();
 				// Client custom vh entry
 				$line .= "# Custom VH settings (if any exist)" . fs_filehandler::NewLine();
-				$line .= $rowvhost['vh_custom_tx'] . fs_filehandler::NewLine();
+				$line .= SentoraNoModPhp($rowvhost['vh_custom_tx']) . fs_filehandler::NewLine();
 				$line .= "</virtualhost>" . fs_filehandler::NewLine();
 		
 				############################## add back old code
@@ -472,7 +486,7 @@ function WriteVhostConfigFile() {
 				$line .= "    AllowOverride All" . fs_filehandler::NewLine();
 				$line .= "    Require all granted" . fs_filehandler::NewLine();
 				$line .= "</Directory>" . fs_filehandler::NewLine();
-				$line .= ctrl_options::GetSystemOption('php_handler') . fs_filehandler::NewLine();
+				$line .= sys_accountphp::PanelHandler();
 				$line .= ctrl_options::GetSystemOption('dir_index') . fs_filehandler::NewLine();
 				
 				# SSL Settings
@@ -482,7 +496,7 @@ function WriteVhostConfigFile() {
 				
 				// Client custom vh entry
 				$line .= "# Custom VH settings (if any exist)" . fs_filehandler::NewLine();
-				$line .= $rowvhost['vh_custom_tx'] . fs_filehandler::NewLine();
+				$line .= SentoraNoModPhp($rowvhost['vh_custom_tx']) . fs_filehandler::NewLine();
 				$line .= "</virtualhost>" . fs_filehandler::NewLine();
 				
 				############################## add back old code
@@ -526,11 +540,11 @@ function WriteVhostConfigFile() {
 				$line .= "    AllowOverride All" . fs_filehandler::NewLine();
 				$line .= "    Require all granted" . fs_filehandler::NewLine();
 				$line .= "</Directory>" . fs_filehandler::NewLine();
-				$line .= ctrl_options::GetSystemOption('php_handler') . fs_filehandler::NewLine();
+				$line .= sys_accountphp::PanelHandler();
 				$line .= ctrl_options::GetSystemOption('dir_index') . fs_filehandler::NewLine();
 				// Client custom vh entry
 				$line .= "# Custom VH settings (if any exist)" . fs_filehandler::NewLine();
-				$line .= $rowvhost['vh_custom_tx'] . fs_filehandler::NewLine();
+				$line .= SentoraNoModPhp($rowvhost['vh_custom_tx']) . fs_filehandler::NewLine();
 				$line .= "</virtualhost>" . fs_filehandler::NewLine();
 				
 				############################## add back old code
@@ -566,7 +580,7 @@ function WriteVhostConfigFile() {
 				$line .= "    AllowOverride All" . fs_filehandler::NewLine();
 				$line .= "    Require all granted" . fs_filehandler::NewLine();
 				$line .= "</Directory>" . fs_filehandler::NewLine();
-				$line .= ctrl_options::GetSystemOption('php_handler') . fs_filehandler::NewLine();
+				$line .= sys_accountphp::PanelHandler();
 				$line .= ctrl_options::GetSystemOption('dir_index') . fs_filehandler::NewLine();
 				
 				# SSL Settings
@@ -576,7 +590,7 @@ function WriteVhostConfigFile() {
 				
 				// Client custom vh entry
 				$line .= "# Custom VH settings (if any exist)" . fs_filehandler::NewLine();
-				$line .= $rowvhost['vh_custom_tx'] . fs_filehandler::NewLine();
+				$line .= SentoraNoModPhp($rowvhost['vh_custom_tx']) . fs_filehandler::NewLine();
 				$line .= "</virtualhost>" . fs_filehandler::NewLine();
 				
 				############################## add back old code
@@ -619,14 +633,14 @@ function WriteVhostConfigFile() {
 				$line .= "    AllowOverride All" . fs_filehandler::NewLine();
 				$line .= "    Require all granted" . fs_filehandler::NewLine();
 				$line .= "</Directory>" . fs_filehandler::NewLine();
-				$line .= ctrl_options::GetSystemOption('php_handler') . fs_filehandler::NewLine();
+				$line .= sys_accountphp::PanelHandler();
 				$line .= ctrl_options::GetSystemOption('dir_index') . fs_filehandler::NewLine();
 				// Global custom global vh entry
 				$line .= "# Custom Global Settings (if any exist)" . fs_filehandler::NewLine();
-				$line .= ctrl_options::GetSystemOption('global_vhcustom') . fs_filehandler::NewLine();
+				$line .= SentoraNoModPhp(ctrl_options::GetSystemOption('global_vhcustom')) . fs_filehandler::NewLine();
 				// Client custom vh entry
 				$line .= "# Custom VH settings (if any exist)" . fs_filehandler::NewLine();
-				$line .= $rowvhost['vh_custom_tx'] . fs_filehandler::NewLine();
+				$line .= SentoraNoModPhp($rowvhost['vh_custom_tx']) . fs_filehandler::NewLine();
 				$line .= "</virtualhost>" . fs_filehandler::NewLine();
 				
 				############################## add back old code
@@ -662,7 +676,7 @@ function WriteVhostConfigFile() {
 				$line .= "    AllowOverride All" . fs_filehandler::NewLine();
 				$line .= "    Require all granted" . fs_filehandler::NewLine();
 				$line .= "</Directory>" . fs_filehandler::NewLine();
-				$line .= ctrl_options::GetSystemOption('php_handler') . fs_filehandler::NewLine();
+				$line .= sys_accountphp::PanelHandler();
 				$line .= ctrl_options::GetSystemOption('dir_index') . fs_filehandler::NewLine();
 				
 				# SSL Settings
@@ -672,10 +686,10 @@ function WriteVhostConfigFile() {
 				
 				// Global custom global vh entry
 				$line .= "# Custom Global Settings (if any exist)" . fs_filehandler::NewLine();
-				$line .= ctrl_options::GetSystemOption('global_vhcustom') . fs_filehandler::NewLine();
+				$line .= SentoraNoModPhp(ctrl_options::GetSystemOption('global_vhcustom')) . fs_filehandler::NewLine();
 				// Client custom vh entry
 				$line .= "# Custom VH settings (if any exist)" . fs_filehandler::NewLine();
-				$line .= $rowvhost['vh_custom_tx'] . fs_filehandler::NewLine();
+				$line .= SentoraNoModPhp($rowvhost['vh_custom_tx']) . fs_filehandler::NewLine();
 				$line .= "</virtualhost>" . fs_filehandler::NewLine();
 				
 				############################## add back old code
@@ -724,20 +738,7 @@ function WriteVhostConfigFile() {
 				$line .= "ServerAdmin " . $useremail . fs_filehandler::NewLine();
 				// Document root
 				$line .= 'DocumentRoot ' . '"' . $RootDir . '"' . fs_filehandler::NewLine();
-				// Get Package openbasedir and PHP handler enabled options
-				if (ctrl_options::GetSystemOption('use_openbase') == "true") {
-					if ($rowvhost['vh_obasedir_in'] <> 0) {
-						$line .= 'php_admin_value open_basedir "' 
-							  . ctrl_options::GetSystemOption('hosted_dir') . $vhostuser['username'] . "/public_html" 
-							  . $rowvhost['vh_directory_vc'] . '/' . ctrl_options::GetSystemOption('openbase_seperator') 
-							  . ctrl_options::GetSystemOption('openbase_temp') . '"' . fs_filehandler::NewLine();
-					}
-				}
-				
-				
-				# PHP_admin_values
-				$line .= 'php_admin_value upload_tmp_dir ' . '"' . ctrl_options::GetSystemOption('hosted_dir') . $vhostuser['username'] . "/tmp/" . "\"" . fs_filehandler::NewLine();
-				$line .= 'php_admin_value session.save_path ' . '"' . ctrl_options::GetSystemOption('hosted_dir') . $vhostuser['username'] . "/tmp/" . "\"" . fs_filehandler::NewLine();
+				// PHP settings (open_basedir, temp and session folders) come with the account's PHP-FPM handler below
 				// Logs
 				if (!is_dir(ctrl_options::GetSystemOption('log_dir') . "domains/" . $vhostuser['username'] . "/")) {
 					fs_director::CreateDirectory(ctrl_options::GetSystemOption('log_dir') . "domains/" . $vhostuser['username'] . "/");
@@ -803,11 +804,11 @@ function WriteVhostConfigFile() {
 		
 				// Global custom global vh entry
 				$line .= "# Custom Global Settings (if any exist)" . fs_filehandler::NewLine();
-				$line .= ctrl_options::GetSystemOption('global_vhcustom') . fs_filehandler::NewLine();
+				$line .= SentoraNoModPhp(ctrl_options::GetSystemOption('global_vhcustom')) . fs_filehandler::NewLine();
 		
 				// Client custom vh entry
 				$line .= "# Custom VH settings (if any exist)" . fs_filehandler::NewLine();
-				$line .= $rowvhost['vh_custom_tx'] . fs_filehandler::NewLine();
+				$line .= SentoraNoModPhp($rowvhost['vh_custom_tx']) . fs_filehandler::NewLine();
 		
 				// End Virtual Host Settings
 				$line .= "</virtualhost>" . fs_filehandler::NewLine();
@@ -847,18 +848,7 @@ function WriteVhostConfigFile() {
 				// Document root
 		
 				$line .= 'DocumentRoot ' . '"' . $RootDir . '"' . fs_filehandler::NewLine();
-				// Get Package openbasedir and PHP handler enabled options
-				if (ctrl_options::GetSystemOption('use_openbase') == "true") {
-					if ($rowvhost['vh_obasedir_in'] <> 0) {
-						$line .= 'php_admin_value open_basedir "' 
-							  . ctrl_options::GetSystemOption('hosted_dir') . $vhostuser['username'] . "/public_html" 
-							  . $rowvhost['vh_directory_vc'] . '/' . ctrl_options::GetSystemOption('openbase_seperator') 
-							  . ctrl_options::GetSystemOption('openbase_temp') . '"' . fs_filehandler::NewLine();
-					}
-				}
-				# PHP_admin_values
-				$line .= 'php_admin_value upload_tmp_dir ' . '"' . ctrl_options::GetSystemOption('hosted_dir') . $vhostuser['username'] . "/tmp/" . "\"" . fs_filehandler::NewLine();
-				$line .= 'php_admin_value session.save_path ' . '"' . ctrl_options::GetSystemOption('hosted_dir') . $vhostuser['username'] . "/tmp/" . "\"" . fs_filehandler::NewLine();
+				// PHP settings (open_basedir, temp and session folders) come with the account's PHP-FPM handler below
 				
 				// Logs
 				if (!is_dir(ctrl_options::GetSystemOption('log_dir') . "domains/" . $vhostuser['username'] . "/")) {
@@ -928,11 +918,11 @@ function WriteVhostConfigFile() {
 		
 				// Global custom global vh entry
 				$line .= "# Custom Global Settings (if any exist)" . fs_filehandler::NewLine();
-				$line .= ctrl_options::GetSystemOption('global_vhcustom') . fs_filehandler::NewLine();
+				$line .= SentoraNoModPhp(ctrl_options::GetSystemOption('global_vhcustom')) . fs_filehandler::NewLine();
 		
 				// Client custom vh entry
 				$line .= "# Custom VH settings (if any exist)" . fs_filehandler::NewLine();
-				$line .= $rowvhost['vh_custom_tx'] . fs_filehandler::NewLine();
+				$line .= SentoraNoModPhp($rowvhost['vh_custom_tx']) . fs_filehandler::NewLine();
 		
 				// End Virtual Host Settings
 				$line .= "</virtualhost>" . fs_filehandler::NewLine();
@@ -980,7 +970,7 @@ function WriteVhostConfigFile() {
 				$line .= ctrl_options::GetSystemOption('dir_index') . fs_filehandler::NewLine();
 				// Client custom vh entry
 				$line .= "# Custom VH settings (if any exist)" . fs_filehandler::NewLine();
-				$line .= $rowvhost['vh_custom_tx'] . fs_filehandler::NewLine();
+				$line .= SentoraNoModPhp($rowvhost['vh_custom_tx']) . fs_filehandler::NewLine();
 				$line .= "</virtualhost>" . fs_filehandler::NewLine();
 				
 				############################## add back old code
@@ -1022,7 +1012,7 @@ function WriteVhostConfigFile() {
 				
 				// Client custom vh entry
 				$line .= "# Custom VH settings (if any exist)" . fs_filehandler::NewLine();
-				$line .= $rowvhost['vh_custom_tx'] . fs_filehandler::NewLine();
+				$line .= SentoraNoModPhp($rowvhost['vh_custom_tx']) . fs_filehandler::NewLine();
 				$line .= "</virtualhost>" . fs_filehandler::NewLine();
 				
 				############################## add back old code

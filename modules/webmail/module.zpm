@@ -11,5 +11,20 @@
     </div>
 
     <a href="etc/apps/webmail/" class="btn btn-large btn-primary" target="_blank"><@ LaunchWebMail @></a>
+    <% if HasSOGo %>
+    &nbsp; <a href="/SOGo/" class="btn btn-large btn-primary" target="_blank"><: Launch Groupware (SOGo) :></a>
+    <div class="zgrid_wrapper" style="margin-top: 20px">
+        <h3><: Mail, calendar and contacts on phones and Outlook (ActiveSync) :></h3>
+        <p><: Add an Exchange or ActiveSync account on the device with these settings :>:</p>
+        <table class="table table-striped" style="max-width: 640px">
+            <tr><th><: Email and user name :></th><td><: the full mailbox address :></td></tr>
+            <tr><th><: Password :></th><td><: the mailbox password :></td></tr>
+            <tr><th><: Server :></th><td><code><@ SOGoServer @></code></td></tr>
+            <tr><th><: Domain :></th><td><: leave empty :></td></tr>
+            <tr><th><: SSL / TLS :></th><td><: on :></td></tr>
+        </table>
+        <p><: Calendars and contacts also work over CalDAV and CardDAV at :> <code>https://<@ SOGoServer @>/SOGo/dav/</code></p>
+    </div>
+    <% endif %>
 
 </div>

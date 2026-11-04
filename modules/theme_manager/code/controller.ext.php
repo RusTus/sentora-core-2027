@@ -160,6 +160,12 @@ class module_controller extends ctrl_module
         runtime_csfr::Protect();
         $currentuser = ctrl_users::GetUserDetail();
         $formvars = $controller->GetAllControllerRequests('FORM');
+        // Only one of the installed themes (the name is used as a folder to include
+        // templates from, so "../" could run files from anywhere)
+        if (!isset($formvars['inTheme']) || ctrl_users::SafeTheme($formvars['inTheme']) !== (string) $formvars['inTheme'] || $formvars['inTheme'] === '') {
+            header("location: ./?module=" . $controller->GetCurrentModule());
+            exit;
+        }
         self::ExecuteUpdateTheme($currentuser['userid'], $formvars['inTheme']);
         if (count(self::ExecuteCSSList($formvars['inTheme'])) > 1) {
             header("location: ./?module=" . $controller->GetCurrentModule() . "&selectcss=true");
@@ -176,6 +182,10 @@ class module_controller extends ctrl_module
         runtime_csfr::Protect();
         $currentuser = ctrl_users::GetUserDetail();
         $formvars = $controller->GetAllControllerRequests('FORM');
+        if (!isset($formvars['inCSS']) || !preg_match('/^[A-Za-z0-9_-]{1,64}$/', (string) $formvars['inCSS'])) {
+            header("location: ./?module=" . $controller->GetCurrentModule());
+            exit;
+        }
         self::ExecuteUpdateCSS($currentuser['userid'], $formvars['inCSS']);
         header("location: ./?module=" . $controller->GetCurrentModule() . "&saved=true");
         exit;

@@ -21,6 +21,15 @@ ini_set('session.use_only_cookies', '1');
 if ((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['SERVER_PORT']) && (int) $_SERVER['SERVER_PORT'] === 443)) {
     ini_set('session.cookie_secure', '1');
 }
+// Browser-side backstops for the panel's own pages: scripts, styles, fonts and
+// images only from the panel itself, no framing by other sites, no plugins.
+// (Inline scripts stay allowed because the panel's pages use them.)
+header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; "
+    . "img-src 'self' data:; font-src 'self' data:; connect-src 'self'; frame-src 'self'; frame-ancestors 'self'; "
+    . "form-action 'self'; base-uri 'self'; object-src 'none'");
+header('X-Frame-Options: SAMEORIGIN');
+header('X-Content-Type-Options: nosniff');
+header('Referrer-Policy: same-origin');
 session_start();
 require_once 'dryden/loader.inc.php';
 require_once 'cnf/db.php';

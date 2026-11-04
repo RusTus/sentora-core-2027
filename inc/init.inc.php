@@ -147,15 +147,82 @@ if (isset($_POST['inUsername'])) {
     $result = $sql->fetch();
     $crypto = new runtime_hash;
     $crypto->SetPassword($_POST['inPassword']);
-    $crypto->SetSalt($result['ac_passsalt_vc']);
+    // An unknown user still goes through the same work (and the same answer)
+    $crypto->SetSalt($result ? $result['ac_passsalt_vc'] : runtime_randomstring::randomHash(22));
     $secure_password = $crypto->CryptParts($crypto->Crypt())->Hash;
 
-    if (!ctrl_auth::Authenticate($_POST['inUsername'], $secure_password, $rememberdetails, false, $inSessionSecuirty)) {
+    // "Remember me" is only set once the whole login (with any second step) has succeeded
+    $loggedInUid = ctrl_auth::Authenticate($_POST['inUsername'], $secure_password, false, false, $inSessionSecuirty);
+    if (!$loggedInUid) {
         ctrl_loginguard::Failed($_POST['inUsername']);
         header("location: ./?invalidlogin");
         exit();
     }
     ctrl_loginguard::Succeeded($_POST['inUsername']);
+    if (ctrl_twofactor::Required($loggedInUid)) {
+        // Password is right; the account is not logged in until the code is too
+        unset($_SESSION['zpuid']);
+        $_SESSION['zp2fa'] = array('uid' => (int) $loggedInUid, 'user' => (string) $_POST['inUsername'],
+            'remember' => $rememberdetails, 'secure' => $inSessionSecuirty, 'time' => time());
+        header("location: ./?twofactor");
+        exit();
+    }
+    if ($rememberdetails) {
+        ctrl_loginguard::Remember($loggedInUid);
+    }
+}
+
+// Second login step: the code from the authenticator app
+if (isset($_SESSION['zp2fa']) && empty($_SESSION['zpuid'])) {
+    $pending = $_SESSION['zp2fa'];
+    if (time() - (int) $pending['time'] > ctrl_twofactor::PENDING_SECONDS || !ctrl_twofactor::Required($pending['uid'])) {
+        unset($_SESSION['zp2fa']);
+        header("location: ./?invalidlogin");
+        exit();
+    }
+    if (isset($_POST['inTwoFactorCode'])) {
+        runtime_csfr::Protect();
+        $key = '2fa:' . $pending['user'];
+        if (ctrl_loginguard::IsLocked($key)) {
+            unset($_SESSION['zp2fa']);
+            header("location: ./?invalidlogin");
+            exit();
+        }
+        if (ctrl_twofactor::Verify($pending['uid'], $_POST['inTwoFactorCode'])) {
+            unset($_SESSION['zp2fa']);
+            ctrl_loginguard::Succeeded($key);
+            ctrl_auth::SetUserSession($pending['uid'], $pending['secure']);
+            if ($pending['remember']) {
+                ctrl_loginguard::Remember($pending['uid']);
+            }
+            header("location: ./");
+            exit();
+        }
+        ctrl_loginguard::Failed($key);
+        header("location: ./?twofactor&wrong");
+        exit();
+    }
+    $tfWrong = isset($_GET['wrong']);
+    $tfTheme = 'Sentora_Default';
+    header('Content-Type: text/html; charset=utf-8');
+    ?><!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Control Panel - Login code</title>
+<link href="etc/styles/<?php echo $tfTheme; ?>/global-css/bootstrap.min.css" rel="stylesheet" type="text/css">
+<style>body{background:#f4f4f4} .box{max-width:380px;margin:12vh auto;background:#fff;border:1px solid #ddd;border-radius:6px;padding:24px 28px}
+.code{font-size:28px;letter-spacing:6px;text-align:center;font-family:monospace}</style></head>
+<body><div class="box">
+<h3>Login code</h3>
+<p>Enter the 6-digit code from the authenticator app for <strong><?php echo htmlspecialchars($pending['user'], ENT_QUOTES, 'UTF-8'); ?></strong>.</p>
+<?php if ($tfWrong) { ?><div class="alert alert-danger">That code is not right, or it was already used. Try the next one.</div><?php } ?>
+<form method="post" action="./?twofactor" autocomplete="off">
+<input class="form-control code" name="inTwoFactorCode" inputmode="numeric" pattern="[0-9 ]{6,7}" maxlength="7" required autofocus>
+<?php echo runtime_csfr::Token(); ?>
+<p style="margin-top:16px"><button class="btn btn-primary btn-block" type="submit">Log in</button></p>
+<p class="text-muted" style="margin:0"><a href="./?logout">Cancel</a></p>
+</form></div></body></html>
+<?php
+    exit();
 }
 
 // "Remember me": a random token (the old cookies held the password hash)

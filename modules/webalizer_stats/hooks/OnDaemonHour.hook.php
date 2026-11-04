@@ -24,7 +24,14 @@ function GenerateWebalizerStats()
     $sql      = $zdbh->prepare( "SELECT * FROM x_vhosts LEFT JOIN x_accounts ON x_vhosts.vh_acc_fk=x_accounts.ac_id_pk WHERE vh_deleted_ts IS NULL" );
     $sql->execute();
     echo "Generating webalizer stats html..." . fs_filehandler::NewLine();
-    while ( $rowvhost = $sql->fetch() ) {
+    $rows = $sql->fetchAll();
+    // The panel's own traffic, under the main administrator account
+    $panelDomain = ctrl_statsdomains::PanelDomain();
+    $panelOwner = ctrl_statsdomains::OwnerName();
+    if ( $panelDomain !== false && $panelOwner !== false ) {
+        $rows[] = array( 'ac_user_vc' => $panelOwner, 'vh_name_vc' => $panelDomain, 'sentora_logfile' => ctrl_statsdomains::PanelLog() );
+    }
+    foreach ( $rows as $rowvhost ) {
       // Reports live outside the web root (they used to be readable by anyone who
       // guessed modules/webalizer_stats/stats/<user>/<domain>/) and are shown by
       // code/report.php to the domain's owner only.
@@ -57,7 +64,7 @@ function GenerateWebalizerStats()
             $command = file_exists( '/usr/local/bin/webalizer' ) ? '/usr/local/bin/webalizer' : 'webalizer';
         }
 
-        $logFile = realpath( ctrl_options::GetSystemOption( 'log_dir' ) .
+        $logFile = isset( $rowvhost[ 'sentora_logfile' ] ) ? realpath( $rowvhost[ 'sentora_logfile' ] ) : realpath( ctrl_options::GetSystemOption( 'log_dir' ) .
             'domains/' .
             $rowvhost[ 'ac_user_vc' ] .
             '/' .

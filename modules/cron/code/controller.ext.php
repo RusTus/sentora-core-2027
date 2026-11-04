@@ -285,8 +285,10 @@ class module_controller extends ctrl_module
         $line .= "#  -> USE SENTORA INSTEAD! (Menu -> Advanced -> Cron Manager)                    " . fs_filehandler::NewLine();
         $line .= "#################################################################################" . fs_filehandler::NewLine();
 
-        //Write command lines in crontab, if any
-        if ($numrows->fetchColumn() <> 0) {
+        // The jobs themselves no longer go in the web server user's crontab: the
+        // daemon writes them to /etc/cron.d/sentora-accounts, each running as its
+        // account's own user (sys_accountphp::SyncCron), within 5 minutes
+        if (false) {
             $sql = $zdbh->prepare($sql);
             $sql->execute();
             while ($rowcron = $sql->fetch()) {

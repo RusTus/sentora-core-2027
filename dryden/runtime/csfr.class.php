@@ -44,7 +44,7 @@ class runtime_csfr {
      * @return bool
      */
     static function Protect() {
-        if (isset($_POST['csfr_token']) && ($_POST['csfr_token'] == $_SESSION['zpcsfr'])) {
+        if (isset($_POST['csfr_token'], $_SESSION['zpcsfr']) && is_string($_POST['csfr_token']) && hash_equals((string) $_SESSION['zpcsfr'], $_POST['csfr_token'])) {
             self::Tokeniser();
             return true;
         }

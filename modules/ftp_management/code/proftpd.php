@@ -42,9 +42,16 @@ if (!fs_director::CheckForEmptyValue(self::$create)) {
     $sql = $ftp_db->prepare("INSERT INTO ftpquotalimits (name, quota_type, per_session, limit_type, bytes_in_avail, bytes_out_avail, bytes_xfer_avail, files_in_avail, files_out_avail, files_xfer_avail) VALUES (:username, 'user', 'true', 'hard', 0, 0, 0, 0, 0, 0);");
     $sql->bindParam(':username', $username);
     $sql->execute();
-    $sql = $ftp_db->prepare("INSERT INTO ftpuser (userid, passwd, homedir, shell, count, accessed, modified) VALUES (:username, :password, :homedir, '/sbin/nologin', 0, now(), now());");
+    // FTP logins act as the account's own Linux user (web<id>, made by the daemon);
+    // a brand-new account gets it within 5 minutes, until then the web server user
+    $ftpOwner = function_exists('posix_getpwnam') ? posix_getpwnam('web' . (int) $currentuser['userid']) : false;
+    $ftpUid = $ftpOwner ? (int) $ftpOwner['uid'] : 33;
+    $ftpGid = $ftpOwner ? (int) $ftpOwner['gid'] : 33;
+    $sql = $ftp_db->prepare("INSERT INTO ftpuser (userid, passwd, uid, gid, homedir, shell, count, accessed, modified) VALUES (:username, :password, :uid, :gid, :homedir, '/sbin/nologin', 0, now(), now());");
     $sql->bindParam(':username', $username);
     $sql->bindParam(':password', $password);
+    $sql->bindParam(':uid', $ftpUid);
+    $sql->bindParam(':gid', $ftpGid);
     $sql->bindParam(':homedir', $homedir);
     $sql->execute();
 }
