@@ -20,6 +20,8 @@ ini_set('session.use_strict_mode', '1');
 ini_set('session.use_only_cookies', '1');
 if ((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['SERVER_PORT']) && (int) $_SERVER['SERVER_PORT'] === 443)) {
     ini_set('session.cookie_secure', '1');
+    // Browsers that have seen the panel on HTTPS keep using HTTPS for it
+    header('Strict-Transport-Security: max-age=31536000');
 }
 // Browser-side backstops for the panel's own pages: scripts, styles, fonts and
 // images only from the panel itself, no framing by other sites, no plugins.
@@ -31,6 +33,10 @@ header('X-Frame-Options: SAMEORIGIN');
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: same-origin');
 session_start();
+// Every form that posts gets this session's CSRF token, added to the page as it is sent
+ob_start(function ($html) {
+    return class_exists('runtime_csfr') ? runtime_csfr::AddToForms($html) : $html;
+});
 require_once 'dryden/loader.inc.php';
 require_once 'cnf/db.php';
 debug_phperrors::SetMode('dev');

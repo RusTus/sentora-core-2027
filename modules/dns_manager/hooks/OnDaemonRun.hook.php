@@ -1,5 +1,12 @@
 <?php
 
+/** One line per record in the zone file: control characters never reach it (also for records saved before this check) */
+function SentoraZoneValue($v)
+{
+    return preg_replace('/[\x00-\x1F\x7F]/', '', (string) $v);
+}
+
+
 echo fs_filehandler::NewLine() . "START DNS Manager Hook" . fs_filehandler::NewLine();
 if (ui_module::CheckModuleEnabled('DNS Config')) {
     echo "DNS Manager module ENABLED..." . fs_filehandler::NewLine();
@@ -77,29 +84,29 @@ function WriteDNSZoneRecordsHook()
         while ($rowdns = $sql->fetch()) {
             switch ($rowdns['dn_type_vc']) {
                 case "A" :
-                    $line .= $rowdns['dn_host_vc'] . "    " . $rowdns['dn_ttl_in'] . "    IN    A    " . $rowdns['dn_target_vc'] . fs_filehandler::NewLine();
+                    $line .= SentoraZoneValue($rowdns['dn_host_vc']) . "    " . $rowdns['dn_ttl_in'] . "    IN    A    " . SentoraZoneValue($rowdns['dn_target_vc']) . fs_filehandler::NewLine();
                     break;
                 case "AAAA" :
-                    $line .= $rowdns['dn_host_vc'] . "    " . $rowdns['dn_ttl_in'] . "    IN    AAAA    " . $rowdns['dn_target_vc'] . fs_filehandler::NewLine();
+                    $line .= SentoraZoneValue($rowdns['dn_host_vc']) . "    " . $rowdns['dn_ttl_in'] . "    IN    AAAA    " . SentoraZoneValue($rowdns['dn_target_vc']) . fs_filehandler::NewLine();
                     break;
                 case "CNAME" :
-                    $line .= $rowdns['dn_host_vc'] . "    " . $rowdns['dn_ttl_in'] . "    IN    CNAME   " . $rowdns['dn_target_vc'] . ($rowdns['dn_target_vc'] == '@' ? '' : '.') . fs_filehandler::NewLine();
+                    $line .= SentoraZoneValue($rowdns['dn_host_vc']) . "    " . $rowdns['dn_ttl_in'] . "    IN    CNAME   " . SentoraZoneValue($rowdns['dn_target_vc']) . (SentoraZoneValue($rowdns['dn_target_vc']) == '@' ? '' : '.') . fs_filehandler::NewLine();
                     break;
                 case "MX" :
-                    $line .= $rowdns['dn_host_vc'] . "    " . $rowdns['dn_ttl_in'] . "    IN    MX    " . $rowdns['dn_priority_in'] . "  " . $rowdns['dn_target_vc'] . "." . fs_filehandler::NewLine();
+                    $line .= SentoraZoneValue($rowdns['dn_host_vc']) . "    " . $rowdns['dn_ttl_in'] . "    IN    MX    " . $rowdns['dn_priority_in'] . "  " . SentoraZoneValue($rowdns['dn_target_vc']) . "." . fs_filehandler::NewLine();
                     break;
                 case "TXT" :
-                    $line .= $rowdns['dn_host_vc'] . "    " . $rowdns['dn_ttl_in'] . "    IN    TXT    \"" . stripslashes($rowdns['dn_target_vc']) . "\"" . fs_filehandler::NewLine();
+                    $line .= SentoraZoneValue($rowdns['dn_host_vc']) . "    " . $rowdns['dn_ttl_in'] . "    IN    TXT    \"" . stripslashes(SentoraZoneValue($rowdns['dn_target_vc'])) . "\"" . fs_filehandler::NewLine();
                     break;
                 case "SRV" :
-                    $line .= $rowdns['dn_host_vc'] . "    " . $rowdns['dn_ttl_in'] . "    IN    SRV    " . $rowdns['dn_priority_in'] . "  " . $rowdns['dn_weight_in'] . "  " . $rowdns['dn_port_in'] . "  " . $rowdns['dn_target_vc'] . "." . fs_filehandler::NewLine();
+                    $line .= SentoraZoneValue($rowdns['dn_host_vc']) . "    " . $rowdns['dn_ttl_in'] . "    IN    SRV    " . $rowdns['dn_priority_in'] . "  " . $rowdns['dn_weight_in'] . "  " . $rowdns['dn_port_in'] . "  " . SentoraZoneValue($rowdns['dn_target_vc']) . "." . fs_filehandler::NewLine();
                     break;
                 case "SPF" :
-                    $line .= $rowdns['dn_host_vc'] . "    " . $rowdns['dn_ttl_in'] . "    IN    SPF    \"" . stripslashes($rowdns['dn_target_vc']) . "\"" . fs_filehandler::NewLine();
-                    $line .= $rowdns['dn_host_vc'] . "    " . $rowdns['dn_ttl_in'] . "    IN    TXT    \"" . stripslashes($rowdns['dn_target_vc']) . "\"" . fs_filehandler::NewLine();
+                    $line .= SentoraZoneValue($rowdns['dn_host_vc']) . "    " . $rowdns['dn_ttl_in'] . "    IN    SPF    \"" . stripslashes(SentoraZoneValue($rowdns['dn_target_vc'])) . "\"" . fs_filehandler::NewLine();
+                    $line .= SentoraZoneValue($rowdns['dn_host_vc']) . "    " . $rowdns['dn_ttl_in'] . "    IN    TXT    \"" . stripslashes(SentoraZoneValue($rowdns['dn_target_vc'])) . "\"" . fs_filehandler::NewLine();
                     break;
                 case "NS" :
-                    $line .= $rowdns['dn_host_vc'] . "    " . $rowdns['dn_ttl_in'] . "    IN    NS    " . $rowdns['dn_target_vc'] . "." . fs_filehandler::NewLine();
+                    $line .= SentoraZoneValue($rowdns['dn_host_vc']) . "    " . $rowdns['dn_ttl_in'] . "    IN    NS    " . SentoraZoneValue($rowdns['dn_target_vc']) . "." . fs_filehandler::NewLine();
                     break;
             }
         }

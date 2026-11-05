@@ -173,7 +173,7 @@ class module_controller extends ctrl_module
 
             while ($rowdns = $sql->fetch()) {
                 $line .= '<div class="dnsRecord row">';
-                $line .= '<div class="hostName"><span>' . $rowdns['dn_host_vc'] . '</span></div>';
+                $line .= '<div class="hostName"><span>' . htmlspecialchars((string) $rowdns['dn_host_vc'], ENT_QUOTES, 'UTF-8') . '</span></div>';
                 $line .= '<div class="TTL">';
                 $line .= '<input name="ttl[' . $rowdns['dn_id_pk'] . ']" value="' . $rowdns['dn_ttl_in'] . '" class="input-small" type="text">';
                 $line .= '<input name="original_ttl[' . $rowdns['dn_id_pk'] . ']" value="' . $rowdns['dn_ttl_in'] . '" type="hidden"></div>';
@@ -188,8 +188,8 @@ class module_controller extends ctrl_module
                     $line .= '<div class="port"><input name="port[' . $rowdns['dn_id_pk'] . ']" value="' . $rowdns['dn_port_in'] . '" type="text" class="input-small"><input name="original_port[' . $rowdns['dn_id_pk'] . ']" value="' . $rowdns['dn_port_in'] . '" type="hidden"></div>';
                 }
                 $line .= '<div class="target">';
-                $line .= '<input name="target[' . $rowdns['dn_id_pk'] . ']" value="' . $rowdns['dn_target_vc'] . '" class="input-small" type="text" ' . $custom_ip . '>';
-                $line .= '<input name="original_target[' . $rowdns['dn_id_pk'] . ']" value="' . $rowdns['dn_target_vc'] . '" type="hidden">';
+                $line .= '<input name="target[' . $rowdns['dn_id_pk'] . ']" value="' . htmlspecialchars((string) $rowdns['dn_target_vc'], ENT_QUOTES, 'UTF-8') . '" class="input-small" type="text" ' . $custom_ip . '>';
+                $line .= '<input name="original_target[' . $rowdns['dn_id_pk'] . ']" value="' . htmlspecialchars((string) $rowdns['dn_target_vc'], ENT_QUOTES, 'UTF-8') . '" type="hidden">';
                 $line .= '</div>';
                 $line .= '<button type="button" class="delete btn btn-danger btn-mini">Delete</button>';
                 $line .= '<button type="button" class="undo btn btn-success btn-mini">Undo</button>';
@@ -248,18 +248,17 @@ class module_controller extends ctrl_module
 
         // Check DNS Zone File for Errors
         $zone_message = self::CheckZoneRecord($domainID);
-        $zonecheck_file = ctrl_options::GetSystemOption('temp_dir') . $domain['vh_name_vc'] . ".txt";
-        $zone_message = str_replace($zonecheck_file, '', $zone_message);
+        $zone_message = str_replace((string) self::$zonecheckFile, '', $zone_message);
         if (strstr(strtoupper($zone_message), "OK")) {
             if (substr_count($zone_message, ":") >= 2) {
                 $zone_error_message = '<font color="orange">' . ui_language::translate('Your DNS zone has been loaded, but with errors. Some features may not work until corrected.') . '</font>';
             } else {
                 $zone_error_message = '<font color="green">' . ui_language::translate('Your DNS zone has been loaded without errors.') . '</font>';
             }
-            $zone_status = '<img src="modules/' . $controller->GetControllerRequest('URL', 'module') . '/assets/up.png">';
+            $zone_status = ui_status::Ok('Your DNS zone is loaded');
         } else {
             $zone_error_message = '<font color="red">' . ui_language::translate('Errors detected have prevented your DNS zone from being loaded. Please correct the error(s) listed below. Until these errors are fixed, your DNS will not work.') . '</font>';
-            $zone_status = '<img src="modules/' . $controller->GetControllerRequest('URL', 'module') . '/assets/down.png">';
+            $zone_status = ui_status::Bad('Your DNS zone has errors');
         }
 
         // Top Edit buttons
@@ -470,6 +469,11 @@ class module_controller extends ctrl_module
     static function createDNSRecord(array $rec)
     {
         global $zdbh;
+        // the same cleaning as records added in the page (this is also used by the web
+        // service API): no line breaks or control characters anywhere in a record
+        $rec['type'] = strtoupper(preg_replace('/[^A-Za-z]/', '', (string) $rec['type']));
+        $rec['hostName'] = preg_replace('/[\x00-\x1F\x7F\s]/', '', (string) $rec['hostName']);
+        $rec['target'] = self::CleanRecord($rec['target'], $rec['type']);
         $sql = $zdbh->prepare('INSERT INTO x_dns (dn_acc_fk,
                            dn_name_vc,
                            dn_vhost_fk,
@@ -1099,6 +1103,9 @@ class module_controller extends ctrl_module
 
     static function CleanRecord($data, $type)
     {
+        // No line breaks or other control characters: a record is one line of the zone
+        // file (a line break could add any line, such as a $INCLUDE directive)
+        $data = preg_replace('/[\x00-\x1F\x7F]/', '', (string) $data);
         $data = trim($data);
         if ($type == 'SPF' || $type == 'TXT') {
             $data = str_replace('"', '', $data);
@@ -1191,6 +1198,27 @@ class module_controller extends ctrl_module
         }
     }
 
+    /** the zone test file of this request (its name is removed from named-checkzone's message) */
+    static $zonecheckFile = null;
+
+    /** a value for the zone test file: no line breaks or control characters (as the daemon writes zones) */
+    static function ZoneValue($v)
+    {
+        return preg_replace('/[\x00-\x1F\x7F]/', '', (string) $v);
+    }
+
+    static function ZoneCheckFile()
+    {
+        $dir = rtrim((string) ctrl_options::GetSystemOption('sentora_root'), '/') . '/etc/tmp';
+        $file = @tempnam($dir, 'zonecheck-');
+        if ($file === false || strpos($file, $dir . '/') !== 0) {
+            return false;
+        }
+        @chmod($file, 0600);
+        self::$zonecheckFile = $file;
+        return $file;
+    }
+
     static function CheckZoneRecord($domainID)
     {
         global $zdbh;
@@ -1210,7 +1238,14 @@ class module_controller extends ctrl_module
                 $numrows->execute();
                 $domain = $numrows->fetch();
 
-                $zonecheck_file = (ctrl_options::GetSystemOption('temp_dir')) . $domain['dn_name_vc'] . ".txt";
+                // The zone test file: a new file with a random name in the panel's own temp
+                // folder (closed to the sites). It was <temp_dir>/<domain>.txt in the shared
+                // temp folder every site can write to: a link put there under that name
+                // would have made the panel write the zone wherever it pointed.
+                $zonecheck_file = self::ZoneCheckFile();
+                if ($zonecheck_file === false) {
+                    return '';
+                }
                 $checkline = "$" . "TTL 10800" . fs_filehandler::NewLine();
                 $checkline .= "@ IN SOA " . $domain['dn_name_vc'] . ". ";
                 $checkline .= "postmaster." . $domain['dn_name_vc'] . ". (" . fs_filehandler::NewLine();
@@ -1220,32 +1255,32 @@ class module_controller extends ctrl_module
                 $checkline .= " " . ctrl_options::GetSystemOption('expire_ttl') . " ;expire after 1 week" . fs_filehandler::NewLine();
                 $checkline .= " " . ctrl_options::GetSystemOption('minimum_ttl') . " ) ;minimum TTL of 1 day" . fs_filehandler::NewLine();
                 while ($rowdns = $sql->fetch()) {
-                    if ($rowdns['dn_type_vc'] == "A") {
-                        $checkline .= $rowdns['dn_host_vc'] . " " . $rowdns['dn_ttl_in'] . " IN A " . $rowdns['dn_target_vc'] . fs_filehandler::NewLine();
+                    if (self::ZoneValue($rowdns['dn_type_vc']) == "A") {
+                        $checkline .= self::ZoneValue($rowdns['dn_host_vc']) . " " . self::ZoneValue($rowdns['dn_ttl_in']) . " IN A " . self::ZoneValue($rowdns['dn_target_vc']) . fs_filehandler::NewLine();
                     }
-                    if ($rowdns['dn_type_vc'] == "AAAA") {
-                        $checkline .= $rowdns['dn_host_vc'] . " " . $rowdns['dn_ttl_in'] . " IN AAAA " . $rowdns['dn_target_vc'] . fs_filehandler::NewLine();
+                    if (self::ZoneValue($rowdns['dn_type_vc']) == "AAAA") {
+                        $checkline .= self::ZoneValue($rowdns['dn_host_vc']) . " " . self::ZoneValue($rowdns['dn_ttl_in']) . " IN AAAA " . self::ZoneValue($rowdns['dn_target_vc']) . fs_filehandler::NewLine();
                     }
-                    if ($rowdns['dn_type_vc'] == "CNAME") {
-                        $checkline .= $rowdns['dn_host_vc'] . " " . $rowdns['dn_ttl_in'] . " IN CNAME " . $rowdns['dn_target_vc'] . fs_filehandler::NewLine();
+                    if (self::ZoneValue($rowdns['dn_type_vc']) == "CNAME") {
+                        $checkline .= self::ZoneValue($rowdns['dn_host_vc']) . " " . self::ZoneValue($rowdns['dn_ttl_in']) . " IN CNAME " . self::ZoneValue($rowdns['dn_target_vc']) . fs_filehandler::NewLine();
                     }
-                    if ($rowdns['dn_type_vc'] == "MX") {
-                        $checkline .= $rowdns['dn_host_vc'] . " " . $rowdns['dn_ttl_in'] . " IN MX " . $rowdns['dn_priority_in'] . " " . $rowdns['dn_target_vc'] . "." . fs_filehandler::NewLine();
+                    if (self::ZoneValue($rowdns['dn_type_vc']) == "MX") {
+                        $checkline .= self::ZoneValue($rowdns['dn_host_vc']) . " " . self::ZoneValue($rowdns['dn_ttl_in']) . " IN MX " . self::ZoneValue($rowdns['dn_priority_in']) . " " . self::ZoneValue($rowdns['dn_target_vc']) . "." . fs_filehandler::NewLine();
                     }
-                    if ($rowdns['dn_type_vc'] == "TXT") {
-                        $checkline .= $rowdns['dn_host_vc'] . " " . $rowdns['dn_ttl_in'] . " IN TXT \"" . stripslashes($rowdns['dn_target_vc']) . "\"" . fs_filehandler::NewLine();
+                    if (self::ZoneValue($rowdns['dn_type_vc']) == "TXT") {
+                        $checkline .= self::ZoneValue($rowdns['dn_host_vc']) . " " . self::ZoneValue($rowdns['dn_ttl_in']) . " IN TXT \"" . stripslashes(self::ZoneValue($rowdns['dn_target_vc'])) . "\"" . fs_filehandler::NewLine();
                     }
-                    if ($rowdns['dn_type_vc'] == "SRV") {
-                        $checkline .= $rowdns['dn_host_vc'] . " " . $rowdns['dn_ttl_in'] . " IN SRV " . $rowdns['dn_priority_in'] . " " . $rowdns['dn_weight_in'] . " " . $rowdns['dn_port_in'] . " " . $rowdns['dn_target_vc'] . "." . fs_filehandler::NewLine();
+                    if (self::ZoneValue($rowdns['dn_type_vc']) == "SRV") {
+                        $checkline .= self::ZoneValue($rowdns['dn_host_vc']) . " " . self::ZoneValue($rowdns['dn_ttl_in']) . " IN SRV " . self::ZoneValue($rowdns['dn_priority_in']) . " " . self::ZoneValue($rowdns['dn_weight_in']) . " " . self::ZoneValue($rowdns['dn_port_in']) . " " . self::ZoneValue($rowdns['dn_target_vc']) . "." . fs_filehandler::NewLine();
                     }
-                    if ($rowdns['dn_type_vc'] == "SPF") {
-                        $checkline .= $rowdns['dn_host_vc'] . " " . $rowdns['dn_ttl_in'] . " IN SPF \"" . stripslashes($rowdns['dn_target_vc']) . "\"" . fs_filehandler::NewLine();
+                    if (self::ZoneValue($rowdns['dn_type_vc']) == "SPF") {
+                        $checkline .= self::ZoneValue($rowdns['dn_host_vc']) . " " . self::ZoneValue($rowdns['dn_ttl_in']) . " IN SPF \"" . stripslashes(self::ZoneValue($rowdns['dn_target_vc'])) . "\"" . fs_filehandler::NewLine();
                     }
-                    if ($rowdns['dn_type_vc'] == "NS") {
-                        $checkline .= $rowdns['dn_host_vc'] . " " . $rowdns['dn_ttl_in'] . " IN NS " . $rowdns['dn_target_vc'] . "." . fs_filehandler::NewLine();
+                    if (self::ZoneValue($rowdns['dn_type_vc']) == "NS") {
+                        $checkline .= self::ZoneValue($rowdns['dn_host_vc']) . " " . self::ZoneValue($rowdns['dn_ttl_in']) . " IN NS " . self::ZoneValue($rowdns['dn_target_vc']) . "." . fs_filehandler::NewLine();
                     }
                 }
-                fs_filehandler::UpdateFile($zonecheck_file, 0777, $checkline);
+                file_put_contents($zonecheck_file, $checkline);
             }
         }
         if ($hasrecords == true) {

@@ -7,6 +7,10 @@
  */
 
 	echo fs_filehandler::NewLine() . "START AutoIP Update Hook." . fs_filehandler::NewLine();
+	// A server setting: only Administrators see the module (older installs gave it to
+	// resellers and clients too; the module refuses them either way)
+	global $zdbh;
+	$zdbh->exec("DELETE p FROM x_permissions p JOIN x_modules m ON m.mo_id_pk = p.pe_module_fk WHERE m.mo_folder_vc = 'autoip' AND p.pe_group_fk <> 1");
 		if (ui_module::CheckModuleEnabled('AutoIP Updater')){
 			UpdateServerIPHook();
 		} else {
@@ -25,7 +29,12 @@
 					// service that is down or rate limiting (HTTP 429) left the IP empty
 					$detectedip = '';
 					$ctx = stream_context_create(array('http' => array('timeout' => 10)));
-					foreach (array_unique(array($autoipsettings['ai_command_vc'], 'https://api.ipify.org', 'https://ipv4.icanhazip.com', 'https://checkip.amazonaws.com')) as $ipservice) {
+					// only an http(s) address (not a local file or another kind of stream)
+					$own = (string) $autoipsettings['ai_command_vc'];
+					if (!preg_match('#^https?://[^\s\'"<>]+$#i', $own)) {
+						$own = 'https://api.ipify.org';
+					}
+					foreach (array_unique(array($own, 'https://api.ipify.org', 'https://ipv4.icanhazip.com', 'https://checkip.amazonaws.com')) as $ipservice) {
 						$answer = trim((string) @file_get_contents($ipservice, false, $ctx));
 						if (filter_var($answer, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
 							$detectedip = $answer;
@@ -72,11 +81,12 @@
 								}
 							}
 							if ($autoipsettings['ai_script_vc'] != ""){
-								echo "Running script: " . $autoipsettings['ai_script_vc'] . fs_filehandler::NewLine();
-								if (sys_versions::ShowOSPlatformVersion() == "Windows"){
-									@exec($autoipsettings['ai_script_vc']);
+								$script = (string) $autoipsettings['ai_script_vc'];
+								if (AutoIPScriptIsSafe($script)) {
+									echo "Running script: " . $script . fs_filehandler::NewLine();
+									@exec(escapeshellarg($script) . ' ' . escapeshellarg($detectedip) . ' ' . escapeshellarg($oldip['so_value_tx']) . ' > /dev/null 2>&1');
 								} else {
-									@exec(ctrl_options::GetOption('zsudo') . " " . $autoipsettings['ai_script_vc']);
+									echo "WARNING - not running " . $script . ": the script must be a file owned by root that only root may change, named by its full path." . fs_filehandler::NewLine();
 								}
 							}
 						}
@@ -124,6 +134,31 @@
 	        exec($cmd . " > /dev/null &");  
 	    }
 	}
+
+    /**
+     * The daemon runs as root: the script must be a plain file (not a link) named by its
+     * full path, owned by root, executable, and not writable by anyone else, in folders
+     * only root may change (otherwise whoever can write it runs commands as root)
+     */
+    function AutoIPScriptIsSafe($path) {
+        if (!preg_match('#^/[A-Za-z0-9._/-]+$#', $path) || strpos($path, '..') !== false) {
+            return false;
+        }
+        clearstatcache();
+        if (is_link($path) || !is_file($path) || !is_executable($path)) {
+            return false;
+        }
+        $dir = $path;
+        do {
+            $st = @lstat($dir);
+            if (!$st || $st['uid'] !== 0 || ($st['mode'] & 0022) || (($st['mode'] & 0170000) === 0120000)) {
+                return false;
+            }
+            $dir = dirname($dir);
+        } while ($dir !== '/' && $dir !== '.');
+        $st = @lstat('/');
+        return $st && $st['uid'] === 0 && !($st['mode'] & 0022);
+    }
 
     function IsValidAutoIPEmail($email) {
         if (!preg_match('/^[a-z0-9]+([_\\.-][a-z0-9]+)*@([a-z0-9]+([\.-][a-z0-9]+)*)+\\.[a-z]{2,}$/i', $email)) {

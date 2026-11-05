@@ -72,8 +72,9 @@
         </form>
         <% endif %>
         <% if TwoFactorPending %>
-        <p><: In your authenticator app, add an account with this key (time based), or open the link on your phone :>:</p>
-        <p><code style="font-size: 18px"><@ TwoFactorSecret @></code> &nbsp; <a href="<@ TwoFactorUri @>"><: Open in app :></a></p>
+        <p><: Scan this QR code with your authenticator app (Google Authenticator, Microsoft Authenticator, Authy, 1Password and the like): :></p>
+        <div style="display: inline-block; padding: 8px; background: #fff; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 10px;"><@ TwoFactorQr @></div>
+        <p class="text-muted" style="font-size: 13px;"><: If you cannot scan it, add an account in the app with this key (time based) :>: <code style="font-size: 15px"><@ TwoFactorSecret @></code> &nbsp; <: Setting it up on this phone :>: <a href="<@ TwoFactorUri @>"><: Open in app :></a></p>
         <form action="./?module=my_account&action=TwoFactorConfirm" method="post" class="form-inline">
             <: Then enter the code it shows :>: <input class="form-control" name="inTwoFactorCode" inputmode="numeric" maxlength="7" size="8" autocomplete="off" required>
             <button class="btn btn-primary" type="submit"><: Turn on :></button>
@@ -86,11 +87,22 @@
         <% endif %>
         <% if TwoFactorOn %>
         <p><strong><: Two-factor login is on for your account. :></strong></p>
+        <@ TwoFactorCodes @>
+        <p><: Recovery codes left :>: <strong><@ TwoFactorRecoveryLeft @></strong> <span class="text-muted"><: (each logs you in once if you lose your phone) :></span></p>
+        <form action="./?module=my_account&action=TwoFactorNewCodes" method="post" class="form-inline" style="margin-bottom: 10px;">
+            <: To make a new set (the old codes stop working), enter a current code :>: <input class="form-control" name="inTwoFactorCode" inputmode="numeric" maxlength="7" size="8" autocomplete="off" required>
+            <button class="btn btn-default" type="submit"><: Make new codes :></button>
+            <@ CSFR_Tag @>
+        </form>
+        <% if TwoFactorForced %>
+        <p class="text-muted"><: This server requires two-factor login for every account, so it can not be turned off. If you lose your phone, ask your administrator. :></p>
+        <% else %>
         <form action="./?module=my_account&action=TwoFactorDisable" method="post" class="form-inline">
             <: To turn it off, enter a current code :>: <input class="form-control" name="inTwoFactorCode" inputmode="numeric" maxlength="7" size="8" autocomplete="off" required>
             <button class="btn btn-danger" type="submit"><: Turn off :></button>
             <@ CSFR_Tag @>
         </form>
+        <% endif %>
         <% endif %>
     </div>
     <% endif %>

@@ -254,26 +254,23 @@ input[type=submit] {
             var iteration = 0;
             var password = "";
 			
-			var chars = "ABCDEFGHIJKLMNOPQRSTUVWXTZabcdefghiklmnopqrstuvwxyz";
-			var string_length = <@ MinPassLength @>;
+			var chars = "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+			var string_length = Math.max(12, <@ MinPassLength @>);
+			// Sentora: the browser's cryptographic generator, each character from the whole
+			// set (this used Math.random(), and only the digits 0-4); retried until it has a
+			// lower case letter, a capital and a digit
 			var randomstring = '';
-			var charCount = 0;
-			var numCount = 0;
-			
-			for (var i=0; i<string_length; i++) {
-				// If random bit is 0, there are less than 3 digits already saved, and there are not already 5 characters saved, generate a numeric value. 
-				//if((Math.floor(Math.random() * 2) == 0) && numCount < 3 || charCount >= 5) {
-				if((Math.floor(Math.random() * 2) == 0) && numCount < 5 || charCount >= 15) {
-					var rnum = Math.floor(Math.random() * 5);
-					randomstring += rnum;
-					numCount += 1;
-				} else {
-					// If any of the above criteria fail, go ahead and generate an alpha character from the chars string
-					var rnum = Math.floor(Math.random() * chars.length);
-					randomstring += chars.substring(rnum,rnum+1);
-					charCount += 1;
+			var buf = new Uint32Array(1);
+			var limit = Math.floor(4294967296 / chars.length) * chars.length;
+			do {
+				randomstring = '';
+				while (randomstring.length < string_length) {
+					window.crypto.getRandomValues(buf);
+					if (buf[0] < limit) {
+						randomstring += chars.charAt(buf[0] % chars.length);
+					}
 				}
-			}
+			} while (!/[a-z]/.test(randomstring) || !/[A-Z]/.test(randomstring) || !/[0-9]/.test(randomstring));
 		
 		return (randomstring);
 			

@@ -1,0 +1,48 @@
+<?php
+/**
+ * One account's backup (websites and databases), in the background: started by the
+ * Backup page (Advanced > Backup > Back up now) so the page can show its progress
+ * instead of waiting. One at a time per account, at most one every 2 minutes.
+ * Progress: /var/lib/sentora/tmp/backup-<account id>.json (read by code/status.php).
+ */
+if (PHP_SAPI !== 'cli') {
+    exit(1);
+}
+$acc = isset($argv[1]) && ctype_digit($argv[1]) ? (int) $argv[1] : 0;
+if ($acc < 1) {
+    exit(2);
+}
+chdir(dirname(__DIR__));
+require 'dryden/loader.inc.php';
+require 'cnf/db.php';
+require 'inc/dbc.inc.php';
+set_time_limit(0);
+$user = ctrl_users::GetUserDetail($acc);
+if (!$user || !sys_backup::ValidUser($user['username'])) {
+    exit(3);
+}
+$state = '/var/lib/sentora/tmp/backup-' . $acc . '.json';
+$put = function (array $s) use ($state) {
+    $tmp = $state . '.' . getmypid();
+    file_put_contents($tmp, json_encode($s));
+    @chmod($tmp, 0660);
+    rename($tmp, $state);
+};
+$lock = fopen('/var/lib/sentora/tmp/backup-' . $acc . '.lock', 'c');
+if (!$lock || !flock($lock, LOCK_EX | LOCK_NB)) {
+    exit(0); // one is already running: the page shows that one
+}
+$prev = json_decode((string) @file_get_contents($state), true);
+if (is_array($prev) && isset($prev['finished']) && time() - (int) $prev['finished'] < 120 && ($prev['state'] ?? '') === 'done') {
+    exit(0); // made less than 2 minutes ago
+}
+$started = time();
+$put(array('state' => 'running', 'started' => $started, 'pid' => getmypid()));
+$file = sys_backup::Create($acc, $user['username']);
+if ($file !== false) {
+    $put(array('state' => 'done', 'started' => $started, 'finished' => time(), 'file' => basename($file),
+        'size' => fs_director::ShowHumanFileSize((int) @filesize($file))));
+    exit(0);
+}
+$put(array('state' => 'failed', 'started' => $started, 'finished' => time(), 'message' => 'The backup could not be made. Try again, or ask your administrator.'));
+exit(1);

@@ -16,7 +16,7 @@
 class ui_tpl_sentoraversion {
 
     public static function Template() {
-        return sys_versions::ShowSentoraVersion();
+        return sys_versions::ShowSentoraName();
     }
 
 }

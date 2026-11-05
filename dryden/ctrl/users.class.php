@@ -218,6 +218,8 @@ class ctrl_users {
         global $zdbh;
             $sql = "SELECT COUNT(*) FROM x_accounts WHERE LOWER(ac_email_vc)=:email AND ac_deleted_ts IS NULL";
             $uniqueuser = $zdbh->prepare($sql);
+            // Compared in lower case on both sides (a capital letter used to let a duplicate through)
+            $email = strtolower(trim((string) $email));
             $uniqueuser->bindParam(':email', $email);
             if ($uniqueuser->execute()) {
                 if ($uniqueuser->fetchColumn() > 0) {

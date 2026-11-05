@@ -74,6 +74,17 @@ class sys_phpversions
         return self::IsEnabled($version) ? $version : '';
     }
 
+    /**
+     * Is this version's PHP-FPM service running? Accounts have their own pools now,
+     * so the old shared socket is gone; every running version keeps its small idle
+     * pool's socket (php<version>-idle.sock), made when the service starts.
+     */
+    static function IsRunning($version)
+    {
+        $v = trim((string) $version);
+        return preg_match('/^[0-9]+\.[0-9]+$/', $v) === 1 && file_exists(self::SOCKET_DIR . 'php' . $v . '-idle.sock');
+    }
+
     static function Socket($version)
     {
         return self::SOCKET_DIR . 'php' . $version . '-fpm.sock';
@@ -133,6 +144,39 @@ class sys_phpversions
             return self::DefaultVersion() . ' (' . $version . ' ' . ui_language::translate('is disabled') . ')';
         }
         return $version;
+    }
+
+    /**
+     * Days until a version's security support ends (negative: ended), or null if unknown
+     */
+    static function DaysLeft($version)
+    {
+        if (!isset(self::$supportEnds[$version])) {
+            return null;
+        }
+        return (int) floor((strtotime(self::$supportEnds[$version] . ' 23:59:59') - time()) / 86400);
+    }
+
+    /**
+     * Label for the domain lists: Label() plus a warning when the version the domain
+     * runs gets no security fixes any more (red) or stops getting them within 90 days
+     */
+    static function ListLabel($version)
+    {
+        $label = htmlspecialchars(self::Label($version), ENT_QUOTES, 'UTF-8');
+        $run = self::Effective($version);
+        $days = self::DaysLeft($run);
+        if ($days === null) {
+            return $label;
+        }
+        if ($days < 0) {
+            return $label . ' <span class="label label-danger" title="' . htmlspecialchars(ui_language::translate('Choose a newer PHP version for this domain.'), ENT_QUOTES, 'UTF-8') . '">'
+                . ui_language::translate('no security fixes since') . ' ' . self::$supportEnds[$run] . '</span>';
+        }
+        if ($days <= 90) {
+            return $label . ' <span class="label label-warning">' . ui_language::translate('security fixes until') . ' ' . self::$supportEnds[$run] . '</span>';
+        }
+        return $label;
     }
 
     /**

@@ -62,9 +62,9 @@ class module_controller extends ctrl_module
             $sql->execute();
             while ($rowmailboxes = $sql->fetch()) {
                 if ($rowmailboxes['mb_enabled_in'] == 1) {
-                    $status = '<img src="modules/' . $controller->GetControllerRequest('URL', 'module') . '/assets/up.gif" alt="Up"/>';
+                    $status = ui_status::Ok('Enabled');
                 } else {
-                    $status = '<img src="modules/' . $controller->GetControllerRequest('URL', 'module') . '/assets/down.gif" alt="Down"/>';
+                    $status = ui_status::Bad('Disabled');
                 }
                 $res[] = array('address' => $rowmailboxes['mb_address_vc'],
                     'created' => date(ctrl_options::GetSystemOption('sentora_df'), $rowmailboxes['mb_created_ts']),

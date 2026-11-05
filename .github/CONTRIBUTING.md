@@ -1,22 +1,28 @@
-# Contributing to Sentora
+# Contributing to Sentora-2027
 
-Thanks for taking the time to contribute!
+Thanks for helping. This build targets **Ubuntu 26.04 only**, with PHP 8.5, MySQL 8.4 and Apache 2.4.
 
-The following is a set of guidelines for contributing to Sentora (https://github.com/sentora) on GitHub.
-These are just guidelines, not rules.
+## Reporting bugs and asking for features
 
-Please check before contributing our dev section in the forums.
+Use the issue templates (**Issues > New issue**). For a security problem, follow the [security policy](../SECURITY.md) instead of opening an issue.
 
-For all bug fixes please use the bug fix branche. For new features/enhancement please check our roadmap first so it won't collide with another member of the team.
+## Making changes
 
-### Our dev forum:
+The code lives in two repositories, both on the branch `master2027`:
 
-http://forums.sentora.org/forumdisplay.php?fid=54
+- [RusTus/sentora-core-2027](https://github.com/RusTus/sentora-core-2027): the panel
+- [RusTus/sentora-installers-2027](https://github.com/RusTus/sentora-installers-2027): service configuration, SQL and build sources
 
-### Roadmap:
+1. Branch from `master2027`, and open the pull request against `master2027`. Keep each pull request to one change.
+2. Test on a fresh Ubuntu 26.04 install, then run `sentora-post-install-check` and `sentora-smoke-test`.
+3. Add a line to [CHANGELOG.md](../CHANGELOG.md) describing the change.
 
-http://forums.sentora.org/showthread.php?tid=2608
+## Rules every module follows
 
-http://forums.sentora.org/showthread.php?tid=2613
-
-V 0.0.1 alpha
+- Check that every id or name taken from a form or the address belongs to the logged-in account (`ctrl_ownership::Owns`, `ctrl_ownership::SafeSubFolder`) before using it.
+- Use bound parameters for every SQL value; never build SQL from form input.
+- Escape everything shown on a page (`htmlspecialchars`).
+- Don't show server paths to clients; don't follow symbolic links in account folders.
+- Actions are form posts; the CSRF token is added and checked centrally.
+- Admin-only modules check the user's group in the controller, not only through module permissions.
+- Shell scripts pass `shellcheck` and keep lines to 80 columns.

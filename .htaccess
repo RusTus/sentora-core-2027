@@ -14,6 +14,16 @@ RewriteRule ^apps/([^/\.]+)/?$ etc/apps/$1 [L]
 # Deny access to some file types/directories
 RewriteRule ^/?(\.git|\.tx|SQL|config|logs|temp|tests|program\/(include|lib|localization|steps)) - [F]
 RewriteRule ^(etc/tmp|etc/zppy-cache|/etc/lib/pChart2/cache|etc/build) - [F,L,NC]
+# Sentora: the panel's own code, templates and daemon jobs are only ever loaded by
+# index.php or the daemon, never requested directly
+RewriteRule ^(inc|dryden|cnf)/ - [F,L,NC]
+# the documentation at the top (CHANGELOG.md lists every security fix: which this server
+# has would tell a visitor what an older one lacks), but not robots.txt
+RewriteRule ^(?!robots\.txt$)[^/]+\.(md|txt|json|lock|dist|xml|yml)$ - [F,L,NC]
+# the bundled apps' change logs, read-mes and package lists name their exact versions
+RewriteRule ^etc/apps/[^/]+/(ChangeLog|CHANGELOG(\.md)?|README(\.(md|rst|txt))?|LICENSE(\.(md|txt))?|RELEASE-DATE-[^/]*|UPGRADING(\.md)?|INSTALL(\.md)?|SECURITY\.md|composer\.(json|lock)|package(-lock)?\.json|yarn\.lock)$ - [F,L,NC]
+RewriteRule ^modules/[^/]+/(hooks|deploy)/ - [F,L,NC]
+RewriteRule ^(etc/styles|modules)/.*\.(ztml|zpm|sql)$ - [F,L,NC]
 
 # Disable index listing
 Options -Indexes
@@ -44,11 +54,18 @@ mod_gzip_item_exclude rspheader ^Content-Encoding:.*gzip.*
   <filesMatch "\.(js)$">
     Header set Cache-Control "private"
   </filesMatch>
-  <filesMatch "\.(x?html?|php)$">
-    Header set Cache-Control "private, must-revalidate"
-  </filesMatch>
+  # (no rule for .php: the panel's PHP sends its own, stricter no-store header;
+  # a second Cache-Control header here only contradicted it)
 </ifModule>
 # END Cache-Control Headers
+
+# BREACH: the panel's pages are not compressed, since they carry secret values (CSRF
+# tokens) next to text a visitor can influence; images, CSS and scripts still are
+<IfModule mod_deflate.c>
+  <FilesMatch "\.php$">
+    SetEnv no-gzip 1
+  </FilesMatch>
+</IfModule>
 
 # BEGIN Expire headers
 <ifModule mod_expires.c>

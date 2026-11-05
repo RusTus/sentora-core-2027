@@ -1,0 +1,341 @@
+#!/bin/bash
+# sentora-post-install-check: after installing (or updating) Sentora, check the
+# things that are easy to miss by eye. Read-only: it changes nothing.
+#
+# Run as root:   sentora-post-install-check
+# Exit code 0 when nothing FAILed. The report is also saved in
+# /var/sentora/logs/post-install-check.log (System Log Viewer).
+
+PANEL=${SENTORA_PANEL:-/etc/sentora/panel}
+CONF=/etc/sentora/configs
+LOG=${SENTORA_CHECK_LOG:-/var/sentora/logs/post-install-check.log}
+
+OKS=0; WARNS=0; FAILS=0
+ok()   { echo "  OK    $*"; OKS=$((OKS + 1)); }
+warn() { echo "  WARN  $*"; WARNS=$((WARNS + 1)); }
+fail() { echo "  FAIL  $*"; FAILS=$((FAILS + 1)); }
+section() { echo; echo "== $*"; }
+
+main() {
+echo "Sentora post-install check, $(date '+%Y-%m-%d %H:%M %Z') on $(hostname -f 2> /dev/null || hostname)"
+[ "$(id -u)" -eq 0 ] || { echo "Run this as root."; return 2; }
+
+PHPVER=$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;' 2> /dev/null)
+SYSTEMD=0
+[ "$(ps -o comm= -p 1 2> /dev/null)" = "systemd" ] && SYSTEMD=1
+
+# --- database access (the panel's own login) ----------------------------------
+DBPHP=$PANEL/cnf/db.php
+val() { grep -o "\$$1 = '[^']*'" "$DBPHP" 2> /dev/null | head -1 | cut -d"'" -f2; }
+DBHOST=$(val host); DBUSER=$(val user); DBPASS=$(val pass)
+MYCNF=$(mktemp); chmod 600 "$MYCNF"
+{
+    echo "[client]"; echo "user=$DBUSER"; echo "password=$DBPASS"
+    case "$DBHOST" in
+        *:*) echo "host=${DBHOST%%:*}"; echo "port=${DBHOST##*:}" ;;
+        localhost|"") ;;
+        *) echo "host=$DBHOST" ;;
+    esac
+} > "$MYCNF"
+q() { mysql --defaults-extra-file="$MYCNF" -N -B -e "$1" 2> /dev/null; }
+DB=0
+[ "$(q 'SELECT 1')" = "1" ] && DB=1
+
+# --- 1. services ------------------------------------------------------------------
+section "Services (running and started at boot)"
+svc() { # label  systemd-unit  process-name
+    local running=0 enabled=1
+    if [ $SYSTEMD -eq 1 ]; then
+        systemctl is-active --quiet "$2" && running=1
+        systemctl is-enabled --quiet "$2" 2> /dev/null || enabled=0
+    else
+        pgrep -x "$3" > /dev/null && running=1
+    fi
+    if [ $running -eq 1 ] && [ $enabled -eq 1 ]; then ok "$1"
+    elif [ $running -eq 1 ]; then warn "$1 runs but is not started at boot (systemctl enable $2)"
+    else fail "$1 is not running (systemctl status $2)"; fi
+}
+svc "Apache" apache2 apache2
+svc "PHP $PHPVER (panel and accounts)" "php$PHPVER-fpm" "php-fpm$PHPVER"
+svc "MySQL" mysql mysqld
+svc "Postfix" postfix master
+svc "Dovecot" dovecot dovecot
+svc "ProFTPD" proftpd proftpd
+svc "BIND" named named
+svc "fail2ban" fail2ban fail2ban-server
+svc "cron (the Sentora daemon)" cron cron
+if [ -x /usr/sbin/sogod ]; then svc "SOGo" sogo sogod; svc "memcached (SOGo)" memcached memcached; fi
+# the backup, restore and update tools copy files with rsync
+command -v rsync > /dev/null 2>&1 && ok "rsync (backups, restore, updates)" || fail "rsync is not installed (apt-get install rsync): restore, updates and off-server backup need it"
+if [ -x /usr/sbin/spamd ] || [ -x /usr/sbin/clamd ]; then
+    # SpamAV: only what is switched on in Admin > SpamAV Admin
+    SA_ON=$(q "SELECT so_value_tx FROM sentora_core.x_settings WHERE so_name_vc = 'sa_enabled'")
+    CL_ON=$(q "SELECT so_value_tx FROM sentora_core.x_settings WHERE so_name_vc = 'clam_enabled'")
+    if [ -x /usr/sbin/spamd ] && [ "$SA_ON" != "false" ]; then svc "SpamAssassin" spamd spamd; svc "SpamAssassin mail connection (spamass-milter)" spamass-milter spamass-milter; fi
+    if [ -x /usr/sbin/clamd ] && [ "$CL_ON" = "true" ]; then
+        if ls /var/lib/clamav/daily.c?d /var/lib/clamav/main.c?d > /dev/null 2>&1; then
+            svc "ClamAV" clamav-daemon clamd; svc "ClamAV mail connection (clamav-milter)" clamav-milter clamav-milter
+        else
+            warn "ClamAV is waiting for its first virus signatures (systemctl status clamav-freshclam)"
+        fi
+    fi
+    MILTERS=$(postconf -h smtpd_milters 2> /dev/null)
+    SCANS=""
+    echo "$MILTERS" | grep -q spamass && SCANS="SpamAssassin"
+    echo "$MILTERS" | grep -q clamav && SCANS="${SCANS:+$SCANS and }ClamAV"
+    if [ -n "$MILTERS" ]; then ok "Postfix scans incoming mail with $SCANS"
+    elif [ "$SA_ON" != "false" ] || [ "$CL_ON" = "true" ]; then warn "Postfix does not scan mail yet (the daemon sets it within 5 minutes)"; fi
+fi
+for d in /opt/sentora-php/*/; do
+    [ -d "$d" ] || continue
+    v=$(basename "$d")
+    if [ -S "/run/sentora-php/php$v-idle.sock" ]; then ok "extra PHP $v"; else warn "extra PHP $v is installed but not running (enable it in PHP Versions if a domain needs it)"; fi
+done
+
+# --- 2. fail2ban -----------------------------------------------------------------
+section "fail2ban jails"
+if command -v fail2ban-client > /dev/null && fail2ban-client ping > /dev/null 2>&1; then
+    jails=$(fail2ban-client status 2> /dev/null | sed -n 's/.*Jail list:[[:space:]]*//p' | tr -d ' ' | tr ',' ' ')
+    want="sshd postfix-sasl sentora-dovecot roundcube-auth sentora-proftpd sentora-panel sentora-phpmyadmin"
+    [ -f /var/log/sogo/sogo.log ] && want="$want sogo-auth"
+    for j in $want; do
+        if echo " $jails " | grep -q " $j "; then ok "jail $j"; else fail "jail $j is not active (fail2ban-client -t, then systemctl restart fail2ban)"; fi
+    done
+else
+    fail "fail2ban is not answering"
+fi
+
+# --- 3. network -----------------------------------------------------------------
+section "Listening ports"
+if command -v ss > /dev/null; then
+    LIST=$(ss -Hltn 2> /dev/null | awk '{print $4}')
+    local_only() { # label port
+        local addrs; addrs=$(echo "$LIST" | grep -E "[:.]$2\$" | sed -E "s/:$2\$//")
+        if [ -z "$addrs" ]; then ok "$1 (port $2): not listening"; return; fi
+        if echo "$addrs" | grep -qvE '^(127\.0\.0\.1|\[::1\]|::1)$'; then fail "$1 (port $2) listens beyond this server: $(echo "$addrs" | tr '\n' ' ')"
+        else ok "$1 (port $2): this server only"; fi
+    }
+    local_only "MySQL" 3306
+    local_only "MySQL X protocol" 33060
+    local_only "memcached" 11211
+    local_only "SOGo" 20000
+    allowed=" 21 22 25 53 80 110 143 443 465 587 953 993 995 4190 "
+    others=$(echo "$LIST" | grep -vE '^(127\.|\[::1\]|::1)' | sed -E 's/.*:([0-9]+)$/\1/' | sort -un | while read -r p; do echo "$allowed" | grep -q " $p " || echo "$p"; done | tr '\n' ' ')
+    if [ -z "$others" ]; then ok "no unexpected public ports"; else warn "other public ports open: $others(check they are meant to be)"; fi
+else
+    warn "ss not found, ports not checked"
+fi
+
+section "Hosted sites may use only their own PHP"
+VH=/etc/sentora/configs/apache/httpd-vhosts.conf
+if [ -f /etc/apache2/mods-enabled/lua.load ] && grep -q "LuaHookFixups" "$VH" 2> /dev/null && grep -q "SENTORA_STATUS_BLOCK" "$VH" 2> /dev/null; then ok "Apache request guard in place (sentora-guard.lua)"
+else fail "Apache request guard missing: a site's .htaccess could hand requests to the panel's PHP (the daemon adds it within 5 minutes)"; fi
+PANELPOOL=$(ls /etc/php/*/fpm/pool.d/sentora.conf 2> /dev/null | head -1)
+if [ -n "$PANELPOOL" ] && grep -q "auto_prepend_file.*fpm_guard.php" "$PANELPOOL"; then ok "the panel's PHP pool runs only the panel's own scripts"
+else fail "the panel's PHP pool has no guard (the daemon adds it within 5 minutes)"; fi
+
+# --- 4. sensitive files -----------------------------------------------------------
+section "File permissions"
+perm() { # path mode owner group
+    [ -e "$1" ] || { warn "$1 not found"; return; }
+    local got; got=$(stat -c '%a %U %G' "$1")
+    if [ "$got" = "$2 $3 $4" ]; then ok "$1 ($2 $3:$4)"; else fail "$1 is $got, expected $2 $3:$4"; fi
+}
+perm "$PANEL/cnf/db.php" 640 root sentora
+perm "$PANEL/cnf/security.php" 640 root sentora
+perm /root/passwords.txt 600 root root
+perm "$CONF/proftpd/proftpd-mysql.conf" 600 root root
+perm "$CONF/dovecot2/dovecot-mysql.conf" 640 root mail
+perm "$CONF/phpmyadmin/config.inc.php" 640 root sentora
+for f in "$CONF"/postfix/mysql-*.cf; do [ -e "$f" ] && perm "$f" 640 root postfix; done
+for f in "$CONF"/roundcube/*.inc.php; do [ -e "$f" ] && perm "$f" 640 root sentora; done
+[ -e /etc/sogo/sogo.conf ] && perm /etc/sogo/sogo.conf 640 root sogo
+MCFG=$PANEL/etc/apps/matomo/config/config.ini.php
+if [ -e "$MCFG" ]; then
+    # Matomo may rewrite its own config: what matters is that only the panel can reach it
+    if [ $(( 8#$(stat -c '%a' "$MCFG") & 7 )) -eq 0 ] || [ $(( 8#$(stat -c '%a' "$(dirname "$MCFG")") & 1 )) -eq 0 ]; then ok "$MCFG (only the panel can read it)"
+    else fail "$MCFG can be read by every user"; fi
+fi
+perm "$PANEL/bin/zsudo" 4750 root sentora
+perm /var/lib/sentora/phpmyadmin-auth.log 640 sentora sentora
+for d in "$PANEL/etc/tmp" "$PANEL/etc/apps/matomo/tmp" "$PANEL/etc/apps/matomo/config"; do
+    [ -d "$d" ] || continue
+    m=$(stat -c '%a' "$d")
+    if [ $((8#$m & 7)) -eq 0 ]; then ok "$d closed to the sites ($m)"; else fail "$d is open to other users ($m); the daemon closes it within 5 minutes"; fi
+done
+# the web service API key: this server's own (the template's is public: with it the API
+# resets passwords and creates clients)
+APIKEY=$(q "SELECT so_value_tx FROM sentora_core.x_settings WHERE so_name_vc='apikey'")
+if [ "${#APIKEY}" -ge 32 ] && [ "$APIKEY" != "ee8795c8c53bfdb3b2cc595186b68912" ]; then ok "the web service API key is this server's own"
+else fail "the web service API key is the public default (or too short): the daemon replaces it within 5 minutes"; fi
+# all of /etc/sentora (configuration, DNS zones, Apache's site settings) and /var/sentora,
+# except the hosting folders, the mail store and the two shared scratch folders
+ww=$(find /etc/sentora /var/sentora -xdev \( -path /var/sentora/hostdata -o -path /var/sentora/vmail -o -path /var/sentora/temp -o -path /var/sentora/sessions \) -prune \
+    -o -perm -o+w ! -type l -print 2> /dev/null | head -5)
+if [ -z "$ww" ]; then ok "nothing in /etc/sentora or /var/sentora is writable by everyone"
+else fail "writable by everyone (any hosted site could change it): $(echo "$ww" | tr '\n' ' ') (the daemon closes these within 5 minutes)"; fi
+
+# --- 5. hosting accounts -----------------------------------------------------------
+section "Hosting accounts (own Linux user, PHP pool and closed folder)"
+if [ $DB -eq 1 ]; then
+    HOSTED=$(q "SELECT so_value_tx FROM sentora_core.x_settings WHERE so_name_vc='hosted_dir'")
+    accounts=$(q "SELECT ac_id_pk, ac_user_vc FROM sentora_core.x_accounts WHERE ac_deleted_ts IS NULL")
+    first=""; second=""
+    while read -r id name; do
+        [ -n "$id" ] || continue
+        u="web$id"; home="${HOSTED%/}/$name"
+        [ -d "$home" ] || { warn "$name: no hosting folder yet"; continue; }
+        problems=""
+        id "$u" > /dev/null 2>&1 || problems="$problems, no Linux user $u"
+        [ -f "/etc/php/$PHPVER/fpm/pool.d/$u.conf" ] || problems="$problems, no PHP pool"
+        [ -S "/run/php/$u.sock" ] || problems="$problems, no PHP socket"
+        [ "$(stat -c '%U' "$home")" = "$u" ] || problems="$problems, folder not owned by $u"
+        [ $(( 8#$(stat -c '%a' "$home") & 7 )) -eq 0 ] || problems="$problems, folder open to others"
+        if command -v getfacl > /dev/null && ! getfacl -p "$home" 2> /dev/null | grep -q '^other::---'; then problems="$problems, access list lets others in"; fi
+        if [ -z "$problems" ]; then ok "$name ($u)"; else fail "$name:${problems#,}"; fi
+        if [ -z "$first" ]; then first="$u $home"; elif [ -z "$second" ]; then second="$u $home"; fi
+    done <<< "$accounts"
+    # as each account's own user (setpriv: no login session needed): its own folder
+    # must open (otherwise the test proves nothing) and the other account's must not
+    as_user() { setpriv --reuid="$1" --regid="$(id -g "$1")" --init-groups ls "$2" > /dev/null 2>&1; }
+    if ! command -v setpriv > /dev/null; then
+        warn "isolation not tested: setpriv not found"
+    elif [ -z "$second" ]; then
+        warn "isolation not tested: it needs two accounts with hosting folders"
+    else
+        read -r ua ha <<< "$first"; read -r ub hb <<< "$second"
+        if ! as_user "$ua" "$ha" || ! as_user "$ub" "$hb"; then
+            warn "isolation not tested: an account user could not open its own folder"
+        else
+            if as_user "$ua" "$hb"; then fail "isolation: $ua can read $hb"; else ok "isolation: $ua can open its own folder and not $hb"; fi
+            if as_user "$ub" "$ha"; then fail "isolation: $ub can read $ha"; else ok "isolation: $ub can open its own folder and not $ha"; fi
+        fi
+    fi
+else
+    fail "could not log in to MySQL with the panel's settings ($DBPHP): accounts and passwords not checked"
+fi
+
+# --- 6. stored passwords ------------------------------------------------------------
+section "Stored passwords"
+if [ $DB -eq 1 ]; then
+    FTPDB=$(q "SELECT so_value_tx FROM sentora_core.x_settings WHERE so_name_vc='ftp_db'"); FTPDB=${FTPDB:-sentora_proftpd}
+    n=$(q "SELECT COUNT(*) FROM sentora_core.x_ftpaccounts WHERE ft_deleted_ts IS NULL AND IFNULL(ft_password_vc,'') <> '' AND ft_password_vc NOT LIKE '\$6\$%'")
+    m=$(q "SELECT COUNT(*) FROM \`$FTPDB\`.ftpuser WHERE passwd <> '' AND passwd NOT LIKE '\$6\$%'")
+    if [ "${n:-0}" = 0 ] && [ "${m:-0}" = 0 ]; then ok "FTP: hashes only"; else fail "FTP: $((${n:-0} + ${m:-0})) password(s) stored as plain text (the daemon hashes them within 5 minutes)"; fi
+    n=$(q "SELECT COUNT(*) FROM sentora_core.x_mysql_users WHERE IFNULL(mu_pass_vc,'') <> '' AND mu_pass_vc NOT LIKE 'enc1:%'")
+    if [ "${n:-0}" = 0 ]; then ok "MySQL users: passwords kept encrypted only"; else fail "MySQL users: $n password(s) stored as plain text (the daemon encrypts them within 5 minutes)"; fi
+    n=$(q "SELECT COUNT(*) FROM sentora_core.x_ftpaccounts WHERE IFNULL(ft_passenc_tx,'') <> '' AND ft_passenc_tx NOT LIKE 'enc1:%'")
+    if [ "${n:-0}" = 0 ]; then ok "FTP: the copies owners can see are encrypted"; else fail "FTP: $n viewable password(s) not encrypted"; fi
+    if q "SHOW COLUMNS FROM sentora_core.x_mailboxes LIKE 'mb_passenc_tx'" | grep -q .; then
+        n=$(q "SELECT COUNT(*) FROM sentora_core.x_mailboxes WHERE mb_passenc_tx IS NOT NULL")
+        if [ "${n:-0}" = 0 ]; then ok "mailboxes: no copies of mailbox passwords kept"; else fail "mailboxes: $n copies of mailbox passwords kept (the daemon removes them within 5 minutes)"; fi
+    else
+        ok "mailboxes: no copies of mailbox passwords kept"
+    fi
+    md5=$(q "SELECT COUNT(*) FROM sentora_postfix.mailbox WHERE password LIKE '{PLAIN-MD5}%'")
+    sha=$(q "SELECT COUNT(*) FROM sentora_postfix.mailbox WHERE password LIKE '{SHA512-CRYPT}%'")
+    other=$(q "SELECT COUNT(*) FROM sentora_postfix.mailbox WHERE password NOT LIKE '{PLAIN-MD5}%' AND password NOT LIKE '{SHA512-CRYPT}%'")
+    if [ "${other:-0}" != 0 ]; then fail "mailboxes: $other password(s) in an unknown format"; fi
+    if [ "${md5:-0}" = 0 ]; then ok "mailboxes: ${sha:-0} on SHA-512 crypt, none on MD5"
+    else warn "mailboxes: $md5 still on MD5 (they move to SHA-512 crypt when their password next changes), ${sha:-0} on SHA-512 crypt"; fi
+    if q "SHOW CREATE VIEW sentora_postfix.sogo_users" | grep -qi "case"; then ok "SOGo mailbox view reads SHA-512 crypt"
+    elif [ -x /usr/sbin/sogod ]; then fail "SOGo mailbox view is the old one (the daemon updates it within 5 minutes)"; fi
+fi
+grep -qE '^SQLAuthTypes[[:space:]]+Crypt[[:space:]]*$' "$CONF/proftpd/proftpd-mysql.conf" 2> /dev/null && ok "ProFTPD accepts hashes only" || fail "ProFTPD still accepts plain-text passwords (SQLAuthTypes)"
+grep -q "password_algorithm'\] = 'sha512-crypt'" "$CONF/roundcube/password_config.inc.php" 2> /dev/null && ok "Roundcube password change uses SHA-512 crypt" || fail "Roundcube password change does not use SHA-512 crypt"
+
+# --- 7. TLS -----------------------------------------------------------------------
+section "TLS"
+tls() { # label port extra-options expect(ok|refused)
+    local out; out=$(echo | timeout 10 openssl s_client -connect "127.0.0.1:$2" $3 2>&1)
+    if echo "$out" | grep -q "Cipher is [A-Z0-9]" && ! echo "$out" | grep -q "Cipher is (NONE)"; then
+        [ "$4" = ok ] && ok "$1" || fail "$1: accepted"
+    else
+        [ "$4" = refused ] && ok "$1" || fail "$1: refused"
+    fi
+}
+tls "HTTPS: modern connection" 443 "" ok
+tls "HTTPS: TLS 1.1 refused" 443 "-tls1_1" refused
+tls "HTTPS: old CBC cipher refused" 443 "-tls1_2 -cipher AES128-SHA" refused
+tls "SMTPS (465): anonymous cipher refused" 465 "-tls1_2 -cipher ADH-AES128-SHA:AECDH-AES128-SHA:@SECLEVEL=0" refused
+tls "IMAPS (993): old CBC cipher refused" 993 "-tls1_2 -cipher ECDHE-RSA-AES128-SHA" refused
+CERT=$CONF/ssl/sentora.crt
+if [ -f "$CERT" ]; then
+    issuer=$(openssl x509 -in "$CERT" -noout -issuer 2> /dev/null); subject=$(openssl x509 -in "$CERT" -noout -subject 2> /dev/null)
+    if [ "${issuer#issuer=}" = "${subject#subject=}" ]; then warn "the certificate is self-signed: issue a Let's Encrypt one with Sencrypt once the name is in public DNS"
+    else ok "certificate issued by ${issuer#issuer=}"; fi
+fi
+
+# --- 8. automatic security updates --------------------------------------------------
+section "Automatic security updates"
+if dpkg -l unattended-upgrades 2> /dev/null | grep -q '^ii'; then
+    if [ "$(apt-config shell X APT::Periodic::Unattended-Upgrade | cut -d"'" -f2)" = "1" ]; then ok "unattended-upgrades is on"
+    else fail "unattended-upgrades is installed but switched off (/etc/apt/apt.conf.d/20auto-upgrades)"; fi
+    if [ $SYSTEMD -eq 1 ]; then
+        systemctl is-active --quiet apt-daily-upgrade.timer && ok "the daily upgrade timer is active" || fail "apt-daily-upgrade.timer is not active (systemctl enable --now apt-daily-upgrade.timer)"
+    fi
+    UL=/var/log/unattended-upgrades/unattended-upgrades.log
+    if [ -f "$UL" ]; then
+        days=$(( ($(date +%s) - $(stat -c %Y "$UL")) / 86400 ))
+        [ $days -le 3 ] && ok "last automatic update run $days day(s) ago" || warn "no automatic update run for $days days (see $UL)"
+    else
+        warn "unattended-upgrades has not run yet (it runs once a day)"
+    fi
+    [ -f /var/run/reboot-required ] && warn "a restart is needed to finish updates ($(tr '\n' ' ' < /var/run/reboot-required.pkgs 2> /dev/null | cut -c1-80))"
+else
+    fail "unattended-upgrades is not installed: security updates are not installed automatically (apt-get install unattended-upgrades)"
+fi
+
+# --- 9. alerts -----------------------------------------------------------------------
+section "Server alerts"
+if [ $DB -eq 1 ]; then
+    to=$(q "SELECT so_value_tx FROM sentora_core.x_settings WHERE so_name_vc='alert_email'")
+    [ -z "$to" ] && to=$(q "SELECT ac_email_vc FROM sentora_core.x_accounts WHERE ac_id_pk=1")
+    if echo "$to" | grep -qE '^[^@ ]+@[^@ ]+\.[^@ ]+$'; then ok "alerts go to $to"
+    else warn "alerts have nowhere to go: set Alert email address in Admin > Sentora Config"; fi
+    [ -f /var/sentora/logs/alerts.log ] && [ -s /var/lib/sentora/alerts.json ] && grep -q '"msg"' /var/lib/sentora/alerts.json && warn "open alerts: $(grep -o '"msg":"[^"]*"' /var/lib/sentora/alerts.json | cut -d'"' -f4 | head -3 | tr '\n' ' ')"
+fi
+
+section "Off-server backup"
+if [ $DB -eq 1 ] && [ "$(q "SELECT so_value_tx FROM sentora_core.x_settings WHERE so_name_vc='offsite_enabled'")" = "true" ]; then
+    lastok=$(grep -o '"last_ok":[0-9]*' /var/lib/sentora/offsite-backup.json 2> /dev/null | cut -d: -f2)
+    if [ "${lastok:-0}" -gt 0 ]; then
+        hours=$(( ($(date +%s) - lastok) / 3600 ))
+        [ $hours -le 26 ] && ok "last good copy $hours hour(s) ago" || fail "no good copy for $hours hours (Admin > Backup Config: Test connection)"
+    else
+        warn "switched on, but no good copy yet (Admin > Backup Config: Test connection, then Back up now)"
+    fi
+    [ -f /etc/cron.d/sentora-offsite-backup ] && ok "nightly job in place" || fail "the nightly job is missing (the daemon adds it within 5 minutes)"
+else
+    warn "switched off: backups stay on this server's disk (Admin > Backup Config > Off-server backup)"
+fi
+
+# --- 10. the Sentora daemon -----------------------------------------------------------
+section "Sentora daemon"
+DL=/var/sentora/logs/daemon-last-run.log
+if [ -f "$DL" ]; then
+    age=$(( ($(date +%s) - $(stat -c %Y "$DL")) / 60 ))
+    if [ $age -le 15 ]; then ok "last run $age minute(s) ago"; else fail "last run $age minutes ago (it runs every 5 minutes: check cron)"; fi
+    grep -q "Daemon run complete" "$DL" && ok "the last run completed" || fail "the last run did not complete (see $DL)"
+    w=$(grep -cE "PHP (Warning|Fatal|Deprecated|Notice)" "$DL")
+    if [ "$w" = 0 ]; then ok "no PHP warnings in the last run"; else fail "$w PHP warning(s) in the last run: $(grep -m1 -E 'PHP (Warning|Fatal|Deprecated|Notice)' "$DL" | cut -c1-150)"; fi
+else
+    fail "$DL not found: the daemon has not run yet (wait 5 minutes)"
+fi
+PL=/var/sentora/logs/sentora-php.log
+if [ -s "$PL" ]; then
+    n=$(grep -cE "PHP (Warning|Fatal|Deprecated|Notice)" "$PL")
+    [ "$n" = 0 ] && ok "panel PHP log: no warnings" || warn "panel PHP log: $n warning(s), latest: $(grep -E 'PHP (Warning|Fatal|Deprecated|Notice)' "$PL" | tail -1 | sed -E 's/^\[[^]]*\] //' | cut -c1-150)"
+else
+    ok "panel PHP log: empty"
+fi
+
+rm -f "$MYCNF"
+echo
+echo "Result: $OKS OK, $WARNS WARN, $FAILS FAIL"
+[ $FAILS -eq 0 ] && echo "No failures." || echo "Fix the FAIL lines above; send this report for help."
+[ $FAILS -eq 0 ]
+}
+
+main 2>&1 | tee "$LOG"
+exit "${PIPESTATUS[0]}"

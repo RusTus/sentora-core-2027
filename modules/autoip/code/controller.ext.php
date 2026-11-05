@@ -9,9 +9,35 @@
 class module_controller {
 
 	static $ok;
+	static $bad;
+
+	/**
+	 * AutoIP rewrites the server's IP and every customer's DNS records, and the daemon
+	 * (root) runs its script: administrators only, whatever the module's permissions say
+	 */
+	static function IsAdmin() {
+		$user = ctrl_users::GetUserDetail();
+		return $user && (int) $user['usergroupid'] === 1;
+	}
+
+	/** an http(s) address for the "what is my IP" service */
+	static function ValidCommand($url) {
+		$url = trim((string) $url);
+		return $url !== '' && strlen($url) <= 255 && filter_var($url, FILTER_VALIDATE_URL)
+			&& preg_match('#^https?://[^\s\'"<>]+$#i', $url);
+	}
+
+	/** the script: empty, or the full path of a file (no arguments, no shell characters) */
+	static function ValidScript($path) {
+		$path = trim((string) $path);
+		return $path === '' || (strlen($path) <= 255 && preg_match('#^/[A-Za-z0-9._/-]+$#', $path) && strpos($path, '..') === false);
+	}
 
     static function ListAutoIPSettings() {
         global $zdbh;
+        if (!self::IsAdmin()) {
+            return false;
+        }
         $sql = "SELECT * FROM x_autoip";
         $numrows = $zdbh->query($sql);
         if ($numrows->fetchColumn() <> 0) {
@@ -46,24 +72,32 @@ class module_controller {
 
     static function ExecuteUpdateAutoIP($inScript, $inEmail, $inCommand, $inEnabled) {
         global $zdbh;
-		$inEmail = strtolower(str_replace(' ', '', $inEmail));
-        $retval = false;
-            $sql = $zdbh->prepare("UPDATE x_autoip SET 
-								   ai_script_vc='" . $inScript . "',
-								   ai_command_vc='" . $inCommand . "', 
-								   ai_enabled_in=" . $inEnabled . ", 
-								   ai_lastupdate_ts='" . time() . "' 
-								   WHERE 
-								   ai_id_pk=1");
-            $sql->execute();
-			$sql = $zdbh->prepare("UPDATE x_autoip SET 
-								   ai_email_vc='" . $inEmail . "' 
-								   WHERE 
-								   ai_id_pk=1");
-            $sql->execute();
-            $retval = true;
-			self::$ok = true;
-            return $retval;
+        if (!self::IsAdmin()) {
+            return false;
+        }
+        $inScript = trim((string) $inScript);
+        $inCommand = trim((string) $inCommand);
+        $emails = array();
+        foreach (explode(',', strtolower(str_replace(' ', '', (string) $inEmail))) as $email) {
+            if ($email === '') {
+                continue;
+            }
+            if (!self::IsValidEmail($email)) {
+                self::$bad = true;
+                return false;
+            }
+            $emails[] = $email;
+        }
+        if (!self::ValidCommand($inCommand) || !self::ValidScript($inScript)) {
+            self::$bad = true;
+            return false;
+        }
+        $sql = $zdbh->prepare("UPDATE x_autoip SET ai_script_vc = :script, ai_command_vc = :command,
+                               ai_enabled_in = :enabled, ai_email_vc = :email, ai_lastupdate_ts = :ts WHERE ai_id_pk = 1");
+        $sql->execute(array(':script' => $inScript, ':command' => $inCommand, ':enabled' => $inEnabled ? 1 : 0,
+                            ':email' => implode(',', $emails), ':ts' => (string) time()));
+        self::$ok = true;
+        return true;
     }
 
     static function IsValidEmail($email) {
@@ -111,11 +145,14 @@ class module_controller {
     static function getDetectedIP() {
 		global $zdbh;
 		$error = "<font color=\"red\">IP NOT DETECTED</font>";
+		if (!self::IsAdmin()) {
+			return '';
+		}
 		$getip = $zdbh->query("SELECT ai_command_vc FROM x_autoip")->fetch();
-        if ($getip) {
+        if ($getip && self::ValidCommand($getip['ai_command_vc'])) {
 			$detectedip = NULL;
 			try {
-				$detectedip = @file_get_contents($getip['ai_command_vc']);
+				$detectedip = @file_get_contents($getip['ai_command_vc'], false, stream_context_create(array('http' => array('timeout' => 5))));
 			} catch (Exception $e) {
 				return $error;
 			}
@@ -139,10 +176,13 @@ class module_controller {
 
     static function getStatusIcon() {
 		global $zdbh;
+		if (!self::IsAdmin()) {
+			return '';
+		}
 		global $controller;
-		$enabled  = "<img src=\"http://".$_SERVER["HTTP_HOST"]."/modules/" . $controller->GetControllerRequest('URL', 'module') . "/assets/up.png\">";
-		$disabled = "<img src=\"http://".$_SERVER["HTTP_HOST"]."/modules/" . $controller->GetControllerRequest('URL', 'module') . "/assets/down.png\">";
-		$caution  = "<img src=\"http://".$_SERVER["HTTP_HOST"]."/modules/" . $controller->GetControllerRequest('URL', 'module') . "/assets/caution.png\">";
+		$enabled  = ui_status::Ok('Enabled');
+		$disabled = ui_status::Bad('Disabled');
+		$caution  = ui_status::Warn('Check the settings');
 		$getenabled = $zdbh->query("SELECT * FROM x_autoip")->fetch();
         if ($getenabled) {
 			if ($getenabled['ai_enabled_in'] == 1){
@@ -164,6 +204,9 @@ class module_controller {
 
     static function getStatusMessage() {
 		global $zdbh;
+		if (!self::IsAdmin()) {
+			return '';
+		}
 		global $controller;
 		$enabled  = "<font color=\"green\">AutoIP is ENABLED and IP Address is in sync with reported public IP</font>";
 		$disabled = "<font color=\"red\">AutoIP is DISABLED</font>";
@@ -190,6 +233,10 @@ class module_controller {
 
     static function doupdateautoip() {
 		global $controller;
+		runtime_csfr::Protect();
+		if (!self::IsAdmin()) {
+			return false;
+		}
         $formvars = $controller->GetAllControllerRequests('FORM');
         if(isset($formvars['inUpdate'])){
 			if(isset($formvars['inEnabled'])){
@@ -219,6 +266,12 @@ class module_controller {
     }
 
     static function getResult() {
+        if (!self::IsAdmin()) {
+            return ui_sysmessage::shout(ui_language::translate("Only administrators can see or change the AutoIP settings."), "zannounceerror");
+        }
+        if (!fs_director::CheckForEmptyValue(self::$bad)) {
+            return ui_sysmessage::shout(ui_language::translate("Not saved: the command must be an http(s) address, the script the full path of a file (no arguments), and each email address valid."), "zannounceerror");
+        }
         if (!fs_director::CheckForEmptyValue(self::$ok)) {
             return ui_sysmessage::shout(ui_language::translate("Changes to your settings have been saved successfully!"), "zannounceok");
         }

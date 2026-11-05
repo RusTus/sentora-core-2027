@@ -1,0 +1,185 @@
+#!/bin/bash
+# sentora-offsite-backup: copy this server's backups to another machine every night.
+#
+# Settings: Admin > Backup Config > Off-server backup (enabled, server, port, username,
+# password, folder, time, nights kept, mailboxes). The daemon keeps the nightly job
+# (/etc/cron.d/sentora-offsite-backup) in step with them and runs the page's
+# "Test connection" and "Back up now".
+#
+#   sentora-offsite-backup --setup    make the SSH key (used when no password is set)
+#   sentora-offsite-backup --check    test the connection and the settings
+#   sentora-offsite-backup --now      make a copy now (also when switched off)
+#   sentora-offsite-backup --cron     the nightly job: a copy, only when switched on
+#   sentora-offsite-backup --status   when the last copy was made, and how it went
+#
+# What is copied (format 2, read by sentora-panel-restore and Admin > Backup Config >
+# Restore), each night a dated snapshot under <folder>/<this server's name>/<date>/:
+#   manifest.json               what it holds: Sentora version, server, every account
+#                               with its domains, databases and mailboxes, sizes
+#   databases/<name>.sql.gz     one dump per database (the panel's own included)
+#   databases/users.sql.gz      the hosting accounts' MySQL users and their grants
+#   var/sentora/hostdata/...    every account's folder: websites and their backups
+#   var/sentora/vmail/...       the mailboxes (when switched on)
+#   var/sentora/backups/...     the panel backups made by sentora-update
+#   config/sentora-config.tar.gz  /etc/sentora/configs, the panel's settings and its
+#                               encryption key, Let's Encrypt (keep the backup machine trusted)
+# Files that did not change are hard links to the night before, so only changes are
+# sent and stored. The oldest nights are removed.
+
+# the settings and the connection to the backup machine (shared with sentora-panel-restore)
+# shellcheck source=sentora-backup-common
+. "$(dirname "$(readlink -f "$0")")/sentora-backup-common" 2> /dev/null || . /etc/sentora/panel/bin/sentora-backup-common
+LOG=/var/sentora/logs/offsite-backup.log
+
+say() { echo "$(date '+%Y-%m-%d %H:%M:%S')  $*" | tee -a "$LOG"; }
+state_set() { # key value [key value...]: merged into the state file the panel shows
+    php -r '$f = $argv[1]; $d = json_decode((string) @file_get_contents($f), true); $d = is_array($d) ? $d : array();
+        for ($i = 2; $i + 1 < $argc; $i += 2) { $d[$argv[$i]] = ctype_digit($argv[$i + 1]) ? (int) $argv[$i + 1] : substr($argv[$i + 1], 0, 300); }
+        file_put_contents($f, json_encode($d)); chmod($f, 0644);' "$STATE" "$@"
+}
+state() { # ok|failed message
+    if [ "$1" = ok ]; then state_set last_run "$(date +%s)" last_ok "$(date +%s)" result ok message "$2"
+    else state_set last_run "$(date +%s)" result failed message "$2"; fi
+}
+die() { say "FAILED: $*"; state failed "$*"; exit 1; }
+
+[ "$(id -u)" -eq 0 ] || { echo "Run this as root."; exit 2; }
+mkdir -p "$(dirname "$LOG")" "$LOCAL"; touch "$LOG"; chmod 640 "$LOG"
+
+
+case "${1:-}" in
+    --setup)
+        mkdir -p /root/.ssh; chmod 700 /root/.ssh
+        [ -f "$KEY" ] || ssh-keygen -q -t ed25519 -N "" -C "sentora-offsite@$HOST" -f "$KEY"
+        echo "Used when no password is set in Admin > Backup Config > Off-server backup."
+        echo "1. On the backup machine, as root (once):"
+        echo "     useradd -m -s /bin/bash sentora-backup && mkdir -p /srv/sentora-backups && chown sentora-backup /srv/sentora-backups"
+        echo "     install -d -m 700 -o sentora-backup ~sentora-backup/.ssh"
+        echo "     echo '$(cat "$KEY.pub")' >> ~sentora-backup/.ssh/authorized_keys"
+        echo "     chown sentora-backup ~sentora-backup/.ssh/authorized_keys && chmod 600 ~sentora-backup/.ssh/authorized_keys"
+        echo "   (it needs rsync installed: apt-get install rsync)"
+        echo "2. Set the server, username and folder in Admin > Backup Config > Off-server backup."
+        echo "3. Press Test connection there, or run: sentora-offsite-backup --check"
+        exit 0 ;;
+    --status)
+        if [ -f "$STATE" ]; then
+            ok=$(grep -o '"last_ok":[0-9]*' "$STATE" | cut -d: -f2); res=$(grep -o '"result":"[a-z]*"' "$STATE" | cut -d'"' -f4)
+            echo "Last run: $(date -d "@$(grep -o '"last_run":[0-9]*' "$STATE" | cut -d: -f2)" '+%Y-%m-%d %H:%M') ($res: $(grep -o '"message":"[^"]*"' "$STATE" | cut -d'"' -f4))"
+            [ "${ok:-0}" -gt 0 ] && echo "Last good copy: $(date -d "@$ok" '+%Y-%m-%d %H:%M')" || echo "No good copy yet."
+        else
+            echo "Not run yet."
+        fi
+        exit 0 ;;
+esac
+
+if [ "${1:-}" = "--cron" ] && [ "$OB_ENABLED" != true ]; then exit 0; fi   # switched off
+if [ -z "$TARGET" ]; then
+    echo "No server or folder set: Admin > Backup Config > Off-server backup."
+    [ "${1:-}" = "--check" ] && state_set check_time "$(date +%s)" check_ok 0 check_message "no server or folder set"
+    exit 2
+fi
+command -v rsync > /dev/null || { apt-get -qq -y install rsync > /dev/null || die "rsync is missing and could not be installed"; }
+if [ -n "$OB_PASSWORD" ] && ! command -v sshpass > /dev/null; then
+    apt-get -qq -y install sshpass > /dev/null 2>&1 || die "sshpass (for the password) is missing and could not be installed"
+fi
+BASE="$(rpath)/$HOST"
+
+if [ "${1:-}" = "--check" ]; then
+    if remote && [ -z "$OB_PASSWORD" ] && [ -z "${SENTORA_OFFSITE_SSH:-}" ] && [ ! -f "$KEY" ]; then
+        out="no password set and no SSH key: set a password, or run sentora-offsite-backup --setup"
+    elif remote; then
+        out=$($SSH "$(rhost)" "mkdir -p '$BASE' && test -w '$BASE' && command -v rsync > /dev/null && echo ready" 2>&1)
+    else
+        out=$(mkdir -p "$BASE" 2>&1 && test -w "$BASE" && echo ready)
+    fi
+    if echo "$out" | grep -q '^ready$'; then
+        msg="$TARGET is reachable and writable ($BASE); copies keep $KEEP nights$( [ "$MAIL" = yes ] && echo ', with mailboxes')"
+        echo "OK: $msg"; state_set check_time "$(date +%s)" check_ok 1 check_message "$msg"; exit 0
+    fi
+    msg=$(echo "$out" | grep -v '^ready$' | tr '\n' ' ' | sed 's/  */ /g' | head -c 250)
+    [ -n "$msg" ] || msg="the backup machine did not answer as expected (is rsync installed there?)"
+    echo "FAILED: $msg"; state_set check_time "$(date +%s)" check_ok 0 check_message "$msg"; exit 1
+fi
+
+exec 9> /run/sentora-offsite-backup.lock
+flock -n 9 || { echo "Another copy is running."; exit 1; }
+START=$(date +%s); TODAY=${SENTORA_OFFSITE_DATE:-$(date +%Y-%m-%d)}  # the override is for testing
+say "Off-server backup to $TARGET/$HOST/$TODAY"
+
+# --- what to copy, gathered in one staging folder of links ----------------------------
+STAGE=$(mktemp -d /var/lib/sentora/offsite-stage.XXXXXX); trap 'rm -rf "$STAGE" "$MYCNF"' EXIT
+chmod 700 "$STAGE"
+# the databases, one dump each (the panel's own included), and the hosting accounts'
+# MySQL users with their grants (not the service users: a new server keeps its own)
+val() { grep -o "\$$1 = '[^']*'" "$PANEL/cnf/db.php" | head -1 | cut -d"'" -f2; }
+MYCNF=$(mktemp); chmod 600 "$MYCNF"; printf '[client]\nuser=%s\npassword=%s\n' "$(val user)" "$(val pass)" > "$MYCNF"
+OUT="$STAGE/out"; mkdir -p "$OUT/databases" "$OUT/config"
+DBS=$(mysql --defaults-extra-file="$MYCNF" -N -B -e "SHOW DATABASES" 2> "$STAGE/dump.err" | grep -vE '^(information_schema|performance_schema|mysql|sys)$') \
+    || die "could not list the databases: $(head -c 200 "$STAGE/dump.err")"
+for db in $DBS; do
+    mysqldump --defaults-extra-file="$MYCNF" --single-transaction --routines --events --triggers --databases "$db" 2> "$STAGE/dump.err" \
+        | gzip -6 > "$OUT/databases/$db.sql.gz"
+    [ "${PIPESTATUS[0]}" -eq 0 ] || die "the dump of $db failed: $(head -c 200 "$STAGE/dump.err")"
+done
+SERVICE_USERS="'root','mysql.sys','mysql.session','mysql.infoschema','debian-sys-maint','postfix','roundcube','sogo','proftpd','matomo','sentora_spamav'"
+mysql --defaults-extra-file="$MYCNF" -N -B -e "SELECT CONCAT(QUOTE(user),'@',QUOTE(host)) FROM mysql.user WHERE user NOT IN ($SERVICE_USERS) AND user <> ''" 2> /dev/null \
+    | while IFS= read -r u; do
+        # the password hash in hex: MySQL 8's hashes hold bytes that do not survive as text
+        mysql --defaults-extra-file="$MYCNF" -N -B -e "SET SESSION print_identified_with_as_hex = ON; SHOW CREATE USER $u" 2> /dev/null | sed 's/$/;/; s/^CREATE USER /CREATE USER IF NOT EXISTS /'
+        mysql --defaults-extra-file="$MYCNF" -N -B -e "SHOW GRANTS FOR $u" 2> /dev/null | sed 's/$/;/'
+    done | gzip -6 > "$OUT/databases/users.sql.gz"
+chmod -R go-rwx "$OUT"
+# configuration: the panel's settings and key, the service configs, certificates
+CONF_PATHS=(etc/sentora/configs etc/sentora/panel/cnf)
+[ -d /etc/letsencrypt ] && CONF_PATHS+=(etc/letsencrypt)
+tar -czf "$OUT/config/sentora-config.tar.gz" -C / "${CONF_PATHS[@]}" 2> /dev/null || die "could not pack the configuration"
+# what the snapshot holds, for the restore
+( cd "$PANEL" && php -r '
+    chdir("/etc/sentora/panel"); require "dryden/loader.inc.php"; require "cnf/db.php"; require "inc/dbc.inc.php";
+    $acc = array();
+    foreach ($zdbh->query("SELECT ac_id_pk, ac_user_vc, ac_enabled_in, ac_reseller_fk FROM x_accounts WHERE ac_deleted_ts IS NULL")->fetchAll(PDO::FETCH_ASSOC) as $a) {
+        $id = (int) $a["ac_id_pk"];
+        $q = function ($sql) use ($zdbh, $id) { $s = $zdbh->prepare($sql); $s->execute(array(":a" => $id)); return $s->fetchAll(PDO::FETCH_COLUMN); };
+        $home = "/var/sentora/hostdata/" . $a["ac_user_vc"];
+        $acc[] = array("id" => $id, "username" => $a["ac_user_vc"], "enabled" => (int) $a["ac_enabled_in"] === 1, "reseller" => (int) $a["ac_reseller_fk"],
+            "domains" => $q("SELECT vh_name_vc FROM x_vhosts WHERE vh_acc_fk = :a AND vh_deleted_ts IS NULL ORDER BY vh_type_in, vh_name_vc"),
+            "databases" => $q("SELECT my_name_vc FROM x_mysql_databases WHERE my_acc_fk = :a AND my_deleted_ts IS NULL ORDER BY my_name_vc"),
+            "mysql_users" => $q("SELECT mu_name_vc FROM x_mysql_users WHERE mu_acc_fk = :a AND mu_deleted_ts IS NULL ORDER BY mu_name_vc"),
+            "mailboxes" => $q("SELECT mb_address_vc FROM x_mailboxes WHERE mb_acc_fk = :a AND mb_deleted_ts IS NULL ORDER BY mb_address_vc"),
+            "size_mb" => is_dir($home) ? (int) round(((int) shell_exec("du -sk " . escapeshellarg($home) . " 2>/dev/null | cut -f1")) / 1024) : 0);
+    }
+    echo json_encode(array("format" => 2, "made_by" => "sentora-offsite-backup", "sentora" => sys_versions::ShowSentoraVersion(),
+        "server" => $argv[1], "panel" => ctrl_options::GetSystemOption("sentora_domain"), "date" => $argv[2], "time" => time(),
+        "mail" => $argv[3] === "yes", "databases" => array_map(function ($f) { return basename($f, ".sql.gz"); }, array_values(array_filter((array) glob($argv[4] . "/*.sql.gz"), function ($f) { return basename($f) !== "users.sql.gz"; }))),
+        "accounts" => $acc), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);' "$HOST" "$TODAY" "$MAIL" "$OUT/databases" ) > "$OUT/manifest.json" 2> "$STAGE/manifest.err" \
+    || die "could not write the manifest: $(head -c 200 "$STAGE/manifest.err")"
+chmod 600 "$OUT/manifest.json"
+
+LIST="$STAGE/sources"
+{
+    echo "$OUT/./"
+    [ -d /var/sentora/hostdata ] && echo "/./var/sentora/hostdata/"
+    [ -d "$LOCAL" ] && echo "/./var/sentora/backups/"
+    [ "$MAIL" = yes ] && [ -d /var/sentora/vmail ] && echo "/./var/sentora/vmail/"
+} > "$LIST"
+
+# --- a dated snapshot: unchanged files are hard links to the last one -------------------------
+run_there "mkdir -p '$BASE/$TODAY.partial'" || die "could not make $BASE/$TODAY.partial on the backup machine"
+LINK=""; run_there "test -d '$BASE/latest'" && LINK="--link-dest=$BASE/latest/"
+RS=(rsync -aHR --delete --numeric-ids --partial --exclude=/var/sentora/hostdata/*/tmp/)
+[ -n "$LINK" ] && RS+=("$LINK")
+if remote; then RS+=(-e "$SSH"); DEST="$(rhost):$BASE/$TODAY.partial/"; else DEST="$BASE/$TODAY.partial/"; fi
+mapfile -t SRC < "$LIST"
+# -R with /./ keeps the paths after the dot (var/sentora/hostdata/<account>/..., and the
+# staging folder's manifest.json, databases/ and config/ at the top of the snapshot)
+"${RS[@]}" "${SRC[@]}" "$DEST" > "$STAGE/rsync.out" 2>&1
+rc=$?
+# 24: files vanished while copying (a mailbox changed): not a failure
+if [ $rc -ne 0 ] && [ $rc -ne 24 ]; then die "rsync failed (code $rc): $(tail -2 "$STAGE/rsync.out" | tr '\n' ' ' | head -c 250)"; fi
+run_there "cd '$BASE' && rm -rf '$TODAY' && mv '$TODAY.partial' '$TODAY' && ln -sfn '$TODAY' latest && ls -1d 20??-??-?? | sort | head -n -$KEEP | xargs -r rm -rf" \
+    || die "the copy was made but could not be finished on the backup machine"
+
+SIZE=$(du -sh "$LOCAL" 2> /dev/null | cut -f1)
+N=$(run_there "ls -1d '$BASE'/20??-??-?? | wc -l")
+say "OK: $TODAY copied in $(( $(date +%s) - START )) s ($N night(s) kept on the backup machine, local backups $SIZE)"
+state ok "copied $TODAY to $TARGET"

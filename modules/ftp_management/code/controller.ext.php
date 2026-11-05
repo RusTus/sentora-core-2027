@@ -29,6 +29,14 @@
 class module_controller extends ctrl_module
 {
 
+    static $shownuser = null; // Show password
+
+    static $shownpass = null;
+
+    static $askpw = null;   // Show password: ask for the panel password first
+
+    static $wrongpw = null;
+
     static $error;
     static $alreadyexists;
     static $blank;
@@ -69,7 +77,7 @@ class module_controller extends ctrl_module
                 $res[] = array('id' => $rowclients['ft_id_pk'],
                     'directory' => runtime_xss::xssClean($rowclients['ft_directory_vc']),
                     'access' => runtime_xss::xssClean($rowclients['ft_access_vc']),	
-					'password' => runtime_xss::xssClean($rowclients['ft_password_vc']),			
+					'password' => '', // only a hash is stored: never shown			
                     'username' => runtime_xss::xssClean($rowclients['ft_user_vc']));
             }
             return $res;
@@ -95,7 +103,7 @@ class module_controller extends ctrl_module
                 $res[] = array('id' => $rowclients['ft_id_pk'],
                     'directory' => runtime_xss::xssClean($rowclients['ft_directory_vc']),
                     'access' => runtime_xss::xssClean($rowclients['ft_access_vc']),
-					'password' => runtime_xss::xssClean($rowclients['ft_password_vc']),
+					'password' => '', // only a hash is stored: never shown
                     'username' => runtime_xss::xssClean($rowclients['ft_user_vc']));
             }
             return $res;
@@ -153,8 +161,8 @@ class module_controller extends ctrl_module
 
 		if (fs_director::CheckForEmptyValue(self::CheckPasswordForErrors($password))) {
 
-			// Verify if Current user can Edit FTP Account.
-			$currentuser = ctrl_users::GetUserDetail($uid);
+			// Verify if Current user can Edit FTP Account (the logged-in user)
+			$currentuser = ctrl_users::GetUserDetail();
 	
 			$sql = "SELECT * FROM x_ftpaccounts WHERE ft_acc_fk=:userid AND ft_id_pk=:editedUsrID AND ft_deleted_ts IS NULL";
 			$numrows = $zdbh->prepare($sql);
@@ -166,7 +174,10 @@ class module_controller extends ctrl_module
 				return;
 			}
 	
-			// Change User Password
+			// Change User Password: ProFTPD gets a one-way hash; the panel also keeps an
+			// encrypted copy (ctrl_secret) so the owner can see it again
+			$enc = ctrl_secret::Encrypt($password);
+			$password = self::HashPassword($password);
 			runtime_hook::Execute('OnBeforeResetFTPPassword');
 			$rowftpsql = "SELECT * FROM x_ftpaccounts WHERE ft_id_pk=:ftIdPk";
 			$rowftpfind = $zdbh->prepare($rowftpsql);
@@ -174,8 +185,9 @@ class module_controller extends ctrl_module
 			$rowftpfind->execute();
 			$rowftp = $rowftpfind->fetch();
 	
-			$sql = $zdbh->prepare("UPDATE x_ftpaccounts SET ft_password_vc=:password WHERE ft_id_pk=:ftpid");
+			$sql = $zdbh->prepare("UPDATE x_ftpaccounts SET ft_password_vc=:password, ft_passenc_tx=:enc WHERE ft_id_pk=:ftpid");
 			$sql->bindParam(':password', $password);
+			$sql->bindParam(':enc', $enc);
 			$sql->bindParam(':ftpid', $ft_id_pk);
 			$sql->execute();
 	
@@ -217,6 +229,10 @@ class module_controller extends ctrl_module
             } else {
                 $homedirectory_to_use = '/' . $destination;
             }
+            // An existing folder inside the account only (no "..", no other account)
+            if (ctrl_ownership::SafeSubFolder($homedirectory_to_use) === false) {
+                return false;
+            }
 
             // Check if Path is inside user home directory.
             $full_homeDir  = ctrl_options::GetSystemOption('hosted_dir') . $currentuser['username'] . $homedirectory_to_use . '/';
@@ -229,7 +245,12 @@ class module_controller extends ctrl_module
                 return false;
             }
 
-            $sql = $zdbh->prepare("INSERT INTO x_ftpaccounts (ft_acc_fk, ft_user_vc, ft_directory_vc, ft_access_vc, ft_password_vc, ft_created_ts) VALUES (:userid, :username, :homedir, :accesstype, :password, :time)");
+            // ProFTPD gets a one-way hash; the panel also keeps an encrypted copy
+            // (ctrl_secret) so the owner can see it again
+            $enc = ctrl_secret::Encrypt($password);
+            $password = self::HashPassword($password);
+            $sql = $zdbh->prepare("INSERT INTO x_ftpaccounts (ft_acc_fk, ft_user_vc, ft_directory_vc, ft_access_vc, ft_password_vc, ft_passenc_tx, ft_created_ts) VALUES (:userid, :username, :homedir, :accesstype, :password, :enc, :time)");
+            $sql->bindParam(':enc', $enc);
             $sql->bindParam(':userid', $currentuser['userid']);
             $sql->bindParam(':username', $username);
             $sql->bindParam(':homedir', $homedirectory_to_use);
@@ -247,6 +268,16 @@ class module_controller extends ctrl_module
             return true;
         }
         return false;
+    }
+
+    /**
+     * SHA-512 crypt hash ("$6$", salted, 50,000 rounds) of an FTP password: ProFTPD
+     * checks logins against it with the system's crypt() (SQLAuthTypes Crypt)
+     */
+    static function HashPassword($password)
+    {
+        $salt = substr(strtr(base64_encode(random_bytes(12)), '+', '.'), 0, 16);
+        return crypt((string) $password, '$6$rounds=50000$' . $salt . '$');
     }
 
     static function CheckForErrors($username, $password)
@@ -370,7 +401,7 @@ class module_controller extends ctrl_module
         runtime_csfr::Protect();
         $currentuser = ctrl_users::GetUserDetail();
         $formvars = $controller->GetAllControllerRequests('FORM');
-        if (self::ExecuteCreateFTP($currentuser['userid'], $formvars['inFTPUsername'], $formvars['inPassword'], $formvars['inDestination'], $formvars['inDomainDestination'], $formvars['inAccess'], $formvars['inAutoHome'])) {
+        if (self::ExecuteCreateFTP($currentuser['userid'], $formvars['inFTPUsername'] ?? '', $formvars['inPassword'] ?? '', $formvars['inDestination'] ?? '', $formvars['inDomainDestination'] ?? '', $formvars['inAccess'] ?? '', $formvars['inAutoHome'] ?? '')) {
             self::$ok = true;
             return true;
         } else {
@@ -433,6 +464,31 @@ class module_controller extends ctrl_module
             if (isset($formvars['inReset_' . $row['id'] . ''])) {
                 header("location: ./?module=" . $controller->GetCurrentModule() . "&show=Edit&other=" . $row['id']);
                 exit;
+            }
+            // Show password: one of this account's own FTP accounts (the loop only has those)
+            if (isset($formvars['inShow_' . $row['id'] . ''])) {
+                global $zdbh;
+                $q = $zdbh->prepare("SELECT ft_user_vc, ft_passenc_tx FROM x_ftpaccounts WHERE ft_id_pk = :id AND ft_acc_fk = :uid AND ft_deleted_ts IS NULL");
+                $q->execute(array(':id' => (int) $row['id'], ':uid' => (int) $currentuser['userid']));
+                $f = $q->fetch();
+                if ($f) {
+                    $gate = ctrl_secret::ConfirmGate();
+                    if ($gate !== true) {
+                        if ($gate === null) {
+                            self::$askpw = array('./?module=ftp_management&action=EditFTP', 'inShow_' . (int) $row['id'], $f['ft_user_vc']);
+                        } else {
+                            self::$wrongpw = true;
+                        }
+                        return;
+                    }
+                    $plain = ctrl_secret::Decrypt((string) $f['ft_passenc_tx']);
+                    self::$shownuser = $f['ft_user_vc'];
+                    self::$shownpass = ($plain === false) ? '' : $plain;
+                    if ($plain !== false) {
+                        ctrl_secret::LogReveal('FTP account ' . $f['ft_user_vc']);
+                    }
+                }
+                return;
             }
         }
         return;
@@ -559,6 +615,21 @@ class module_controller extends ctrl_module
 
     static function getResult()
     {
+        if (self::$askpw !== null) {
+            return ui_sysmessage::shout(ctrl_secret::ConfirmForm(self::$askpw[0], self::$askpw[1], self::$askpw[2]), "zannounceinfo");
+        }
+        if (!fs_director::CheckForEmptyValue(self::$wrongpw)) {
+            return ui_sysmessage::shout(ui_language::translate("That is not your panel password: the password was not shown."), "zannounceerror");
+        }
+        if (self::$shownuser !== null) {
+            $h = function ($s) { return htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8'); };
+            if (self::$shownpass === '') {
+                return ui_sysmessage::shout(ui_language::translate("The password of") . ' <strong>' . $h(self::$shownuser) . '</strong> '
+                    . ui_language::translate("is not stored (it was set before passwords were kept). Use Reset Password to set a new one; it can be shown after that."), "zannounceerror");
+            }
+            return ui_sysmessage::shout(ui_language::translate("FTP account") . ' <strong>' . $h(self::$shownuser) . '</strong>, '
+                . ui_language::translate("password:") . ' <code style="user-select: all; font-size: 14px;">' . $h(self::$shownpass) . '</code>', "zannounceok");
+        }
         if (!fs_director::CheckForEmptyValue(self::$blank)) {
             return ui_sysmessage::shout(ui_language::translate("You must enter a valid username and password to create your FTP account."), "zannounceerror");
         }

@@ -137,6 +137,15 @@ class fs_director {
             $hosted = (string) ctrl_options::GetSystemOption('hosted_dir');
             if ($hosted !== '' && strpos(realpath($path) . '/', rtrim(realpath($hosted), '/') . '/') === 0) {
                 $mode = is_dir($path) ? (($mode & 0770) | 02000) : ($mode & 0660);
+            } else {
+                // Elsewhere (service configuration, DNS zones, Apache's site settings,
+                // logs) never writable by everyone: every hosted site runs as its own
+                // Linux user, and Apache and BIND read these files as root. The old
+                // default 0777 becomes 0664 for files (owner and group may write).
+                if ($mode === 0777 && !is_dir($path)) {
+                    $mode = 0664;
+                }
+                $mode &= ~0002;
             }
             @chmod($path, $mode);
             runtime_hook::Execute('OnAfterSetFileSystemPerms');
@@ -216,31 +225,23 @@ class fs_director {
      * @return string The newly generated password. 
      */
     static function GenerateRandomPassword($length = 9, $strength = 0) {
-        $vowels = 'aeuy';
-        $consonants = 'bdghjmnpqrstvz';
-        if ($strength & 1) {
-            $consonants .= 'BDGHJLMNPQRSTVWXZ';
-        }
-        if ($strength & 2) {
-            $vowels .= "AEUY";
-        }
-        if ($strength & 4) {
-            $consonants .= '23456789';
-        }
+        // Sentora: cryptographically random, every character from the whole set (this
+        // used rand(), whose output can be predicted, and alternated vowels and
+        // consonants, so a 16-character password was far weaker than it looked). Letters
+        // and digits always; no look-alikes (0 O 1 l I); symbols when asked ($strength & 8).
+        $chars = 'abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
         if ($strength & 8) {
-            $consonants .= '@#$%';
+            $chars .= '@#$%';
         }
-        $fretval = '';
-        $alt = time() % 2;
-        for ($i = 0; $i < $length; $i++) {
-            if ($alt == 1) {
-                $fretval .= $consonants[(rand() % strlen($consonants))];
-                $alt = 0;
-            } else {
-                $fretval .= $vowels[(rand() % strlen($vowels))];
-                $alt = 1;
+        $length = max(12, (int) $length);
+        $max = strlen($chars) - 1;
+        do {
+            $fretval = '';
+            for ($i = 0; $i < $length; $i++) {
+                $fretval .= $chars[random_int(0, $max)];
             }
-        }
+            // at least one lower case letter, one capital and one digit
+        } while (!preg_match('/[a-z]/', $fretval) || !preg_match('/[A-Z]/', $fretval) || !preg_match('/[0-9]/', $fretval));
         return $fretval;
     }
 

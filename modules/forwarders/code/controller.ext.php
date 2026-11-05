@@ -58,11 +58,9 @@ class module_controller extends ctrl_module
             $sql->execute();
             while ($rowforwarders = $sql->fetch()) {
                 if ($rowforwarders['fw_keepmessage_in'] == 1) {
-                    $status = '<a href="#" title="' . ui_language::translate("A copy of the original message will be left in the source mailbox address when it is fowarded to the destination address") . '">'
-                            . '<img src="modules/' . $controller->GetControllerRequest('URL', 'module') . '/assets/up.gif"></a>';
+                    $status = ui_status::Ok('A copy of the original message will be left in the source mailbox address when it is fowarded to the destination address');
                 } else {
-                    $status = '<a href="#" title="' . ui_language::translate("The original message will only be available in the destination address") . '">'
-                            . '<img src="modules/' . $controller->GetControllerRequest('URL', 'module') . '/assets/down.gif"></a>';
+                    $status = ui_status::Bad('The original message will only be available in the destination address');
                 }
                 $res[] = array('address' => $rowforwarders['fw_address_vc'],
                     'destination' => $rowforwarders['fw_destination_vc'],

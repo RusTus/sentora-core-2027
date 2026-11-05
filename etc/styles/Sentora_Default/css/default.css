@@ -907,6 +907,26 @@ li.highlight {
 .icon-webalizer-stats:before,
 .icon-chart-bar-2:before { content: '\e804'; }
 
+/* A module installed from a package shows its own icon.png inside the icon tag:
+   no font icon beside it as well */
+i.greyscale[class^="icon-"]:before, i.greyscale[class*=" icon-"]:before { content: none !important; }
+
+/* Modules added in this build (each its own icon in the sidebar) */
+.icon-apache-status:before { content: '\1f4ca'; }    /* bar chart */
+.icon-repo-browser:before { content: '\e79d'; }      /* layers: packages */
+.icon-server-monitor:before { content: '\f108'; }    /* desktop */
+.icon-system-logviewer:before { content: '\e7ac'; }  /* terminal */
+.icon-goaccess-stats:before { content: '\e7a2'; }    /* pie chart */
+.icon-matomo:before { content: '\e795'; }            /* equalizer */
+.icon-php-versions:before { content: '\f0c3'; }      /* beaker */
+.icon-file-manager:before { content: '\f068'; }      /* open folder */
+.icon-php-adminer:before { content: '\e754'; }       /* database */
+.icon-visitor-stats:before { content: '\e70a'; }     /* eye */
+.icon-dashboard:before { content: '\2302'; }        /* home */
+.icon-widget-admin:before { content: '\e79d'; }     /* layers */
+.icon-spamav-admin:before { content: '\f510'; }     /* lock */
+.icon-spamav:before { content: '\26a0'; }           /* attention */
+
 
 .icon-mysql-databases:before,
 .icon-database:before { content: '\e754'; }
@@ -976,3 +996,34 @@ li.highlight {
 .navbar-nav li a img {
     margin: -1px 0;
 }
+
+/* Sentora: full-width layout. The content area grows and shrinks with the
+   browser window instead of stopping at Bootstrap's fixed container width
+   (the sidebar keeps its 250px). */
+@media (min-width: 768px) {
+    .wrap.container,
+    .navbar > .container {
+        width: 100%;
+        max-width: none;
+    }
+    .wrap.container {
+        padding-right: 20px;
+    }
+    #page-content.col-lg-9 {
+        float: none;
+        width: auto;
+        margin-right: 0;
+    }
+}
+
+/* Status icons (dryden/ui/status.class.php): good, bad, warning */
+.sn-status { display: inline-flex; vertical-align: middle; line-height: 0; }
+.sn-status svg { width: 20px; height: 20px; }
+.sn-status circle { stroke-width: 1.2; }
+.sn-status path { fill: none; stroke-width: 2.1; stroke-linecap: round; stroke-linejoin: round; }
+.sn-ok circle { fill: #e3f5ea; stroke: #9ad4b1; }
+.sn-ok path { stroke: #1e8a4c; }
+.sn-bad circle { fill: #fdeaea; stroke: #f0a9a7; }
+.sn-bad path { stroke: #c62f2b; }
+.sn-warn circle { fill: #fff4d6; stroke: #f2cf7a; }
+.sn-warn path { stroke: #a86b00; stroke-width: 2.3; }

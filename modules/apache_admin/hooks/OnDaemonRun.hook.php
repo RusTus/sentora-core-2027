@@ -8,7 +8,15 @@ if (ui_module::CheckModuleEnabled('Apache Config')) {
     sys_accountphp::Sync();
     echo "Apache Admin module ENABLED..." . fs_filehandler::NewLine();
     TriggerApacheQuotaUsage();
-    if (ctrl_options::GetSystemOption('apache_changed') == strtolower("true")) {
+    // Write the vhosts once more if they do not have the request guard yet (servers
+    // updated from an earlier version), or its account map is missing
+    $vhostFile = (string) ctrl_options::GetSystemOption('apache_vhost');
+    $guardMissing = is_file(rtrim((string) ctrl_options::GetSystemOption('sentora_root'), '/') . '/etc/lib/apache/sentora-guard.lua')
+        && (strpos((string) @file_get_contents($vhostFile), 'SENTORA_STATUS_BLOCK') === false || !is_file('/etc/sentora/configs/apache/sentora-accounts.map'));
+    if ($guardMissing) {
+        echo "Apache Config: adding the request guard for hosted sites..." . fs_filehandler::NewLine();
+    }
+    if ($guardMissing || ctrl_options::GetSystemOption('apache_changed') == strtolower("true")) {
         echo "Apache Config has changed..." . fs_filehandler::NewLine();
 		
         echo "Begin writing Apache Config to: " . ctrl_options::GetSystemOption('apache_vhost') . fs_filehandler::NewLine();
@@ -43,9 +51,9 @@ function BuildVhostPortForward($vhostName, $customPort, $userEmail) {
 	$customPort_in = $customPort;
 	
     $line = "# DOMAIN: " . $vhostName . fs_filehandler::NewLine();
-    $line .= "# PORT FORWARD FROM ".ctrl_options::GetSystemOption('apache_port')." TO: " . $customPort_in . fs_filehandler::NewLine();
+    $line .= "# PORT FORWARD FROM ".SentoraOneLine(ctrl_options::GetSystemOption('apache_port'))." TO: " . $customPort_in . fs_filehandler::NewLine();
     // $apache_port was never defined here, which wrote "<Virtualhost *:>"
-    $line .= "<Virtualhost *:" . ctrl_options::GetSystemOption('apache_port') . ">" . fs_filehandler::NewLine();
+    $line .= "<Virtualhost *:" . SentoraOneLine(ctrl_options::GetSystemOption('apache_port')) . ">" . fs_filehandler::NewLine();
     $line .= "ServerName " . $vhostName . fs_filehandler::NewLine();
 	if ($vhostName != ctrl_options::GetSystemOption('sentora_domain') ) 
 		$line .= "ServerAlias www." . $vhostName . fs_filehandler::NewLine();
@@ -70,7 +78,7 @@ function BuildVhostReWriteSSL($vhostName, $userEmail) {
 		
     $line = "# DOMAIN: " . $vhostName . fs_filehandler::NewLine();
     $line .= "# SSL REDIRECT" . fs_filehandler::NewLine();
-    $line .= "<Virtualhost *:".ctrl_options::GetSystemOption('apache_port').">" . fs_filehandler::NewLine();
+    $line .= "<Virtualhost *:".SentoraOneLine(ctrl_options::GetSystemOption('apache_port')).">" . fs_filehandler::NewLine();
     $line .= "ServerName " . $vhostName . fs_filehandler::NewLine();
 	if ($vhostName != ctrl_options::GetSystemOption('sentora_domain') ) 
 		$line .= "ServerAlias www." . $vhostName . fs_filehandler::NewLine();
@@ -96,6 +104,44 @@ function BuildVhostReWriteSSL($vhostName, $userEmail) {
  * the php_handler setting) or the PHP-FPM version chosen for the domain.
  */
 /**
+ * The panel also answers on this server's own IP addresses (https://<server IP>),
+ * not only on its name; any other unknown name still gets "not found".
+ */
+function SentoraPanelAliases() {
+    $ips = array();
+    foreach (array_merge(preg_split('/\s+/', trim((string) @shell_exec('hostname -I 2>/dev/null'))), array((string) ctrl_options::GetSystemOption('server_ip'))) as $ip) {
+        if (filter_var($ip, FILTER_VALIDATE_IP) && strpos($ip, '127.') !== 0 && $ip !== '::1') {
+            $ips[$ip] = true;
+        }
+    }
+    if (!count($ips)) {
+        return '';
+    }
+    return "ServerAlias " . implode(' ', array_map(function ($ip) {
+        return strpos($ip, ':') !== false ? '[' . $ip . ']' : $ip;
+    }, array_keys($ips))) . fs_filehandler::NewLine();
+}
+
+/** A setting that belongs on one line of the Apache config (no line breaks) */
+function SentoraOneLine($v) {
+    return preg_replace('/[\x00-\x1F\x7F]/', ' ', (string) $v);
+}
+
+/**
+ * Custom vhost entries (Apache Config) go into the config as written, so the
+ * directives that would let them run a program as root (Apache's main process
+ * starts piped loggers and rewrite-map programs as root) or load outside code
+ * are kept but commented out.
+ */
+function SentoraSafeCustom($text) {
+    $text = SentoraNoModPhp($text);
+    $danger = '/^(\s*)((?:Include|IncludeOptional|LoadModule|LoadFile|RewriteMap|PidFile|ServerRoot|CoreDumpDirectory|ScriptSock|Mutex|Define|UnDefine|User|Group|Listen|SSLPassPhraseDialog|SSLCryptoDevice|GlobalLog|ScoreBoardFile|DefaultRuntimeDir)\b.*'
+        . '|(?:CustomLog|ErrorLog|TransferLog|ForensicLog|CookieLog|RewriteLog|ScriptLog)\s+["\']?\s*(?:\||syslog:|exec:).*'
+        . '|(?:CustomLog|TransferLog)\s+.*["\']?\s*\|.*)$/mi';
+    return preg_replace($danger, '$1# Not allowed in custom entries (would run as root): $2', $text);
+}
+
+/**
  * Custom vhost entries written for mod_php ("php_value ...", "php_admin_flag ...")
  * would stop Apache now that PHP runs in PHP-FPM: they are kept, commented out.
  * (In PHP-FPM, per-site PHP settings go in a .user.ini file in the site's folder.)
@@ -116,6 +162,46 @@ function BuildVhostPhpHandler($rowvhost, $vhostuser) {
         $openBasedir = $home . "public_html" . $rowvhost['vh_directory_vc'] . '/' . ctrl_options::GetSystemOption('openbase_seperator') . $home . 'tmp/';
     }
     return sys_accountphp::ApacheHandler($vhostuser['userid'], $vhostuser['username'], $version, $openBasedir);
+}
+
+/**
+ * What a hosted site's request may be handed to: etc/lib/apache/sentora-guard.lua
+ * (mod_lua, run after .htaccess and mod_rewrite) allows a proxy handler only to the
+ * account's own PHP-FPM sockets, and refuses the panel's pool, other accounts' pools,
+ * server-status, server-info and proxying. Writes the account map it reads, makes
+ * sure mod_lua is on, and returns the lines for the top of the vhost file.
+ */
+function SentoraRequestGuard()
+{
+    global $zdbh;
+    $nl = fs_filehandler::NewLine();
+    $lua = rtrim((string) ctrl_options::GetSystemOption('sentora_root'), '/') . '/etc/lib/apache/sentora-guard.lua';
+    if (!is_file($lua)) {
+        return '';
+    }
+    $map = "hosted_dir " . rtrim((string) ctrl_options::GetSystemOption('hosted_dir'), '/') . "/\n";
+    foreach ($zdbh->query("SELECT ac_id_pk, ac_user_vc FROM x_accounts WHERE ac_deleted_ts IS NULL ORDER BY ac_id_pk")->fetchAll() as $a) {
+        if (preg_match('/^[A-Za-z0-9_-]{1,64}$/', $a['ac_user_vc'])) {
+            $map .= $a['ac_user_vc'] . ' ' . (int) $a['ac_id_pk'] . "\n";
+        }
+    }
+    $mapFile = '/etc/sentora/configs/apache/sentora-accounts.map';
+    if (@file_get_contents($mapFile) !== $map) {
+        @file_put_contents($mapFile . '.new', $map);
+        @chmod($mapFile . '.new', 0644);
+        @rename($mapFile . '.new', $mapFile);
+    }
+    if (!is_file('/etc/apache2/mods-enabled/lua.load') && is_file('/etc/apache2/mods-available/lua.load')) {
+        exec('a2enmod -q lua > /dev/null 2>&1');
+        echo "Apache: mod_lua enabled (hosted sites may hand requests only to their own PHP)" . $nl;
+    }
+    return "# What a hosted site's request may be handed to: its own PHP only (" . $lua . ")" . $nl
+        . "<IfModule lua_module>" . $nl
+        . "    LuaScope thread" . $nl
+        // runs after mod_rewrite's and SetHandler's fixups, which are registered first
+        . "    LuaHookFixups \"" . $lua . "\" sentora_guard" . $nl
+        . "    LuaOutputFilter SENTORA_STATUS_BLOCK \"" . $lua . "\" sentora_status_block" . $nl
+        . "</IfModule>" . $nl . $nl;
 }
 
 function WriteVhostConfigFile() {
@@ -144,7 +230,7 @@ function WriteVhostConfigFile() {
     $getserveremail = $zdbh->query("SELECT ac_email_vc FROM x_accounts where ac_id_pk=1")->fetch();
     $serveremail = ( $getserveremail['ac_email_vc'] != "" ) ? $getserveremail['ac_email_vc'] : "postmaster@" . ctrl_options::GetSystemOption('sentora_domain');
 
-    $VHostDefaultPort = ctrl_options::GetSystemOption('apache_port');
+    $VHostDefaultPort = SentoraOneLine(ctrl_options::GetSystemOption('apache_port'));
     // Always listen on the standard web port too: when the panel moves to 443
     // its http:// redirect lives on this port, even before any domain exists
     $customPorts = array(ctrl_options::GetSystemOption('sentora_port'), $VHostDefaultPort);
@@ -174,21 +260,39 @@ function WriteVhostConfigFile() {
 
     $line = "################################################################" . fs_filehandler::NewLine();
     $line .= "# Apache VHOST configuration file" . fs_filehandler::NewLine();
-    $line .= "# Automatically generated by Sentora " . sys_versions::ShowSentoraVersion() . fs_filehandler::NewLine();
+    $line .= "# Automatically generated by " . sys_versions::ShowSentoraName() . fs_filehandler::NewLine();
     $line .= "# Generated on: " . date(ctrl_options::GetSystemOption('sentora_df'), time()) . fs_filehandler::NewLine();
     $line .= "#==== YOU MUST NOT EDIT THIS FILE : IT WILL BE OVERWRITTEN ====" . fs_filehandler::NewLine();
     $line .= "# Use Sentora Menu -> Admin -> Module Admin -> Apache config" . fs_filehandler::NewLine();
     $line .= "################################################################" . fs_filehandler::NewLine();
     $line .= fs_filehandler::NewLine();
+    $line .= SentoraRequestGuard();
 
     # Listen is mandatory for each port <> 80 (80 is defined in system config)
-	//$line .= "Listen " . ctrl_options::GetSystemOption('apache_port');
+	//$line .= "Listen " . SentoraOneLine(ctrl_options::GetSystemOption('apache_port'));
 	# For each custom port
     foreach ($customPortList as $port) {
         $line .= "Listen " . $port . fs_filehandler::NewLine();
     }
 	
 	$line .= fs_filehandler::NewLine();
+
+	// HTTPS for a name with no certificate of its own here (a domain whose SSL is not
+	// set up or failed, an address): "not found", instead of Apache falling back to the
+	// first HTTPS vhost, which is the panel's login page. It must be the first one.
+	$sslCert = '/etc/sentora/configs/ssl/';
+	if (ctrl_options::GetSystemOption('panel_ssl_tx') != null && is_file($sslCert . 'sentora.crt') && is_file($sslCert . 'sentora.key')) {
+		$line .= "# Any HTTPS name without its own vhost here: 404" . fs_filehandler::NewLine();
+		$line .= "<VirtualHost *:443>" . fs_filehandler::NewLine();
+		$line .= "ServerName sentora-default.invalid" . fs_filehandler::NewLine();
+		$line .= "SSLEngine On" . fs_filehandler::NewLine();
+		$line .= "SSLCertificateFile " . $sslCert . "sentora.crt" . fs_filehandler::NewLine();
+		$line .= "SSLCertificateKeyFile " . $sslCert . "sentora.key" . fs_filehandler::NewLine();
+		$line .= "DocumentRoot /var/www" . fs_filehandler::NewLine();
+		$line .= "ErrorDocument 404 \"Not Found\"" . fs_filehandler::NewLine();
+		$line .= "Redirect 404 /" . fs_filehandler::NewLine();
+		$line .= "</VirtualHost>" . fs_filehandler::NewLine() . fs_filehandler::NewLine();
+	}
 
 	$line .= "# Configuration for Sentora control panel." . fs_filehandler::NewLine();
 	
@@ -203,6 +307,7 @@ function WriteVhostConfigFile() {
 		$line .= "ServerAdmin " . $serveremail . fs_filehandler::NewLine();
 		$line .= 'DocumentRoot "' . ctrl_options::GetSystemOption('sentora_root') . '"' . fs_filehandler::NewLine();
 		$line .= "ServerName " . ctrl_options::GetSystemOption('sentora_domain') . fs_filehandler::NewLine();
+		$line .= SentoraPanelAliases();
 		
 		# Vhost PHP settings
 		// The panel runs as its own user through PHP-FPM (pool "sentora"), never as the
@@ -220,8 +325,8 @@ function WriteVhostConfigFile() {
 
 		
 		$line .= 'ErrorLog "' . ctrl_options::GetSystemOption('log_dir') . 'sentora-error.log" ' . fs_filehandler::NewLine();
-		$line .= 'CustomLog "' . ctrl_options::GetSystemOption('log_dir') . 'sentora-access.log" ' . ctrl_options::GetSystemOption('access_log_format') . fs_filehandler::NewLine();
-		$line .= 'CustomLog "' . ctrl_options::GetSystemOption('log_dir') . 'sentora-bandwidth.log" ' . ctrl_options::GetSystemOption('bandwidth_log_format') . fs_filehandler::NewLine();
+		$line .= 'CustomLog "' . ctrl_options::GetSystemOption('log_dir') . 'sentora-access.log" ' . SentoraOneLine(ctrl_options::GetSystemOption('access_log_format')) . fs_filehandler::NewLine();
+		$line .= 'CustomLog "' . ctrl_options::GetSystemOption('log_dir') . 'sentora-bandwidth.log" ' . SentoraOneLine(ctrl_options::GetSystemOption('bandwidth_log_format')) . fs_filehandler::NewLine();
 		
 		// Error documents:- Error pages are added automatically if they are found in the /etc/static/errorpages
 		// directory and if they are a valid error code, and saved in the proper format, i.e. <error_number>.html
@@ -282,6 +387,7 @@ function WriteVhostConfigFile() {
 		$line .= "ServerAdmin " . $serveremail . fs_filehandler::NewLine();
 		$line .= 'DocumentRoot "' . ctrl_options::GetSystemOption('sentora_root') . '"' . fs_filehandler::NewLine();
 		$line .= "ServerName " . ctrl_options::GetSystemOption('sentora_domain') . fs_filehandler::NewLine();
+		$line .= SentoraPanelAliases();
 		
 		# Vhost PHP settings
 		// The panel runs as its own user through PHP-FPM (pool "sentora"), never as the
@@ -299,8 +405,8 @@ function WriteVhostConfigFile() {
 
 	
 		$line .= 'ErrorLog "' . ctrl_options::GetSystemOption('log_dir') . 'sentora-error.log" ' . fs_filehandler::NewLine();
-		$line .= 'CustomLog "' . ctrl_options::GetSystemOption('log_dir') . 'sentora-access.log" ' . ctrl_options::GetSystemOption('access_log_format') . fs_filehandler::NewLine();
-		$line .= 'CustomLog "' . ctrl_options::GetSystemOption('log_dir') . 'sentora-bandwidth.log" ' . ctrl_options::GetSystemOption('bandwidth_log_format') . fs_filehandler::NewLine();
+		$line .= 'CustomLog "' . ctrl_options::GetSystemOption('log_dir') . 'sentora-access.log" ' . SentoraOneLine(ctrl_options::GetSystemOption('access_log_format')) . fs_filehandler::NewLine();
+		$line .= 'CustomLog "' . ctrl_options::GetSystemOption('log_dir') . 'sentora-bandwidth.log" ' . SentoraOneLine(ctrl_options::GetSystemOption('bandwidth_log_format')) . fs_filehandler::NewLine();
 	
 		// Error documents:- Error pages are added automatically if they are found in the /etc/static/errorpages
 		// directory and if they are a valid error code, and saved in the proper format, i.e. <error_number>.html
@@ -446,10 +552,10 @@ function WriteVhostConfigFile() {
 				$line .= "    Require all granted" . fs_filehandler::NewLine();
 				$line .= "</Directory>" . fs_filehandler::NewLine();
 				$line .= sys_accountphp::PanelHandler();
-				$line .= ctrl_options::GetSystemOption('dir_index') . fs_filehandler::NewLine();
+				$line .= SentoraOneLine(ctrl_options::GetSystemOption('dir_index')) . fs_filehandler::NewLine();
 				// Client custom vh entry
 				$line .= "# Custom VH settings (if any exist)" . fs_filehandler::NewLine();
-				$line .= SentoraNoModPhp($rowvhost['vh_custom_tx']) . fs_filehandler::NewLine();
+				$line .= SentoraSafeCustom($rowvhost['vh_custom_tx']) . fs_filehandler::NewLine();
 				$line .= "</virtualhost>" . fs_filehandler::NewLine();
 		
 				############################## add back old code
@@ -487,7 +593,7 @@ function WriteVhostConfigFile() {
 				$line .= "    Require all granted" . fs_filehandler::NewLine();
 				$line .= "</Directory>" . fs_filehandler::NewLine();
 				$line .= sys_accountphp::PanelHandler();
-				$line .= ctrl_options::GetSystemOption('dir_index') . fs_filehandler::NewLine();
+				$line .= SentoraOneLine(ctrl_options::GetSystemOption('dir_index')) . fs_filehandler::NewLine();
 				
 				# SSL Settings
 				$line .= "# SSL settings (if any exist)" . fs_filehandler::NewLine();
@@ -496,7 +602,7 @@ function WriteVhostConfigFile() {
 				
 				// Client custom vh entry
 				$line .= "# Custom VH settings (if any exist)" . fs_filehandler::NewLine();
-				$line .= SentoraNoModPhp($rowvhost['vh_custom_tx']) . fs_filehandler::NewLine();
+				$line .= SentoraSafeCustom($rowvhost['vh_custom_tx']) . fs_filehandler::NewLine();
 				$line .= "</virtualhost>" . fs_filehandler::NewLine();
 				
 				############################## add back old code
@@ -541,10 +647,10 @@ function WriteVhostConfigFile() {
 				$line .= "    Require all granted" . fs_filehandler::NewLine();
 				$line .= "</Directory>" . fs_filehandler::NewLine();
 				$line .= sys_accountphp::PanelHandler();
-				$line .= ctrl_options::GetSystemOption('dir_index') . fs_filehandler::NewLine();
+				$line .= SentoraOneLine(ctrl_options::GetSystemOption('dir_index')) . fs_filehandler::NewLine();
 				// Client custom vh entry
 				$line .= "# Custom VH settings (if any exist)" . fs_filehandler::NewLine();
-				$line .= SentoraNoModPhp($rowvhost['vh_custom_tx']) . fs_filehandler::NewLine();
+				$line .= SentoraSafeCustom($rowvhost['vh_custom_tx']) . fs_filehandler::NewLine();
 				$line .= "</virtualhost>" . fs_filehandler::NewLine();
 				
 				############################## add back old code
@@ -581,7 +687,7 @@ function WriteVhostConfigFile() {
 				$line .= "    Require all granted" . fs_filehandler::NewLine();
 				$line .= "</Directory>" . fs_filehandler::NewLine();
 				$line .= sys_accountphp::PanelHandler();
-				$line .= ctrl_options::GetSystemOption('dir_index') . fs_filehandler::NewLine();
+				$line .= SentoraOneLine(ctrl_options::GetSystemOption('dir_index')) . fs_filehandler::NewLine();
 				
 				# SSL Settings
 				$line .= "# SSL settings (if any exist)" . fs_filehandler::NewLine();
@@ -590,7 +696,7 @@ function WriteVhostConfigFile() {
 				
 				// Client custom vh entry
 				$line .= "# Custom VH settings (if any exist)" . fs_filehandler::NewLine();
-				$line .= SentoraNoModPhp($rowvhost['vh_custom_tx']) . fs_filehandler::NewLine();
+				$line .= SentoraSafeCustom($rowvhost['vh_custom_tx']) . fs_filehandler::NewLine();
 				$line .= "</virtualhost>" . fs_filehandler::NewLine();
 				
 				############################## add back old code
@@ -634,13 +740,13 @@ function WriteVhostConfigFile() {
 				$line .= "    Require all granted" . fs_filehandler::NewLine();
 				$line .= "</Directory>" . fs_filehandler::NewLine();
 				$line .= sys_accountphp::PanelHandler();
-				$line .= ctrl_options::GetSystemOption('dir_index') . fs_filehandler::NewLine();
+				$line .= SentoraOneLine(ctrl_options::GetSystemOption('dir_index')) . fs_filehandler::NewLine();
 				// Global custom global vh entry
 				$line .= "# Custom Global Settings (if any exist)" . fs_filehandler::NewLine();
-				$line .= SentoraNoModPhp(ctrl_options::GetSystemOption('global_vhcustom')) . fs_filehandler::NewLine();
+				$line .= SentoraSafeCustom(ctrl_options::GetSystemOption('global_vhcustom')) . fs_filehandler::NewLine();
 				// Client custom vh entry
 				$line .= "# Custom VH settings (if any exist)" . fs_filehandler::NewLine();
-				$line .= SentoraNoModPhp($rowvhost['vh_custom_tx']) . fs_filehandler::NewLine();
+				$line .= SentoraSafeCustom($rowvhost['vh_custom_tx']) . fs_filehandler::NewLine();
 				$line .= "</virtualhost>" . fs_filehandler::NewLine();
 				
 				############################## add back old code
@@ -677,7 +783,7 @@ function WriteVhostConfigFile() {
 				$line .= "    Require all granted" . fs_filehandler::NewLine();
 				$line .= "</Directory>" . fs_filehandler::NewLine();
 				$line .= sys_accountphp::PanelHandler();
-				$line .= ctrl_options::GetSystemOption('dir_index') . fs_filehandler::NewLine();
+				$line .= SentoraOneLine(ctrl_options::GetSystemOption('dir_index')) . fs_filehandler::NewLine();
 				
 				# SSL Settings
 				$line .= "# SSL settings (if any exist)" . fs_filehandler::NewLine();
@@ -686,10 +792,10 @@ function WriteVhostConfigFile() {
 				
 				// Global custom global vh entry
 				$line .= "# Custom Global Settings (if any exist)" . fs_filehandler::NewLine();
-				$line .= SentoraNoModPhp(ctrl_options::GetSystemOption('global_vhcustom')) . fs_filehandler::NewLine();
+				$line .= SentoraSafeCustom(ctrl_options::GetSystemOption('global_vhcustom')) . fs_filehandler::NewLine();
 				// Client custom vh entry
 				$line .= "# Custom VH settings (if any exist)" . fs_filehandler::NewLine();
-				$line .= SentoraNoModPhp($rowvhost['vh_custom_tx']) . fs_filehandler::NewLine();
+				$line .= SentoraSafeCustom($rowvhost['vh_custom_tx']) . fs_filehandler::NewLine();
 				$line .= "</virtualhost>" . fs_filehandler::NewLine();
 				
 				############################## add back old code
@@ -744,13 +850,17 @@ function WriteVhostConfigFile() {
 					fs_director::CreateDirectory(ctrl_options::GetSystemOption('log_dir') . "domains/" . $vhostuser['username'] . "/");
 				}
 				$line .= 'ErrorLog "' . ctrl_options::GetSystemOption('log_dir') . "domains/" . $vhostuser['username'] . "/" . $rowvhost['vh_name_vc'] . '-error.log" ' . fs_filehandler::NewLine();
-				$line .= 'CustomLog "' . ctrl_options::GetSystemOption('log_dir') . "domains/" . $vhostuser['username'] . "/" . $rowvhost['vh_name_vc'] . '-access.log" ' . ctrl_options::GetSystemOption('access_log_format') . fs_filehandler::NewLine();
-				$line .= 'CustomLog "' . ctrl_options::GetSystemOption('log_dir') . "domains/" . $vhostuser['username'] . "/" . $rowvhost['vh_name_vc'] . '-bandwidth.log" ' . ctrl_options::GetSystemOption('bandwidth_log_format') . fs_filehandler::NewLine();
+				$line .= 'CustomLog "' . ctrl_options::GetSystemOption('log_dir') . "domains/" . $vhostuser['username'] . "/" . $rowvhost['vh_name_vc'] . '-access.log" ' . SentoraOneLine(ctrl_options::GetSystemOption('access_log_format')) . fs_filehandler::NewLine();
+				$line .= 'CustomLog "' . ctrl_options::GetSystemOption('log_dir') . "domains/" . $vhostuser['username'] . "/" . $rowvhost['vh_name_vc'] . '-bandwidth.log" ' . SentoraOneLine(ctrl_options::GetSystemOption('bandwidth_log_format')) . fs_filehandler::NewLine();
 		
 				// Directory options
 				$line .= '<Directory ' . $RootDir . '>' . fs_filehandler::NewLine();
-				$line .= "    Options +FollowSymLinks -Indexes" . fs_filehandler::NewLine();
-				$line .= "    AllowOverride All" . fs_filehandler::NewLine();
+				// Symbolic links only when the link and its target have the same owner:
+				// Apache can read every account, so following any link would let one
+				// account serve another account's files. .htaccess may not turn that back
+				// on (Options FollowSymLinks there gives an error; use SymLinksIfOwnerMatch).
+				$line .= "    Options -Indexes +SymLinksIfOwnerMatch" . fs_filehandler::NewLine();
+				$line .= "    AllowOverride AuthConfig FileInfo Indexes Limit Options=Indexes,MultiViews,SymLinksIfOwnerMatch" . fs_filehandler::NewLine();
 				$line .= "    Require all granted" . fs_filehandler::NewLine();
 				$line .= "</Directory>" . fs_filehandler::NewLine();
 				
@@ -800,15 +910,15 @@ function WriteVhostConfigFile() {
 				}
 		
 				// Directory indexes
-				$line .= ctrl_options::GetSystemOption('dir_index') . fs_filehandler::NewLine();
+				$line .= SentoraOneLine(ctrl_options::GetSystemOption('dir_index')) . fs_filehandler::NewLine();
 		
 				// Global custom global vh entry
 				$line .= "# Custom Global Settings (if any exist)" . fs_filehandler::NewLine();
-				$line .= SentoraNoModPhp(ctrl_options::GetSystemOption('global_vhcustom')) . fs_filehandler::NewLine();
+				$line .= SentoraSafeCustom(ctrl_options::GetSystemOption('global_vhcustom')) . fs_filehandler::NewLine();
 		
 				// Client custom vh entry
 				$line .= "# Custom VH settings (if any exist)" . fs_filehandler::NewLine();
-				$line .= SentoraNoModPhp($rowvhost['vh_custom_tx']) . fs_filehandler::NewLine();
+				$line .= SentoraSafeCustom($rowvhost['vh_custom_tx']) . fs_filehandler::NewLine();
 		
 				// End Virtual Host Settings
 				$line .= "</virtualhost>" . fs_filehandler::NewLine();
@@ -855,13 +965,17 @@ function WriteVhostConfigFile() {
 					fs_director::CreateDirectory(ctrl_options::GetSystemOption('log_dir') . "domains/" . $vhostuser['username'] . "/");
 				}
 				$line .= 'ErrorLog "' . ctrl_options::GetSystemOption('log_dir') . "domains/" . $vhostuser['username'] . "/" . $rowvhost['vh_name_vc'] . '-error.log" ' . fs_filehandler::NewLine();
-				$line .= 'CustomLog "' . ctrl_options::GetSystemOption('log_dir') . "domains/" . $vhostuser['username'] . "/" . $rowvhost['vh_name_vc'] . '-access.log" ' . ctrl_options::GetSystemOption('access_log_format') . fs_filehandler::NewLine();
-				$line .= 'CustomLog "' . ctrl_options::GetSystemOption('log_dir') . "domains/" . $vhostuser['username'] . "/" . $rowvhost['vh_name_vc'] . '-bandwidth.log" ' . ctrl_options::GetSystemOption('bandwidth_log_format') . fs_filehandler::NewLine();
+				$line .= 'CustomLog "' . ctrl_options::GetSystemOption('log_dir') . "domains/" . $vhostuser['username'] . "/" . $rowvhost['vh_name_vc'] . '-access.log" ' . SentoraOneLine(ctrl_options::GetSystemOption('access_log_format')) . fs_filehandler::NewLine();
+				$line .= 'CustomLog "' . ctrl_options::GetSystemOption('log_dir') . "domains/" . $vhostuser['username'] . "/" . $rowvhost['vh_name_vc'] . '-bandwidth.log" ' . SentoraOneLine(ctrl_options::GetSystemOption('bandwidth_log_format')) . fs_filehandler::NewLine();
 		
 				// Directory options
 				$line .= '<Directory ' . $RootDir . '>' . fs_filehandler::NewLine();
-				$line .= "    Options +FollowSymLinks -Indexes" . fs_filehandler::NewLine();
-				$line .= "    AllowOverride All" . fs_filehandler::NewLine();
+				// Symbolic links only when the link and its target have the same owner:
+				// Apache can read every account, so following any link would let one
+				// account serve another account's files. .htaccess may not turn that back
+				// on (Options FollowSymLinks there gives an error; use SymLinksIfOwnerMatch).
+				$line .= "    Options -Indexes +SymLinksIfOwnerMatch" . fs_filehandler::NewLine();
+				$line .= "    AllowOverride AuthConfig FileInfo Indexes Limit Options=Indexes,MultiViews,SymLinksIfOwnerMatch" . fs_filehandler::NewLine();
 				$line .= "    Require all granted" . fs_filehandler::NewLine();
 				$line .= "</Directory>" . fs_filehandler::NewLine();
 		
@@ -909,7 +1023,7 @@ function WriteVhostConfigFile() {
 				}
 		
 				// Directory indexes
-				$line .= ctrl_options::GetSystemOption('dir_index') . fs_filehandler::NewLine();
+				$line .= SentoraOneLine(ctrl_options::GetSystemOption('dir_index')) . fs_filehandler::NewLine();
 		
 				# SSL Settings
 				$line .= "# SSL settings (if any exist)" . fs_filehandler::NewLine();
@@ -918,11 +1032,11 @@ function WriteVhostConfigFile() {
 		
 				// Global custom global vh entry
 				$line .= "# Custom Global Settings (if any exist)" . fs_filehandler::NewLine();
-				$line .= SentoraNoModPhp(ctrl_options::GetSystemOption('global_vhcustom')) . fs_filehandler::NewLine();
+				$line .= SentoraSafeCustom(ctrl_options::GetSystemOption('global_vhcustom')) . fs_filehandler::NewLine();
 		
 				// Client custom vh entry
 				$line .= "# Custom VH settings (if any exist)" . fs_filehandler::NewLine();
-				$line .= SentoraNoModPhp($rowvhost['vh_custom_tx']) . fs_filehandler::NewLine();
+				$line .= SentoraSafeCustom($rowvhost['vh_custom_tx']) . fs_filehandler::NewLine();
 		
 				// End Virtual Host Settings
 				$line .= "</virtualhost>" . fs_filehandler::NewLine();
@@ -967,10 +1081,10 @@ function WriteVhostConfigFile() {
 				$line .= "    AllowOverride All" . fs_filehandler::NewLine();
 				$line .= "    Require all granted" . fs_filehandler::NewLine();
 				$line .= "</Directory>" . fs_filehandler::NewLine();
-				$line .= ctrl_options::GetSystemOption('dir_index') . fs_filehandler::NewLine();
+				$line .= SentoraOneLine(ctrl_options::GetSystemOption('dir_index')) . fs_filehandler::NewLine();
 				// Client custom vh entry
 				$line .= "# Custom VH settings (if any exist)" . fs_filehandler::NewLine();
-				$line .= SentoraNoModPhp($rowvhost['vh_custom_tx']) . fs_filehandler::NewLine();
+				$line .= SentoraSafeCustom($rowvhost['vh_custom_tx']) . fs_filehandler::NewLine();
 				$line .= "</virtualhost>" . fs_filehandler::NewLine();
 				
 				############################## add back old code
@@ -1003,7 +1117,7 @@ function WriteVhostConfigFile() {
 				$line .= "    AllowOverride All" . fs_filehandler::NewLine();
 				$line .= "    Require all granted" . fs_filehandler::NewLine();
 				$line .= "</Directory>" . fs_filehandler::NewLine();
-				$line .= ctrl_options::GetSystemOption('dir_index') . fs_filehandler::NewLine();
+				$line .= SentoraOneLine(ctrl_options::GetSystemOption('dir_index')) . fs_filehandler::NewLine();
 				
 				# SSL Settings
 				$line .= "# SSL settings (if any exist)" . fs_filehandler::NewLine();
@@ -1012,7 +1126,7 @@ function WriteVhostConfigFile() {
 				
 				// Client custom vh entry
 				$line .= "# Custom VH settings (if any exist)" . fs_filehandler::NewLine();
-				$line .= SentoraNoModPhp($rowvhost['vh_custom_tx']) . fs_filehandler::NewLine();
+				$line .= SentoraSafeCustom($rowvhost['vh_custom_tx']) . fs_filehandler::NewLine();
 				$line .= "</virtualhost>" . fs_filehandler::NewLine();
 				
 				############################## add back old code
@@ -1159,6 +1273,8 @@ function CheckApacheVhostConfig() {
 	} else { # Linux systems
 		$command = "apachectl";
 		$args = "configtest";
+	// New domain log folders made above: root's and the panel's only, before Apache opens them
+	sys_accountphp::LockSharedFolders();
 
 		$ConfigReturnValue = ctrl_system::systemCommand($command, $args);
 	}

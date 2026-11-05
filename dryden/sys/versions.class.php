@@ -146,6 +146,12 @@ class sys_versions {
     static function ShowSentoraVersion() {
         return ctrl_options::GetSystemOption('dbversion');
     }
+
+    /** the release's full name, as shown to people: Sentora-2027 */
+    static function ShowSentoraName() {
+        $v = (string) self::ShowSentoraVersion();
+        return ($v === '') ? 'Sentora' : 'Sentora-' . $v;
+    }
 }
 
 ?>

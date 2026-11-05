@@ -51,27 +51,10 @@ if (ui_module::CheckModuleEnabled('Backup Config')) {
             $bsql->execute();
             echo "[FILE][PURGE_DATE][FILE_DATE][ACTION]" . fs_filehandler::NewLine();
             while ($rowclients = $bsql->fetch()) {
-                $username = $rowclients['ac_user_vc'];
-                $backupdir = ctrl_options::GetSystemOption('hosted_dir') . $username . "/backups/";
-                if ($handle = @opendir($backupdir)) {
-                    while (false !== ($file = readdir($handle))) {
-                        if ($file != "." && $file != "..") {
-                            $filetime = @filemtime($backupdir . $file);
-                            if ($filetime == NULL) {
-                                $filetime = @filemtime(mb_convert_encoding($backupdir . $file, 'ISO-8859-1', 'UTF-8'));
-                            }
-                            $filetime = floor((time() - $filetime) / 86400);
-                            echo "" . $file . " - " . $purge_date . " - " . $filetime . "";
-                            if ($purge_date < $filetime) {
-                                //delete the file
-                                echo " - Deleting file..." . fs_filehandler::NewLine();
-                                unlink($backupdir . $file);
-                            } else {
-                                echo " - Skipping file..." . fs_filehandler::NewLine();
-                            }
-                        }
-                    }
-                }
+                // backups older than the purge age, in the account's real backups folder
+                // only (never through a link a site put in its place: this runs as root)
+                $n = sys_backup::Purge($rowclients['ac_user_vc'], (int) $purge_date);
+                echo $rowclients['ac_user_vc'] . ": " . $n . " old backup(s) removed" . fs_filehandler::NewLine();
             }
         }
         echo "Backup Purging COMPLETE..." . fs_filehandler::NewLine();

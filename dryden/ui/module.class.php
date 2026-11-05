@@ -79,8 +79,10 @@ class ui_module {
             $module_version = $mod_config->document->version[0]->tagData;
             $module_description = $mod_config->document->desc[0]->tagData;
             $module_defaultcat = $mod_config->document->defaultcat[0]->tagData;
-            $module_type = $mod_config->document->type[0]->tagData;
-            if ($module_type != ("user" || "system" || "modadmin")) {
+            // The type tag is optional (most module.xml files have none): one of the three
+            // known types, otherwise "user" (the old check compared with true, so let anything through)
+            $module_type = isset($mod_config->document->type[0]) ? trim((string) $mod_config->document->type[0]->tagData) : '';
+            if (!in_array($module_type, array('user', 'system', 'modadmin'), true)) {
                 $module_type = "user";
             }
             $sql = $zdbh->prepare("SELECT mc_id_pk FROM x_modcats WHERE mc_name_vc = :module_defaultcat");

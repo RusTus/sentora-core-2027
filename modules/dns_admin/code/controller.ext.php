@@ -187,9 +187,9 @@ class module_controller extends ctrl_module
         $line .= "</table>";
         $line .= "</td><td>";
         if (fs_director::CheckForEmptyValue(sys_monitoring::PortStatus(53))) {
-            $line .= "<img src=\"/modules/" . $controller->GetControllerRequest('URL', 'module') . "/assets/down.png\" border=\"0\"/>";
+            $line .= ui_status::Bad('The DNS service is not running');
         } else {
-            $line .= "<img src=\"/modules/" . $controller->GetControllerRequest('URL', 'module') . "/assets/up.png\" border=\"0\"/>";
+            $line .= ui_status::Ok('The DNS service is running');
         }
         $line .="</td></tr></table>";
         $line .= "</form>";

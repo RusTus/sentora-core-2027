@@ -30,370 +30,216 @@
  * - reformated header inserted in crontab file (heading spaces and wrong EOL encoding)
  * - removed daemon task that is handled by independant crontab /etc/cron.d/zdaemon (linux)
  */
+require_once dirname(__FILE__) . '/cronsafe.php';
+
+/**
+ * Cron Manager: an account's scheduled PHP scripts. A script is picked from the
+ * account's own public_html in a file browser (code/files.php); everything is checked
+ * again here when it is saved (cron_safe). The daemon writes the jobs to
+ * /etc/cron.d/sentora-accounts within 5 minutes, each running as the account's own
+ * user, limited to its folder, with the PHP version of the domain the script is in
+ * (sys_accountphp::SyncCron). Server paths are never shown: only public_html/...
+ */
 class module_controller extends ctrl_module
 {
+    const MAX_JOBS = 50;
+    static $msg = array();
 
-    static $error;
-    static $noexists;
-    static $cronnoexists;
-    static $cronnowrite;
-    static $alreadyexists;
-    static $blank;
-    static $ok;
+    static function h($s)
+    {
+        return htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
+    }
+
+    static function t($s)
+    {
+        return ui_language::translate($s);
+    }
+
+    static function Me()
+    {
+        return ctrl_users::GetUserDetail();
+    }
+
+    /** the path shown for a job: relative to public_html, from what was stored */
+    static function ShownPath($row, $username)
+    {
+        $root = pd_safe::PublicRoot($username) . '/';
+        $full = (string) $row['ct_fullpath_vc'];
+        $rel = (strpos($full, $root) === 0) ? substr($full, strlen($root)) : ltrim((string) $row['ct_script_vc'], '/');
+        return 'public_html/' . $rel;
+    }
+
+    /** which PHP runs a job: the version of the domain its script is in, else the system PHP */
+    static function PhpFor($accountId, $username, $full)
+    {
+        global $zdbh;
+        $root = pd_safe::PublicRoot($username) . '/';
+        $best = '';
+        $version = '';
+        $q = $zdbh->prepare("SELECT vh_directory_vc, vh_php_version_vc FROM x_vhosts WHERE vh_acc_fk = :a AND vh_deleted_ts IS NULL AND vh_type_in IN (1, 2)");
+        $q->execute(array(':a' => (int) $accountId));
+        foreach ($q->fetchAll(PDO::FETCH_ASSOC) as $d) {
+            $dir = $root . trim((string) $d['vh_directory_vc'], '/') . '/';
+            if (strpos($full, $dir) === 0 && strlen($dir) > strlen($best)) {
+                $best = $dir;
+                $version = (string) $d['vh_php_version_vc'];
+            }
+        }
+        $default = sys_phpversions::DefaultVersion();
+        if ($version !== '' && $version !== $default && sys_phpversions::IsEnabled($version) && is_executable(sys_phpversions::BASE_DIR . $version . '/bin/php')) {
+            return 'PHP ' . $version;
+        }
+        return 'PHP ' . $default;
+    }
 
     static function getCrons()
     {
         global $zdbh;
-        global $controller;
-        $currentuser = ctrl_users::GetUserDetail();
-        $line = "<h2>" . ui_language::translate("Current Cron Tasks") . "</h2>";
-        $sql = "SELECT COUNT(*) FROM x_cronjobs WHERE ct_acc_fk=:userid AND ct_deleted_ts IS NULL";
-        $numrows = $zdbh->prepare($sql);
-        $numrows->bindParam(':userid', $currentuser['userid']);
-
-        if ($numrows->execute()) {
-            if ($numrows->fetchColumn() <> 0) {
-
-                $sql = $zdbh->prepare("SELECT * FROM x_cronjobs WHERE ct_acc_fk=:userid AND ct_deleted_ts IS NULL");
-                $sql->bindParam(':userid', $currentuser['userid']);
-                $sql->execute();
-                $line .= "<form action=\"./?module=cron&action=DeleteCron\" method=\"post\">";
-                $line .= "<table class=\"table table-striped\">";
-                $line .= "<tr>";
-                $line .= "<th>" . ui_language::translate("Script") . "</th>";
-                $line .= "<th>" . ui_language::translate("Timing") . "</th>";
-                $line .= "<th>" . ui_language::translate("Description") . "</th>";
-                $line .= "<th></th>";
-                $line .= "</tr>";
-                while ($rowcrons = $sql->fetch()) {
-                    $line .= "<tr>";
-                    $line .= "<td>" . $rowcrons['ct_script_vc'] . "</td>";
-                    $line .= "<td>" . ui_language::translate(self::TranslateTiming($rowcrons['ct_timing_vc'])) . "</td>";
-                    $line .= "<td>" . htmlspecialchars((string) $rowcrons['ct_description_tx'], ENT_QUOTES, 'UTF-8') . "</td>";
-                    $line .= "<td><button class=\"button-loader delete btn btn-danger\" type=\"submit\" name=\"inDelete_" . $rowcrons['ct_id_pk'] . "\" id=\"button\" value=\"inDelete_" . $rowcrons['ct_id_pk'] . "\">" . ui_language::translate("Delete") . "</button></td>";
-                    $line .= "</tr>";
-                }
-                $line .= "</table>";
-                $line .= runtime_csfr::Token();
-                $line .= "</form>";
-            } else {
-                $line .= ui_language::translate("You currently do not have any tasks setup.");
-            }
-            return $line;
+        $me = self::Me();
+        $q = $zdbh->prepare("SELECT * FROM x_cronjobs WHERE ct_acc_fk = :a AND ct_deleted_ts IS NULL ORDER BY ct_id_pk");
+        $q->execute(array(':a' => (int) $me['userid']));
+        $rows = $q->fetchAll(PDO::FETCH_ASSOC);
+        $out = '<h2>' . self::t('Current tasks') . '</h2>';
+        if (!$rows) {
+            return $out . '<p class="text-muted">' . self::t('You have no scheduled tasks yet.') . '</p>';
         }
+        $min = sys_accountphp::CronSettings()['cron_min_interval'];
+        $out .= '<table class="table table-striped"><tr><th>' . self::t('Script') . '</th><th>' . self::t('Runs') . '</th><th>' . self::t('With') . '</th><th>'
+            . self::t('Last run') . '</th><th>' . self::t('Description') . '</th><th></th></tr>';
+        foreach ($rows as $r) {
+            $slower = (sys_accountphp::CronEvery((string) $r['ct_timing_vc']) < $min)
+                ? '<br><span class="text-muted">' . self::h(self::t('the server runs it every') . ' ' . $min . ' ' . self::t('minutes')) . '</span>' : '';
+            $log = cron_safe::ReadLog($me['username'], $me['userid'], (int) $r['ct_id_pk'], 4096);
+            if ($log === false) {
+                $last = '<span class="text-muted">' . self::t('not yet') . '</span>';
+            } else {
+                list($state, $text) = cron_safe::LogResult($log[0]);
+                $icon = ($state === 'ok') ? ui_status::Ok('Finished') : (($state === 'running') ? ui_status::Warn('Running') : ui_status::Bad('Problem'));
+                $last = $icon . ' ' . self::h(date('Y-m-d H:i', (int) $log[1])) . '<br><span class="text-muted">' . self::h(self::t($text)) . '</span>'
+                    . ' <a href="./?module=cron&amp;log=' . (int) $r['ct_id_pk'] . '#output">' . self::t('Output') . '</a>';
+            }
+            $out .= '<tr><td><code>' . self::h(self::ShownPath($r, $me['username'])) . '</code></td>'
+                . '<td>' . self::h(self::t(cron_safe::TimingLabel((string) $r['ct_timing_vc']))) . $slower . '</td>'
+                . '<td>' . self::h(self::PhpFor($me['userid'], $me['username'], (string) $r['ct_fullpath_vc'])) . '</td>'
+                . '<td>' . $last . '</td>'
+                . '<td>' . self::h($r['ct_description_tx']) . '</td>'
+                . '<td><form method="post" action="./?module=cron&amp;action=DeleteCron" style="display:inline" onsubmit="return confirm(\'' . self::h(self::t('Delete this task?')) . '\');">'
+                . '<input type="hidden" name="inJob" value="' . (int) $r['ct_id_pk'] . '">' . runtime_csfr::Token()
+                . '<button class="btn btn-danger btn-sm" type="submit">' . self::t('Delete') . '</button></form></td></tr>';
+        }
+        $lim = sys_accountphp::CronSettings();
+        $out .= '</table><p class="text-muted">' . self::h(self::t('New tasks and changes start within 5 minutes. A run is skipped while the previous one is still running, and stopped after') . ' '
+            . $lim['cron_max_runtime'] . ' ' . self::t('minutes') . '.') . '</p>';
+        return $out . self::Output($rows, $me);
+    }
+
+    /** the last run's output of one of the account's tasks (?log=<id>) */
+    static function Output($rows, $me)
+    {
+        global $controller;
+        $id = (int) $controller->GetControllerRequest('URL', 'log');
+        if ($id < 1) {
+            return '';
+        }
+        foreach ($rows as $r) {
+            if ((int) $r['ct_id_pk'] === $id) {
+                $log = cron_safe::ReadLog($me['username'], $me['userid'], $id);
+                return '<div id="output" style="margin: 10px 0 20px;"><h3>' . self::t('Last output of') . ' <code>' . self::h(self::ShownPath($r, $me['username'])) . '</code></h3>'
+                    . ($log === false ? '<p class="text-muted">' . self::t('It has not run yet.') . '</p>'
+                        : '<pre style="max-height: 420px; overflow: auto; white-space: pre-wrap;">' . self::h($log[0]) . '</pre>')
+                    . '<a class="btn btn-default btn-sm" href="./?module=cron">' . self::t('Close') . '</a></div>';
+            }
+        }
+        return '';
     }
 
     static function getCreateCron()
     {
-        global $zdbh;
-        global $controller;
-        $currentuser = ctrl_users::GetUserDetail();
+        $opts = '';
+        $min = sys_accountphp::CronSettings()['cron_min_interval'];
+        foreach (self::Allowed() as $value => $label) {
+            $opts .= '<option value="' . self::h($value) . '"' . ($value === '0 * * * *' ? ' selected' : '') . '>' . self::h(self::t($label)) . '</option>';
+        }
+        return '<link rel="stylesheet" href="modules/protected_directories/assets/tree.css">'
+            . '<h2>' . self::t('Schedule a script') . '</h2>'
+            . '<form id="cr-form" method="post" action="./?module=cron&amp;action=CreateCron"><table class="table">'
+            . '<tr><th style="width: 180px;">' . self::t('Script') . '</th><td>'
+            . '<p class="text-muted" style="margin-top: 0;">' . self::t('Open your folders and click the PHP file to run.') . '</p>'
+            . '<div class="pd-tree" id="cr-tree" data-url="modules/cron/code/files.php"><div class="pd-loading">' . self::t('Loading...') . '</div></div>'
+            . '<div class="pd-chosen">' . self::t('Chosen') . ': <code id="cr-chosen" class="text-muted">' . self::t('nothing yet') . '</code></div>'
+            . '<input type="hidden" name="inScript" id="cr-path" value=""></td></tr>'
+            . '<tr><th>' . self::t('Runs') . '</th><td><select class="form-control" name="inTiming" style="max-width: 320px;">' . $opts . '</select>'
+            . '<span class="text-muted">' . self::t('Server time') . ': ' . self::h(date('H:i T')) . '</span></td></tr>'
+            . '<tr><th>' . self::t('Description') . '</th><td><input class="form-control" name="inDescription" maxlength="100" style="max-width: 420px;" placeholder="' . self::h(self::t('optional, for example: clear the cache')) . '"></td></tr>'
+            . '<tr><td colspan="2">' . runtime_csfr::Token() . '<button class="btn btn-primary" type="submit" id="cr-submit" disabled>' . self::t('Schedule') . '</button> '
+            . '<span class="text-muted">' . self::t('The script runs as your account, with your domain\'s PHP version, and can only use files in your account.') . '</span></td></tr>'
+            . '</table></form><script src="modules/cron/assets/files.js"></script>';
+    }
 
-        $line = "<h2>Create a new task</h2>";
-        $line .= "<form action=\"./?module=cron&action=CreateCron\" method=\"post\">";
-        $line .= "<table class=\"table table-striped\">";
-        $line .= "<tr valign=\"top\">";
-        $line .= "<th>" . ui_language::translate("Script") . ":</th>";
-        $line .= '<td><input name="inScript" type="text" id="inScript" size="50" /><br />'
-                . ui_language::translate("example") . ': /folder/task.php<br>'
-                . ui_language::translate('Note 1 : Script path is relative to your sentora-user root directory:') . '<br>'
-                . ' &nbsp; <b>' . ctrl_options::GetSystemOption('hosted_dir') . $currentuser['username'] . '/public_html/</b><br>'
-                . ui_language::translate('Note 2 : Each file access in your script must use absolute directory path as above.')
-                . '</td>';
-        $line .= "</tr>";
-        $line .= "<tr>";
-        $line .= "<th>" . ui_language::translate("Comment") . ":</th>";
-        $line .= "<td><input name=\"inDescription\" type=\"text\" id=\"inDescription\" size=\"50\" maxlength=\"50\" /></td>";
-        $line .= "</tr>";
-        $line .= "<tr>";
-        $line .= "<th>" . ui_language::translate("Executed") . ":</th>";
-        $line .= "<td><select name=\"inTiming\" id=\"inTiming\">";
-        $line .= "<option value=\"* * * * *\">" . ui_language::translate("Every 1 minute") . "</option>";
-        $line .= "<option value=\"0,5,10,15,20,25,30,35,40,45,50,55 * * * *\">" . ui_language::translate("Every 5 minutes") . "</option>";
-        $line .= "<option value=\"0,10,20,30,40,50 * * * *\">" . ui_language::translate("Every 10 minutes") . "</option>";
-        $line .= "<option value=\"0,30 * * * *\">" . ui_language::translate("Every 30 minutes") . "</option>";
-        $line .= "<option value=\"0 * * * *\">" . ui_language::translate("Every 1 hour") . "</option>";
-        $line .= "<option value=\"0 0,2,4,6,8,10,12,14,16,18,20,22 * * *\">" . ui_language::translate("Every 2 hours") . "</option>";
-        $line .= "<option value=\"0 0,8,16 * * *\">" . ui_language::translate("Every 8 hours") . "</option>";
-        $line .= "<option value=\"0 0,12 * * *\">" . ui_language::translate("Every 12 hours") . "</option>";
-        $line .= "<option value=\"0 0 * * *\">" . ui_language::translate("Every 1 day") . "</option>";
-        $line .= "<option value=\"0 0 * * 0\">" . ui_language::translate("Every week") . "</option>";
-        $line .="<option value=\"0 0 1 * *\">" . ui_language::translate("Every month") . "</option>";
-        $line .= "</select></td>";
-        $line .= "</tr>";
-        $line .= "<tr>";
-        $line .= "<th colspan=\"2\" align=\"right\"><input type=\"hidden\" name=\"inReturn\" value=\"GetFullURL\" />";
-        $line .= "<input type=\"hidden\" name=\"inUserID\" value=\"" . $currentuser['userid'] . "\" />";
-        $line .= runtime_csfr::Token();
-        $line .= "<button class=\"button-loader btn btn-primary\" type=\"submit\" id=\"button\">" . ui_language::translate("Create") . "</button></th>";
-        $line .= "</tr>";
-        $line .= "</table>";
-        $line .= "</form>";
-
-        return $line;
+    /** the timings offered, without those more often than the server allows */
+    static function Allowed()
+    {
+        $min = sys_accountphp::CronSettings()['cron_min_interval'];
+        return array_filter(cron_safe::Timings(), function ($t) use ($min) { return sys_accountphp::CronEvery($t) >= $min; }, ARRAY_FILTER_USE_KEY);
     }
 
     static function doCreateCron()
     {
-        global $zdbh;
-        global $controller;
+        global $zdbh, $controller;
         runtime_csfr::Protect();
-        $currentuser = ctrl_users::GetUserDetail();
-        if (fs_director::CheckForEmptyValue(self::CheckCronForErrors())) {
-            // If the user submitted a 'new' request then we will simply add the cron task to the database...
-            $sql = $zdbh->prepare("INSERT INTO x_cronjobs (ct_acc_fk, ct_script_vc, ct_description_tx, ct_timing_vc, ct_fullpath_vc, ct_created_ts) VALUES (:userid, :script, :desc, :timing, :fullpath, " . time() . ")");
-            // The job always belongs to the logged-in account (this took inUserID from the form)
-            $sql->bindParam(':userid', $currentuser['userid']);
-            $sql->bindParam(':script', $controller->GetControllerRequest('FORM', 'inScript'));
-            $sql->bindParam(':desc', $controller->GetControllerRequest('FORM', 'inDescription'));
-            $sql->bindParam(':timing', $controller->GetControllerRequest('FORM', 'inTiming'));
-            $full_path = ctrl_options::GetSystemOption('hosted_dir') . $currentuser['username'] . "/public_html/" . $controller->GetControllerRequest('FORM', 'inScript');
-            $sql->bindParam(':fullpath', $full_path);
-            $sql->execute();
-            self::WriteCronFile();
-            self::$ok = TRUE;
+        $me = self::Me();
+        $rel = trim((string) $controller->GetControllerRequest('FORM', 'inScript'), '/');
+        $timing = (string) $controller->GetControllerRequest('FORM', 'inTiming');
+        $desc = trim(preg_replace('/[\x00-\x1f\x7f]+/', ' ', (string) $controller->GetControllerRequest('FORM', 'inDescription')));
+        $desc = function_exists('mb_substr') ? mb_substr($desc, 0, 100) : substr($desc, 0, 100);
+        if ($rel === '') {
+            self::$msg[] = array('error', 'Choose the script to run.');
             return;
         }
-        self::$error = TRUE;
-        return;
+        $full = cron_safe::ResolveFile($me['username'], $rel);
+        if ($full === false) {
+            self::$msg[] = array('error', 'That script can not be scheduled: it must be a .php file in your public_html (not a link), with only letters, digits, dots, dashes and underscores in its path.');
+            return;
+        }
+        if (!isset(self::Allowed()[$timing])) {
+            self::$msg[] = array('error', 'Choose how often it runs.');
+            return;
+        }
+        $q = $zdbh->prepare("SELECT COUNT(*) FROM x_cronjobs WHERE ct_acc_fk = :a AND ct_deleted_ts IS NULL");
+        $q->execute(array(':a' => (int) $me['userid']));
+        if ((int) $q->fetchColumn() >= self::MAX_JOBS) {
+            self::$msg[] = array('error', 'You have the most tasks an account can have (' . self::MAX_JOBS . '). Delete one first.');
+            return;
+        }
+        $q = $zdbh->prepare("SELECT COUNT(*) FROM x_cronjobs WHERE ct_acc_fk = :a AND ct_fullpath_vc = :f AND ct_timing_vc = :t AND ct_deleted_ts IS NULL");
+        $q->execute(array(':a' => (int) $me['userid'], ':f' => $full, ':t' => $timing));
+        if ((int) $q->fetchColumn() > 0) {
+            self::$msg[] = array('error', 'That script already runs at that timing.');
+            return;
+        }
+        $zdbh->prepare("INSERT INTO x_cronjobs (ct_acc_fk, ct_script_vc, ct_description_tx, ct_timing_vc, ct_fullpath_vc, ct_created_ts) VALUES (:a, :s, :d, :t, :f, :c)")
+            ->execute(array(':a' => (int) $me['userid'], ':s' => $rel, ':d' => $desc, ':t' => $timing, ':f' => $full, ':c' => time()));
+        self::$msg[] = array('ok', 'Scheduled: public_html/' . $rel . ', ' . strtolower(self::t(cron_safe::Timings()[$timing])) . '. It starts within 5 minutes.');
     }
 
     static function doDeleteCron()
     {
-        global $zdbh;
-        global $controller;
+        global $zdbh, $controller;
         runtime_csfr::Protect();
-        $currentuser = ctrl_users::GetUserDetail();
-        $sql = "SELECT COUNT(*) FROM x_cronjobs WHERE ct_acc_fk=:userid AND ct_deleted_ts IS NULL";
-        $numrows = $zdbh->prepare($sql);
-        $numrows->bindParam(':userid', $currentuser['userid']);
-        if ($numrows->execute()) {
-            if ($numrows->fetchColumn() <> 0) {
-                $sql = $zdbh->prepare("SELECT * FROM x_cronjobs WHERE ct_acc_fk=:userid AND ct_deleted_ts IS NULL");
-                $sql->bindParam(':userid', $currentuser['userid']);
-                $sql->execute();
-                while ($rowcrons = $sql->fetch()) {
-                    if (!fs_director::CheckForEmptyValue($controller->GetControllerRequest('FORM', 'inDelete_' . $rowcrons['ct_id_pk'] . ''))) {
-                        $sql2 = $zdbh->prepare("UPDATE x_cronjobs SET ct_deleted_ts=:time WHERE ct_id_pk=:cronid");
-                        $sql2->bindParam(':cronid', $rowcrons['ct_id_pk']);
-                        $sql2->bindParam(':time', time());
-                        $sql2->execute();
-                        self::WriteCronFile();
-                        self::$ok = TRUE;
-                        return;
-                    }
-                }
-            }
-        }
-        self::$error = TRUE;
-        return;
-    }
-
-    static function ValidScript($script)
-    {
-        $script = (string) $script;
-        return preg_match('#^[A-Za-z0-9_][A-Za-z0-9_./-]{0,250}\.php$#', $script) === 1
-            && strpos($script, '..') === false && strpos($script, '//') === false;
-    }
-
-    static function ValidTiming($timing)
-    {
-        return preg_match('#^[0-9*/,-]{1,40}( [0-9*/,-]{1,40}){4}$#', (string) $timing) === 1;
-    }
-
-    static function CheckCronForErrors()
-    {
-        global $zdbh;
-        global $controller;
-        $retval = FALSE;
-        //Try to create the cron file if it doesnt exist...
-        if (!file_exists(ctrl_options::GetSystemOption('cron_file'))) {
-            fs_filehandler::UpdateFile(ctrl_options::GetSystemOption('cron_file'), 0644, "");
-        }
-        $currentuser = ctrl_users::GetUserDetail();
-        // Check to make sure the cron is not blank before we go any further...
-        if ($controller->GetControllerRequest('FORM', 'inScript') == '') {
-            self::$blank = TRUE;
-            $retval = TRUE;
-        }
-        // A script path inside public_html and a plain five-field timing only: a
-        // newline, "..", quotes or spaces could otherwise write other crontab lines
-        if (!self::ValidScript($controller->GetControllerRequest('FORM', 'inScript'))
-            || !self::ValidTiming($controller->GetControllerRequest('FORM', 'inTiming'))) {
-            self::$noexists = TRUE;
-            $retval = TRUE;
-        }
-        // Check to make sure the cron script exists before we go any further...
-        if (!is_file(fs_director::RemoveDoubleSlash(fs_director::ConvertSlashes(ctrl_options::GetSystemOption('hosted_dir') . $currentuser['username'] . '/public_html/' . $controller->GetControllerRequest('FORM', 'inScript'))))) {
-            self::$noexists = TRUE;
-            $retval = TRUE;
-        }
-        // Check to see if creating system cron file was successful...
-        if (!is_file(ctrl_options::GetSystemOption('cron_file'))) {
-            self::$cronnoexists = TRUE;
-            $retval = TRUE;
-        }
-        // Check to makesystem cron file is writable...
-        if (!is_writable(ctrl_options::GetSystemOption('cron_file'))) {
-            self::$cronnowrite = TRUE;
-            $retval = TRUE;
-        }
-        // Check to make sure the cron is not a duplicate...
-        $sql = "SELECT COUNT(*) FROM x_cronjobs WHERE ct_acc_fk=:userid AND ct_script_vc=:inScript AND ct_deleted_ts IS NULL";
-        $numrows = $zdbh->prepare($sql);
-        $numrows->bindParam(':userid', $currentuser['userid']);
-        $numrows->bindParam(':inScript', $controller->GetControllerRequest('FORM', 'inScript'));
-        if ($numrows->execute()) {
-            if ($numrows->fetchColumn() <> 0) {
-                self::$alreadyexists = TRUE;
-                $retval = TRUE;
-            }
-        }
-        return $retval;
-    }
-
-    static function WriteCronFile()
-    {
-        global $zdbh;
-        $currentuser = ctrl_users::GetUserDetail();
-        $line = "";
-        $sql = "SELECT * FROM x_cronjobs WHERE ct_deleted_ts IS NULL";
-        $numrows = $zdbh->query($sql);
-
-        //common header whatever there are some cron task or not
-        if (sys_versions::ShowOSPlatformVersion() != "Windows") {
-            $line .= 'SHELL=/bin/bash' . fs_filehandler::NewLine();
-            $line .= 'PATH=/sbin:/bin:/usr/sbin:/usr/bin' . fs_filehandler::NewLine();
-            $line .= 'HOME=/' . fs_filehandler::NewLine();
-            $line .= fs_filehandler::NewLine();
-        }
-		
-		$restrictinfos = ctrl_options::GetSystemOption('php_exer') . " -d open_basedir=\"" . ctrl_options::GetSystemOption('hosted_dir') . $currentuser['username'] . "/" . ctrl_options::GetSystemOption('openbase_seperator') . ctrl_options::GetSystemOption('openbase_temp') . "\" ";
-
-
-        $line .= "#################################################################################" . fs_filehandler::NewLine();
-        $line .= "# CRONTAB FOR SENTORA CRON MANAGER MODULE                                        " . fs_filehandler::NewLine();
-        $line .= "# Module Developed by Bobby Allen, 17/12/2009                                    " . fs_filehandler::NewLine();
-        $line .= "# File automatically generated by Sentora " . sys_versions::ShowSentoraVersion() . fs_filehandler::NewLine();
-        if (sys_versions::ShowOSPlatformVersion() == "Windows") {
-            $line .= "# Cron Debug infomation can be found in file C:\WINDOWS\System32\crontab.txt " . fs_filehandler::NewLine();
-            $line .= "#################################################################################" . fs_filehandler::NewLine();
-            $line .= "" . ctrl_options::GetSystemOption('daemon_timing') . " " . $restrictinfos . ctrl_options::GetSystemOption('daemon_exer') . fs_filehandler::NewLine();
-        }
-        $line .= "#################################################################################" . fs_filehandler::NewLine();
-        $line .= "# NEVER MANUALLY REMOVE OR EDIT ANY OF THE CRON ENTRIES FROM THIS FILE,          " . fs_filehandler::NewLine();
-        $line .= "#  -> USE SENTORA INSTEAD! (Menu -> Advanced -> Cron Manager)                    " . fs_filehandler::NewLine();
-        $line .= "#################################################################################" . fs_filehandler::NewLine();
-
-        // The jobs themselves no longer go in the web server user's crontab: the
-        // daemon writes them to /etc/cron.d/sentora-accounts, each running as its
-        // account's own user (sys_accountphp::SyncCron), within 5 minutes
-        if (false) {
-            $sql = $zdbh->prepare($sql);
-            $sql->execute();
-            while ($rowcron = $sql->fetch()) {
-                $fetchRows = $zdbh->prepare("SELECT * FROM x_accounts WHERE ac_id_pk=:userid AND ac_deleted_ts IS NULL");
-                $fetchRows->bindParam(':userid', $rowcron['ct_acc_fk']);
-                $fetchRows->execute();
-                $rowclient = $fetchRows->fetch();
-                // Each job runs with its own owner's open_basedir (this used the user who
-                // saved last), and a job whose timing or path is not well formed is
-                // never written (a newline in either used to add any line to the crontab)
-                $jobuser = $rowclient ? (string) $rowclient['ac_user_vc'] : '';
-                $jobbase = ctrl_options::GetSystemOption('hosted_dir') . $jobuser . "/";
-                $jobOk = self::ValidTiming($rowcron['ct_timing_vc'])
-                    && preg_match('/^[A-Za-z0-9_-]{1,64}$/', $jobuser)
-                    && strpos($rowcron['ct_fullpath_vc'], $jobbase . 'public_html/') === 0
-                    && self::ValidScript(substr($rowcron['ct_fullpath_vc'], strlen($jobbase . 'public_html/')));
-                if ($rowclient && $rowclient['ac_enabled_in'] <> 0 && $jobOk) {
-                    $jobrestrict = ctrl_options::GetSystemOption('php_exer') . " -d open_basedir=\"" . $jobbase . ctrl_options::GetSystemOption('openbase_seperator') . ctrl_options::GetSystemOption('openbase_temp') . "\" ";
-                    $line .= "# CRON ID: " . $rowcron['ct_id_pk'] . fs_filehandler::NewLine();
-                    $line .= $rowcron['ct_timing_vc'] . " " . $jobrestrict . escapeshellarg($rowcron['ct_fullpath_vc']) . fs_filehandler::NewLine();
-                    $line .= "# END CRON ID: " . $rowcron['ct_id_pk'] . fs_filehandler::NewLine();
-                }
-            }
-        }
-        if (fs_filehandler::UpdateFile(ctrl_options::GetSystemOption('cron_file'), 0644, $line)) {
-            if (sys_versions::ShowOSPlatformVersion() != "Windows") {
-                $returnValue = ctrl_system::systemCommand(
-                                   ctrl_options::GetSystemOption('zsudo'), array(
-                                      ctrl_options::GetSystemOption('cron_reload_command'),
-                                      ctrl_options::GetSystemOption('cron_reload_flag'),
-                                      ctrl_options::GetSystemOption('cron_reload_user'),
-                                      ctrl_options::GetSystemOption('cron_reload_path'),
-                                   )
-                               );
-            }
-            return true;
-        } else {
-            return false;
-        }
-    }
-
-    static function TranslateTiming($timing)
-    {
-        $timing = trim($timing);
-        $retval = NULL;
-        if ($timing == "* * * * *") {
-            $retval = "Every 1 minute";
-        }
-        if ($timing == "0,5,10,15,20,25,30,35,40,45,50,55 * * * *") {
-            $retval = "Every 5 minutes";
-        }
-        if ($timing == "0,10,20,30,40,50 * * * *") {
-            $retval = "Every 10 minutes";
-        }
-        if ($timing == "0,30 * * * *") {
-            $retval = "Every 30 minutes";
-        }
-        if ($timing == "0 * * * *") {
-            $retval = "Every 1 hour";
-        }
-        if ($timing == "0 0,2,4,6,8,10,12,14,16,18,20,22 * * *") {
-            $retval = "Every 2 hours";
-        }
-        if ($timing == "0 0,8,16 * * *") {
-            $retval = "Every 8 hours";
-        }
-        if ($timing == "0 0,12 * * *") {
-            $retval = "Every 12 hours";
-        }
-        if ($timing == "0 0 * * *") {
-            $retval = "Every day";
-        }
-        if ($timing == "0 0 * * 0") {
-            $retval = "Every week";
-        }
-        if ($timing == "0 0 1 * *") {
-            $retval = "Every month";
-        }
-        return $retval;
+        $me = self::Me();
+        $id = (int) $controller->GetControllerRequest('FORM', 'inJob');
+        // only one of this account's own tasks
+        $q = $zdbh->prepare("UPDATE x_cronjobs SET ct_deleted_ts = :t WHERE ct_id_pk = :id AND ct_acc_fk = :a AND ct_deleted_ts IS NULL");
+        $q->execute(array(':t' => time(), ':id' => $id, ':a' => (int) $me['userid']));
+        self::$msg[] = ($q->rowCount() === 1) ? array('ok', 'Task deleted. It stops within 5 minutes.') : array('error', 'That task was not found.');
     }
 
     static function getResult()
     {
-        if (!fs_director::CheckForEmptyValue(self::$blank)) {
-            return ui_sysmessage::shout(ui_language::translate("<strong>Error:</strong> You need to specify a valid location for your script."), "zannounceerror");
+        $out = '';
+        foreach (self::$msg as $m) {
+            $out .= ui_sysmessage::shout(self::h(self::t($m[1])), $m[0] === 'ok' ? 'zannounceok' : 'zannounceerror');
         }
-        if (!fs_director::CheckForEmptyValue(self::$noexists)) {
-            return ui_sysmessage::shout(ui_language::translate("<strong>Error:</strong> Your script does not appear to exist at that location."), "zannounceerror");
-        }
-        if (!fs_director::CheckForEmptyValue(self::$cronnoexists)) {
-            return ui_sysmessage::shout(ui_language::translate("<strong>Error:</strong> System Cron file could not be created."), "zannounceerror");
-        }
-        if (!fs_director::CheckForEmptyValue(self::$cronnowrite)) {
-            return ui_sysmessage::shout(ui_language::translate("<strong>Error:</strong> Could not write to the System Cron file."), "zannounceerror");
-        }
-        if (!fs_director::CheckForEmptyValue(self::$alreadyexists)) {
-            return ui_sysmessage::shout(ui_language::translate("<strong>Error:</strong> You can not add the same cron task more than once."), "zannounceerror");
-        }
-        if (!fs_director::CheckForEmptyValue(self::$error)) {
-            return ui_sysmessage::shout(ui_language::translate("<strong>Error:</strong> There was an error updating the cron job."), "zannounceerror");
-        }
-        if (!fs_director::CheckForEmptyValue(self::$ok)) {
-            return ui_sysmessage::shout(ui_language::translate("<strong>Success:</strong> Cron updated successfully."), "zannounceok");
-        }
-        return;
+        return $out;
     }
-
 }

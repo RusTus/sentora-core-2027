@@ -10,7 +10,31 @@
  */
 echo fs_filehandler::NewLine() . "START SOGo settings." . fs_filehandler::NewLine();
 SentoraApplySOGoSettings();
+SentoraSOGoPasswordView();
 echo "END SOGo settings." . fs_filehandler::NewLine();
+
+/**
+ * SOGo checks mailbox logins through the view sentora_postfix.sogo_users. Mailbox
+ * passwords are now {SHA512-CRYPT} hashes, which keep their prefix in the view (SOGo
+ * reads the scheme from it); old {PLAIN-MD5} ones lose it, as before (checked with
+ * userPasswordAlgorithm = md5). Views made by older installers strip every prefix.
+ */
+function SentoraSOGoPasswordView()
+{
+    global $zdbh;
+    try {
+        $row = $zdbh->query("SHOW CREATE VIEW sentora_postfix.sogo_users")->fetch(PDO::FETCH_NUM);
+    } catch (Exception $e) {
+        return; // no SOGo view on this server
+    }
+    if (!$row || stripos((string) $row[1], 'case') !== false) {
+        return;
+    }
+    $zdbh->exec("CREATE OR REPLACE SQL SECURITY DEFINER VIEW sentora_postfix.sogo_users AS SELECT username AS c_uid, username AS c_name,
+        CASE WHEN password LIKE '{PLAIN-MD5}%' THEN SUBSTRING(password, 12) ELSE password END AS c_password,
+        COALESCE(NULLIF(name, ''), username) AS c_cn, username AS mail, domain AS c_domain FROM sentora_postfix.mailbox WHERE active = '1'");
+    echo "SOGo mailbox view updated for SHA-512 crypt passwords." . fs_filehandler::NewLine();
+}
 
 function SentoraSOGoOpt($name, $default)
 {
@@ -91,6 +115,7 @@ function SentoraApplySOGoSettings()
     }
     $new = substr($old, 0, $start) . $block . substr($old, $end + strlen("  /* --- end of Sentora settings --- */\n"));
     $restart = false;
+    $changed = false;
     if ($new !== $old) {
         file_put_contents($conf . '.new', $new);
         chmod($conf . '.new', 0640);
@@ -98,6 +123,7 @@ function SentoraApplySOGoSettings()
         rename($conf . '.new', $conf);
         $restart = true;
         echo "sogo.conf updated." . fs_filehandler::NewLine();
+        $changed = true;
     }
 
     // ActiveSync on or off (Apache)
@@ -110,6 +136,7 @@ function SentoraApplySOGoSettings()
         file_put_contents($access, $want);
         exec('apache2ctl -t > /dev/null 2>&1 && systemctl reload apache2 > /dev/null 2>&1');
         echo "ActiveSync " . (strpos($want, 'denied') ? 'turned off' : 'turned on') . "." . fs_filehandler::NewLine();
+        $changed = true;
     }
 
     // SOGo's own jobs: session expiry, email reminders, nightly backup
@@ -129,8 +156,12 @@ function SentoraApplySOGoSettings()
         file_put_contents($cronFile, $cron);
         chmod($cronFile, 0644);
         echo "SOGo jobs updated." . fs_filehandler::NewLine();
+        $changed = true;
     }
 
+    if (!$changed) {
+        echo "SOGo settings unchanged (ActiveSync " . (strpos($want, 'denied') ? 'off' : 'on') . "), nothing to do." . fs_filehandler::NewLine();
+    }
     if ($restart) {
         exec('systemctl restart sogo > /dev/null 2>&1', $out, $rc);
         echo "SOGo restarted" . ($rc === 0 ? '' : ' (FAILED, check /var/log/sogo/sogo.log)') . "." . fs_filehandler::NewLine();

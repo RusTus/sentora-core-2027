@@ -34,17 +34,13 @@ class module_controller extends ctrl_module
     static private function status_port($PortNum, $iconpath)
     {
         $status = sys_monitoring::LocalPortStatus($PortNum);
-        return ($status ?  $iconpath.'up.gif">' : $iconpath.'down.gif">') . ' (port ' . $PortNum .' is ' . ($status ? 'open' : 'closed') . ')';
+        return ($status ? ui_status::Ok('Port ' . $PortNum . ' is open') : ui_status::Bad('Port ' . $PortNum . ' is closed')) . ' (port ' . $PortNum .' is ' . ($status ? 'open' : 'closed') . ')';
     }
 
     static public function getServices()
     {
         global $controller;
-        if(file_exists(ui_tpl_assetfolderpath::Template() . 'img/modules/' . $controller->GetControllerRequest('URL', 'module') . '/assets/up.gif') && file_exists(ui_tpl_assetfolderpath::Template() . 'img/modules/' . $controller->GetControllerRequest('URL', 'module') . '/assets/down.gif')) {
-            $iconpath = '<img src="' . ui_tpl_assetfolderpath::Template() . 'img/modules/' . $controller->GetControllerRequest('URL', 'module') . '/assets/';
-        }else{
-            $iconpath = '<img src="modules/' . $controller->GetControllerRequest('URL', 'module') . '/assets/';    
-        }
+        $iconpath = ''; // the status icons are ui_status (no image files)
         $line = "<h2>" . ui_language::translate("Checking status of services...") . "</h2>";
         $line .= "<table>";
         

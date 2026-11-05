@@ -1,0 +1,43 @@
+# shellcheck shell=bash
+# sentora-backup-common: the off-server backup's settings (Admin > Backup Config) and the
+# connection to the backup machine. Loaded by sentora-offsite-backup and
+# sentora-panel-restore, as root.
+# shellcheck disable=SC2034  # the variables are used by the scripts that load this
+
+KEY=/root/.ssh/sentora_offsite
+STATE=/var/lib/sentora/offsite-backup.json
+PANEL=/etc/sentora/panel
+LOCAL=/var/sentora/backups
+
+# --- the settings, from the panel (the password decrypted with the panel's key) -----------
+OB_ENABLED=false; OB_SERVER=""; OB_PORT=22; OB_USER=""; OB_PASSWORD=""; OB_PATH=""; OB_KEEP=14; OB_MAIL=true
+SETTINGS=$(cd "$PANEL" 2> /dev/null && php -r '
+    chdir("/etc/sentora/panel"); require "dryden/loader.inc.php"; require "cnf/db.php"; require "inc/dbc.inc.php";
+    foreach (array("enabled", "server", "port", "user", "password", "path", "time", "keep", "mail") as $k) {
+        $v = ctrl_options::GetSystemOption("offsite_" . $k);
+        if ($v === false || $v === null) { continue; }
+        if ($k === "password" && $v !== "") { $p = ctrl_secret::Decrypt($v); $v = ($p === false) ? "" : $p; }
+        echo "OB_" . strtoupper($k) . "=" . escapeshellarg((string) $v) . "\n";
+    }' 2> /dev/null)
+eval "$SETTINGS"
+[[ "$OB_KEEP" =~ ^[0-9]+$ ]] && [ "$OB_KEEP" -ge 1 ] || OB_KEEP=14
+[[ "$OB_PORT" =~ ^[0-9]+$ ]] || OB_PORT=22
+KEEP=$OB_KEEP; MAIL=no; [ "$OB_MAIL" = true ] && MAIL=yes
+if [ -n "$OB_SERVER" ]; then TARGET="$OB_USER@$OB_SERVER:$OB_PATH"; else TARGET="$OB_PATH"; fi
+[ -n "$OB_SERVER" ] || [ -n "$OB_PATH" ] || TARGET=""
+HOST=$(hostname -f 2> /dev/null || hostname)
+if [ -n "$OB_PASSWORD" ]; then
+    # the password goes to sshpass through its environment, never on a command line
+    export SSHPASS="$OB_PASSWORD"
+    SSH="sshpass -e ssh -p $OB_PORT -o ConnectTimeout=20 -o StrictHostKeyChecking=accept-new -o PreferredAuthentications=password,keyboard-interactive -o PubkeyAuthentication=no"
+else
+    SSH="ssh -i $KEY -p $OB_PORT -o BatchMode=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=accept-new"
+fi
+SSH=${SENTORA_OFFSITE_SSH:-$SSH}
+
+remote() { case "$TARGET" in *:*) return 0 ;; *) return 1 ;; esac; }
+rhost() { echo "${TARGET%%:*}"; }
+rpath() { if remote; then echo "${TARGET#*:}"; else echo "$TARGET"; fi; }
+run_there() { # a command on the backup machine (or here, for a local folder)
+    if remote; then $SSH "$(rhost)" "$1"; else (cd / && bash -c "$1"); fi
+}

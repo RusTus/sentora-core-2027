@@ -32,6 +32,29 @@ class ctrl_ownership
         return (int) $sql->fetchColumn() > 0;
     }
 
+
+    /**
+     * A folder chosen in a form ("use an existing folder" for a domain, subdomain or
+     * FTP account): plain folder names only, no "..", so it can never point outside
+     * the account's own folder (it used to: "../../otheraccount/public_html").
+     */
+    static function SafeSubFolder($path)
+    {
+        $path = trim((string) $path, '/');
+        if ($path === '') {
+            return '';
+        }
+        if (strlen($path) > 255 || !preg_match('#^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$#', $path)) {
+            return false;
+        }
+        foreach (explode('/', $path) as $part) {
+            if ($part === '.' || $part === '..') {
+                return false;
+            }
+        }
+        return $path;
+    }
+
 }
 
 ?>

@@ -1,0 +1,313 @@
+#!/bin/bash
+# sentora-panel-restore: restore from the full panel backup (sentora-offsite-backup,
+# format 2: a snapshot with manifest.json, databases/, config/ and the account folders).
+# Started by the daemon for Admin > Backup Config > Restore; can be run by hand, as root.
+#
+#   sentora-panel-restore --list
+#       read which servers and nights the backup machine holds (any server's name, so a
+#       new server can restore an old one) into /var/lib/sentora/restore-catalog.json
+#   sentora-panel-restore --account <server> <date> <username> [files] [databases] [mail] [exact]
+#       one account: its websites (copied as the account's own user; "exact" also removes
+#       files the backup does not have), its databases and MySQL users, its mailboxes.
+#       The account must exist here with that username.
+#   sentora-panel-restore --full <server> <date> --yes
+#       the whole panel, for a new server: every database (the panel's own included), the
+#       hosting accounts' MySQL users, the panel's encryption key, certificates, every
+#       account's folder and the mailboxes; then the daemon rebuilds websites, PHP pools
+#       and DNS. This server keeps its own service passwords, name, IP address and
+#       off-server backup settings.
+#
+# Before it changes anything it saves what is here now in /var/sentora/backups/pre-restore-*.
+# Progress: /var/lib/sentora/panel-restore.json (shown by the page), log:
+# /var/sentora/logs/panel-restore.log
+
+# shellcheck source=sentora-backup-common
+. "$(dirname "$(readlink -f "$0")")/sentora-backup-common" 2> /dev/null || . /etc/sentora/panel/bin/sentora-backup-common
+LOG=/var/sentora/logs/panel-restore.log
+RSTATE=/var/lib/sentora/panel-restore.json
+CATALOG=/var/lib/sentora/restore-catalog.json
+HOSTED=/var/sentora/hostdata
+VMAIL=/var/sentora/vmail
+
+[ "$(id -u)" -eq 0 ] || { echo "Run this as root."; exit 2; }
+mkdir -p "$(dirname "$LOG")"; touch "$LOG"; chmod 640 "$LOG"
+
+say() { echo "$(date '+%Y-%m-%d %H:%M:%S')  $*" | tee -a "$LOG"; rstate step "$*"; }
+rstate() { # key value [key value...]: merged into the progress file the page shows
+    php -r '$f = $argv[1]; $d = json_decode((string) @file_get_contents($f), true); $d = is_array($d) ? $d : array();
+        for ($i = 2; $i + 1 < $argc; $i += 2) { $d[$argv[$i]] = ctype_digit($argv[$i + 1]) ? (int) $argv[$i + 1] : substr($argv[$i + 1], 0, 300); }
+        file_put_contents($f, json_encode($d)); chmod($f, 0644);' "$RSTATE" "$@"
+}
+die() { echo "$(date '+%Y-%m-%d %H:%M:%S')  FAILED: $*" | tee -a "$LOG"; rstate running 0 result failed message "$*" finished "$(date +%s)"; exit 1; }
+[ -n "$TARGET" ] || die "no backup machine or folder set: Admin > Backup Config > Off-server backup"
+command -v rsync > /dev/null || apt-get -qq -y install rsync > /dev/null 2>&1 || die "rsync is not installed"
+if [ -n "$OB_PASSWORD" ] && ! command -v sshpass > /dev/null; then apt-get -qq -y install sshpass > /dev/null 2>&1 || die "sshpass is not installed"; fi
+BASE=$(rpath)
+
+# MySQL as the panel's root user (from the panel's database settings)
+val() { grep -o "\$$1 = '[^']*'" "$PANEL/cnf/db.php" | head -1 | cut -d"'" -f2; }
+MYCNF=$(mktemp); chmod 600 "$MYCNF"; printf '[client]\nuser=%s\npassword=%s\n' "$(val user)" "$(val pass)" > "$MYCNF"
+JOB=$(date +%Y%m%d-%H%M%S)
+STAGE="/var/sentora/restore-stage/$JOB"
+cleanup() { rm -f "$MYCNF"; rm -rf "$STAGE"; }
+trap cleanup EXIT
+sql() { mysql --defaults-extra-file="$MYCNF" -N -B -e "$1"; }
+panelphp() { (cd "$PANEL" && php -r 'chdir("/etc/sentora/panel"); require "dryden/loader.inc.php"; require "cnf/db.php"; require "inc/dbc.inc.php"; '"$1" -- "${@:2}"); }
+
+valid_host() { [[ "$1" =~ ^[A-Za-z0-9][A-Za-z0-9.-]{0,252}$ ]]; }
+valid_date() { [[ "$1" =~ ^20[0-9]{2}-[0-9]{2}-[0-9]{2}$ ]]; }
+valid_user() { [[ "$1" =~ ^[A-Za-z0-9_-]{1,64}$ ]]; }
+
+# copy a path of the snapshot (relative to it) to a local folder
+fetch() { # snapshot-path local-dir [rsync options...]
+    local src="$SNAP/$1" dest="$2"; shift 2
+    mkdir -p "$dest"
+    if remote; then
+        rsync -a --numeric-ids "$@" -e "$SSH" "$(rhost):$src" "$dest" >> "$LOG" 2>&1
+    else
+        rsync -a --numeric-ids "$@" "$src" "$dest" >> "$LOG" 2>&1
+    fi
+}
+
+# ======================================================================================
+if [ "${1:-}" = "--list" ]; then
+    rstate listing 1
+    # one call: every <server>/<date> folder and its manifest (shell only on the other side)
+    LISTING=$(run_there "cd '$BASE' 2> /dev/null || exit 3
+        for h in */; do h=\${h%/}; [ -L \"\$h\" ] && continue
+            for d in \"\$h\"/20??-??-??; do [ -d \"\$d\" ] || continue
+                echo \"@@SNAPSHOT \$d\"
+                if [ -f \"\$d/manifest.json\" ]; then cat \"\$d/manifest.json\"; else echo '{\"format\":1}'; fi
+                echo; echo '@@END'
+            done
+        done" 2>&1)
+    rc=$?
+    [ $rc -eq 3 ] && { rstate listing 0; echo '{"time":'"$(date +%s)"',"error":"the backup folder does not exist yet","snapshots":[]}' > "$CATALOG"; chmod 644 "$CATALOG"; exit 1; }
+    [ $rc -ne 0 ] && { rstate listing 0; php -r 'echo json_encode(array("time" => time(), "error" => substr($argv[1], 0, 250), "snapshots" => array()));' "$LISTING" > "$CATALOG"; chmod 644 "$CATALOG"; exit 1; }
+    printf '%s' "$LISTING" | php -r '
+        $out = array(); $cur = null; $buf = "";
+        foreach (explode("\n", stream_get_contents(STDIN)) as $line) {
+            if (strpos($line, "@@SNAPSHOT ") === 0) { $cur = substr($line, 11); $buf = ""; continue; }
+            if ($line === "@@END" && $cur !== null) {
+                list($host, $date) = array_pad(explode("/", $cur, 2), 2, "");
+                $m = json_decode($buf, true);
+                $s = array("server" => $host, "date" => $date, "format" => is_array($m) && isset($m["format"]) ? (int) $m["format"] : 0);
+                if ($s["format"] >= 2) {
+                    $s["sentora"] = (string) ($m["sentora"] ?? ""); $s["panel"] = (string) ($m["panel"] ?? ""); $s["mail"] = !empty($m["mail"]);
+                    $s["databases"] = array_values(array_map("strval", (array) ($m["databases"] ?? array())));
+                    $s["accounts"] = array();
+                    foreach ((array) ($m["accounts"] ?? array()) as $a) {
+                        $s["accounts"][] = array("username" => (string) $a["username"], "domains" => array_values(array_map("strval", (array) ($a["domains"] ?? array()))),
+                            "databases" => array_values(array_map("strval", (array) ($a["databases"] ?? array()))), "mailboxes" => count((array) ($a["mailboxes"] ?? array())),
+                            "size_mb" => (int) ($a["size_mb"] ?? 0));
+                    }
+                }
+                $out[] = $s; $cur = null; continue;
+            }
+            if ($cur !== null) { $buf .= $line . "\n"; }
+        }
+        usort($out, function ($a, $b) { return strcmp($b["date"], $a["date"]) ?: strcmp($a["server"], $b["server"]); });
+        echo json_encode(array("time" => time(), "target" => $argv[1], "this_server" => $argv[2], "snapshots" => $out));
+    ' "$TARGET" "$HOST" > "$CATALOG.tmp" && mv "$CATALOG.tmp" "$CATALOG"
+    chmod 644 "$CATALOG"
+    rstate listing 0
+    echo "$(grep -o '"date"' "$CATALOG" | wc -l) snapshot(s) found; see $CATALOG"
+    exit 0
+fi
+
+MODE="${1:-}"; SRV="${2:-}"; DATE="${3:-}"
+case "$MODE" in --account|--full) ;; *) sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;; esac
+valid_host "$SRV" || die "not a server name: $SRV"
+valid_date "$DATE" || die "not a date: $DATE"
+SNAP="$BASE/$SRV/$DATE"
+exec 9> /run/sentora-panel-restore.lock
+flock -n 9 || { echo "Another restore is running."; exit 1; }
+mkdir -p "$STAGE"; chmod 711 "$STAGE" /var/sentora/restore-stage
+rstate running 1 started "$(date +%s)" result "" message "" finished 0 mode "${MODE#--}" snapshot "$SRV/$DATE"
+
+fetch manifest.json "$STAGE/" || die "the snapshot $SRV/$DATE can not be read from $TARGET"
+[ -f "$STAGE/manifest.json" ] || die "the snapshot $SRV/$DATE has no manifest.json: it was made by an older version and can not be restored here"
+FORMAT=$(php -r '$m = json_decode((string) file_get_contents($argv[1]), true); echo is_array($m) ? (int) ($m["format"] ?? 0) : 0;' "$STAGE/manifest.json")
+[ "$FORMAT" -ge 2 ] || die "the snapshot $SRV/$DATE is not one this restore can read (format $FORMAT)"
+# one account's fields from the manifest, one per line: m_account <username> <field>
+m_account() { php -r '$m = json_decode((string) file_get_contents($argv[1]), true);
+    foreach ((array) $m["accounts"] as $a) { if ($a["username"] === $argv[2]) { foreach ((array) ($a[$argv[3]] ?? array()) as $v) { echo $v, "\n"; } } }' "$STAGE/manifest.json" "$1" "$2"; }
+
+PRE="$LOCAL/pre-restore-$JOB"
+mkdir -p "$PRE"; chmod 700 "$PRE"
+
+# --- restore one account's folder: fetched to a staging folder, then copied as the
+# account's own Linux user (so a link the site put in its folder can not redirect a write)
+restore_files() { # username exact(yes|no)
+    local u="$1" exact="$2" id web home
+    id=$(sql "SELECT ac_id_pk FROM sentora_core.x_accounts WHERE ac_user_vc = '$u' AND ac_deleted_ts IS NULL")
+    [ -n "$id" ] || { say "skipped $u's files: no such account here"; return 1; }
+    web="web$id"; home="$HOSTED/$u"
+    id "$web" > /dev/null 2>&1 || { say "skipped $u's files: its Linux user $web does not exist yet (the daemon makes it)"; return 1; }
+    [ -d "$home" ] && [ ! -L "$home" ] || { say "skipped $u's files: $home is missing"; return 1; }
+    say "Restoring the files of $u"
+    rm -rf "$STAGE/files-$u"
+    fetch "var/sentora/hostdata/$u/" "$STAGE/files-$u/" --exclude=/tmp/ || { say "could not fetch the files of $u"; return 1; }
+    chown -R "$web:$web" "$STAGE/files-$u"; chmod 700 "$STAGE/files-$u"
+    local del=(); [ "$exact" = yes ] && del=(--delete)
+    setpriv --reuid="$web" --regid="$web" --init-groups rsync -rlt "${del[@]}" --exclude=/tmp/ "$STAGE/files-$u/" "$home/" >> "$LOG" 2>&1 \
+        || { say "the files of $u were not all copied (see the log)"; rm -rf "$STAGE/files-$u"; return 1; }
+    rm -rf "$STAGE/files-$u"
+}
+
+# --- one database: dropped and loaded from its dump
+restore_database() { # name
+    local db="$1"
+    [[ "$db" =~ ^[A-Za-z0-9_]{1,64}$ ]] || { say "skipped the database $db: not a database name"; return 1; }
+    fetch "databases/$db.sql.gz" "$STAGE/db/" || { say "the dump of $db is not in the snapshot"; return 1; }
+    say "Restoring the database $db"
+    sql "DROP DATABASE IF EXISTS \`$db\`" || return 1
+    gunzip -c "$STAGE/db/$db.sql.gz" | mysql --defaults-extra-file="$MYCNF" >> "$LOG" 2>&1 || { say "the database $db did not load (see the log)"; return 1; }
+    rm -f "$STAGE/db/$db.sql.gz"
+}
+
+# --- MySQL users from users.sql.gz: all, or those named
+restore_users() { # [names...]
+    fetch "databases/users.sql.gz" "$STAGE/db/" || { say "the snapshot has no MySQL users"; return 1; }
+    local filter="."
+    if [ $# -gt 0 ]; then filter=$(printf "^(CREATE USER IF NOT EXISTS|GRANT .* TO) \`?'?(%s)'?\`?@\n" "$(printf '%s|' "$@" | sed 's/|$//')"); fi
+    gunzip -c "$STAGE/db/users.sql.gz" | grep -E "$filter" | while IFS= read -r stmt; do
+        mysql --defaults-extra-file="$MYCNF" -e "$stmt" >> "$LOG" 2>&1 || echo "  not applied: ${stmt:0:80}" >> "$LOG"
+    done
+    sql "FLUSH PRIVILEGES"
+}
+
+# --- mailboxes: copied into the mail store, owned by the mail user
+restore_mail() { # address...
+    local a dom local_part
+    for a in "$@"; do
+        [[ "$a" =~ ^([A-Za-z0-9._+-]+)@([A-Za-z0-9.-]+)$ ]] || continue
+        local_part="${BASH_REMATCH[1]}"; dom="${BASH_REMATCH[2]}"
+        say "Restoring the mailbox $a"
+        mkdir -p "$VMAIL/$dom/$local_part"
+        fetch "var/sentora/vmail/$dom/$local_part/" "$VMAIL/$dom/$local_part/" || say "the mailbox $a is not in the snapshot"
+        chown -R vmail:mail "$VMAIL/$dom"
+    done
+}
+
+# ======================================================================================
+if [ "$MODE" = "--account" ]; then
+    U="${4:-}"; valid_user "$U" || die "not a username: $U"
+    shift 4
+    FILES=no; DBS=no; MAILP=no; EXACT=no
+    for p in "$@"; do case "$p" in files) FILES=yes ;; databases) DBS=yes ;; mail) MAILP=yes ;; exact) EXACT=yes ;; esac; done
+    [ "$FILES$DBS$MAILP" != nonono ] || die "choose what to restore: files, databases and/or mail"
+    php -r '$m = json_decode((string) file_get_contents($argv[1]), true); foreach ((array) $m["accounts"] as $a) { if ($a["username"] === $argv[2]) exit(0); } exit(1);' "$STAGE/manifest.json" "$U" \
+        || die "$U is not in the snapshot $SRV/$DATE"
+    ID=$(sql "SELECT ac_id_pk FROM sentora_core.x_accounts WHERE ac_user_vc = '$U' AND ac_deleted_ts IS NULL")
+    [ -n "$ID" ] || die "there is no account $U here: make it first (Manage Clients, the same username), then restore into it"
+    rstate account "$U"
+    say "Restoring $U from $SRV/$DATE ($( [ $FILES = yes ] && echo 'files ')$( [ $DBS = yes ] && echo 'databases ')$( [ $MAILP = yes ] && echo 'mail'))"
+    # what is here now, first
+    say "Saving $U as it is now"
+    NOW=$(panelphp 'echo sys_backup::Create((int) $argv[1], $argv[2]);' "$ID" "$U" 2>> "$LOG")
+    [ -n "$NOW" ] && [ -f "$NOW" ] || die "could not save $U as it is now: nothing was changed"
+    cp -a "$NOW" "$PRE/"
+    FAILS=0
+    if [ "$MAILP" = yes ]; then
+        mapfile -t BOXES <<< "$(m_account "$U" mailboxes)"
+        for a in "${BOXES[@]}"; do
+            [ -n "$a" ] || continue
+            dom="${a#*@}"; lp="${a%@*}"
+            [ -d "$VMAIL/$dom/$lp" ] && tar -czf "$PRE/mail-$a.tar.gz" -C "$VMAIL/$dom" "$lp" 2>> "$LOG"
+        done
+    fi
+    [ "$FILES" = yes ] && { restore_files "$U" "$EXACT" || FAILS=$((FAILS + 1)); }
+    if [ "$DBS" = yes ]; then
+        mapfile -t DBLIST <<< "$(m_account "$U" databases)"
+        for db in "${DBLIST[@]}"; do
+            [ -n "$db" ] || continue
+            # only this account's own databases (named after it), registered to it here
+            case "$db" in "${U}_"*) ;; *) say "skipped the database $db: not named after $U"; continue ;; esac
+            restore_database "$db" || FAILS=$((FAILS + 1))
+            [ "$(sql "SELECT COUNT(*) FROM sentora_core.x_mysql_databases WHERE my_name_vc = '$db' AND my_deleted_ts IS NULL")" -gt 0 ] \
+                || sql "INSERT INTO sentora_core.x_mysql_databases (my_acc_fk, my_name_vc, my_usedspace_bi, my_created_ts) VALUES ($ID, '$db', 0, UNIX_TIMESTAMP())"
+        done
+        mapfile -t MYUSERS <<< "$(m_account "$U" mysql_users)"
+        [ -n "${MYUSERS[0]:-}" ] && { restore_users "${MYUSERS[@]}" || FAILS=$((FAILS + 1)); }
+    fi
+    if [ "$MAILP" = yes ]; then
+        mapfile -t BOXES <<< "$(m_account "$U" mailboxes)"
+        [ -n "${BOXES[0]:-}" ] && restore_mail "${BOXES[@]}"
+    fi
+    MSG="$U restored from $SRV/$DATE$( [ $FAILS -gt 0 ] && echo ", with $FAILS problem(s): see the log"). What was here before is in $PRE"
+    say "$MSG"
+    rstate running 0 result "$( [ $FAILS -eq 0 ] && echo ok || echo partial)" message "$MSG" finished "$(date +%s)"
+    exit 0
+fi
+
+# ======================================================================================
+# --full: the whole panel
+[ "${4:-}" = "--yes" ] || die "a full restore replaces everything on this server: add --yes"
+say "Restoring the whole panel from $SRV/$DATE"
+# 1. what is here now: every database, the configuration
+say "Saving this server as it is now (databases and configuration)"
+for db in $(sql "SHOW DATABASES" | grep -vE '^(information_schema|performance_schema|mysql|sys)$'); do
+    mysqldump --defaults-extra-file="$MYCNF" --single-transaction --routines --events --triggers --databases "$db" 2>> "$LOG" | gzip -6 > "$PRE/$db.sql.gz" \
+        || die "could not save the database $db: nothing was changed"
+done
+tar -czf "$PRE/config.tar.gz" -C / etc/sentora/configs etc/sentora/panel/cnf 2>> "$LOG" || die "could not save the configuration: nothing was changed"
+# 2. what this server keeps: its name and address, its off-server backup settings (the
+# password decrypted now: it is encrypted again with the restored key below)
+KEEPJSON=$(panelphp '$k = array();
+    foreach (array("sentora_domain", "server_ip", "offsite_enabled", "offsite_server", "offsite_port", "offsite_user", "offsite_password", "offsite_path", "offsite_time", "offsite_keep", "offsite_mail") as $n) {
+        $v = ctrl_options::GetSystemOption($n);
+        if ($v === false || $v === null) { continue; }
+        if ($n === "offsite_password" && $v !== "") { $p = ctrl_secret::Decrypt($v); $v = ($p === false) ? "" : $p; }
+        $k[$n] = (string) $v;
+    }
+    echo json_encode($k);' 2>> "$LOG")
+printf '%s' "$KEEPJSON" > "$STAGE/keep.json"; chmod 600 "$STAGE/keep.json"
+# 3. the databases (the panel's own first), then the hosting accounts' MySQL users
+fetch "databases/" "$STAGE/db/" || die "could not fetch the databases from the snapshot"
+mapfile -t DUMPS <<< "$(cd "$STAGE/db" && ls -1 ./*.sql.gz 2> /dev/null | sed 's|^\./||; s|\.sql\.gz$||' | grep -vx users)"
+[ -n "${DUMPS[0]:-}" ] || die "the snapshot has no database dumps"
+FAILS=0
+[ -f "$STAGE/db/sentora_core.sql.gz" ] || die "the snapshot has no dump of the panel's database (sentora_core)"
+restore_database sentora_core || die "the panel's database did not load: the previous one is in $PRE"
+for db in "${DUMPS[@]}"; do
+    [ -n "$db" ] && [ "$db" != sentora_core ] || continue
+    restore_database "$db" || FAILS=$((FAILS + 1))
+done
+restore_users || FAILS=$((FAILS + 1))
+# 4. the panel's encryption key (the restored passwords shown to owners need it) and the certificates
+say "Restoring the panel's encryption key and the certificates"
+fetch "config/sentora-config.tar.gz" "$STAGE/" || die "could not fetch the configuration"
+tar -xzf "$STAGE/sentora-config.tar.gz" -C / etc/sentora/panel/cnf/security.php 2>> "$LOG" || say "the panel's encryption key was not in the snapshot"
+tar -tzf "$STAGE/sentora-config.tar.gz" 2> /dev/null | grep -q '^etc/letsencrypt/' && tar -xzf "$STAGE/sentora-config.tar.gz" -C / etc/letsencrypt 2>> "$LOG"
+chown root:sentora "$PANEL/cnf/security.php" 2> /dev/null; chmod 640 "$PANEL/cnf/security.php"
+# 5. what this server keeps, back in; every website and DNS zone to be written again
+panelphp '$k = json_decode((string) file_get_contents($argv[1]), true);
+    foreach ((array) $k as $n => $v) {
+        if ($n === "offsite_password" && $v !== "") { $v = ctrl_secret::Encrypt($v); }
+        $zdbh->prepare("UPDATE x_settings SET so_value_tx = :v WHERE so_name_vc = :n")->execute(array(":v" => $v, ":n" => $n));
+    }
+    $ids = $zdbh->query("SELECT DISTINCT dn_vhost_fk FROM x_dns WHERE dn_deleted_ts IS NULL")->fetchAll(PDO::FETCH_COLUMN);
+    $zdbh->prepare("UPDATE x_settings SET so_value_tx = :v WHERE so_name_vc = \"dns_hasupdates\"")->execute(array(":v" => implode(",", $ids)));
+    $zdbh->exec("UPDATE x_settings SET so_value_tx = \"true\" WHERE so_name_vc = \"apache_changed\"");' "$STAGE/keep.json" >> "$LOG" 2>&1
+rm -f "$STAGE/keep.json"
+# 6. the daemon makes the accounts' Linux users, folders, PHP pools, websites and zones
+say "Rebuilding the accounts, websites, PHP pools and DNS (daemon run)"
+(cd "$PANEL" && php -q bin/daemon.php) >> "$LOG" 2>&1 || say "the daemon run reported problems (see the log)"
+# 7. every account's folder, then the mailboxes
+mapfile -t USERS <<< "$(php -r '$m = json_decode((string) file_get_contents($argv[1]), true); foreach ((array) $m["accounts"] as $a) { echo $a["username"], "\n"; }' "$STAGE/manifest.json")"
+for u in "${USERS[@]}"; do
+    [ -n "$u" ] || continue
+    valid_user "$u" || continue
+    restore_files "$u" no || FAILS=$((FAILS + 1))
+done
+if php -r '$m = json_decode((string) file_get_contents($argv[1]), true); exit(empty($m["mail"]) ? 1 : 0);' "$STAGE/manifest.json"; then
+    say "Restoring the mailboxes"
+    fetch "var/sentora/vmail/" "$VMAIL/" || FAILS=$((FAILS + 1))
+    chown -R vmail:mail "$VMAIL"
+fi
+# 8. once more, so everything made from the restored files is in place
+(cd "$PANEL" && php -q bin/daemon.php) >> "$LOG" 2>&1
+MSG="The panel was restored from $SRV/$DATE$( [ $FAILS -gt 0 ] && echo ", with $FAILS problem(s): see the log"). What was here before is in $PRE. Check it: sentora-post-install-check"
+say "$MSG"
+rstate running 0 result "$( [ $FAILS -eq 0 ] && echo ok || echo partial)" message "$MSG" finished "$(date +%s)"

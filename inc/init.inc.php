@@ -40,6 +40,17 @@ if (isset($_GET['returnsession'])) {
     exit;
 }
 
+/** where a login lands: the Dashboard when it is on and the account may open it */
+function sentora_after_login($uid)
+{
+    global $zdbh;
+    $q = $zdbh->prepare("SELECT mo_id_pk FROM x_modules WHERE mo_folder_vc = 'dashboard' AND mo_enabled_en = 'true'");
+    $q->execute();
+    $mid = (int) $q->fetchColumn();
+    $u = ctrl_users::GetUserDetail((int) $uid);
+    return ($mid > 0 && $u && ctrl_groups::CheckGroupModulePermissions($u['usergroupid'], $mid)) ? './?module=dashboard' : './';
+}
+
 if (isset($_POST['inForgotPassword'])) {
     runtime_csfr::Protect();
     $randomkey = runtime_randomstring::randomHash();
@@ -167,9 +178,20 @@ if (isset($_POST['inUsername'])) {
         header("location: ./?twofactor");
         exit();
     }
+    if (ctrl_twofactor::Forced()) {
+        // Two-factor login is required on this server and this account has not set it up:
+        // it does so now, before it is logged in
+        unset($_SESSION['zpuid']);
+        $_SESSION['zp2fa_setup'] = array('uid' => (int) $loggedInUid, 'user' => (string) $_POST['inUsername'],
+            'remember' => $rememberdetails, 'secure' => $inSessionSecuirty, 'time' => time());
+        header("location: ./?twofactor-setup");
+        exit();
+    }
     if ($rememberdetails) {
         ctrl_loginguard::Remember($loggedInUid);
     }
+    header("location: " . sentora_after_login($loggedInUid));
+    exit();
 }
 
 // Second login step: the code from the authenticator app
@@ -188,14 +210,23 @@ if (isset($_SESSION['zp2fa']) && empty($_SESSION['zpuid'])) {
             header("location: ./?invalidlogin");
             exit();
         }
-        if (ctrl_twofactor::Verify($pending['uid'], $_POST['inTwoFactorCode'])) {
+        // the app's 6-digit code, or one of the account's recovery codes (lost phone)
+        $tfCode = (string) $_POST['inTwoFactorCode'];
+        $tfRecovery = !preg_match('/^[0-9 ]{6,7}$/', $tfCode) && ctrl_twofactor::UseRecoveryCode($pending['uid'], $tfCode);
+        if ($tfRecovery || ctrl_twofactor::Verify($pending['uid'], $tfCode)) {
             unset($_SESSION['zp2fa']);
             ctrl_loginguard::Succeeded($key);
             ctrl_auth::SetUserSession($pending['uid'], $pending['secure']);
-            if ($pending['remember']) {
+            if ($pending['remember'] && !$tfRecovery) {
                 ctrl_loginguard::Remember($pending['uid']);
             }
-            header("location: ./");
+            if ($tfRecovery) {
+                // straight to My Account: how many codes are left, and a new set
+                $_SESSION['zp2fa_recovered'] = 1;
+                header("location: ./?module=my_account");
+                exit();
+            }
+            header("location: " . sentora_after_login($pending['uid']));
             exit();
         }
         ctrl_loginguard::Failed($key);
@@ -216,7 +247,8 @@ if (isset($_SESSION['zp2fa']) && empty($_SESSION['zpuid'])) {
 <p>Enter the 6-digit code from the authenticator app for <strong><?php echo htmlspecialchars($pending['user'], ENT_QUOTES, 'UTF-8'); ?></strong>.</p>
 <?php if ($tfWrong) { ?><div class="alert alert-danger">That code is not right, or it was already used. Try the next one.</div><?php } ?>
 <form method="post" action="./?twofactor" autocomplete="off">
-<input class="form-control code" name="inTwoFactorCode" inputmode="numeric" pattern="[0-9 ]{6,7}" maxlength="7" required autofocus>
+<input class="form-control code" name="inTwoFactorCode" inputmode="numeric" pattern="[0-9 ]{6,7}|[A-Za-z0-9]{5}-?[A-Za-z0-9]{5}" maxlength="11" autocapitalize="characters" spellcheck="false" required autofocus id="tfCode">
+<p class="text-muted" style="font-size:13px;margin-top:8px">Lost your phone? <a href="#" onclick="var c=document.getElementById('tfCode');c.setAttribute('inputmode','text');c.placeholder='XXXXX-XXXXX';c.value='';c.focus();this.parentNode.textContent='Enter one of your recovery codes (each works once).';return false;">Use a recovery code</a> instead. No codes left? Ask your administrator.</p>
 <?php echo runtime_csfr::Token(); ?>
 <p style="margin-top:16px"><button class="btn btn-primary btn-block" type="submit">Log in</button></p>
 <p class="text-muted" style="margin:0"><a href="./?logout">Cancel</a></p>
@@ -228,6 +260,82 @@ if (isset($_SESSION['zp2fa']) && empty($_SESSION['zpuid'])) {
 // "Remember me": a random token (the old cookies held the password hash)
 if (!isset($_SESSION['zpuid'])) {
     ctrl_loginguard::LoginFromCookie();
+}
+
+// Two-factor login required on this server (enabled-forced): an account logged in
+// without it (an older session, "Remember me") sets it up before it can go on
+if (isset($_SESSION['zpuid']) && empty($_SESSION['ruid']) && ctrl_twofactor::Forced() && !ctrl_twofactor::Required((int) $_SESSION['zpuid'])) {
+    $tfUser = ctrl_users::GetUserDetail((int) $_SESSION['zpuid']);
+    $_SESSION['zp2fa_setup'] = array('uid' => (int) $_SESSION['zpuid'], 'user' => $tfUser ? (string) $tfUser['username'] : '',
+        'remember' => false, 'secure' => true, 'time' => time());
+    unset($_SESSION['zpuid']);
+    ctrl_loginguard::Forget();
+    header("location: ./?twofactor-setup");
+    exit();
+}
+
+// Two-factor setup at login (enabled-forced): the QR code, then one code to confirm
+if (isset($_SESSION['zp2fa_setup']) && empty($_SESSION['zpuid'])) {
+    $setup = $_SESSION['zp2fa_setup'];
+    if (time() - (int) $setup['time'] > 900 || !ctrl_twofactor::Forced() || ctrl_twofactor::Required($setup['uid'])) {
+        unset($_SESSION['zp2fa_setup']);
+        header("location: ./");
+        exit();
+    }
+    $setupRow = ctrl_twofactor::Row($setup['uid']);
+    if (!$setupRow || (int) $setupRow['tf_enabled_in'] === 1) {
+        ctrl_twofactor::Begin($setup['uid']);
+        $setupRow = ctrl_twofactor::Row($setup['uid']);
+    }
+    if (isset($_POST['inTwoFactorCode'])) {
+        runtime_csfr::Protect();
+        $key = '2fa-setup:' . $setup['user'];
+        if (ctrl_loginguard::IsLocked($key)) {
+            unset($_SESSION['zp2fa_setup']);
+            header("location: ./?invalidlogin");
+            exit();
+        }
+        if (ctrl_twofactor::Verify($setup['uid'], $_POST['inTwoFactorCode'], false)) {
+            ctrl_twofactor::Activate($setup['uid']);
+            unset($_SESSION['zp2fa_setup']);
+            // the recovery codes, shown once on My Account straight after this
+            $_SESSION['zp2fa_newcodes'] = ctrl_twofactor::NewRecoveryCodes($setup['uid']);
+            ctrl_loginguard::Succeeded($key);
+            ctrl_auth::SetUserSession($setup['uid'], $setup['secure']);
+            if ($setup['remember']) {
+                ctrl_loginguard::Remember($setup['uid']);
+            }
+            header("location: ./?module=my_account");
+            exit();
+        }
+        ctrl_loginguard::Failed($key);
+        header("location: ./?twofactor-setup&wrong");
+        exit();
+    }
+    $tfWrong = isset($_GET['wrong']);
+    $tfUri = ctrl_twofactor::OtpauthUri($setupRow['tf_secret_vc'], $setup['user']);
+    header('Content-Type: text/html; charset=utf-8');
+    ?><!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Control Panel - Set up two-factor login</title>
+<link href="etc/styles/Sentora_Default/global-css/bootstrap.min.css" rel="stylesheet" type="text/css">
+<style>body{background:#f4f4f4} .box{max-width:460px;margin:7vh auto;background:#fff;border:1px solid #ddd;border-radius:6px;padding:24px 28px}
+.code{font-size:28px;letter-spacing:6px;text-align:center;font-family:monospace} .qr{display:inline-block;padding:8px;border:1px solid #ddd;border-radius:4px;background:#fff}</style></head>
+<body><div class="box">
+<h3>Set up two-factor login</h3>
+<p>This server requires a code from an authenticator app at every login. Scan this QR code with your app (Google Authenticator, Microsoft Authenticator, Authy, 1Password and the like) for <strong><?php echo htmlspecialchars($setup['user'], ENT_QUOTES, 'UTF-8'); ?></strong>:</p>
+<p style="text-align:center"><span class="qr"><?php echo ctrl_twofactor::QrSvg($tfUri, 200); ?></span></p>
+<p class="text-muted" style="font-size:13px">If you cannot scan it, add an account in the app with this key (time based): <code><?php echo htmlspecialchars(trim(chunk_split($setupRow['tf_secret_vc'], 4, ' ')), ENT_QUOTES, 'UTF-8'); ?></code> &nbsp; <a href="<?php echo htmlspecialchars($tfUri, ENT_QUOTES, 'UTF-8'); ?>">Open in app</a></p>
+<?php if ($tfWrong) { ?><div class="alert alert-danger">That code is not right. Check the time on your phone, and try the next one.</div><?php } ?>
+<form method="post" action="./?twofactor-setup" autocomplete="off">
+<label>Then enter the 6-digit code it shows:</label>
+<input class="form-control code" name="inTwoFactorCode" inputmode="numeric" pattern="[0-9 ]{6,7}" maxlength="7" required autofocus>
+<?php echo runtime_csfr::Token(); ?>
+<p style="margin-top:16px"><button class="btn btn-primary btn-block" type="submit">Turn on and log in</button></p>
+<p class="text-muted" style="margin:0"><a href="./?logout">Cancel</a></p>
+</form></div></body></html>
+<?php
+    exit();
 }
 
 if (!isset($_SESSION['zpuid'])) {

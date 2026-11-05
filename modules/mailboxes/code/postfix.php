@@ -1,5 +1,20 @@
 <?php
 
+/*
+ * Mailbox passwords are stored as {SHA512-CRYPT} hashes (salted SHA-512 crypt,
+ * 50,000 rounds), the scheme named in front as Dovecot expects. Dovecot, SOGo and
+ * Roundcube's password change all read and write that format; mailboxes still on the
+ * old {PLAIN-MD5} keep working until their password is next changed.
+ */
+if (!function_exists('sentora_mailbox_hash')) {
+    function sentora_mailbox_hash($password)
+    {
+        $salt = substr(strtr(base64_encode(random_bytes(12)), '+', '.'), 0, 16);
+        return '{SHA512-CRYPT}' . crypt((string) $password, '$6$rounds=50000$' . $salt . '$');
+    }
+}
+
+
 /**
  * @copyright 2014-2023 Sentora Project (http://www.sentora.org/) 
  * Sentora is a GPL fork of the ZPanel Project whose original header follows:
@@ -95,7 +110,7 @@ if (!fs_director::CheckForEmptyValue(self::$create)) {
 														 	NOW(),
 														 	NOW(),
 														 	'1')");
-        $password = '{PLAIN-MD5}' . md5($password);
+        $password = sentora_mailbox_hash($password);
         $location = $domain . "/" . $address . "/";
         $maxMail = ctrl_options::GetSystemOption('max_mail_size');
 
@@ -140,7 +155,7 @@ if (!fs_director::CheckForEmptyValue(self::$delete)) {
 if (!fs_director::CheckForEmptyValue(self::$update)) {
     if (!fs_director::CheckForEmptyValue($password)) {
         $sql = $mail_db->prepare("UPDATE mailbox SET password=:password, modified=NOW() WHERE username=:mb_address_vc");
-        $password = '{PLAIN-MD5}' . md5($password);
+        $password = sentora_mailbox_hash($password);
         $sql->bindParam(':password', $password);
         $sql->bindParam(':mb_address_vc', $rowmailbox['mb_address_vc']);
         $sql->execute();

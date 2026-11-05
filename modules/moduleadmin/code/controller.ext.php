@@ -31,6 +31,7 @@ class module_controller extends ctrl_module
 
     static $error;
     static $ok;
+    static $uploadqueued = null;
     static $error_message;
 
     static function getAdminModules()
@@ -152,9 +153,9 @@ class module_controller extends ctrl_module
                     }
                     $line .= "</td><td style=\"text-align:center\">";
                     if (ui_module::GetModuleHasUpdates($modules['mo_folder_vc'])) {
-                        $line .= "<img src=\"modules/" . $controller->GetControllerRequest('URL', 'module') . "/assets/down.gif\"><br>" . ui_language::translate("Latest version") . ": <a href=\"" . $modules['mo_updateurl_tx'] . "\" target=\"_blank\">" . $modules['mo_updatever_vc'] . "</a>";
+                        $line .= ui_status::Warn('An update is available') . "<br>" . ui_language::translate("Latest version") . ": <a href=\"" . $modules['mo_updateurl_tx'] . "\" target=\"_blank\">" . $modules['mo_updatever_vc'] . "</a>";
                     } else {
-                        $line .= "<img src=\"modules/" . $controller->GetControllerRequest('URL', 'module') . "/assets/up.gif\">";
+                        $line .= ui_status::Ok('Up to date');
                     }
                     /**
                      * --
@@ -202,9 +203,9 @@ class module_controller extends ctrl_module
         $modsql->execute();
         $modulestatus = $modsql->fetch();
         if ($modulestatus['mo_enabled_en'] == 'false') {
-            $retval = "<img src=\"modules/" . $controller->GetControllerRequest('URL', 'module') . "/assets/down.gif\">";
+            $retval = ui_status::Bad('Disabled');
         } else {
-            $retval = "<img src=\"modules/" . $controller->GetControllerRequest('URL', 'module') . "/assets/up.gif\">";
+            $retval = ui_status::Ok('Enabled');
         }
         return $retval;
     }
@@ -248,6 +249,9 @@ class module_controller extends ctrl_module
     {
         if (!fs_director::CheckForEmptyValue(self::$error_message))
             return ui_sysmessage::shout(ui_language::translate(self::$error_message), 'zannounceerror', 'zannounce');
+        if (!fs_director::CheckForEmptyValue(self::$uploadqueued)) {
+            return ui_sysmessage::shout(ui_language::translate("The module has been queued for installation (this can take up to 5 minutes)."));
+        }
         if (!fs_director::CheckForEmptyValue(self::$ok)) {
             return ui_sysmessage::shout(ui_language::translate("Changes to your module options have been saved successfully!"));
         } else {
@@ -390,6 +394,9 @@ class module_controller extends ctrl_module
                 self::$error_message = "The package name must be a module folder name (letters, numbers, _ and -) and not one of the panel's own modules.";
             } elseif (fs_director::CheckFolderExists(ctrl_options::GetSystemOption('sentora_root') . 'modules/' . $module_folder)) {
                 self::$error_message = "The module folder already exists!";
+            } elseif (repo_browser_helper::Pending($module_folder) !== false) {
+                // the earlier upload is still waiting for the daemon: keep it, do not overwrite it
+                self::$error_message = "This module is already queued for installation (this can take up to 5 minutes).";
             } else {
                 // Modules are installed by root (the modules folder is not writable by the
                 // panel): keep the upload for the root job and queue it
@@ -399,7 +406,7 @@ class module_controller extends ctrl_module
                 }
                 if (move_uploaded_file($_FILES['modulefile']['tmp_name'], $dir . $module_folder . '.zpp')
                     && repo_browser_helper::Enqueue(array('install-upload', $module_folder))) {
-                    self::$ok = true;
+                    self::$uploadqueued = $module_folder;
                 } else {
                     self::$error_message = "The package could not be queued for installation.";
                 }

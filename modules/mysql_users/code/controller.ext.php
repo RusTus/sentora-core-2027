@@ -39,6 +39,12 @@ class module_controller extends ctrl_module
     static $rootabuse;
     static $badIP;
     static $ok;
+    static $newuser = null; // shown once: the panel keeps no copy of the password
+    static $newpass = null;
+    static $shownuser = null; // Show password
+    static $shownpass = null;
+    static $askpw = null;   // Show password: ask for the panel password first
+    static $wrongpw = null;
 
     /**
      * The 'worker' methods.
@@ -121,7 +127,7 @@ class module_controller extends ctrl_module
                 }
                 array_push($res, array('userid' => $rowmysql['mu_id_pk'],
                     'username' => $rowmysql['mu_name_vc'],
-                    'dbpassword' => $rowmysql['mu_pass_vc'],
+                    'dbpassword' => '', // MySQL keeps its own hash; the panel keeps no copy
                     'totaldb' => $numrowdb[0],
                     'accesshtml' => $access,
                     'access' => $rowmysql['mu_access_vc']));
@@ -213,6 +219,18 @@ class module_controller extends ctrl_module
         }
     }
 
+    /** is the database (by id) one of the account's own, not deleted */
+    static function AccountOwnsDatabase($uid, $database)
+    {
+        global $zdbh;
+        if (!preg_match('/^[0-9]{1,10}$/', (string) $database) || !preg_match('/^[0-9]{1,10}$/', (string) $uid)) {
+            return false;
+        }
+        $q = $zdbh->prepare("SELECT COUNT(*) FROM x_mysql_databases WHERE my_id_pk = :id AND my_acc_fk = :uid AND my_deleted_ts IS NULL");
+        $q->execute(array(':id' => (int) $database, ':uid' => (int) $uid));
+        return (int) $q->fetchColumn() > 0;
+    }
+
     static function ExecuteCreateUser($uid, $username, $database, $access)
     {
         global $zdbh;
@@ -224,6 +242,11 @@ class module_controller extends ctrl_module
 		$username = $currentuser['username'] . "_" . $username;
         // If errors are found, then exit before creating user...
         if (fs_director::CheckForEmptyValue(self::CheckCreateForErrors($username, $database, $access))) {
+            return false;
+        }
+        // The database must be one of this account's own (the id comes from the form or
+        // the API: another account's id gave the new user full rights on its database)
+        if (!self::AccountOwnsDatabase($uid, $database)) {
             return false;
         }
         runtime_hook::Execute('OnBeforeCreateDatabaseUser');
@@ -283,7 +306,13 @@ class module_controller extends ctrl_module
         $sql->bindParam(':userid', $uid);
         $sql->bindParam(':username', $username);
         $sql->bindParam(':database', $database);
-        $sql->bindParam(':password', $password);
+        // The panel keeps only an encrypted copy (ctrl_secret), shown to the owner on
+        // request; MySQL stores its own hash
+        $enc = ctrl_secret::Encrypt($password);
+        $sql->bindParam(':password', $enc);
+        self::EnsurePassColumn();
+        self::$newuser = $username;
+        self::$newpass = $password;
         $sql->bindParam(':access', $access);
         $time = time();
         $sql->bindParam(':time', $time);
@@ -425,6 +454,15 @@ class module_controller extends ctrl_module
             $currentuser = ctrl_users::GetUserDetail();
             $uid = $currentuser['userid'];
         }
+        // Both the user and the database must belong to the account
+        if (!self::AccountOwnsDatabase($uid, $dbid)) {
+            return false;
+        }
+        $own = $zdbh->prepare("SELECT COUNT(*) FROM x_mysql_users WHERE mu_id_pk = :id AND mu_acc_fk = :uid AND mu_deleted_ts IS NULL");
+        $own->execute(array(':id' => (int) $myuserid, ':uid' => (int) $uid));
+        if ((int) $own->fetchColumn() === 0) {
+            return false;
+        }
         runtime_hook::Execute('OnBeforeAddDatabaseAccess');
         //$rowdb = $zdbh->query("SELECT * FROM x_mysql_databases WHERE my_id_pk=" . $dbid . " AND my_deleted_ts IS NULL")->fetch();
         $numrows = $zdbh->prepare("SELECT * FROM x_mysql_databases WHERE my_id_pk=:dbid AND my_deleted_ts IS NULL");
@@ -533,8 +571,11 @@ class module_controller extends ctrl_module
                 $sql->execute();
                 $sql = $zdbh->prepare("FLUSH PRIVILEGES");
                 $sql->execute();
-                $sql = $zdbh->prepare("UPDATE x_mysql_users SET mu_pass_vc=:password WHERE mu_id_pk=:myuserid");
-                $sql->bindParam(':password', $password);
+                // Only an encrypted copy is kept, for the owner to see again
+                $enc = ctrl_secret::Encrypt($password);
+                self::EnsurePassColumn();
+                $sql = $zdbh->prepare("UPDATE x_mysql_users SET mu_pass_vc=:enc WHERE mu_id_pk=:myuserid");
+                $sql->bindParam(':enc', $enc);
                 $sql->bindParam(':myuserid', $myuserid);
                 $sql->execute();
             }
@@ -542,6 +583,21 @@ class module_controller extends ctrl_module
         runtime_hook::Execute('OnAfterResetDatabasePassword');
         self::$ok = true;
         return true;
+    }
+
+    /** room for the encrypted password (older databases have 40 characters) */
+    static function EnsurePassColumn()
+    {
+        global $zdbh;
+        static $done = false;
+        if ($done) {
+            return;
+        }
+        $done = true;
+        $w = $zdbh->query("SELECT CHARACTER_MAXIMUM_LENGTH FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'x_mysql_users' AND COLUMN_NAME = 'mu_pass_vc'")->fetchColumn();
+        if ((int) $w < 255) {
+            $zdbh->exec("ALTER TABLE x_mysql_users MODIFY mu_pass_vc VARCHAR(255) DEFAULT NULL");
+        }
     }
 
     static function CheckPasswordForErrors($password)
@@ -622,6 +678,31 @@ class module_controller extends ctrl_module
             if (isset($formvars['inEdit_' . $row['userid'] . ''])) {
                 header("location: ./?module=" . $controller->GetCurrentModule() . "&show=Edit&other=" . $row['userid'] . "");
                 exit;
+            }
+            // Show password: one of this account's own users (the loop only has those)
+            if (isset($formvars['inShow_' . $row['userid'] . ''])) {
+                global $zdbh;
+                $q = $zdbh->prepare("SELECT mu_name_vc, mu_pass_vc FROM x_mysql_users WHERE mu_id_pk = :id AND mu_acc_fk = :uid AND mu_deleted_ts IS NULL");
+                $q->execute(array(':id' => (int) $row['userid'], ':uid' => (int) $currentuser['userid']));
+                $u = $q->fetch();
+                if ($u) {
+                    $gate = ctrl_secret::ConfirmGate();
+                    if ($gate !== true) {
+                        if ($gate === null) {
+                            self::$askpw = array('./?module=mysql_users&action=EditUser', 'inShow_' . (int) $row['userid'], $u['mu_name_vc']);
+                        } else {
+                            self::$wrongpw = true;
+                        }
+                        return;
+                    }
+                    $plain = ctrl_secret::Decrypt($u['mu_pass_vc']);
+                    self::$shownuser = $u['mu_name_vc'];
+                    self::$shownpass = ($plain === false) ? '' : $plain;
+                    if ($plain !== false) {
+                        ctrl_secret::LogReveal('MySQL user ' . $u['mu_name_vc']);
+                    }
+                }
+                return;
             }
         }
         return;
@@ -850,6 +931,27 @@ class module_controller extends ctrl_module
         }
         if (!fs_director::CheckForEmptyValue(self::$dbalreadyadded)) {
             return ui_sysmessage::shout(ui_language::translate("That database has already been added to this user."), "zannounceerror");
+        }
+        if (self::$askpw !== null) {
+            return ui_sysmessage::shout(ctrl_secret::ConfirmForm(self::$askpw[0], self::$askpw[1], self::$askpw[2]), "zannounceinfo");
+        }
+        if (!fs_director::CheckForEmptyValue(self::$wrongpw)) {
+            return ui_sysmessage::shout(ui_language::translate("That is not your panel password: the password was not shown."), "zannounceerror");
+        }
+        if (self::$shownuser !== null) {
+            $h = function ($s) { return htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8'); };
+            if (self::$shownpass === '') {
+                return ui_sysmessage::shout(ui_language::translate("The password of") . ' <strong>' . $h(self::$shownuser) . '</strong> '
+                    . ui_language::translate("is not stored (it was set before passwords were kept). Use Reset Password to set a new one; it can be shown after that."), "zannounceerror");
+            }
+            return ui_sysmessage::shout(ui_language::translate("MySQL user") . ' <strong>' . $h(self::$shownuser) . '</strong>, '
+                . ui_language::translate("password:") . ' <code style="user-select: all; font-size: 14px;">' . $h(self::$shownpass) . '</code>', "zannounceok");
+        }
+        if (!fs_director::CheckForEmptyValue(self::$newpass)) {
+            $h = function ($s) { return htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8'); };
+            return ui_sysmessage::shout(ui_language::translate("MySQL user created:") . ' <strong>' . $h(self::$newuser) . '</strong><br>'
+                . ui_language::translate("Password:") . ' <code style="user-select: all; font-size: 14px;">' . $h(self::$newpass) . '</code><br>'
+                . ui_language::translate("You can see it again later with Show password."), "zannounceok");
         }
         if (!fs_director::CheckForEmptyValue(self::$ok)) {
             return ui_sysmessage::shout(ui_language::translate("Changes to your MySQL users have been saved successfully!"), "zannounceok");

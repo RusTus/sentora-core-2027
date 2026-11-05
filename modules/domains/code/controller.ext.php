@@ -138,6 +138,11 @@ class module_controller extends ctrl_module
                 fs_director::SetFileSystemPermissions($vhost_path, 0777);
                 //** Existing Home Directory **//
             } else {
+                // An existing folder inside the account's public_html only
+                $destination = ctrl_ownership::SafeSubFolder($destination);
+                if ($destination === false || $destination === '') {
+                    return false;
+                }
                 $destination = "/" . $destination;
                 $vhost_path = ctrl_options::GetSystemOption('hosted_dir') . $currentuser['username'] . "/public_html/" . $destination . "/";
             }
@@ -331,7 +336,7 @@ class module_controller extends ctrl_module
                     'directory' => $row['directory'],
                     'active' => $row['active'],
                     'status' => $status,
-                    'php' => sys_phpversions::Label($row['php']),
+                    'php' => sys_phpversions::ListLabel($row['php']),
                     'id' => $row['id']);
             }
             return $res;

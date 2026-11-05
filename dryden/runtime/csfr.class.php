@@ -43,6 +43,30 @@ class runtime_csfr {
      * @author Bobby Allen (ballen@bobbyallen.me)
      * @return bool
      */
+    /**
+     * Sentora: is the posted token right? (Does not replace the token, so a module's
+     * own Protect() in the same request still works.)
+     */
+    static function Valid() {
+        return isset($_POST['csfr_token'], $_SESSION['zpcsfr']) && is_string($_POST['csfr_token'])
+            && is_string($_SESSION['zpcsfr']) && hash_equals($_SESSION['zpcsfr'], $_POST['csfr_token']);
+    }
+
+    /**
+     * Sentora: adds the token to every form that posts, in a whole page of panel
+     * output (so no module's form can miss it).
+     */
+    static function AddToForms($html) {
+        if (stripos($html, '<form') === false || session_status() !== PHP_SESSION_ACTIVE) {
+            return $html;
+        }
+        if (!isset($_SESSION['zpcsfr'])) {
+            self::Tokeniser();
+        }
+        $field = '<input type="hidden" name="csfr_token" value="' . htmlspecialchars((string) $_SESSION['zpcsfr'], ENT_QUOTES) . '">';
+        return preg_replace('/(<form\b[^>]*\bmethod\s*=\s*["\']?post["\']?[^>]*>)/i', '$1' . $field, $html);
+    }
+
     static function Protect() {
         if (isset($_POST['csfr_token'], $_SESSION['zpcsfr']) && is_string($_POST['csfr_token']) && hash_equals((string) $_SESSION['zpcsfr'], $_POST['csfr_token'])) {
             self::Tokeniser();

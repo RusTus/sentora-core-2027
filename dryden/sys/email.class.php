@@ -13,9 +13,19 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  */
-require './etc/lib/PHPMailer/class.phpmailer.php';
+// PHPMailer 7 (the 5.2.7 Sentora shipped dated from 2013 and had several published
+// security flaws). Without exceptions: send() returns false and sets ErrorInfo.
+require_once __DIR__ . '/../../etc/lib/PHPMailer/src/Exception.php';
+require_once __DIR__ . '/../../etc/lib/PHPMailer/src/PHPMailer.php';
+require_once __DIR__ . '/../../etc/lib/PHPMailer/src/SMTP.php';
 
-class sys_email extends PHPMailer {
+class sys_email extends \PHPMailer\PHPMailer\PHPMailer {
+
+    public function __construct() {
+        parent::__construct(false);
+        $this->CharSet = 'UTF-8';
+        $this->XMailer = ' ';   // no X-Mailer header (it named the exact library version)
+    }
 
     /**
      * Sends the email with the contents of the object (Body etc. set using the parant calls in phpMailer!)
@@ -38,12 +48,19 @@ class sys_email extends PHPMailer {
             }
             $this->Host = ctrl_options::GetSystemOption('smtp_server');
             $this->Port = ctrl_options::GetSystemOption('smtp_port');
+            // PHPMailer checks the mail server's certificate. This server's own mail
+            // server (Postfix) has a self-signed one until Sencrypt replaces it, and
+            // nothing sent to it leaves the machine, so for this server only it is not
+            // checked; any other mail server's certificate is.
+            if (in_array(strtolower(trim((string) $this->Host)), array('localhost', '127.0.0.1', '::1', '[::1]'), true)) {
+                $this->SMTPOptions = array('ssl' => array('verify_peer' => false, 'verify_peer_name' => false, 'allow_self_signed' => true));
+            }
         }
 
         ob_start();
         $send_resault = $this->Send();
-        $error = ob_get_contents();
-        ob_clean();
+        $error = trim(ob_get_contents() . ' ' . $this->ErrorInfo);
+        ob_end_clean();
         if ($send_resault) {
             runtime_hook::Execute('OnSuccessfulSendEmail');
             return true;

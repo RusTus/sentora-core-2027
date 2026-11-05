@@ -1,0 +1,42 @@
+<?php
+/**
+ * Clients' FTP backups: one account's connection test ("check") or backup and
+ * upload ("run"). Started in the background by the daemon (root); see
+ * dryden/sys/clientftp.class.php. At most two uploads run at the same time.
+ */
+if (PHP_SAPI !== 'cli' || !function_exists('posix_geteuid') || posix_geteuid() !== 0) {
+    exit(1);
+}
+$acc = isset($argv[1]) && ctype_digit($argv[1]) ? (int) $argv[1] : 0;
+$mode = isset($argv[2]) && in_array($argv[2], array('check', 'run'), true) ? $argv[2] : '';
+if ($acc < 1 || $mode === '') {
+    fwrite(STDERR, "usage: sentora-client-ftp-backup <account id> check|run\n");
+    exit(2);
+}
+chdir(dirname(__DIR__));
+require 'dryden/loader.inc.php';
+require 'cnf/db.php';
+require 'inc/dbc.inc.php';
+set_time_limit(0);
+@mkdir(sys_clientftp::STATE_DIR, 0700, true);
+$slot = null;
+if ($mode === 'run') {
+    // two upload slots for the whole server; wait up to 2 hours for one
+    for ($tries = 0; $tries < 720 && $slot === null; $tries++) {
+        foreach (array(1, 2) as $n) {
+            $h = fopen(sys_clientftp::STATE_DIR . 'slot-' . $n . '.lock', 'c');
+            if ($h && flock($h, LOCK_EX | LOCK_NB)) {
+                $slot = $h;
+                break;
+            }
+        }
+        if ($slot === null) {
+            sleep(10);
+        }
+    }
+    if ($slot === null) {
+        sys_clientftp::SetStatus($acc, array('run_time' => time(), 'run_ok' => 0, 'run_message' => 'Not started: the server was busy with other uploads for 2 hours.'));
+        exit(1);
+    }
+}
+exit(sys_clientftp::Run($acc, $mode) ? 0 : 1);

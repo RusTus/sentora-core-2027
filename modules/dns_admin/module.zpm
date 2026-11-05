@@ -37,9 +37,26 @@
 </script>
 
 <script type="text/javascript">
-    $(document).ready(function() {
-        $('#dnsTabs').tabs({
-            cookie: { expires: 7, name: "dnsTabs Cookie" }
-        });
-    });
+    /* the General / Tools tabs (no jQuery UI needed); the last tab is remembered */
+    (function () {
+        var box = document.getElementById('dnsTabs');
+        if (!box) { return; }
+        var links = box.querySelectorAll('ul.nav-tabs a[href^="#"]');
+        function show(id) {
+            for (var i = 0; i < links.length; i++) {
+                var target = document.getElementById(links[i].getAttribute('href').slice(1));
+                var on = links[i].getAttribute('href') === '#' + id;
+                if (target) { target.style.display = on ? 'block' : 'none'; }
+                links[i].parentNode.className = on ? 'active' : '';
+            }
+            try { sessionStorage.setItem('dnsTab', id); } catch (e) {}
+        }
+        for (var i = 0; i < links.length; i++) {
+            links[i].addEventListener('click', function (ev) { ev.preventDefault(); show(this.getAttribute('href').slice(1)); });
+        }
+        var start = null;
+        try { start = sessionStorage.getItem('dnsTab'); } catch (e) {}
+        if (!start || !document.getElementById(start)) { start = links.length ? links[0].getAttribute('href').slice(1) : null; }
+        if (start) { show(start); }
+    })();
 </script>

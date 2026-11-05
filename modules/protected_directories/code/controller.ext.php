@@ -1,1044 +1,426 @@
 <?php
 
 /**
- * @copyright 2014-2023 Sentora Project (http://www.sentora.org/) 
- * 
- * This class handles all core module functionality.
- * @author Kevin Andrews <kevin@zvps.uk>
- * @copyright (c) 2014, nForced Website Hosting Limtied
- * @license http://www.gnu.org/licenses/gpl-3.0.html GPLv3
- * @category Security
- * @link http://zvps.uk
+ * Protected Directories: password-protect folders of the account's website with
+ * Apache basic authentication.
+ *
+ * Each protected folder gets a marked block in its .htaccess (AuthType Basic, the
+ * message as AuthName, its own password file, Require valid-user) and a password file
+ * in the account's htpasswd/ folder, outside public_html. Passwords are stored as
+ * bcrypt ($2y$), which Apache checks itself.
+ *
+ * Safety: every record is read and changed with the account's own id in the SQL;
+ * folders are chosen in a tree of the account's own public_html and checked again
+ * on submit (pd_safe: real folders only, no links, nothing hidden or outside);
+ * files are written through a temporary file and a rename, so a symbolic link put in
+ * place of .htaccess or a password file is replaced, never written through; the
+ * message and the usernames are limited to plain characters, so nothing else can be
+ * added to either file.
  */
+require_once dirname(__FILE__) . '/pdsafe.php';
+
 class module_controller extends ctrl_module
 {
-    
-    #########################################################
-    # Configurations                                        #
-    #########################################################
-    /**
-     * Live is false, Dev is true
-     * Dev mode enables debug messages in the view.
-     * @var boolean 
-     */
-    static $mode = false;
-    
-    
-    #########################################################
-    # Application Start                                     #
-    #########################################################
-    
+    const BEGIN = '# BEGIN Sentora protected directory (managed by the panel: do not edit this block)';
+    const END = '# END Sentora protected directory';
 
-    static $flash_messanger = array();
+    static $messages = array();
+    static $errors = array();
 
-    #########################################################
-    # Htpasswd DAO (Data Access Object) Functions           #
-    #########################################################
-
-    /**
-     * 
-     * @global db_driver $zdbh
-     * @param int $x_htpasswd_file_id
-     * @return array
-     */
-    static function fetchFile( $x_htpasswd_file_id )
+    static function h($s)
     {
-        global $zdbh;
-        $sqlString = "SELECT * FROM x_htpasswd_file
-            WHERE x_htpasswd_sentora_user_id = :x_htpasswd_sentora_user_id
-            AND x_htpasswd_file_id = :x_htpasswd_file_id
-            AND x_htpasswd_file_deleted IS NULL";
-        $bindArray = array( 
-            ':x_htpasswd_file_id' => $x_htpasswd_file_id, 
-            ':x_htpasswd_sentora_user_id' => self::getCurrentUserId(),
-            );
-        try {
-            $zdbh->bindQuery( $sqlString, $bindArray );
+        return htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
+    }
+
+    static function Me()
+    {
+        static $me = null;
+        if ($me === null) {
+            $me = ctrl_users::GetUserDetail();
         }
-        catch (PDOException $e) {
-            self::setFlashMessage('error', 'this protected directory record could not be found to edit.');
+        return $me;
+    }
+
+    static function Fail($text)
+    {
+        self::$errors[] = $text;
+        return false;
+    }
+
+    /** the message shown in the login box: plain characters only, never a quote or a line break */
+    static function CleanMessage($m)
+    {
+        $m = trim(preg_replace('/\s+/', ' ', (string) $m));
+        if ($m === '') {
+            $m = 'Protected area';
+        }
+        if (!preg_match('/^[\p{L}\p{N} .,:;!()_\-\/@&+]{1,64}$/u', $m)) {
             return false;
         }
-        $row = $zdbh->returnRow();
-        $row['x_htpasswd_file_created'] = date('Y-m-d H:i:s', $row['x_htpasswd_file_created']);
-        return $row;
+        return $m;
     }
 
-    /**
-     * 
-     * @global db_driver $zdbh
-     * @param int $x_htpasswd_sentora_user_id
-     * @return array
-     */
-    static function fetchFileList()
+    static function ValidUsername($u)
+    {
+        return is_string($u) && preg_match('/^[A-Za-z0-9._-]{1,32}$/', $u) === 1;
+    }
+
+    static function ValidPassword($p)
+    {
+        return is_string($p) && strlen($p) >= 8 && strlen($p) <= 128 && !preg_match('/[\x00-\x1f\x7f]/', $p);
+    }
+
+    // --- records (always the account's own) ----------------------------------------------
+
+    /** a protected folder of this account, or false */
+    static function Protection($id)
     {
         global $zdbh;
-        $sqlString = "SELECT * FROM x_htpasswd_file
-            WHERE x_htpasswd_sentora_user_id = :x_htpasswd_sentora_user_id
-            AND x_htpasswd_file_deleted IS NULL";
-        $bindArray = array( ':x_htpasswd_sentora_user_id' => self::getCurrentUserId() );
-        $zdbh->bindQuery( $sqlString, $bindArray );
-        $rows = $zdbh->returnRows();
-        /** format created */
-        foreach($rows as &$row) {
-            $row['x_htpasswd_file_created'] = date('Y-m-d H:i:s', $row['x_htpasswd_file_created']);
-        }
-        return $rows;
+        $q = $zdbh->prepare("SELECT * FROM x_htpasswd_file WHERE x_htpasswd_file_id = :id AND x_htpasswd_sentora_user_id = :u AND x_htpasswd_file_deleted IS NULL");
+        $q->execute(array(':id' => (int) $id, ':u' => (int) self::Me()['userid']));
+        $row = $q->fetch();
+        return $row ? $row : false;
     }
 
-    /**
-     * 
-     * @global db_driver $zdbh
-     * @param int $x_htpasswd_user_id
-     * @return array
-     */
-    static function fetchUser()
+    /** the users of a protected folder of this account */
+    static function Users($fileId)
     {
         global $zdbh;
-        $sqlString = "SELECT * FROM x_htpasswd_user
-            WHERE x_htpasswd_user_id = :x_htpasswd_user_id
-            AND x_htpasswd_sentora_user_id = :x_htpasswd_sentora_user_id
-            AND x_htpasswd_user_deleted IS NULL";
-        $bindArray = array( 
-            ':x_htpasswd_user_id' => self::getUserId(),
-            ':x_htpasswd_sentora_user_id' => self::getCurrentUserId()
-            );
-        $zdbh->bindQuery( $sqlString, $bindArray );
-        
-        return $zdbh->returnRow();
+        $q = $zdbh->prepare("SELECT u.* FROM x_htpasswd_user u JOIN x_htpasswd_mapper m ON m.x_htpasswd_user_id = u.x_htpasswd_user_id
+            JOIN x_htpasswd_file f ON f.x_htpasswd_file_id = m.x_htpasswd_file_id
+            WHERE m.x_htpasswd_file_id = :f AND f.x_htpasswd_sentora_user_id = :u AND u.x_htpasswd_sentora_user_id = :u2
+            AND u.x_htpasswd_user_deleted IS NULL ORDER BY u.x_htpasswd_user_username");
+        $q->execute(array(':f' => (int) $fileId, ':u' => (int) self::Me()['userid'], ':u2' => (int) self::Me()['userid']));
+        return $q->fetchAll();
     }
 
-    /**
-     * 
-     * @global db_driver $zdbh
-     * @return array
-     */
-    static function fetchUserList()
+    // --- the files ------------------------------------------------------------------------
+
+    /** the folder of a record, checked again (it may have been replaced by a link since) */
+    static function TargetDir($row)
     {
-        global $zdbh;
-        $sqlString = "SELECT * FROM sentora_core.x_htpasswd_file 
-                     LEFT OUTER JOIN x_htpasswd_mapper
-                     ON x_htpasswd_file.x_htpasswd_file_id = x_htpasswd_mapper.x_htpasswd_file_id
-                     LEFT OUTER JOIN x_htpasswd_user
-                     ON x_htpasswd_user.x_htpasswd_user_id = x_htpasswd_mapper.x_htpasswd_user_id
-                     WHERE x_htpasswd_file.x_htpasswd_file_id = :x_htpasswd_file_id
-                     AND (x_htpasswd_user.x_htpasswd_sentora_user_id = :x_htpasswd_sentora_user_id
-                          OR x_htpasswd_user.x_htpasswd_sentora_user_id IS NULL);";
-        $bindArray = array( 
-            ':x_htpasswd_file_id' => self::getId(), 
-            ':x_htpasswd_sentora_user_id' => self::getCurrentUserId(),     
-        );
-        $zdbh->bindQuery( $sqlString, $bindArray );
-        $rows = $zdbh->returnRows();
-        /** format created */
-        foreach($rows as &$row) {
-            $row['x_htpasswd_file_created'] = date('Y-m-d H:i:s', $row['x_htpasswd_file_created']);
-            $row['x_htpasswd_user_created'] = date('Y-m-d H:i:s', $row['x_htpasswd_user_created']);
-        }
-        return $rows;
+        $rel = pd_safe::RelPath(self::Me()['username'], (string) $row['x_htpasswd_file_target']);
+        $dir = ($rel === false) ? false : pd_safe::ResolveDir(self::Me()['username'], $rel);
+        return ($dir !== false && $dir === $row['x_htpasswd_file_target']) ? $dir : false;
     }
 
-    /**
-     * 
-     * @global db_driver $zdbh
-     * @param type $x_htpasswd_file_id
-     */
-    static function fetchFileUserList()
+    /** .htaccess without this panel's block (and without the block older versions wrote) */
+    static function StripBlock($htaccess, $passwdFile)
     {
-        global $zdbh;
-        $sqlString = "
-            SELECT * FROM x_htpasswd_file f
-            INNER JOIN x_htpasswd_mapper m ON f.x_htpasswd_file_id=m.x_htpasswd_file_id
-            INNER JOIN x_htpasswd_user u ON m.x_htpasswd_user_id=u.x_htpasswd_user_id
-            WHERE f.x_htpasswd_file_id = :x_htpasswd_file_id
-            AND f.x_htpasswd_sentora_user_id = :x_htpasswd_sentora_user_id
-        ";
-        $bindArray = array(
-            ':x_htpasswd_file_id' => self::getId(),
-            ':x_htpasswd_sentora_user_id' => self::getCurrentUserId(),
-        );
-        $zdbh->bindQuery($sqlString, $bindArray);
-        $rows = $zdbh->returnRows();
-        /** format created */
-        foreach($rows as &$row) {
-            $row['x_htpasswd_file_created'] = date('Y-m-d H:i:s', $row['x_htpasswd_file_created']);
-            $row['x_htpasswd_user_created'] = date('Y-m-d H:i:s', $row['x_htpasswd_user_created']);
-        }
-        return $rows;
+        // the block, and the blank line written after it
+        $s = preg_replace('/' . preg_quote(self::BEGIN, '/') . '.*?' . preg_quote(self::END, '/') . '(\R\R?)?/s', '', $htaccess);
+        $s = preg_replace('/AuthName "[^"\r\n]*"\R+AuthType Basic\R+AuthUserFile ' . preg_quote($passwdFile, '/') . '\R+Require valid-user\R?/', '', $s);
+        return trim($s) === '' ? '' : ltrim(rtrim($s), "\r\n") . "\n";
     }
 
-    #########################################################
-
-    /**
-     * @global db_driver $zdbh
-     * @param array $fileArray
-     * @return int
-     */
-    static function createFile( array $fileArray )
+    static function WriteHtaccess($dir, $passwdFile, $message, $protect)
     {
-        global $zdbh;
-        $sqlString = "
-            INSERT INTO x_htpasswd_file 
-            ( 
-                x_htpasswd_file_target, 
-                x_htpasswd_file_message, 
-                x_htpasswd_file_created, 
-                x_htpasswd_sentora_user_id
-            )
-            VALUES
-            (
-                :x_htpasswd_file_target, 
-                :x_htpasswd_file_message, 
-                :x_htpasswd_file_created, 
-                :x_htpasswd_sentora_user_id
-            )
-        ";
-        $bindArray = array(
-            ':x_htpasswd_file_target'    => $fileArray[ 'x_htpasswd_file_target' ],
-            ':x_htpasswd_file_message'   => $fileArray[ 'x_htpasswd_file_message' ],
-            ':x_htpasswd_file_created'   => $fileArray[ 'x_htpasswd_file_created' ],
-            ':x_htpasswd_sentora_user_id' => self::getCurrentUserId(),
-        );
-        try {
-            $zdbh->bindQuery( $sqlString, $bindArray );
+        $current = pd_safe::Read($dir . '/.htaccess');
+        if ($current === false) {
+            return self::Fail('The .htaccess in that folder is not a plain file (for example a link), so it is not changed.');
         }
-        catch (PDOException $exc) {
-            $message = ($exc->getCode() === '23000') ? 'Folder already protected.' : 'Error adding to database.';
-            self::setFlashMessage('error', $exc->getMessage());
+        $new = self::StripBlock($current, $passwdFile);
+        if ($protect) {
+            $block = self::BEGIN . "\nAuthType Basic\nAuthName \"" . $message . "\"\nAuthUserFile " . $passwdFile . "\nRequire valid-user\n" . self::END . "\n";
+            $new = $block . ($new === '' ? '' : "\n" . $new);
         }
-
-        
-        return $zdbh->lastInsertId();
+        if ($new === '' && $current !== '') {
+            return pd_safe::Remove($dir . '/.htaccess') ? true : self::Fail('Could not remove the .htaccess file.');
+        }
+        if ($new === '' || $new === $current) {
+            return true;
+        }
+        return pd_safe::Write($dir, '.htaccess', $new, 0644) ? true : self::Fail('Could not write the .htaccess file.');
     }
 
-    /**
-     * 
-     * @global db_driver $zdbh
-     * @param array $userArray
-     * @return int
-     */
-    static function createUser( array $userArray )
+    static function WritePasswd($row)
     {
-        global $zdbh;
-        $sqlString = "
-            INSERT INTO x_htpasswd_user
-            (
-                x_htpasswd_user_username,
-                x_htpasswd_user_password,
-                x_htpasswd_user_created,
-                x_htpasswd_sentora_user_id
-            )
-            VALUES
-            (
-                :x_htpasswd_user_username,
-                :x_htpasswd_user_password,
-                :x_htpasswd_user_created,
-                :x_htpasswd_sentora_user_id
-            )
-        ";
-        $bindArray = array(
-            ':x_htpasswd_user_username' => $userArray[ 'x_htpasswd_user_username' ],
-            ':x_htpasswd_user_password' => $userArray[ 'x_htpasswd_user_password' ],
-            ':x_htpasswd_user_created'  => time(),
-            ':x_htpasswd_sentora_user_id'  => self::getCurrentUserId(),
-        );
-        $zdbh->bindQuery( $sqlString, $bindArray );
-        return $zdbh->lastInsertId();
-    }
-
-    /**
-     * 
-     * @global db_driver $zdbh
-     * @param int $x_htpasswd_file_id
-     * @param int $x_htpasswd_user_id
-     * @return int
-     */
-    static function createMapper( $x_htpasswd_file_id, $x_htpasswd_user_id )
-    {
-        global $zdbh;
-        $x_htpasswd_file_id = (int) $x_htpasswd_file_id;
-        $x_htpasswd_user_id = (int) $x_htpasswd_user_id;
-        $sqlString               = "
-            INSERT INTO x_htpasswd_mapper
-            (
-                x_htpasswd_file_id,
-                x_htpasswd_user_id
-            )
-            VALUES
-            (
-                :x_htpasswd_file_id,
-                :x_htpasswd_user_id
-            )
-        ";
-        $bindArray = array(
-            ':x_htpasswd_file_id' => $x_htpasswd_file_id,
-            ':x_htpasswd_user_id' => $x_htpasswd_user_id,
-        );
-        $zdbh->bindQuery( $sqlString, $bindArray );
-        return $zdbh->lastInsertId();
-    }
-
-    #########################################################
-
-    /**
-     * 
-     * @global db_driver $zdbh
-     * @param array $fileArray
-     * @return int
-     */
-    static function updateFile( $fileArray )
-    {
-        global $zdbh;
-        $sqlString = "
-            UPDATE x_htpasswd_file SET
-            x_htpasswd_file_target = :x_htpasswd_file_target,
-            x_htpasswd_file_message = :x_htpasswd_file_message
-            WHERE x_htpasswd_file_id = :x_htpasswd_file_id
-            AND x_htpasswd_sentora_user_id = :x_htpasswd_sentora_user_id
-        ";
-        $bindArray = array(
-            ':x_htpasswd_file_id'      => $fileArray[ 'x_htpasswd_file_id' ],
-            ':x_htpasswd_file_target'  => $fileArray[ 'x_htpasswd_file_target' ],
-            ':x_htpasswd_file_message' => $fileArray[ 'x_htpasswd_file_message' ],
-            ':x_htpasswd_sentora_user_id' => self::getCurrentUserId(),
-        );
-        $zdbh->bindQuery( $sqlString, $bindArray );
-        return $zdbh->returnResult();
-    }
-
-    static function updateUser( $userArray )
-    {
-        global $zdbh;
-        $sqlString = "
-            UPDATE x_htpasswd_user SET
-            x_htpasswd_user_username = :x_htpasswd_user_username,
-            x_htpasswd_user_password = :x_htpasswd_user_password
-            WHERE
-            x_htpasswd_user_id = :x_htpasswd_user_id
-            x_htpasswd_sentora_user_id = :x_htpasswd_sentora_user_id
-        ";
-        $bindArray = array(
-            ':x_htpasswd_user_id'       => self::getUserId(),
-            ':x_htpasswd_user_username' => $userArray[ 'x_htpasswd_user_username' ],
-            ':x_htpasswd_user_password' => $userArray[ 'x_htpasswd_user_password' ],
-            ':x_htpasswd_sentora_user_id' => self::getCurrentUserId(),
-        );
-        $zdbh->bindQuery( $sqlString, $bindArray );
-        return $zdbh->returnResult();
-    }
-
-    #########################################################
-
-    /**
-     * 
-     * @global db_driver $zdbh
-     * @param int $x_htpasswd_file_id
-     * @return int
-     */
-    static function deleteFile( $x_htpasswd_file_id )
-    {
-        global $zdbh;
-        $sqlString = "
-            DELETE FROM x_htpasswd_file 
-            WHERE x_htpasswd_file_id = :x_htpasswd_file_id
-            AND x_htpasswd_sentora_user_id = :x_htpasswd_sentora_user_id
-        ";
-        $bindArray = array( 
-            ':x_htpasswd_file_id' => $x_htpasswd_file_id,
-            ':x_htpasswd_sentora_user_id' => self::getCurrentUserId(),
-        );
-        $zdbh->bindQuery( $sqlString, $bindArray );
-        return $zdbh->returnResult();
-    }
-
-    /**
-     * 
-     * @global db_driver $zdbh
-     * @param int $x_htpasswd_user_id
-     * @return int
-     */
-    static function deleteUser( $x_htpasswd_user_id )
-    {
-        global $zdbh;
-        $sqlString = "
-            DELETE FROM x_htpasswd_user 
-            WHERE x_htpasswd_user_id = :x_htpasswd_user_id
-            AND x_htpasswd_sentora_user_id = :x_htpasswd_sentora_user_id
-        ";
-        $bindArray = array( 
-            ':x_htpasswd_user_id' => $x_htpasswd_user_id,
-            ':x_htpasswd_sentora_user_id' => self::getCurrentUserId(),
-        );
-        $zdbh->bindQuery( $sqlString, $bindArray );
-        return $zdbh->returnResult();
-    }
-
-    /**
-     * 
-     * @global db_driver $zdbh
-     * @param int $x_htpasswd_file_id
-     * @param int $x_htpasswd_user_id
-     * @return int
-     */
-    static function deleteMapper( $x_htpasswd_file_id, $x_htpasswd_user_id )
-    {
-        global $zdbh;
-        $sqlString = "
-            DELETE FROM x_htpasswd_mapper 
-            WHERE
-            x_htpasswd_file_id = :x_htpasswd_file_id
-            AND
-            x_htpasswd_user_id = :x_htpasswd_user_id
-        ";
-        $bindArray = array(
-            ':x_htpasswd_file_id' => $x_htpasswd_file_id,
-            ':x_htpasswd_user_id' => $x_htpasswd_user_id
-        );
-        $zdbh->bindQuery( $sqlString, $bindArray );
-        return $zdbh->returnResult();
-    }
-
-    #########################################################
-    # File System Operations                                #
-    #########################################################
-    static function fileInPathCheck($file)
-    {
-        $path = self::getHostDir() . self::getCurrentUsername() . '/public_html/' . $file . '/';
-        $realPath = realpath($path);
-        
-        if(!$realPath)
-        {
-            self::setFlashMessage('error', 'Path \'' . $path . '\' not found.');
-            return false;
+        $pdir = pd_safe::PasswdDir(self::Me()['username']);
+        if ($pdir === false) {
+            return self::Fail('The htpasswd folder of your account can not be used (is it a link?).');
         }
-        
-        if( 0 !== strpos($realPath, self::getHostDir() . self::getCurrentUsername() . '/'))
-        {
-            self::setFlashMessage('error', 'Path \'' . $realPath . '\' is outside your home directory and is not allowed.');
-            return false;
-        }
-        
-        self::setFlashMessage('debug', 'fileInPathCheck successful');
-        return $realPath;
-    }
-    
-    static function fileExists($combinedPath)
-    {
-        if(!fs_director::CheckFileExists($combinedPath)) {
-            self::setFlashMessage('debug', 'file does not exist');
-            return false;
-        }
-        self::setFlashMessage('debug', 'file exists');
-        return true;
-    }
-    
-    static function fileHtaccessExists($realPath)
-    {
-        if(!self::fileExists($realPath . '/.htaccess'))
-        {
-            self::setFlashMessage('debug', 'htaccess file does not exists: ' . $realPath . '/.htaccess');
-            return false;
-        }
-        self::setFlashMessage('debug', 'htaccess file exists');
-        return true;
-    }
-    
-    static function fileHtpasswdExists($combinedPath)
-    {
-        if(!self::fileExists($combinedPath))
-        {
-            self::setFlashMessage('debug', 'htpasswd file does not exists: ' . $combinedPath);
-            return false;
-        }
-        self::setFlashMessage('debug', 'htpasswd file exists');
-        return true;
-    }
-    
-    static function writeFile($fileCombinedPath, $string='', $append=false )
-    {
-        
-        $openType = (!$append) ? 'w' : 'a';
-
-        $fp = fopen($fileCombinedPath, $openType);
-
-        if(false === $fp) {
-            self::setFlashMessage('debug', 'file pointer returned false on fopen ' . $fileCombinedPath . ' ' .$openType);
-            return false;
-        }
-
-        if(false === fwrite($fp, $string)) {
-            self::setFlashMessage('debug', 'file pointer returned false on fwrite');
-            return false;
-        }
-
-        if (false === fclose($fp)) {
-           self::setFlashMessage('debug', 'file pointer returned false on fclose');
-            return false; 
-        }
-        
-        unset($fp);
-
-        self::setFlashMessage('debug', 'file created successfully');
-        return true;
-    }
-    
-    static function readFile ($fileCombinedPath) {
-        $fp = fopen($fileCombinedPath, 'r');
-
-        if(false === $fp) {
-            self::setFlashMessage('debug', 'file pointer returned false on fopen ' . $fileCombinedPath . ' ' .$openType);
-            return false;
-        }
-        $string = fread($fp, 10000000);
-        if(false === $string) {
-            self::setFlashMessage('debug', 'file pointer returned false on fwrite');
-            return false;
-        }
-
-        if (false === fclose($fp)) {
-           self::setFlashMessage('debug', 'file pointer returned false on fclose');
-            return false; 
-        }
-        
-        unset($fp);
-
-        self::setFlashMessage('debug', 'file created successfully');
-        return $string;
-    }
-    
-    static function createHtaccessFile($realPath) {
-        $combinedPath = $realPath . '/.htaccess';
-        if(!self::writeFile($combinedPath) )
-        {
-            self::setFlashMessage('error', 'failed to create htaccess file.');
-            return false;
-        }
-        return true;
-    }
-    
-    static function createPasswdFile($realPath)
-    {
-        
-        $path = self::getHostDir() . self::getCurrentUsername() . '/htpasswd/';
-
-        if(!file_exists($path))
-        {
-            self::setFlashMessage('debug', 'passwd folder doesn\'t exist');
-            
-            if(!mkdir($path, 0777, true))
-            {
-                self::setFlashMessage('error', 'passwd folder failed creation');
-                return false;
+        $lines = '';
+        foreach (self::Users($row['x_htpasswd_file_id']) as $u) {
+            if (self::ValidUsername($u['x_htpasswd_user_username']) && strpos($u['x_htpasswd_user_password'], "\n") === false && strpos($u['x_htpasswd_user_password'], ':') === false) {
+                $lines .= $u['x_htpasswd_user_username'] . ':' . $u['x_htpasswd_user_password'] . "\n";
             }
         }
-        
-        $combinedPath = $path . 'htpasswd-' . md5($realPath);
-        
-        if(!self::writeFile($combinedPath))
-        {
-            self::setFlashMessage('error', 'failed to create passwd file for protected directory.');
-            return false;
-        }
-        
-        return true;
-    }
-    
-    static function buildHtaccessLink($message, $htpasswdFile) {
-        $htaccessString = 'AuthName "' . $message . '"' . PHP_EOL .
-                          'AuthType Basic' . PHP_EOL .
-                          'AuthUserFile ' . $htpasswdFile . PHP_EOL .
-                          'Require valid-user' . PHP_EOL;
-        return $htaccessString;
-    }
-    
-    static function writeHtaccessLink($realPath, $append, $message)
-    {
-        $htpasswdFile = self::getHostDir() . self::getCurrentUsername() . '/htpasswd/' . 'htpasswd-' . md5($realPath);
-        $htaccessString = self::buildHtaccessLink($message, $htpasswdFile);
-        
-        $combinedPath = $realPath . '/.htaccess';
-        
-        if(!self::writeFile($combinedPath, $htaccessString, $append ) )
-        {
-            self::setFlashMessage('error', 'failed to write htaccess file data.');
-            return false;
-        }
-        
-        self::setFlashMessage('debug', 'linked htaccess and passwd successfully.');
-        return true;
-    }
-    
-    static function removeHtaccessLink($realPath, $message)
-    {
-        $combinedPath = $realPath . '/.htaccess';
-        $data = self::readFile($combinedPath);
-
-        $htpasswdFile = self::getHostDir() . self::getCurrentUsername(). '/' . 'htpasswd/' . 'htpasswd-' . md5($realPath);
-        
-        $htaccessString = self::buildHtaccessLink($message, $htpasswdFile);
-                      
-        $newFileString = str_replace($htaccessString, '', $data);
-
-        if(!self::writeFile($combinedPath, $newFileString))
-        {
-            self::setFlashMessage('error', 'failed to remove htaccess link to htpasswd file.');
-            return false;
-        }
-        
-        self::setFlashMessage('debug', 'htaccess link to htpasswd removed successfully.');
-        return true;
-    }
-    
-    static function removeHtpasswd($combinedPath)
-    {
-        if(!unlink($combinedPath))
-        {
-            self::setFlashMessage('debug', 'htpasswd file removal failed : ' . $combinedPath);
-            return false;
-        }
-        
-        self::setFlashMessage('debug', 'htpasswd file removal succeeded : ' . $combinedPath);
-        return true;
-        
-    }
-    
-    static function writePasswdUsers($file) {
-        $files = self::fetchFileUserList($file['x_htpasswd_file_id']);
-        $userString = "";
-        foreach($files as $file) {
-            $userString .= 
-                $file['x_htpasswd_user_username'] . 
-                ':' . 
-                $file['x_htpasswd_user_password'] . PHP_EOL
-            ; 
-        }
-        
-        self::writeFile(
-            self::getHostDir() . 
-            '/' . 
-            self::getCurrentUsername() . 
-            '/htpasswd/'.
-            'htpasswd-' . md5($file['x_htpasswd_file_target'])
-            , 
-            $userString
-            , 
-            false
-        );
+        return pd_safe::Write($pdir, basename(pd_safe::PasswdFile(self::Me()['username'], $row['x_htpasswd_file_target'])), $lines, 0640)
+            ? true : self::Fail('Could not write the password file.');
     }
 
-    #########################################################
-    # Service Output methods
-    #########################################################
-    static function getFileList()
-    {
-        return self::fetchFileList();
-    }
-    
-    static function getFile()
-    {
-        return array(self::fetchFile( self::getId() ));
-    }
-    
-    static function getHostDir()
-    {
-        return ctrl_options::GetSystemOption('hosted_dir');
-    }
-    
-    static function getUserFileList()
-    {
-        return self::fetchFileUserList();
-    }
-    
-    static function getUser()
-    {
-        return array(self::fetchUser());
-    }
-    
-    #########################################################
-    # Input Checkers
-    #########################################################
-    static function getId()
-    {
-        global $controller;
-        $urlvars = $controller->GetAllControllerRequests('URL');
-        if ( 
-            (isset($urlvars['control'])) && 
-            (isset($urlvars['id'])) 
-        ) {
-            return (int) $urlvars['id'];
-        }
-        return false;
-    }
-    
-    static function getUserId()
-    {
-        global $controller;
-        $urlvars = $controller->GetAllControllerRequests('URL');
-        if ( 
-            (isset($urlvars['control'])) && 
-            (isset($urlvars['userid'])) 
-        ) {
-            return (int) $urlvars['userid'];
-        }
-        return false;
-    }
-    
-    #########################################################
-    # Post Actions
-    #########################################################
+    // --- actions (POST, with the CSRF token) -------------------------------------------------------
+
     static function doCreateProtection()
     {
-        global $controller;
+        global $controller, $zdbh;
         runtime_csfr::Protect();
-        
-        $file = $controller->GetControllerRequest('FORM', 'file');
-        $message = $controller->GetControllerRequest('FORM', 'message');
-        
-        
-        // Check File path security check
-        if(!self::hasFlashErrors()) { $fileTarget = self::fileInPathCheck($file); }
-        
-        // Check .htaccess exists
-        if(!self::hasFlashErrors()) { $exists = self::fileHtaccessExists($fileTarget); }
-        
-        // Create .htaccess file if needed
-        if(!self::hasFlashErrors() && !$exists) { self::createHtaccessFile($fileTarget); }
-        
-        // Create protected passwd file
-        if(!self::hasFlashErrors()) { self::createPasswdFile($fileTarget); }
- 
-        // Remove exiting protection to prevent duplicate entries
-        if(!self::hasFlashErrors()) { self::removeHtaccessLink($fileTarget, $message); }
-
-        $append = !$exists ? false : true;
-        
-        // Write htaccess configs to link to passwd file
-        if(!self::hasFlashErrors()) { self::writeHtaccessLink($fileTarget, $append, $message); }
-        
-        // Create DB record
-        if(!self::hasFlashErrors())
-        {
-            $id = self::createFile(
-                array(
-                    'x_htpasswd_file_target'    => $fileTarget,
-                    'x_htpasswd_file_message'   => $message,
-                    'x_htpasswd_file_created'   => time(),
-                    'x_htpasswd_sentora_user_id' => self::getCurrentUserId(),
-                )
-            );
-            if(!self::hasFlashErrors()) 
-            {
-                self::setFlashMessage('debug', 'protected directory added to db successfully.');
-            }
+        $f = $controller->GetAllControllerRequests('FORM');
+        $me = self::Me();
+        $dir = pd_safe::ResolveDir($me['username'], isset($f['inPath']) ? $f['inPath'] : '');
+        if ($dir === false) {
+            return self::Fail('Choose a folder of your website in the tree.');
         }
-        
-
-        // No errors
-        if(!self::hasFlashErrors()) 
-        {
-            header("location: ./?module=" . $controller->GetCurrentModule() . "&control=EditProtection&id=" . $id);
+        $message = self::CleanMessage(isset($f['inMessage']) ? $f['inMessage'] : '');
+        if ($message === false) {
+            return self::Fail('The message may have letters, digits, spaces and . , : ; ! ( ) _ - / @ & + only (64 at most).');
         }
-
+        $q = $zdbh->prepare("SELECT COUNT(*) FROM x_htpasswd_file WHERE x_htpasswd_file_target = :t AND x_htpasswd_file_deleted IS NULL");
+        $q->execute(array(':t' => $dir));
+        if ((int) $q->fetchColumn() > 0) {
+            return self::Fail('That folder is already protected.');
+        }
+        if (pd_safe::PasswdDir($me['username']) === false) {
+            return self::Fail('The htpasswd folder of your account can not be used (is it a link?).');
+        }
+        $passwd = pd_safe::PasswdFile($me['username'], $dir);
+        if (!pd_safe::Write(dirname($passwd), basename($passwd), '', 0640) || !self::WriteHtaccess($dir, $passwd, $message, true)) {
+            return self::Fail(self::$errors ? array_pop(self::$errors) : 'Could not protect that folder.');
+        }
+        $zdbh->prepare("INSERT INTO x_htpasswd_file (x_htpasswd_file_target, x_htpasswd_file_message, x_htpasswd_file_created, x_htpasswd_sentora_user_id) VALUES (:t, :m, :c, :u)")
+            ->execute(array(':t' => $dir, ':m' => $message, ':c' => time(), ':u' => (int) $me['userid']));
+        $id = (int) $zdbh->lastInsertId();
+        header('location: ./?module=protected_directories&control=Edit&id=' . $id . '&done=created');
+        exit;
     }
-    
-    static function doEditProtection()
+
+    static function doUpdateMessage()
     {
-        global $controller;
+        global $controller, $zdbh;
         runtime_csfr::Protect();
-        
-        $message = $controller->GetControllerRequest('FORM', 'message');
-        $id = self::getId();
-        $file = self::fetchFile($id);
-        
-        self::removeHtaccessLink($file['x_htpasswd_file_target'], $file['x_htpasswd_file_message']);
-
-        // Check .htaccess exists
-        if(!self::hasFlashErrors()) { $exists = self::fileHtaccessExists($file['x_htpasswd_file_target']); }
-        // Create .htaccess file if needed
-        if(!self::hasFlashErrors() && !$exists) { self::createHtaccessFile($file['x_htpasswd_file_target']); }
-        // Write htaccess configs to link to passwd file
-        $append = !$exists ? false : true;
-        if(!self::hasFlashErrors()) { self::writeHtaccessLink($file['x_htpasswd_file_target'], $append, $message); }
-        
-        if(!self::hasFlashErrors())
-        {
-            self::updateFile(array(
-                'x_htpasswd_file_id'      => $id,
-                'x_htpasswd_file_target'  => $file['x_htpasswd_file_target'],
-                'x_htpasswd_file_message' => $message,
-            ));
+        $f = $controller->GetAllControllerRequests('FORM');
+        $row = self::Protection(isset($f['inId']) ? $f['inId'] : 0);
+        if (!$row) {
+            return self::Fail('That protected folder was not found.');
         }
+        $message = self::CleanMessage(isset($f['inMessage']) ? $f['inMessage'] : '');
+        if ($message === false) {
+            return self::Fail('The message may have letters, digits, spaces and . , : ; ! ( ) _ - / @ & + only (64 at most).');
+        }
+        $dir = self::TargetDir($row);
+        if ($dir === false) {
+            return self::Fail('That folder is no longer a plain folder of your website (removed, or replaced by a link).');
+        }
+        if (!self::WriteHtaccess($dir, pd_safe::PasswdFile(self::Me()['username'], $dir), $message, true)) {
+            return false;
+        }
+        $zdbh->prepare("UPDATE x_htpasswd_file SET x_htpasswd_file_message = :m WHERE x_htpasswd_file_id = :id AND x_htpasswd_sentora_user_id = :u")
+            ->execute(array(':m' => $message, ':id' => (int) $row['x_htpasswd_file_id'], ':u' => (int) self::Me()['userid']));
+        self::$messages[] = 'The message has been changed.';
     }
-    
+
     static function doDeleteProtection()
     {
-        global $controller;
+        global $controller, $zdbh;
         runtime_csfr::Protect();
-        $id = self::getId();
-        $file = self::fetchFile($id);
-        $htpasswdFile = self::getHostDir() . self::getCurrentUsername() . '/htpasswd/' . 'htpasswd-' . md5($file['x_htpasswd_file_target']);
+        $f = $controller->GetAllControllerRequests('FORM');
+        $row = self::Protection(isset($f['inId']) ? $f['inId'] : 0);
+        if (!$row) {
+            return self::Fail('That protected folder was not found.');
+        }
+        $me = self::Me();
+        $passwd = pd_safe::PasswdFile($me['username'], $row['x_htpasswd_file_target']);
+        $dir = self::TargetDir($row);
+        if ($dir !== false && !self::WriteHtaccess($dir, $passwd, '', false)) {
+            return false;
+        }
+        pd_safe::Remove($passwd);
+        $u = (int) $me['userid'];
+        $zdbh->prepare("UPDATE x_htpasswd_user u JOIN x_htpasswd_mapper m ON m.x_htpasswd_user_id = u.x_htpasswd_user_id
+            SET u.x_htpasswd_user_deleted = :t WHERE m.x_htpasswd_file_id = :f AND u.x_htpasswd_sentora_user_id = :u")
+            ->execute(array(':t' => time(), ':f' => (int) $row['x_htpasswd_file_id'], ':u' => $u));
+        $zdbh->prepare("UPDATE x_htpasswd_file SET x_htpasswd_file_deleted = :t WHERE x_htpasswd_file_id = :f AND x_htpasswd_sentora_user_id = :u")
+            ->execute(array(':t' => time(), ':f' => (int) $row['x_htpasswd_file_id'], ':u' => $u));
+        header('location: ./?module=protected_directories&done=removed');
+        exit;
+    }
 
-        // delete from htaccess file
-        self::removeHtaccessLink($file['x_htpasswd_file_target'],$file['x_htpasswd_file_message']);
-        
-        // delete htaccess passwd file
-        self::removeHtpasswd($htpasswdFile);
-        
-        // delete all users and mappings from db related to protected directory
-        $files = self::fetchUserList($id);
-        
-        if($files && !self::hasFlashErrors()) {
-            foreach ($files as $file) {
-                if($file['x_htpasswd_file_id'] && $file['x_htpasswd_user_id']) {
-                    self::deleteMapper($file['x_htpasswd_file_id'], $file['x_htpasswd_user_id']);
-                    self::setFlashMessage('debug', 'deleting file user mapper');
-                }
-                if($file['x_htpasswd_file_id']) { 
-                    self::deleteUser($file['x_htpasswd_user_id']);
-                    self::setFlashMessage('debug', 'deleting user');
-                }
+    static function doAddUser()
+    {
+        global $controller, $zdbh;
+        runtime_csfr::Protect();
+        $f = $controller->GetAllControllerRequests('FORM');
+        $row = self::Protection(isset($f['inId']) ? $f['inId'] : 0);
+        if (!$row) {
+            return self::Fail('That protected folder was not found.');
+        }
+        $name = isset($f['inUser']) ? trim((string) $f['inUser']) : '';
+        $pass = isset($f['inPassword']) ? (string) $f['inPassword'] : '';
+        if (!self::ValidUsername($name)) {
+            return self::Fail('A username has 1 to 32 letters, digits, dots, dashes or underscores.');
+        }
+        if (!self::ValidPassword($pass)) {
+            return self::Fail('A password has 8 to 128 characters.');
+        }
+        foreach (self::Users($row['x_htpasswd_file_id']) as $u) {
+            if (strcasecmp($u['x_htpasswd_user_username'], $name) === 0) {
+                return self::Fail('That folder already has a user with that name.');
             }
         }
-        
-        // delete protected from db
-        self::deleteFile($id);
-        self::setFlashMessage('debug', 'deleting file');
-
-        // return to list
-        if(!self::hasFlashErrors()) 
-        {
-            header("location: ./?module=" . $controller->GetCurrentModule() . "&control=Index");
+        $me = (int) self::Me()['userid'];
+        $zdbh->prepare("INSERT INTO x_htpasswd_user (x_htpasswd_user_username, x_htpasswd_user_password, x_htpasswd_user_created, x_htpasswd_sentora_user_id) VALUES (:n, :p, :c, :u)")
+            ->execute(array(':n' => $name, ':p' => password_hash($pass, PASSWORD_BCRYPT), ':c' => time(), ':u' => $me));
+        $zdbh->prepare("INSERT INTO x_htpasswd_mapper (x_htpasswd_file_id, x_htpasswd_user_id) VALUES (:f, :u)")
+            ->execute(array(':f' => (int) $row['x_htpasswd_file_id'], ':u' => (int) $zdbh->lastInsertId()));
+        if (self::WritePasswd($row)) {
+            self::$messages[] = 'User ' . $name . ' can now open the folder.';
         }
     }
-    
-    static function doCreateUser()
-    {
-        global $controller;
-        runtime_csfr::Protect();
-        $id = self::getId();
-        $file = self::fetchFile($id);
 
-        $username = $controller->GetControllerRequest('FORM', 'username');
-        $password = $controller->GetControllerRequest('FORM', 'password');
-        
-        $encryptedPassword = crypt($password, base64_encode($password));
-        
-        $userId = self::createUser(array(
-            'x_htpasswd_user_username'  => $username,
-            'x_htpasswd_user_password'  => $encryptedPassword,
-        ));
-        
-        self::createMapper($id, $userId);
-        
-        self::writePasswdUsers($file);
-        
-        header("location: ./?module=" . $controller->GetCurrentModule() . "&control=EditProtection&id=" . $id);
-        
-    }
-    
-        static function doUpdateUser()
+    static function UserOfProtection($row, $userId)
     {
-        global $controller;
-        runtime_csfr::Protect();
-        $id = self::getId();
-        $file = self::fetchFile($id);
-
-        $username = $controller->GetControllerRequest('FORM', 'username');
-        $password = $controller->GetControllerRequest('FORM', 'password');
-        
-        $encryptedPassword = crypt($password, base64_encode($password));
-        
-        self::updateUser(array(
-            'x_htpasswd_user_username'  => $username,
-            'x_htpasswd_user_password'  => $encryptedPassword,
-        ));
-        
-        self::writePasswdUsers($file);
-        
-        header("location: ./?module=" . $controller->GetCurrentModule() . "&control=EditProtection&id=" . $id);
-        
+        foreach (self::Users($row['x_htpasswd_file_id']) as $u) {
+            if ((int) $u['x_htpasswd_user_id'] === (int) $userId) {
+                return $u;
+            }
+        }
+        return false;
     }
-    
+
+    static function doSetPassword()
+    {
+        global $controller, $zdbh;
+        runtime_csfr::Protect();
+        $f = $controller->GetAllControllerRequests('FORM');
+        $row = self::Protection(isset($f['inId']) ? $f['inId'] : 0);
+        $u = $row ? self::UserOfProtection($row, isset($f['inUserId']) ? $f['inUserId'] : 0) : false;
+        if (!$u) {
+            return self::Fail('That user was not found.');
+        }
+        $pass = isset($f['inPassword']) ? (string) $f['inPassword'] : '';
+        if (!self::ValidPassword($pass)) {
+            return self::Fail('A password has 8 to 128 characters.');
+        }
+        $zdbh->prepare("UPDATE x_htpasswd_user SET x_htpasswd_user_password = :p WHERE x_htpasswd_user_id = :id AND x_htpasswd_sentora_user_id = :u")
+            ->execute(array(':p' => password_hash($pass, PASSWORD_BCRYPT), ':id' => (int) $u['x_htpasswd_user_id'], ':u' => (int) self::Me()['userid']));
+        if (self::WritePasswd($row)) {
+            self::$messages[] = 'The password of ' . $u['x_htpasswd_user_username'] . ' has been changed.';
+        }
+    }
+
     static function doDeleteUser()
     {
-        global $controller;
+        global $controller, $zdbh;
         runtime_csfr::Protect();
-        
-        $id = self::getId();
-        $userId = self::getUserId();
-        $file = self::fetchFile($id);
-        
-        if(!self::hasFlashErrors()) 
-        {
-        self::deleteUser($userId);
+        $f = $controller->GetAllControllerRequests('FORM');
+        $row = self::Protection(isset($f['inId']) ? $f['inId'] : 0);
+        $u = $row ? self::UserOfProtection($row, isset($f['inUserId']) ? $f['inUserId'] : 0) : false;
+        if (!$u) {
+            return self::Fail('That user was not found.');
         }
-        
-        if(!self::hasFlashErrors()) 
-        {
-        self::deleteMapper($id, $userId);
+        $zdbh->prepare("UPDATE x_htpasswd_user SET x_htpasswd_user_deleted = :t WHERE x_htpasswd_user_id = :id AND x_htpasswd_sentora_user_id = :u")
+            ->execute(array(':t' => time(), ':id' => (int) $u['x_htpasswd_user_id'], ':u' => (int) self::Me()['userid']));
+        if (self::WritePasswd($row)) {
+            self::$messages[] = 'User ' . $u['x_htpasswd_user_username'] . ' has been removed.';
         }
-        
-        if(!self::hasFlashErrors()) 
-        {
-            self::writePasswdUsers($file);
-        }
-        
-        if(!self::hasFlashErrors()) 
-        {
-            header("location: ./?module=" . $controller->GetCurrentModule() . "&control=EditProtection&id=" . $id);
-        }
-        
     }
 
-    
-    #########################################################
-    # Controller Actions
-    #########################################################
-    static function getisEditProtection()
+    // --- the page ----------------------------------------------------------------------------
+
+    static function CurrentId()
     {
         global $controller;
-        $urlvars = $controller->GetAllControllerRequests('URL');
-        if ((isset($urlvars['control'])) && ($urlvars['control'] === "EditProtection")) {
-            return true;
-        }
-        return false;
+        return (int) $controller->GetControllerRequest('URL', 'id');
     }
 
-    static function getisCreateProtection()
+    static function getIsEdit()
     {
         global $controller;
-        $urlvars = $controller->GetAllControllerRequests('URL');
-        if ((isset($urlvars['control'])) && ($urlvars['control'] === "CreateProtection")) {
-            return true;
-        }
-        return false;
+        return $controller->GetControllerRequest('URL', 'control') === 'Edit' && self::Protection(self::CurrentId()) !== false;
     }
-    
-    static function getisDeleteProtection()
+
+    static function getIsIndex()
+    {
+        return !self::getIsEdit();
+    }
+
+    static function getResult()
     {
         global $controller;
-        $urlvars = $controller->GetAllControllerRequests('URL');
-        if ((isset($urlvars['control'])) && ($urlvars['control'] === "DeleteProtection")) {
-            return true;
+        $done = (string) $controller->GetControllerRequest('URL', 'done');
+        $out = '';
+        if ($done === 'created') {
+            $out .= ui_sysmessage::shout(ui_language::translate('The folder is protected. Add a user below so that someone can open it.'), 'zannounceok');
+        } elseif ($done === 'removed') {
+            $out .= ui_sysmessage::shout(ui_language::translate('The protection has been removed: the folder is open again.'), 'zannounceok');
         }
-        return false;
+        foreach (self::$errors as $e) {
+            $out .= ui_sysmessage::shout(self::h(ui_language::translate($e)), 'zannounceerror');
+        }
+        foreach (self::$messages as $m) {
+            $out .= ui_sysmessage::shout(self::h($m), 'zannounceok');
+        }
+        return $out;
     }
 
-    static function getisEditUser()
+    static function getProtectionRows()
     {
-        global $controller;
-        $urlvars = $controller->GetAllControllerRequests('URL');
-        if ((isset($urlvars['control'])) && ($urlvars['control'] === "EditUser")) {
-            return true;
+        global $zdbh;
+        $me = self::Me();
+        $q = $zdbh->prepare("SELECT * FROM x_htpasswd_file WHERE x_htpasswd_sentora_user_id = :u AND x_htpasswd_file_deleted IS NULL ORDER BY x_htpasswd_file_target");
+        $q->execute(array(':u' => (int) $me['userid']));
+        $html = '';
+        foreach ($q->fetchAll() as $r) {
+            $rel = pd_safe::RelPath($me['username'], $r['x_htpasswd_file_target']);
+            $n = count(self::Users($r['x_htpasswd_file_id']));
+            $html .= '<tr><td><span class="icon-lock-alt"></span> public_html/' . self::h($rel === false ? $r['x_htpasswd_file_target'] : $rel) . '</td>'
+                . '<td>' . self::h($r['x_htpasswd_file_message']) . '</td><td>' . $n . '</td><td nowrap>'
+                . '<a class="btn btn-default btn-sm" href="./?module=protected_directories&amp;control=Edit&amp;id=' . (int) $r['x_htpasswd_file_id'] . '">' . ui_language::translate('Users and message') . '</a> '
+                . '<form method="post" action="./?module=protected_directories&amp;action=DeleteProtection" style="display:inline" onsubmit="return confirm(\'' . self::h(ui_language::translate('Remove the protection from this folder')) . '\');">'
+                . '<input type="hidden" name="inId" value="' . (int) $r['x_htpasswd_file_id'] . '">' . runtime_csfr::Token()
+                . '<button class="btn btn-danger btn-sm" type="submit">' . ui_language::translate('Remove protection') . '</button></form></td></tr>';
         }
-        return false;
+        return $html === '' ? '<tr><td colspan="4" class="text-muted">' . ui_language::translate('No folder is protected yet.') . '</td></tr>' : $html;
     }
 
-    static function getisCreateUser()
+    static function getPublicRoot()
     {
-        global $controller;
-        $urlvars = $controller->GetAllControllerRequests('URL');
-        if ((isset($urlvars['control'])) && ($urlvars['control'] === "CreateUser")) {
-            return true;
-        }
-        return false;
-    }
-    
-    static function getisDeleteUser()
-    {
-        global $controller;
-        $urlvars = $controller->GetAllControllerRequests('URL');
-        if ((isset($urlvars['control'])) && ($urlvars['control'] === "DeleteUser")) {
-            return true;
-        }
-        return false;
-    }
-    
-    static function getisIndex()
-    {
-        global $controller;
-        $urlvars = $controller->GetAllControllerRequests('URL');
-        if ( 
-            (!isset($urlvars['control'])) || 
-            ( (isset($urlvars['control'])) && ($urlvars['control'] === "Index")) 
-        ) {
-            return true;
-        }
-        return false;
+        return self::h(pd_safe::PublicRoot(self::Me()['username']));
     }
 
-    #########################################################
-    # General Utility Methods
-    #########################################################
-    
-    static function getModuleMode()
+    static function getEditPath()
     {
-        return self::$mode;
+        $row = self::Protection(self::CurrentId());
+        $rel = $row ? pd_safe::RelPath(self::Me()['username'], $row['x_htpasswd_file_target']) : '';
+        return self::h('public_html/' . $rel);
     }
 
-    private static function getCurrentUserId()
+    static function getEditMessage()
     {
-        $currentuser = ctrl_users::GetUserDetail();
-        return $currentuser[ 'userid' ];
-    }
-    
-    private static function getCurrentUsername()
-    {
-        $currentuser = ctrl_users::GetUserDetail();
-        return $currentuser[ 'username' ];
-    }
-    
-    #########################
-    # Flash message methods #
-    #########################
-
-    static function getFlashMessages()
-    {
-        return self::$flash_messanger;
-    }
-    
-    static function getFlashErrorMessages()
-    {
-        $messages = self::getFlashMessages();
-        $errorMessages = array();
-        foreach( $messages as $message ) {
-            if(array_key_exists('error', $message)) {
-                $errorMessages[] = $message;
-            }
-        }
-        return $errorMessages;
-    }
-    
-    static function getFlashDebugMessages()
-    {
-        $messages = self::getFlashMessages();
-        $debugMessages = array();
-        foreach( $messages as $message ) {
-            if(array_key_exists('debug', $message)) {
-                $debugMessages[] = $message;
-            }
-        }
-        return $debugMessages;
-    }
-    
-    static function setFlashMessage($type,$message)
-    {
-        self::$flash_messanger[] = array($type => $message);
-    }
-    
-    static function hasFlashErrors()
-    {
-        $messages = self::getFlashMessages();
-        
-        if(empty($messages)) { return false; }
-        
-        foreach( $messages as $message ) {
-            if(array_key_exists('error', $message)) {
-                return true;
-            }
-        }
-        
-        return false;
+        $row = self::Protection(self::CurrentId());
+        return $row ? self::h($row['x_htpasswd_file_message']) : '';
     }
 
+    static function getEditId()
+    {
+        return self::CurrentId();
+    }
+
+    static function getUserRows()
+    {
+        $row = self::Protection(self::CurrentId());
+        if (!$row) {
+            return '';
+        }
+        $html = '';
+        foreach (self::Users($row['x_htpasswd_file_id']) as $u) {
+            $strong = (strncmp($u['x_htpasswd_user_password'], '$2y$', 4) === 0);
+            $id = (int) $u['x_htpasswd_user_id'];
+            $html .= '<tr><td>' . self::h($u['x_htpasswd_user_username'])
+                . ($strong ? '' : ' <span class="label label-warning" title="' . self::h(ui_language::translate('Set a new password to store it with bcrypt.')) . '">' . ui_language::translate('weak password hash') . '</span>') . '</td>'
+                . '<td><form method="post" action="./?module=protected_directories&amp;control=Edit&amp;id=' . (int) $row['x_htpasswd_file_id'] . '&amp;action=SetPassword" class="form-inline" style="display:inline">'
+                . '<input type="hidden" name="inId" value="' . (int) $row['x_htpasswd_file_id'] . '"><input type="hidden" name="inUserId" value="' . $id . '">'
+                . '<input type="password" name="inPassword" class="form-control input-sm" placeholder="' . self::h(ui_language::translate('New password')) . '" minlength="8" maxlength="128" autocomplete="new-password" required> '
+                . runtime_csfr::Token() . '<button class="btn btn-default btn-sm" type="submit">' . ui_language::translate('Set password') . '</button></form></td>'
+                . '<td><form method="post" action="./?module=protected_directories&amp;control=Edit&amp;id=' . (int) $row['x_htpasswd_file_id'] . '&amp;action=DeleteUser" style="display:inline" onsubmit="return confirm(\'' . self::h(ui_language::translate('Remove this user')) . '\');">'
+                . '<input type="hidden" name="inId" value="' . (int) $row['x_htpasswd_file_id'] . '"><input type="hidden" name="inUserId" value="' . $id . '">'
+                . runtime_csfr::Token() . '<button class="btn btn-danger btn-sm" type="submit">' . ui_language::translate('Remove') . '</button></form></td></tr>';
+        }
+        return $html === '' ? '<tr><td colspan="3" class="text-muted">' . ui_language::translate('No users yet: nobody can open the folder until you add one.') . '</td></tr>' : $html;
+    }
+
+    static function getAssets()
+    {
+        return 'modules/protected_directories/assets/';
+    }
 }

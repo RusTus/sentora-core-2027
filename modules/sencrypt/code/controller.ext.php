@@ -421,7 +421,9 @@ class module_controller extends ctrl_module {
 		$temp_dir = ctrl_options::GetSystemOption('sentora_root') . "etc/tmp/";
 		$homedir = ctrl_options::GetSystemOption('hosted_dir') . $username;
     	$backupname = $rootdir;
-		$resault = exec("cd " . $homedir . "/ssl/sencrypt/third_party/" . $domain . "/ && " . ctrl_options::GetSystemOption('zip_exe') . " -r9 " . $temp_dir . $backupname . " *");
+		// -y: symbolic links are stored as links, not followed (a link in the account's
+		// folder could otherwise put any file the panel can read into this download)
+		$resault = exec("cd " . escapeshellarg($homedir . "/ssl/sencrypt/third_party/" . $domain . "/") . " && " . escapeshellarg(ctrl_options::GetSystemOption('zip_exe')) . " -r9y " . escapeshellarg($temp_dir . $backupname) . " .");
         @chmod($temp_dir . $backupname . ".zip", 0600);
 		$filename = $backupname . ".zip";
 		$filepath = $temp_dir;
@@ -787,6 +789,17 @@ class module_controller extends ctrl_module {
 		if (!is_dir(ctrl_options::GetSystemOption('hosted_dir') . $currentuser["username"] . "/ssl/sencrypt/third_party/") ) {
 			mkdir(ctrl_options::GetSystemOption('hosted_dir') . $currentuser["username"] . "/ssl/sencrypt/third_party/", 0777);
 		}
+		// These folders are in the account's own folder, which the account controls: each
+		// must be a real folder there, not a link (through one the panel would write the
+		// uploaded files wherever the link points)
+		$home = rtrim(ctrl_options::GetSystemOption('hosted_dir'), '/') . '/' . $currentuser["username"];
+		foreach (array('', '/ssl', '/ssl/sencrypt', '/ssl/sencrypt/third_party') as $sub) {
+			clearstatcache(true, $home . $sub);
+			if (is_link($home . $sub) || !is_dir($home . $sub) || realpath($home . $sub) !== $home . $sub) {
+				self::$error = true;
+				return false;
+			}
+		}
 			
 		if (!is_dir(ctrl_options::GetSystemOption('hosted_dir') . $currentuser["username"] . "/ssl/sencrypt/third_party/" . $domain . "/") ) {
 				mkdir(ctrl_options::GetSystemOption('hosted_dir') . $currentuser["username"] . "/ssl/sencrypt/third_party/" . $domain . "/", 0777);
@@ -804,6 +817,8 @@ class module_controller extends ctrl_module {
 			move_uploaded_file($_FILES["inkey"]["tmp_name"], $uploadkey);
 			move_uploaded_file($_FILES["inWCA"]["tmp_name"], $uploadwcrt);
 			move_uploaded_file($_FILES["inICA"]["tmp_name"], $uploadicrt);
+			// the private key: the panel and Apache (root) only
+			@chmod($uploadkey, 0600);
 			
 			if($domain == ctrl_options::GetSystemOption('sentora_domain')) {
 			

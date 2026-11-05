@@ -1,0 +1,99 @@
+#!/bin/bash
+# sentora-restore: put an account back from one of its Sentora backups.
+#
+#   sentora-restore <account>                  list the account's backups
+#   sentora-restore <account> <backup.zip>     restore web files and databases
+#        --files        web files only        --databases   databases only
+#        --exact        also remove files that are not in the backup (default: keep them)
+#        --yes          do not ask
+#
+# Before anything is changed, a backup of the account as it is now is made, so a
+# restore can be undone with another restore. Only what belongs to the account is
+# accepted from the zip: files under public_html/ and dumps of the account's own
+# databases. Restored files belong to the account's own user (web<id>).
+
+PANEL=/etc/sentora/panel
+die() { echo -e "\e[1;31mERROR:\e[0m $*"; exit 1; }
+say() { echo -e "\e[1;34m==>\e[0m $*"; }
+
+[ "$(id -u)" -eq 0 ] || die "run this as root"
+ACC="${1:-}"; shift || true
+[[ "$ACC" =~ ^[A-Za-z0-9_-]{1,64}$ ]] || { sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'; exit 1; }
+ZIPF=""; FILES=1; DBS=1; EXACT=0; YES=0
+for a in "$@"; do
+    case "$a" in
+        --files) DBS=0 ;; --databases) FILES=0 ;; --exact) EXACT=1 ;; --yes|-y) YES=1 ;;
+        -*) die "unknown option $a" ;; *) ZIPF="$a" ;;
+    esac
+done
+
+# the panel's database login, in an option file (never on a command line)
+val() { grep -o "\$$1 = '[^']*'" "$PANEL/cnf/db.php" | head -1 | cut -d"'" -f2; }
+MYCNF=$(mktemp); chmod 600 "$MYCNF"
+TMP=$(mktemp -d); trap 'rm -rf "$TMP" "$MYCNF"' EXIT
+H=$(val host); printf '[client]\nuser=%s\npassword=%s\n' "$(val user)" "$(val pass)" > "$MYCNF"
+case "$H" in *:*) printf 'host=%s\nport=%s\n' "${H%%:*}" "${H##*:}" >> "$MYCNF" ;; localhost|"") ;; *) echo "host=$H" >> "$MYCNF" ;; esac
+q() { mysql --defaults-extra-file="$MYCNF" -N -B -e "$1" sentora_core 2> /dev/null; }
+
+ID=$(q "SELECT ac_id_pk FROM x_accounts WHERE ac_user_vc = '$ACC' AND ac_deleted_ts IS NULL")
+[ -n "$ID" ] || die "no account named $ACC"
+HOSTED=$(q "SELECT so_value_tx FROM x_settings WHERE so_name_vc = 'hosted_dir'")
+HOME_DIR="${HOSTED%/}/$ACC"; BK="$HOME_DIR/backups"; WEBU="web$ID"
+id "$WEBU" > /dev/null 2>&1 || die "the account's user $WEBU does not exist yet (the daemon makes it within 5 minutes)"
+
+if [ -z "$ZIPF" ]; then
+    echo "Backups of $ACC (newest first):"
+    ls -1t "$BK"/*.zip 2> /dev/null | while read -r f; do echo "  $f ($(du -h "$f" | cut -f1), $(date -r "$f" '+%Y-%m-%d %H:%M'))"; done
+    echo "Restore one with: sentora-restore $ACC <file>"
+    exit 0
+fi
+[ -f "$ZIPF" ] || die "$ZIPF not found"
+
+# --- what the backup holds, and nothing else ---------------------------------------------
+unzip -Z1 "$ZIPF" > "$TMP/list" 2> /dev/null || die "$ZIPF is not a zip file"
+OWN_DBS=$(q "SELECT my_name_vc FROM x_mysql_databases WHERE my_acc_fk = $ID AND my_deleted_ts IS NULL")
+DUMPS=""
+while read -r e; do
+    case "$e" in
+        *..*|/*) die "the backup contains a path outside the account ($e): refused" ;;
+        public_html/*|public_html) ;;
+        *.sql)
+            db=$(echo "$e" | sed -E 's/_[0-9]{6}_[0-9]{3,4}\.sql$//')
+            [[ "$e" =~ ^[A-Za-z0-9_]+\.sql$ ]] || die "unexpected file in the backup: $e"
+            echo "$OWN_DBS" | grep -qx "$db" || die "the backup has a dump of $db, which is not one of $ACC's databases: refused"
+            DUMPS="$DUMPS $e" ;;
+        *) die "unexpected file in the backup: $e" ;;
+    esac
+done < "$TMP/list"
+nfiles=$(grep -c '^public_html/.*[^/]$' "$TMP/list")
+echo "Backup $ZIPF ($(date -r "$ZIPF" '+%Y-%m-%d %H:%M')):"
+[ $FILES -eq 1 ] && echo "  web files: $nfiles file(s) into $HOME_DIR/public_html$( [ $EXACT -eq 1 ] && echo ', removing files that are not in the backup')"
+[ $DBS -eq 1 ] && for d in $DUMPS; do echo "  database: $(echo "$d" | sed -E 's/_[0-9]{6}_[0-9]{3,4}\.sql$//') (its tables are replaced by the backup's)"; done
+if [ $YES -eq 0 ]; then
+    read -r -p "Restore this into $ACC? A backup of $ACC as it is now is made first. [y/N] " a
+    [[ "$a" =~ ^[Yy] ]] || { echo "Nothing changed."; exit 0; }
+fi
+
+# --- a backup of the current state first ---------------------------------------------------
+say "Backing up $ACC as it is now"
+NOW=$(cd "$PANEL" && php -r 'chdir("'"$PANEL"'"); require "dryden/loader.inc.php"; require "cnf/db.php"; require "inc/dbc.inc.php"; echo sys_backup::Create((int) $argv[1], $argv[2]);' "$ID" "$ACC" 2> /dev/null | tail -1)
+[ -n "$NOW" ] && [ -f "$NOW" ] || die "could not back up the current state: nothing was changed"
+echo "  $NOW (restore it with: sentora-restore $ACC $NOW)"
+
+command -v rsync > /dev/null 2>&1 || apt-get install -y -qq rsync > /dev/null 2>&1 || die "rsync is not installed (apt-get install rsync): nothing was changed"
+unzip -q "$ZIPF" -d "$TMP/x" || die "could not unpack $ZIPF"
+if [ $FILES -eq 1 ] && [ -d "$TMP/x/public_html" ]; then
+    say "Restoring the web files"
+    DEL=""; [ $EXACT -eq 1 ] && DEL="--delete"
+    # -a keeps symbolic links as links (never followed), and nothing outside public_html
+    rsync -a $DEL "$TMP/x/public_html/" "$HOME_DIR/public_html/" || die "the file restore did not complete"
+    chown -hR "$WEBU" "$HOME_DIR/public_html"
+fi
+if [ $DBS -eq 1 ]; then
+    for d in $DUMPS; do
+        db=$(echo "$d" | sed -E 's/_[0-9]{6}_[0-9]{3,4}\.sql$//')
+        say "Restoring the database $db"
+        mysql --defaults-extra-file="$MYCNF" "$db" < "$TMP/x/$d" || die "the restore of $db failed (the backup of the state before is $NOW)"
+    done
+fi
+say "Restored $ACC from $ZIPF. To undo: sentora-restore $ACC $NOW"

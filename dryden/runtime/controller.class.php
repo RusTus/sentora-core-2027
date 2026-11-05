@@ -61,6 +61,12 @@ class runtime_controller
         }
         if (isset($this->vars_get[0]['action'])) {
             if (ctrl_groups::CheckGroupModulePermissions($user['usergroupid'], ui_module::GetModuleID())) {
+                // Sentora: every action changes something, so it must be a form post with
+                // this session's token: a link or a form on another site can not trigger one
+                // (several modules never checked the token themselves)
+                if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !runtime_csfr::Valid()) {
+                    runtime_csfr::Protect();
+                }
                 if ((class_exists('module_controller', FALSE)) && (method_exists('module_controller', 'do' . $this->vars_get[0]['action']))) {
                     call_user_func(array('module_controller', 'do' . $this->vars_get[0]['action']));
                 } else {

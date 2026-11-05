@@ -11,20 +11,15 @@
     </div>
 
     <@ Result @>
+    <@ ProgressMessage @>
+    <link rel="stylesheet" href="<@ ModulePath @>assets/progress.css">
 
     <@ CreateBackupDirectory @>
 
     <div class="zform_wrapper">
         <h2><: Backup your hosting account files :></h2>
         <% if HasData %>
-        <form name="LaunchBackup" action="modules/backupmgr/code/launchbackup.php?id=<@ UserID @>" target="backup" method="post" onsubmit="var w=window.open('', 'backup', 'scrollbars=no,menubar=no,height=300,width=600,resizable=no,toolbar=no,location=no,status=no'); w.focus();">
-            <table class="table table-striped">
-                <tr>
-                    <th nowrap="nowrap"><button class="btn btn-primary" type="submit" name="inBackUp" value="<@ UserID @>"><: Launch :></button></th>
-                    <td><: Backups your data whilst you wait and then prompt's you to download the backup archive. :></td>
-                </tr>
-            </table>
-        </form>
+        <@ BackupNow @>
         <% else %>
         <: There are no files in your public folder to back up. :>
         <% endif %>
@@ -55,7 +50,8 @@
                     <td width="50px"><@ FileLocation @></td>
                     <td><& backupfile &>.zip</td>
                     <td><b><& filesize &></b></td>
-                    <td><button class="button-loader delete btn btn-danger" type="submit" name="inDelete_<& backupfile &>" id="inDelete_<& backupfile &>" value="<& backupfile &>"><: Delete Backup :></button></td>
+                    <td nowrap="nowrap"><a class="btn btn-default" href="modules/backupmgr/code/downloadbackup.php?id=<@ UserID @>&amp;file=<& backupfile &>.zip"><: Download :></a>
+                        <button class="button-loader delete btn btn-danger" type="submit" name="inDelete_<& backupfile &>" id="inDelete_<& backupfile &>" value="<& backupfile &>"><: Delete Backup :></button></td>
                 </tr>
                 <% endloop %>
             </table>
@@ -68,5 +64,12 @@
         <p><: Backup to disk is not enabled on the server. You may still download backups directly to your computer through your browser. :>
             <% endif %>
             <% endif %>
+        <% if FtpAllowed %>
+        <h3><: Copy my backups to my own FTP server :></h3>
+        <p class="text-muted"><: Every day at the hour you choose, a new backup of your websites and databases is made and uploaded to your FTP server, keeping the number of copies you choose. Your mail is not included. :></p>
+        <@ FtpForm @>
+        <@ FtpStatus @>
+        <% endif %>
     </div>
+    <script src="<@ ModulePath @>assets/progress.js"></script>
 </div>

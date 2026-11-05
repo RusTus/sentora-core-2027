@@ -32,6 +32,14 @@
             </table>
             <@ CSFR_Tag @>
         </form>
+        <h2><: Off-server backup :></h2>
+        <p class="text-muted"><: Every night, copies the account backups, a dump of all databases, the configuration and the mailboxes to another machine. Each night is kept as a dated snapshot in which unchanged files take no extra space. :></p>
+        <@ OffsiteForm @>
+        <@ OffsiteStatus @>
+        <h2 id="restore" style="margin-top: 26px;"><: Restore :></h2>
+        <p class="text-muted"><: Restore one account or the whole panel from the full backup on the backup machine. :></p>
+        <style>.bk-job{color:#31708f}.bk-spin{display:inline-block;width:14px;height:14px;vertical-align:-2px;border:2px solid #bcdcec;border-top-color:#31708f;border-radius:50%;animation:bk-spin .9s linear infinite}@keyframes bk-spin{to{transform:rotate(360deg)}}.bk-restore{border:1px solid #ddd;border-radius:6px;padding:4px 16px 12px;margin-top:14px;background:#fafafa}.bk-danger{border-color:#ebccd1;background:#fdf7f7}</style>
+        <@ Restore @>
     </div>
 
 </div>

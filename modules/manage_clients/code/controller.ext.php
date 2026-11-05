@@ -47,6 +47,8 @@ class module_controller extends ctrl_module
     static $clientpkgid;
     static $resetform;
     static $not_unique_email;
+    static $tfreset = null; // Reset two-factor: the client's name
+    static $email_owner; // the account already using the address, if the viewer may know it
 
     /**
      * The 'worker' methods.
@@ -90,6 +92,13 @@ class module_controller extends ctrl_module
                     $currentuser['bandwidthreadable'] = fs_director::ShowHumanFileSize(ctrl_users::GetQuotaUsages('bandwidth', $currentuser['userid']));
                     $currentuser['bandwidthquotareadable'] = fs_director::ShowHumanFileSize($currentuser['bandwidthquota']);
                     $currentuser['numclients'] = $numrowclients[0];
+                    // Reset two-factor (lost phone and codes): only when the client has it
+                    $tfRow = ctrl_twofactor::Row($currentuser['userid']);
+                    $currentuser['tfreset'] = ($tfRow && (int) $tfRow['tf_enabled_in'] === 1)
+                        ? '<button class="btn btn-warning" type="submit" name="inResetTwoFactor_' . (int) $currentuser['userid'] . '" value="1" onclick="return confirm(\''
+                            . htmlspecialchars(ui_language::translate('Reset the two-factor login of this client? Do this only after checking who is asking (for example by phone).'), ENT_QUOTES, 'UTF-8')
+                            . '\');">' . ui_language::translate('Reset two-factor') . '</button>'
+                        : '';
                     array_push($res, $currentuser);
                 }
             }
@@ -553,12 +562,9 @@ class module_controller extends ctrl_module
         $sql->bindParam(':ac_id_pk', $client['ac_id_pk']);
         $sql->execute();
         // Lets create the client diectories
-        fs_director::CreateDirectory(ctrl_options::GetSystemOption('hosted_dir') . $username);
-        fs_director::SetFileSystemPermissions(ctrl_options::GetSystemOption('hosted_dir') . $username, 0777);
-        fs_director::CreateDirectory(ctrl_options::GetSystemOption('hosted_dir') . $username . "/public_html");
-        fs_director::SetFileSystemPermissions(ctrl_options::GetSystemOption('hosted_dir') . $username . "/public_html", 0777);
-        fs_director::CreateDirectory(ctrl_options::GetSystemOption('hosted_dir') . $username . "/backups");
-        fs_director::SetFileSystemPermissions(ctrl_options::GetSystemOption('hosted_dir') . $username . "/backups", 0777);
+        // The account's folders are made by the daemon (root) within 5 minutes, with
+        // the account's own Linux user as owner (sys_accountphp::EnsureUser): the
+        // panel can not write to the hosting folder's parent
         // Send the user account details via. email (if requested)...
         if ($sendemail <> 0) {
             if (isset($_SERVER['HTTPS'])) {
@@ -591,6 +597,27 @@ class module_controller extends ctrl_module
         self::$resetform = true;
         self::$ok = true;
         return true;
+    }
+
+    /**
+     * Which account already uses an email address, as far as the viewer may know:
+     * administrators see any account; a reseller only their own clients (otherwise
+     * an empty string, so other resellers' clients can not be found by trying addresses)
+     */
+    static function EmailOwnerFor($email)
+    {
+        global $zdbh;
+        $me = ctrl_users::GetUserDetail();
+        $sql = $zdbh->prepare("SELECT ac_user_vc, ac_reseller_fk FROM x_accounts WHERE ac_email_vc = :email AND ac_deleted_ts IS NULL LIMIT 1");
+        $sql->execute(array(':email' => $email));
+        $row = $sql->fetch();
+        if (!$row) {
+            return '';
+        }
+        if ((int) $me['usergroupid'] === 1 || (int) $row['ac_reseller_fk'] === (int) $me['userid']) {
+            return (string) $row['ac_user_vc'];
+        }
+        return '';
     }
 
     static function CheckCreateForErrors($username, $packageid, $groupid, $email, $password)
@@ -682,6 +709,7 @@ class module_controller extends ctrl_module
                 return true;
             } else {
                 self::$not_unique_email = true;
+                self::$email_owner = self::EmailOwnerFor($email);
                 return false;
             }
         } else {
@@ -811,7 +839,7 @@ class module_controller extends ctrl_module
         } else {
             $sendemail = 0;
         }
-        if (self::ExecuteCreateClient($currentuser['userid'], $formvars['inNewUserName'], $formvars['inNewPackage'], $formvars['inNewGroup'], $formvars['inNewFullName'], $formvars['inNewEmailAddress'], $formvars['inNewAddress'], $formvars['inNewPostCode'], $formvars['inNewPhone'], $formvars['inNewPassword'], $sendemail, $formvars['inEmailSubject'], $formvars['inEmailBody'])) {
+        if (self::ExecuteCreateClient($currentuser['userid'], $formvars['inNewUserName'], $formvars['inNewPackage'], $formvars['inNewGroup'], $formvars['inNewFullName'], $formvars['inNewEmailAddress'], $formvars['inNewAddress'], $formvars['inNewPostCode'], $formvars['inNewPhone'], $formvars['inNewPassword'], $sendemail, ($formvars['inEmailSubject'] ?? ''), ($formvars['inEmailBody'] ?? ''))) {
             unset($_POST['inNewUserName']);
             return true;
         } else {
@@ -833,6 +861,12 @@ class module_controller extends ctrl_module
             if (isset($formvars['inEdit_' . $row['userid'] . ''])) {
                 header("location: ./?module=" . $controller->GetCurrentModule() . "&show=Edit&other=" . $row['userid'] . "");
                 exit;
+            }
+            // one of this administrator's or reseller's own clients (the list has only those)
+            if (isset($formvars['inResetTwoFactor_' . $row['userid']])) {
+                ctrl_twofactor::ResetBy($row['userid'], $currentuser['username']);
+                self::$tfreset = $row['username'];
+                return;
             }
         }
         return;
@@ -1268,8 +1302,16 @@ class module_controller extends ctrl_module
         if (!fs_director::CheckForEmptyValue(self::$ok)) {
             return ui_sysmessage::shout(ui_language::translate("Changes to your client(s) have been saved successfully!"), "zannounceok");
         }
+        if (self::$tfreset !== null) {
+            return ui_sysmessage::shout(ui_language::translate('The two-factor login of') . ' <strong>' . htmlspecialchars(self::$tfreset, ENT_QUOTES, 'UTF-8') . '</strong> '
+                . ui_language::translate(ctrl_twofactor::Forced() ? 'has been reset: they set it up again at their next login.' : 'has been reset: they log in with their password only, and can turn it on again in My Account.'), 'zannounceok');
+        }
         if (!fs_director::CheckForEmptyValue(self::$not_unique_email)) {
-            return ui_sysmessage::shout(ui_language::translate("Another user account is already using this email address."), "zannounceerror");
+            $owner = self::$email_owner;
+            $msg = ($owner !== null && $owner !== '')
+                ? ui_language::translate("This email address is already used by the account") . ' <strong>' . htmlspecialchars($owner, ENT_QUOTES, 'UTF-8') . '</strong>.'
+                : ui_language::translate("This email address is already used by an account that is not one of yours.");
+            return ui_sysmessage::shout($msg . ' ' . ui_language::translate("Each account needs its own email address."), "zannounceerror");
         }
         return;
     }

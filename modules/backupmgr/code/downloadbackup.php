@@ -27,58 +27,28 @@ if (isset($_GET['id'])) {
 session_start();
 // Strict: a missing session id must never match (loose == let null equal null)
 if (!empty($_SESSION['zpuid']) && ctype_digit((string) $userid) && (int) $_SESSION['zpuid'] === (int) $userid) {
-
-	# Get username from Logged in userID
 	$currentuser = ctrl_users::GetUserDetail($userid);
-    $username = $currentuser['username'];
-	
-	# Get username from file name.  
+	$username = $currentuser['username'];
+	# One of this account's own backups: a real file with a backup name, never a link
+	# (sys_backup::OpenFile checks the file it opens is the one it checked)
 	$input = isset($_GET["file"]) ? (string) $_GET["file"] : '';
-	# Only one of this account's own backup files, by name (no paths)
-	if (sys_backup::ValidFile($username, $input)) {
-
-		# Check file name is set
-		if (isset($_GET["file"])){
-				
-			$filepath = sys_backup::BackupDir($username) . $input;
-			
-			# Check file name exists then download
-			if(file_exists($filepath)) {
-							
-				header('Content-Description: File Transfer');
-				header('Content-Type: application/octet-stream');
-				header('Content-Disposition: attachment; filename="'.basename($filepath).'"');
-				header('Expires: 0');
-				header('Cache-Control: must-revalidate');
-				header('Pragma: public');
-				header('Content-Length: ' . filesize($filepath));
-				flush(); // Flush system output buffer
-				readfile($filepath);
-				//header('Location: ' . $_SERVER['HTTP_REFERER']); # DONT NEED THIS
-				
-				# Exit code
-				exit;
-				die();
-			} else {
-				echo '<h2>ERROR: </h2>' . '<br>';
-				echo 'Something went wrong. File does not exist. Check with your administrator for help.';
-			}
-			
-		} else {
-			echo '<h2>ERROR: </h2>' . '<br>';
-			echo 'Something went wrong. Missing file info. Please try again or contact you administrator for help.';	
-		}
-
-	} else {
-		echo '<h2>Unauthorized Access!</h2>' . '<br>';
-		echo 'You have no permission to download this file.';	
+	$opened = sys_backup::OpenFile($username, $input);
+	if ($opened !== false) {
+		list($fh, $size) = $opened;
+		header('Content-Description: File Transfer');
+		header('Content-Type: application/zip');
+		header('Content-Disposition: attachment; filename="' . $input . '"');
+		header('X-Content-Type-Options: nosniff');
+		header('Cache-Control: private, no-store');
+		header('Content-Length: ' . $size);
+		while (ob_get_level() > 0) { ob_end_clean(); }
+		fpassthru($fh);
+		fclose($fh);
+		exit;
 	}
-	
+	http_response_code(404);
+	echo '<h2>ERROR:</h2>That backup was not found. It may have been removed; make a new one.';
 } else {
-	
-	echo '<h2>Unauthorized Access!</h2>';
-	echo 'You have no permission to view this module.';
-	
+	http_response_code(403);
+	echo '<h2>Unauthorized Access!</h2>You have no permission to view this module.';
 }
-
-?>

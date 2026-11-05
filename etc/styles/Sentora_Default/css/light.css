@@ -962,3 +962,22 @@ li.highlight {
 .navbar-nav li a img {
     margin: -1px 0;
 }
+
+/* Sentora: full-width layout. The content area grows and shrinks with the
+   browser window instead of stopping at Bootstrap's fixed container width
+   (the sidebar keeps its 250px). */
+@media (min-width: 768px) {
+    .wrap.container,
+    .navbar > .container {
+        width: 100%;
+        max-width: none;
+    }
+    .wrap.container {
+        padding-right: 20px;
+    }
+    #page-content.col-lg-9 {
+        float: none;
+        width: auto;
+        margin-right: 0;
+    }
+}

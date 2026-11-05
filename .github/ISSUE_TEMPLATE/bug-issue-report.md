@@ -1,31 +1,33 @@
 ---
-name: Bug/Issue report
-about: Create a report to help us improve or fix issues.
+name: Bug report
+about: Something in the panel or the installer doesn't work as it should.
 title: ''
-labels: ''
+labels: bug
 assignees: ''
 
 ---
 
-**Describe the bug**
-A clear and concise description of what the bug is.
+<!-- For a security problem, don't open an issue: see SECURITY.md. -->
 
-**To Reproduce**
-Steps to reproduce the behavior:
-1. Go to '...'
-2. Click on '....'
-3. Scroll down to '....'
-4. See error
+**What happened**
+A short description of the problem.
 
-**Expected behavior**
-A clear and concise description of what you expected to happen.
+**Steps to reproduce**
+1. Log in as (client, reseller or administrator)
+2. Go to '...'
+3. Click '...'
+4. See the error
 
-**Screenshots**
-If applicable, add screenshots to help explain your problem.
+**What you expected**
+What should have happened instead.
 
-**Server info (please complete the following information):**
- - OS: [e.g. iOS]
- - Sentora BUILD version: [e.g. Build-0.X.X] Find in PANEL ADMIN->UPDATES
+**Screenshots or output**
+A screenshot, or the output of `sentora-post-install-check`, if it helps.
 
-**Additional context**
-Add any other context about the problem here.
+**Server**
+- Sentora version: [shown in the panel's footer, e.g. Sentora-2027]
+- Ubuntu version: [output of `lsb_release -d`]
+- Installed with `sentora2027-ub26.04`: yes / no
+
+**Anything else**
+Other details that might help.

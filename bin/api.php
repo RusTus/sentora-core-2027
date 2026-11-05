@@ -20,7 +20,7 @@ require_once 'dryden/loader.inc.php';
 require_once 'cnf/db.php';
 require_once 'inc/dbc.inc.php';
 
-debug_phperrors::SetMode('dev');
+debug_phperrors::SetMode('prod');
 
 if (file_exists('modules/' . fs_protector::SanitiseFolderName($_GET['m']) . '/code/webservice.ext.php')) {
     include 'modules/' . fs_protector::SanitiseFolderName($_GET['m']) . '/code/controller.ext.php';

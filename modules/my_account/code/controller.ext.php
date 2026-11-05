@@ -144,6 +144,56 @@ class module_controller extends ctrl_module
 
     /* ---------- Two-factor login (only when switched on in Sentora Config) ---------- */
 
+    /** new recovery codes: only with a current code from the app (not just an open browser) */
+    static function doTwoFactorNewCodes()
+    {
+        global $controller;
+        runtime_csfr::Protect();
+        $currentuser = ctrl_users::GetUserDetail();
+        if (ctrl_twofactor::Required($currentuser['userid']) && ctrl_twofactor::Verify($currentuser['userid'], $controller->GetControllerRequest('FORM', 'inTwoFactorCode'))) {
+            $_SESSION['zp2fa_newcodes'] = ctrl_twofactor::NewRecoveryCodes($currentuser['userid']);
+            self::$tfmsg = 'newcodes';
+        } else {
+            self::$tfmsg = 'wrong';
+        }
+        return true;
+    }
+
+    /** the recovery codes, once: straight after they are made */
+    static function getTwoFactorCodes()
+    {
+        // the template engine calls this twice per page (to compile it, then to show
+        // it): the codes are taken from the session once and kept for this request
+        static $html = null;
+        if ($html !== null) {
+            return $html;
+        }
+        if (empty($_SESSION['zp2fa_newcodes']) || !is_array($_SESSION['zp2fa_newcodes'])) {
+            return $html = '';
+        }
+        $codes = $_SESSION['zp2fa_newcodes'];
+        unset($_SESSION['zp2fa_newcodes']);
+        $items = '';
+        foreach ($codes as $c) {
+            $items .= '<li><code>' . htmlspecialchars($c, ENT_QUOTES, 'UTF-8') . '</code></li>';
+        }
+        return $html = '<div class="alert alert-warning" style="max-width: 640px;"><strong>' . ui_language::translate('Your recovery codes') . '</strong><br>'
+            . ui_language::translate('If you lose your phone, each of these logs you in once instead of the app. Save them now (print them, or keep them in a password manager): they are not shown again.')
+            . '<ol style="columns: 2; font-size: 16px; margin: 10px 0;">' . $items . '</ol>'
+            . '<button type="button" class="btn btn-default btn-sm" onclick="window.print()">' . ui_language::translate('Print') . '</button></div>';
+    }
+
+    static function getTwoFactorRecoveryLeft()
+    {
+        $currentuser = ctrl_users::GetUserDetail();
+        return (string) ctrl_twofactor::RecoveryLeft($currentuser['userid']);
+    }
+
+    static function getTwoFactorForced()
+    {
+        return ctrl_twofactor::Forced();
+    }
+
     static function getTwoFactorAvailable()
     {
         return ctrl_twofactor::Enabled();
@@ -185,6 +235,13 @@ class module_controller extends ctrl_module
         return ($row && (int) $row['tf_enabled_in'] === 0) ? htmlspecialchars(ctrl_twofactor::OtpauthUri($row['tf_secret_vc'], $currentuser['username']), ENT_QUOTES, 'UTF-8') : '';
     }
 
+    static function getTwoFactorQr()
+    {
+        $row = self::TwoFactorRow();
+        $currentuser = ctrl_users::GetUserDetail();
+        return ($row && (int) $row['tf_enabled_in'] === 0) ? ctrl_twofactor::QrSvg(ctrl_twofactor::OtpauthUri($row['tf_secret_vc'], $currentuser['username'])) : '';
+    }
+
     static function doTwoFactorBegin()
     {
         runtime_csfr::Protect();
@@ -203,6 +260,7 @@ class module_controller extends ctrl_module
         $currentuser = ctrl_users::GetUserDetail();
         if (ctrl_twofactor::Enabled() && ctrl_twofactor::Verify($currentuser['userid'], $controller->GetControllerRequest('FORM', 'inTwoFactorCode'), false)) {
             ctrl_twofactor::Activate($currentuser['userid']);
+            $_SESSION['zp2fa_newcodes'] = ctrl_twofactor::NewRecoveryCodes($currentuser['userid']);
             self::$tfmsg = 'on';
         } else {
             self::$tfmsg = 'wrong';
@@ -216,6 +274,10 @@ class module_controller extends ctrl_module
         runtime_csfr::Protect();
         $currentuser = ctrl_users::GetUserDetail();
         $row = ctrl_twofactor::Row($currentuser['userid']);
+        if (ctrl_twofactor::Forced() && $row && (int) $row['tf_enabled_in'] === 1) {
+            self::$tfmsg = 'forced';   // required on this server: it can not be turned off
+            return;
+        }
         // Turning it off needs a current code (a pending, unconfirmed setup can just be cancelled)
         if ($row && ((int) $row['tf_enabled_in'] === 0 || ctrl_twofactor::Verify($currentuser['userid'], $controller->GetControllerRequest('FORM', 'inTwoFactorCode')))) {
             ctrl_twofactor::Disable($currentuser['userid']);
@@ -239,6 +301,22 @@ class module_controller extends ctrl_module
         }
         if (self::$tfmsg === 'off') {
             return ui_sysmessage::shout(ui_language::translate("Two-factor login is now off for your account."), "zannounceok");
+        }
+        static $recovered = null;
+        if ($recovered === null) {
+            $recovered = !empty($_SESSION['zp2fa_recovered']);
+            unset($_SESSION['zp2fa_recovered']);
+        }
+        if ($recovered) {
+            $left = ctrl_twofactor::RecoveryLeft(ctrl_users::GetUserDetail()['userid']);
+            return ui_sysmessage::shout(ui_language::translate('You logged in with a recovery code. Codes left') . ': <strong>' . (int) $left . '</strong>. '
+                . ui_language::translate('If you have a new phone, set it up again below and make a new set of codes.'), 'zannounceinfo');
+        }
+        if (self::$tfmsg === 'newcodes') {
+            return ui_sysmessage::shout(ui_language::translate('New recovery codes made: the old ones no longer work.'), 'zannounceok');
+        }
+        if (self::$tfmsg === 'forced') {
+            return ui_sysmessage::shout(ui_language::translate('Two-factor login is required on this server and can not be turned off.'), 'zannounceerror');
         }
         if (self::$tfmsg === 'wrong') {
             return ui_sysmessage::shout(ui_language::translate("That code is not right. Check the time on your phone and try the next code."), "zannounceerror");

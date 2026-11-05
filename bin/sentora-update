@@ -1,0 +1,257 @@
+#!/bin/bash
+# sentora-update: update the Sentora panel (the core) in place, safely.
+#
+#   sentora-update              update from the download server (asks first)
+#   sentora-update --yes        the same without asking
+#   sentora-update --check      only say whether an update is available
+#   sentora-update --rollback   list the backups and restore one
+#   sentora-update --rollback /var/sentora/backups/panel-before-update-....tar.gz
+#
+# What it does: downloads sentora-core-2027.zip (checked against SHA256SUMS when the
+# download server has one), backs up the panel (the last 5 backups are kept), copies
+# the new core over the old one without touching this server's own files (database
+# settings and key in cnf/, zsudo, the template cache, Matomo's config, the
+# repository lists, installed add-on modules), removes files the core no longer has,
+# sets the permissions the installer sets, registers new core modules, updates the
+# Matomo and Roundcube databases when their versions changed, runs the daemon once
+# and then sentora-post-install-check.
+#
+# It updates the panel only: changes to service configurations (Postfix, Dovecot,
+# Apache...) are described in the CHANGELOG and applied by hand or by a fresh install.
+
+PANEL=/etc/sentora/panel
+PANEL_USER=sentora
+HTTP_GROUP=www-data
+BACKUPS=/var/sentora/backups
+STATE=/var/lib/sentora/last-update
+CONF=/etc/sentora/update.conf
+ZIP=sentora-core-2027.zip
+KEEP=5
+
+URL="http://hembackup1.hemsaw.local/installers"
+# shellcheck disable=SC1090
+[ -f "$CONF" ] && . "$CONF"          # may set URL=...
+URL=${SENTORA_UPDATE_URL:-$URL}
+
+say()  { echo -e "\e[1;34m==>\e[0m $*"; }
+warn() { echo -e "\e[1;33mWARNING:\e[0m $*"; }
+die()  { echo -e "\e[1;31mERROR:\e[0m $*"; exit 1; }
+
+[ "$(id -u)" -eq 0 ] || die "run this as root"
+exec 9> /run/sentora-update.lock
+flock -n 9 || die "another sentora-update is running"
+
+MODE=update; YES=0; RESTORE=""
+case "${1:-}" in
+    --check) MODE=check ;;
+    --yes|-y) YES=1 ;;
+    --rollback) MODE=rollback; RESTORE="${2:-}" ;;
+    ""|--force) ;;
+    *) sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
+esac
+FORCE=0; [ "${1:-}" = "--force" ] && FORCE=1
+
+need() { command -v "$1" > /dev/null || { say "Installing $2"; apt-get -qq -y install "$2" > /dev/null || die "could not install $2"; }; }
+
+# --- permissions the installer sets (also after a rollback) --------------------------
+fix_permissions() {
+    say "Setting permissions"
+    chown -R root:root "$PANEL"
+    find "$PANEL" -type d -exec chmod 755 {} +
+    find "$PANEL" -type f -exec chmod 644 {} +
+    for b in zppy setso setzadmin sentora-update sentora-update-check sentora-post-install-check sentora-restore sentora-smoke-test sentora-offsite-backup sentora-panel-restore sentora-web-probe; do
+        [ -f "$PANEL/bin/$b" ] && chmod 755 "$PANEL/bin/$b"
+    done
+    [ -f "$PANEL/bin/zsudo" ] && { chown root:"$PANEL_USER" "$PANEL/bin/zsudo"; chmod 4750 "$PANEL/bin/zsudo"; }
+    chown -R "$PANEL_USER:$HTTP_GROUP" "$PANEL/etc/tmp"
+    chown root:"$PANEL_USER" "$PANEL/cnf/db.php" "$PANEL/cnf/security.php"
+    chmod 640 "$PANEL/cnf/db.php" "$PANEL/cnf/security.php"
+    local m=$PANEL/etc/apps/matomo
+    if [ -d "$m" ]; then
+        chown -R "$PANEL_USER:$HTTP_GROUP" "$m/tmp" "$m/config"
+        [ -f "$m/config/config.ini.php" ] && { chown root:"$PANEL_USER" "$m/config/config.ini.php"; chmod 660 "$m/config/config.ini.php"; }
+    fi
+    # the panel's working folders: the panel and Apache only (as the daemon keeps them)
+    for d in "$PANEL/etc/tmp" "$m/tmp" "$m/config"; do [ -d "$d" ] && chmod o-rwx,g+s "$d"; done
+    for b in sentora-update sentora-update-check sentora-post-install-check sentora-restore sentora-smoke-test sentora-offsite-backup sentora-panel-restore sentora-web-probe; do
+        [ -f "$PANEL/bin/$b" ] && ln -sf "$PANEL/bin/$b" "/usr/local/sbin/$b"
+    done
+}
+
+php_reload() {
+    local v; v=$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;' 2> /dev/null)
+    systemctl reload "php$v-fpm" 2> /dev/null || systemctl restart "php$v-fpm" 2> /dev/null || true
+}
+
+finish() {
+    say "Running the Sentora daemon once"
+    php "$PANEL/bin/daemon.php" > /var/sentora/logs/daemon-last-run.log 2>&1 || warn "the daemon run reported an error (see /var/sentora/logs/daemon-last-run.log)"
+    if [ -x "$PANEL/bin/sentora-post-install-check" ]; then
+        say "Checking the installation"
+        "$PANEL/bin/sentora-post-install-check" | grep -E "^Result:|^No failures|^Fix the FAIL"
+        echo "(full report: /var/sentora/logs/post-install-check.log)"
+    fi
+}
+
+# --- rollback ------------------------------------------------------------------------
+if [ "$MODE" = rollback ]; then
+    if [ -z "$RESTORE" ]; then
+        echo "Backups (newest first):"
+        ls -1t "$BACKUPS"/panel-before-update-*.tar.gz 2> /dev/null || echo "  none"
+        echo "Restore one with: sentora-update --rollback <file>"
+        exit 0
+    fi
+    [ -f "$RESTORE" ] || die "$RESTORE not found"
+    need rsync rsync
+    TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
+    say "Restoring $RESTORE"
+    tar -xzf "$RESTORE" -C "$TMP" || die "could not unpack $RESTORE"
+    [ -f "$TMP/panel/index.php" ] || die "$RESTORE is not a panel backup"
+    # back to exactly that state, except this server's own files (kept as they are now)
+    rsync -a --delete --exclude=/cnf/ --exclude=/bin/zsudo --exclude=/etc/tmp/ --exclude=/etc/zppy-cache/ \
+        --exclude=/etc/apps/matomo/tmp/ --exclude=/etc/apps/matomo/config/config.ini.php \
+        --exclude=/etc/apps/webmail/config/config.inc.php --exclude=/etc/apps/phpmyadmin/config.inc.php \
+        --exclude=/etc/apps/webmail/plugins/managesieve/config.inc.php --exclude=/etc/apps/webmail/plugins/password/config.inc.php \
+        "$TMP/panel/" "$PANEL/" || die "the restore did not complete"
+    fix_permissions; php_reload; finish
+    rm -f "$STATE"
+    say "Restored. Run sentora-update again to go back to the latest version."
+    exit 0
+fi
+
+# --- download -------------------------------------------------------------------------
+need rsync rsync; need unzip unzip
+TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
+say "Downloading $URL/$ZIP"
+wget -q -O "$TMP/$ZIP" "$URL/$ZIP" || die "could not download $URL/$ZIP"
+SUM=$(sha256sum "$TMP/$ZIP" | cut -d' ' -f1)
+if wget -q -O "$TMP/SHA256SUMS" "$URL/SHA256SUMS" 2> /dev/null && grep -q " $ZIP\$\| \*$ZIP\$" "$TMP/SHA256SUMS"; then
+    grep -E " \*?$ZIP\$" "$TMP/SHA256SUMS" | cut -d' ' -f1 | grep -qx "$SUM" || die "$ZIP does not match SHA256SUMS on the download server"
+    say "Checksum matches SHA256SUMS"
+else
+    warn "no SHA256SUMS on the download server: the download is not checked"
+fi
+LAST=$(cut -d' ' -f1 "$STATE" 2> /dev/null)
+if [ "$MODE" = check ]; then
+    [ "$SUM" = "$LAST" ] && echo "Up to date (installed $(cut -d' ' -f2- "$STATE"))." || echo "An update is available: run sentora-update."
+    exit 0
+fi
+if [ "$SUM" = "$LAST" ] && [ $FORCE -eq 0 ]; then
+    say "Already up to date (installed $(cut -d' ' -f2- "$STATE")). Use --force to install it again."
+    exit 0
+fi
+unzip -q "$TMP/$ZIP" -d "$TMP/new" || die "could not unpack $ZIP"
+SRC=$(dirname "$(find "$TMP/new" -maxdepth 3 -name index.php -path '*/sentora-core*/index.php' | head -1)")
+[ -d "$SRC/dryden" ] && [ -d "$SRC/modules" ] || die "$ZIP does not look like the Sentora core"
+
+if [ $YES -eq 0 ]; then
+    read -r -p "Update the panel in $PANEL now (a backup is made first)? [y/N] " a
+    [[ "$a" =~ ^[Yy] ]] || { echo "Nothing changed."; exit 0; }
+fi
+
+# --- backup ---------------------------------------------------------------------------
+mkdir -p "$BACKUPS"; chmod 700 "$BACKUPS"
+B="$BACKUPS/panel-before-update-$(date +%Y%m%d-%H%M%S).tar.gz"
+say "Backing up the panel to $B"
+tar -czf "$B" -C "$(dirname "$PANEL")" --exclude=panel/etc/tmp --exclude=panel/etc/apps/matomo/tmp "$(basename "$PANEL")" || die "the backup failed: nothing was changed"
+chmod 600 "$B"
+ls -1t "$BACKUPS"/panel-before-update-*.tar.gz 2> /dev/null | tail -n +$((KEEP + 1)) | xargs -r rm -f
+
+ver() { grep -ho "$2" "$1" 2> /dev/null | head -1; }
+RC_BEFORE=$(ver "$PANEL/etc/apps/webmail/program/include/iniset.php" "RCMAIL_VERSION', '[^']*'")
+MT_BEFORE=$(ver "$PANEL/etc/apps/matomo/core/Version.php" "VERSION = '[^']*'")
+
+# the extra PHP versions' services: the same file permissions as the system PHP (UMask)
+for unit in /etc/systemd/system/sentora-php*-fpm.service; do
+    [ -f "$unit" ] || continue
+    if ! grep -q '^UMask=' "$unit"; then
+        sed -i 's/^PrivateTmp=true$/PrivateTmp=true\nUMask=0002/' "$unit"
+        systemctl daemon-reload
+        systemctl try-restart "$(basename "$unit")" > /dev/null 2>&1
+    fi
+done
+
+# rsync copies the new core (minimized Ubuntu servers may not have it)
+command -v rsync > /dev/null 2>&1 || apt-get install -y -qq rsync > /dev/null 2>&1 || { echo "rsync is not installed: apt-get install rsync, then run sentora-update again"; exit 1; }
+
+# --- copy the new core ------------------------------------------------------------------
+say "Updating the panel"
+rsync -a --exclude=/cnf/ --exclude=/bin/zsudo --exclude=/etc/tmp/ --exclude=/etc/zppy-cache/ \
+    --exclude=/etc/apps/matomo/tmp/ --exclude=/etc/apps/matomo/config/config.ini.php \
+    "$SRC/" "$PANEL/" || die "the copy did not complete: restore with sentora-update --rollback $B"
+# files the core no longer has (never an installed add-on module)
+if [ -f "$SRC/bin/obsolete-files.txt" ]; then
+    n=0
+    while read -r f; do
+        case "$f" in ''|\#*|*..*|/*) continue ;; esac
+        if [ -f "$PANEL/$f" ] && [ ! -L "$PANEL/$f" ]; then rm -f "$PANEL/$f"; n=$((n + 1)); fi
+    done < "$SRC/bin/obsolete-files.txt"
+    [ $n -gt 0 ] && say "Removed $n file(s) the core no longer has"
+fi
+fix_permissions
+# the release this server now runs (shown in the panel as Sentora-<version>)
+if [ -f "$SRC/VERSION" ]; then
+    NEWVER=$(head -c 32 "$SRC/VERSION" | tr -cd 'A-Za-z0-9._-')
+    if [ -n "$NEWVER" ]; then
+        "$PANEL/bin/setso" --set dbversion "$NEWVER" > /dev/null 2>&1 && say "Release: Sentora-$NEWVER"
+    fi
+fi
+
+# --- new core modules, and the bundled apps' databases ----------------------------------------
+say "Registering new modules"
+SRC_MODULES=$(cd "$SRC/modules" && ls -d -- */ | tr -d '/' | tr '\n' ' ')
+( cd "$PANEL" && php -r '
+    chdir("'"$PANEL"'"); require "dryden/loader.inc.php"; require "cnf/db.php"; require "inc/dbc.inc.php";
+    $n = 0;
+    foreach (explode(" ", trim($argv[1])) as $m) {
+        // zpx_core_module is the panel itself, not a menu module
+        if ($m === "" || $m === "zpx_core_module" || !is_file("modules/$m/module.xml")) continue;
+        $q = $zdbh->prepare("SELECT COUNT(*) FROM x_modules WHERE mo_folder_vc = :f"); $q->execute(array(":f" => $m));
+        if ((int) $q->fetchColumn() > 0) continue;
+        ui_module::ModuleInfoToDB($m);
+        $q = $zdbh->prepare("SELECT mo_id_pk FROM x_modules WHERE mo_folder_vc = :f"); $q->execute(array(":f" => $m));
+        $id = (int) $q->fetchColumn();
+        if ($id > 0) { $zdbh->prepare("INSERT INTO x_permissions (pe_group_fk, pe_module_fk) VALUES (1, :m)")->execute(array(":m" => $id)); echo "  new module: $m (administrators; give it to other groups in Module Admin)\n"; $n++; }
+    }
+    if ($n === 0) echo "  none\n";
+' "$SRC_MODULES" ) || warn "could not register new modules"
+# --- SpamAV: SpamAssassin and ClamAV (the new installer installs them; older servers get them here)
+if [ -d "$PANEL/modules/spamav_admin" ] && { [ ! -x /usr/sbin/spamd ] || [ ! -x /usr/sbin/clamd ]; }; then
+    say "Installing SpamAssassin and ClamAV (Admin > SpamAV Admin)"
+    if DEBIAN_FRONTEND=noninteractive apt-get install -y -q spamassassin spamc spamd spamass-milter libdbd-mysql-perl \
+        clamav clamav-daemon clamav-freshclam clamav-milter > /var/sentora/logs/update-spamav-install.log 2>&1; then
+        for u in clamav spamass-milter; do id "$u" > /dev/null 2>&1 && usermod -aG postfix "$u"; done
+        mkdir -p /var/spool/postfix/clamav /var/spool/postfix/spamass /var/sentora/sieve/spamav /var/log/clamav
+        chown clamav:postfix /var/spool/postfix/clamav; chmod 750 /var/spool/postfix/clamav
+        chown spamass-milter:postfix /var/spool/postfix/spamass; chmod 750 /var/spool/postfix/spamass
+        chown vmail:mail /var/sentora/sieve/spamav; chmod 750 /var/sentora/sieve/spamav
+        chown clamav:clamav /var/log/clamav
+        # stopped until the daemon has written Sentora's settings (it starts what is switched on)
+        systemctl stop clamav-milter clamav-daemon spamass-milter spamd > /dev/null 2>&1
+        MEM_MB=$(awk '/^MemTotal:/ {print int($2/1024)}' /proc/meminfo)
+        if [ "${MEM_MB:-0}" -lt 1900 ]; then
+            echo "  ClamAV left off (it needs about 1.5 GB of memory; this server has ${MEM_MB} MB)"
+            systemctl disable --now clamav-freshclam > /dev/null 2>&1
+        else
+            systemctl enable --now clamav-freshclam > /dev/null 2>&1
+            echo "  the first virus signatures are downloading; ClamAV starts scanning when they are in"
+        fi
+    else
+        warn "could not install SpamAssassin and ClamAV (see /var/sentora/logs/update-spamav-install.log)"
+    fi
+fi
+RC_AFTER=$(ver "$PANEL/etc/apps/webmail/program/include/iniset.php" "RCMAIL_VERSION', '[^']*'")
+MT_AFTER=$(ver "$PANEL/etc/apps/matomo/core/Version.php" "VERSION = '[^']*'")
+if [ -n "$MT_AFTER" ] && [ "$MT_BEFORE" != "$MT_AFTER" ] && [ -f "$PANEL/etc/apps/matomo/config/config.ini.php" ]; then
+    say "Matomo changed (${MT_BEFORE#VERSION = } -> ${MT_AFTER#VERSION = }): updating its database"
+    setpriv --reuid="$PANEL_USER" --regid="$PANEL_USER" --init-groups php "$PANEL/etc/apps/matomo/console" core:update --yes > /dev/null 2>&1 || warn "Matomo's database update reported an error"
+fi
+if [ -n "$RC_AFTER" ] && [ "$RC_BEFORE" != "$RC_AFTER" ]; then
+    say "Roundcube changed: updating its database"
+    php "$PANEL/etc/apps/webmail/bin/updatedb.sh" --package=roundcube --dir="$PANEL/etc/apps/webmail/SQL" > /dev/null 2>&1 || warn "Roundcube's database update reported an error"
+fi
+
+php_reload
+echo "$SUM $(date '+%Y-%m-%d %H:%M')" > "$STATE"
+finish
+say "Updated. To go back: sentora-update --rollback $B"

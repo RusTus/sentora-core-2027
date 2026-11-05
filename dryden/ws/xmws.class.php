@@ -45,6 +45,12 @@ class ws_xmws {
         $this->currentmodule = new module_controller;
     }
 
+    /** API keys that are public (the default in Sentora's and ZPanel's database templates) */
+    static function PublicKeys()
+    {
+        return array('ee8795c8c53bfdb3b2cc595186b68912');
+    }
+
     /**
      * Requests that the web service method requires that the user must be authenticated wth the server.
      * @author Bobby Allen (ballen@bobbyallen.me) 
@@ -69,7 +75,13 @@ class ws_xmws {
      * @return boolean
      */
     public function CheckServerAPIKey() {
-        if ($this->wsdataarray['apikey'] != ctrl_options::GetSystemOption('apikey')) {
+        // Sentora: the key must be this server's own (the installer and the daemon make a
+        // random one). The key every Sentora shipped with is public, and with it alone the
+        // API resets passwords, creates clients and domains and reads every setting, so it
+        // is never accepted, nor a short or empty one; compared in constant time.
+        $key = (string) ctrl_options::GetSystemOption('apikey');
+        $given = isset($this->wsdataarray['apikey']) ? (string) $this->wsdataarray['apikey'] : '';
+        if (strlen($key) < 32 || in_array(strtolower($key), self::PublicKeys(), true) || $given === '' || !hash_equals($key, $given)) {
             runtime_hook::Execute('OnBadAPIKeyAuth');
             return false;
         } else {

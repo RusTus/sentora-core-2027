@@ -1,0 +1,6 @@
+# Uploaded dashboard widgets: only their stylesheets are served; their code and
+# descriptions are read by the panel, never requested directly
+Require all denied
+<Files "widget.css">
+    Require all granted
+</Files>
