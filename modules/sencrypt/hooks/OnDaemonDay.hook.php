@@ -76,7 +76,9 @@ echo "END Sencrypt Manager SSL Renewal Hook." . fs_filehandler::NewLine();
 /**
  * Renew the Let's Encrypt certificates of all SSL vhosts that expire within 30 days.
  *
- * Skips domains whose DNS does not point to this server. Exits the daemon run with code 1 when a renewal fails.
+ * Skips domains whose DNS does not point to this server. A failed renewal is logged
+ * (modules/sencrypt/sencrypt.log, with the domain) and the next domain is renewed; the
+ * failures are listed at the end.
  *
  * @global db_driver $zdbh The panel's database connection.
  * @global runtime_controller $controller The request controller (unused).
@@ -90,6 +92,7 @@ function renewCertificates() {
 	$rowvhost->execute();
 	$sslVhosts = $rowvhost->fetchAll();
 	$result = "";
+	$failed = array();
 	
 	foreach($sslVhosts as $sslVhost) {
 		//if (strpos($sslVhost['vh_ssl_tx'], 'Sencrypt') !== false) {
@@ -192,20 +195,26 @@ function renewCertificates() {
 					}
 
 				}
-				catch (\Exception $e) {
-					echo "ERROR!";
+				catch (\Throwable $e) {
+					// One failed renewal (a blocked challenge, a rate limit, a PHP error in
+					// Lescript) must not stop the others: this used to exit(1), which ended the
+					// whole daemon run, so every site after it went unrenewed and its
+					// certificate expired. Log it with the domain and carry on; Server Monitor
+					// alerts when a certificate gets within 14 days of expiring.
+					echo "   ERROR renewing " . $domain . ": " . $e->getMessage() . fs_filehandler::NewLine();
 					$logger->error($e->getMessage());
 					$logger->error($e->getTraceAsString());
 					$errorCatahed = $e->getMessage();
-					// Throw error and log to file
-					error_log( date('Y-m-d H:i:s') . " - DOMAIN: "  . fs_filehandler::NewLine() . $errorCatahed . fs_filehandler::NewLine(), 3, ctrl_options::GetSystemOption('sentora_root') . 'modules/sencrypt/sencrypt.log');
-					// Exit with an error code, something went wrong.
-					exit(1);
+					error_log( date('Y-m-d H:i:s') . " - DOMAIN " . $domain . ": " . $errorCatahed . fs_filehandler::NewLine(), 3, ctrl_options::GetSystemOption('sentora_root') . 'modules/sencrypt/sencrypt.log');
+					$failed[] = $domain;
 				}
 			}
 			
 			echo "Domain: " . $sslVhost['vh_name_vc'] . " analyzed." . fs_filehandler::NewLine() . fs_filehandler::NewLine();
 		}
+	}
+	if ($failed) {
+		echo count($failed) . " renewal(s) FAILED: " . implode(', ', $failed) . " (see modules/sencrypt/sencrypt.log)." . fs_filehandler::NewLine();
 	}
 	
 }
@@ -213,7 +222,8 @@ function renewCertificates() {
 /**
  * Renew the panel domain's Let's Encrypt certificate when it expires within 30 days.
  *
- * Only when the panel has SSL settings and runs on port 443. Exits the daemon run with code 1 when the renewal fails.
+ * Only when the panel has SSL settings and runs on port 443. A failed renewal is logged
+ * (modules/sencrypt/sencrypt.log) and the daemon run carries on.
  *
  * @global db_driver $zdbh The panel's database connection (unused).
  * @global runtime_controller $controller The request controller (unused).
@@ -356,15 +366,14 @@ function renewPanelCertificates() {
 					*/
 					
 				}
-				catch (\Exception $e) {
-					echo "ERROR!";
+				catch (\Throwable $e) {
+					// Logged, and the daemon run carries on (this used to exit(1) and end it,
+					// skipping every client renewal); Server Monitor alerts near expiry
+					echo "   ERROR renewing the panel certificate (" . $domain . "): " . $e->getMessage() . fs_filehandler::NewLine();
 					$logger->error($e->getMessage());
 					$logger->error($e->getTraceAsString());
 					$errorCatahed = $e->getMessage();
-					// Throw error and log to file
-					error_log( date('Y-m-d H:i:s') . " - PANEL DOMAIN: "  . fs_filehandler::NewLine() . $errorCatahed . fs_filehandler::NewLine(), 3, ctrl_options::GetSystemOption('sentora_root') . 'modules/sencrypt/sencrypt.log');
-					// Exit with an error code, something went wrong. Disable because it stops Daemon from completing.
-					exit(1);
+					error_log( date('Y-m-d H:i:s') . " - PANEL DOMAIN " . $domain . ": " . $errorCatahed . fs_filehandler::NewLine(), 3, ctrl_options::GetSystemOption('sentora_root') . 'modules/sencrypt/sencrypt.log');
 				}
 			}
 

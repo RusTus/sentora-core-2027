@@ -138,6 +138,14 @@ function SentoraServerAlerts()
         }
     }
 
+    // SSL certificates close to expiring: Sencrypt renews Let's Encrypt certificates 30 days
+    // ahead, so one with under 14 days left means renewal has been failing for two weeks
+    // (DNS no longer pointing here, a blocked challenge, a rate limit). Third-party
+    // certificates are renewed by hand, so they get the same warning.
+    foreach (SentoraExpiringCertificates(14) as $key => $msg) {
+        $now[$key] = $msg;
+    }
+
     // --- compare with what was already reported -------------------------------------------------
     $stateFile = '/var/lib/sentora/alerts.json';
     $state = json_decode((string) @file_get_contents($stateFile), true);
@@ -201,4 +209,52 @@ function SentoraServerAlerts()
     }
     @file_put_contents($stateFile, json_encode($state));
     @chmod($stateFile, 0600);
+}
+
+/**
+ * SSL certificates of active sites (and the panel) that expire within a number of days.
+ *
+ * Reads each active SSL vhost's Let's Encrypt (Sencrypt) or third-party certificate from
+ * the owner's ssl/sencrypt folder, and the panel's own Let's Encrypt certificate.
+ *
+ * @global db_driver $zdbh The panel's database connection.
+ * @param int $days Warn when fewer than this many days are left.
+ * @return array<string, string> Alert key ('cert:<domain>') => message.
+ */
+function SentoraExpiringCertificates($days)
+{
+    global $zdbh;
+    $out = array();
+    $hosted = (string) ctrl_options::GetSystemOption('hosted_dir');
+    $sites = array();
+    $q = $zdbh->query("SELECT vh_name_vc, ac_user_vc FROM x_vhosts JOIN x_accounts ON ac_id_pk = vh_acc_fk
+        WHERE vh_active_in = '1' AND vh_enabled_in = '1' AND vh_deleted_ts IS NULL AND vh_ssl_tx IS NOT NULL AND vh_ssl_tx <> ''");
+    foreach (($q ? $q->fetchAll() : array()) as $row) {
+        $sites[] = array((string) $row['vh_name_vc'], (string) $row['ac_user_vc']);
+    }
+    if (ctrl_options::GetSystemOption('panel_ssl_tx') != null) {
+        $sites[] = array((string) ctrl_options::GetSystemOption('sentora_domain'), 'zadmin');
+    }
+    foreach ($sites as $site) {
+        list($domain, $user) = $site;
+        if (!preg_match('/^[A-Za-z0-9][A-Za-z0-9._-]*$/', $domain) || !preg_match('/^[A-Za-z0-9][A-Za-z0-9._-]*$/', $user)) {
+            continue;
+        }
+        foreach (array('letsencrypt' => 'Let\'s Encrypt renewal has been failing (see modules/sencrypt/sencrypt.log)',
+            'third_party' => 'it is a third-party certificate: upload a renewed one in Sencrypt') as $kind => $why) {
+            $file = $hosted . $user . '/ssl/sencrypt/' . $kind . '/' . $domain . '/cert.pem';
+            $cert = is_file($file) ? @openssl_x509_parse((string) @file_get_contents($file)) : false;
+            if (!$cert || empty($cert['validTo_time_t'])) {
+                continue;
+            }
+            $left = (int) floor(((int) $cert['validTo_time_t'] - time()) / 86400);
+            if ($left < $days) {
+                $out['cert:' . $domain] = 'The SSL certificate for ' . $domain . ' (' . $user . ') '
+                    . ($left < 0 ? 'EXPIRED ' . date('Y-m-d', (int) $cert['validTo_time_t']) : 'expires in ' . $left . ' day(s), ' . date('Y-m-d', (int) $cert['validTo_time_t']))
+                    . ': ' . $why . '.';
+            }
+            break;
+        }
+    }
+    return $out;
 }

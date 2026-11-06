@@ -217,6 +217,7 @@ The whole core now lints clean on PHP 8.5, and every panel page loads with no PH
 
 **Bug fixes**
 
+- Sencrypt: one failed Let's Encrypt renewal (a blocked challenge, a rate limit) ended the whole daily daemon run with `exit(1)`, so every site after it went unrenewed and its certificate expired, and the rest of the daily jobs were skipped. A failure is now logged with its domain in `modules/sencrypt/sencrypt.log`, the next site is renewed, and the run carries on. Server Monitor alerts (email and alerts.log) when any active site's certificate, or the panel's, has under 14 days left: renewal starts at 30 days, so that means it has been failing for two weeks; third-party certificates get the same warning.
 - Apache: the port 80 to 443 redirect no longer catches `/server-status`, so Apache Status works on HTTPS panels; port 80 always listened on; a wrong port variable fixed.
 - Services page: wrong port variable removed; DNS, SMTP, submission, IMAP(S) and POP3(S) checks added.
 - AutoIP: tries several address services and validates the result.
