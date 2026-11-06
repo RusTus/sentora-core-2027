@@ -1,7 +1,7 @@
 # Sentora themes
 
 Each folder here with a `master.ztml` is a theme (template) that Theme Manager offers.
-**Modern** is the default; **Kerf** is optional. A folder whose name starts with `_` is not a
+**Modern** is the default; **Legacy** (formerly Kerf) is optional. A folder whose name starts with `_` is not a
 theme: `_shared/` holds the files every theme uses (Bootstrap, jQuery and the other scripts,
 the fontello and Glyphicons fonts, favicons, OS icons, small images), so a theme folder only
 needs its own templates, CSS and images. Link them as `etc/styles/_shared/...` (in a

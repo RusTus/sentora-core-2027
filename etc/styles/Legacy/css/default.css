@@ -998,38 +998,38 @@ i.greyscale[class^="icon-"]:before, i.greyscale[class*=" icon-"]:before { conten
 }
 
 /* =====================================================================
-   Kerf: a Sentora theme for a machine-shop network.
+   Legacy: a Sentora theme for a machine-shop network (formerly "Kerf").
    Brushed-steel surfaces, layout-fluid blue for anything you can act on,
    and a plain straight top bar. Everything else stays quiet.
    ===================================================================== */
 /* Barlow Semi Condensed, SIL Open Font License (fonts/barlow/OFL.txt) */
 @font-face {
-    font-family: "Kerf Display";
+    font-family: "Legacy Display";
     src: url("../fonts/barlow/BarlowSemiCondensed-Medium.woff2") format("woff2");
     font-weight: 500; font-style: normal; font-display: swap;
 }
 @font-face {
-    font-family: "Kerf Display";
+    font-family: "Legacy Display";
     src: url("../fonts/barlow/BarlowSemiCondensed-SemiBold.woff2") format("woff2");
     font-weight: 600; font-style: normal; font-display: swap;
 }
 :root {
-    --kerf-steel: #E4E8E9;       /* page, like brushed steel */
-    --kerf-plate: #F7F8F7;       /* panels */
-    --kerf-ink: #18232C;         /* top bar, headings */
-    --kerf-graphite: #4A5862;    /* secondary text */
-    --kerf-scribe: #C3CBCF;      /* hairlines and borders */
-    --kerf-dykem: #2747B0;       /* layout fluid blue: links, focus, active */
-    --kerf-dykem-deep: #1B337F;
-    --kerf-display: "Kerf Display", "Bahnschrift", "Arial Narrow", sans-serif;
-    --kerf-body: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+    --legacy-steel: #E4E8E9;       /* page, like brushed steel */
+    --legacy-plate: #F7F8F7;       /* panels */
+    --legacy-ink: #18232C;         /* top bar, headings */
+    --legacy-graphite: #4A5862;    /* secondary text */
+    --legacy-scribe: #C3CBCF;      /* hairlines and borders */
+    --legacy-dykem: #2747B0;       /* layout fluid blue: links, focus, active */
+    --legacy-dykem-deep: #1B337F;
+    --legacy-display: "Legacy Display", "Bahnschrift", "Arial Narrow", sans-serif;
+    --legacy-body: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
 }
 /* Shared colours every theme provides for modules (see etc/styles/THEMES.md) */
 :root {
-    --sn-card: #ffffff; --sn-ink: var(--kerf-ink); --sn-muted: var(--kerf-graphite);
-    --sn-line: var(--kerf-scribe); --sn-line-strong: #a9b4ba;
-    --sn-soft: var(--kerf-plate); --sn-hover: #eef1f2; --sn-hover-strong: #dde2e4;
-    --sn-accent: var(--kerf-dykem); --sn-accent-soft: #e8ecf8;
+    --sn-card: #ffffff; --sn-ink: var(--legacy-ink); --sn-muted: var(--legacy-graphite);
+    --sn-line: var(--legacy-scribe); --sn-line-strong: #a9b4ba;
+    --sn-soft: var(--legacy-plate); --sn-hover: #eef1f2; --sn-hover-strong: #dde2e4;
+    --sn-accent: var(--legacy-dykem); --sn-accent-soft: #e8ecf8;
     --sn-ok: #1e7a45; --sn-ok-soft: #e3f5ea; --sn-ok-line: #9ad4b1;
     --sn-warn: #8f5b00; --sn-warn-soft: #fff4d6; --sn-warn-line: #f2cf7a;
     --sn-bad: #b42b27; --sn-bad-soft: #fdeaea; --sn-bad-line: #f0a9a7;
@@ -1037,24 +1037,24 @@ i.greyscale[class^="icon-"]:before, i.greyscale[class*=" icon-"]:before { conten
 }
 
 body {
-    background: var(--kerf-steel);
-    color: var(--kerf-ink);
-    font-family: var(--kerf-body);
+    background: var(--legacy-steel);
+    color: var(--legacy-ink);
+    font-family: var(--legacy-body);
 }
-a { color: var(--kerf-dykem); }
-a:hover, a:focus { color: var(--kerf-dykem-deep); }
+a { color: var(--legacy-dykem); }
+a:hover, a:focus { color: var(--legacy-dykem-deep); }
 
 /* Keyboard focus is visible everywhere (the base theme removed it) */
 a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
-    outline: 2px solid var(--kerf-dykem);
+    outline: 2px solid var(--legacy-dykem);
     outline-offset: 2px;
 }
 
 /* ---- Top bar ------------------------------------------------------- */
 .navbar-inverse {
-    background: var(--kerf-ink);
+    background: var(--legacy-ink);
     border: 0;
-    font-family: var(--kerf-display);
+    font-family: var(--legacy-display);
 }
 .navbar-inverse .nav > li > a {
     color: #C9D3D8;
@@ -1066,7 +1066,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .navbar-inverse .nav > li > a:focus {
     color: #FFFFFF;
     background: transparent;
-    box-shadow: inset 0 -3px 0 var(--kerf-dykem);
+    box-shadow: inset 0 -3px 0 var(--legacy-dykem);
 }
 .navbar-inverse .navbar-nav li.dropdown.open > .dropdown-toggle,
 .navbar-inverse .navbar-nav li.dropdown.active > .dropdown-toggle,
@@ -1081,137 +1081,137 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .navbar-inverse .nav > .active > a:hover,
 .navbar-inverse .nav > .open > a,
 .navbar-inverse .nav > .open > a:hover {
-    background: var(--kerf-dykem);
+    background: var(--legacy-dykem);
     color: #FFFFFF;
 }
 .navbar-inverse .nav > li > a.nav-stat-button { opacity: 0.85; }
 .dropdown-menu {
-    border: 1px solid var(--kerf-scribe);
+    border: 1px solid var(--legacy-scribe);
     border-radius: 2px;
     box-shadow: 0 8px 18px rgba(24, 35, 44, 0.18);
-    background: var(--kerf-plate);
+    background: var(--legacy-plate);
 }
-.dropdown-menu > li > a { color: var(--kerf-ink); }
+.dropdown-menu > li > a { color: var(--legacy-ink); }
 .dropdown-menu > li > a:hover, .dropdown-menu > li > a:focus {
-    background: var(--kerf-dykem);
+    background: var(--legacy-dykem);
     color: #FFFFFF;
 }
 
 /* ---- Sidebar: a light tool rail ------------------------------------- */
 #menu-sidebar, #sidebar-bg {
-    background: var(--kerf-plate);
+    background: var(--legacy-plate);
 }
-#sidebar-bg { border-right: 1px solid var(--kerf-scribe); }
+#sidebar-bg { border-right: 1px solid var(--legacy-scribe); }
 #menu-sidebar .heading {
-    color: var(--kerf-ink);
-    font-family: var(--kerf-display);
+    color: var(--legacy-ink);
+    font-family: var(--legacy-display);
     font-weight: 600;
     font-size: 15px;
     border-left: 3px solid transparent;
     padding-left: 17px;
 }
 #menu-sidebar .heading:hover {
-    border-left-color: var(--kerf-dykem);
-    color: var(--kerf-dykem-deep);
+    border-left-color: var(--legacy-dykem);
+    color: var(--legacy-dykem-deep);
 }
-#menu-sidebar .open { color: var(--kerf-graphite); }
+#menu-sidebar .open { color: var(--legacy-graphite); }
 #menu-sidebar ul li a {
-    color: var(--kerf-graphite);
-    font-family: var(--kerf-body);
+    color: var(--legacy-graphite);
+    font-family: var(--legacy-body);
 }
 #menu-sidebar ul li a:hover {
-    background: var(--kerf-steel);
+    background: var(--legacy-steel);
     border-top: 1px solid transparent;
-    color: var(--kerf-dykem-deep);
+    color: var(--legacy-dykem-deep);
 }
 
 /* Account info button and search: flat, steel, no gradient */
 .stats-but {
-    background: var(--kerf-ink);
+    background: var(--legacy-ink);
     background-image: none;
     border: 0;
     border-radius: 2px;
     color: #E4E8E9;
-    font-family: var(--kerf-display);
+    font-family: var(--legacy-display);
     letter-spacing: 0.02em;
 }
 .stats-but:hover, .stats-but:focus, .stats-but:active {
-    background: var(--kerf-dykem);
+    background: var(--legacy-dykem);
     background-image: none;
     color: #FFFFFF;
 }
 #module-search {
-    border: 1px solid var(--kerf-scribe);
+    border: 1px solid var(--legacy-scribe);
     border-radius: 2px;
     background: #FFFFFF;
     box-shadow: none;
 }
-#module-search:focus { border-color: var(--kerf-dykem); }
+#module-search:focus { border-color: var(--legacy-dykem); }
 
 /* ---- Dashboard category panels ------------------------------------- */
 .module-box-title {
-    background: var(--kerf-plate);
+    background: var(--legacy-plate);
     background-image: none;
-    border: 1px solid var(--kerf-scribe);
-    border-bottom: 1px solid var(--kerf-scribe);
+    border: 1px solid var(--legacy-scribe);
+    border-bottom: 1px solid var(--legacy-scribe);
     border-radius: 2px 2px 0 0;
-    color: var(--kerf-ink) !important;
+    color: var(--legacy-ink) !important;
 }
 .module-box-title h4 {
-    color: var(--kerf-ink);
-    font-family: var(--kerf-display);
+    color: var(--legacy-ink);
+    font-family: var(--legacy-display);
     font-weight: 600;
     font-size: 17px;
 }
-.module-box-title .tools a, .module-box-title .tools i { color: var(--kerf-graphite); }
+.module-box-title .tools a, .module-box-title .tools i { color: var(--legacy-graphite); }
 .module-box-body {
     background: #FFFFFF;
-    border: 1px solid var(--kerf-scribe);
+    border: 1px solid var(--legacy-scribe);
     border-top: 0;
     border-radius: 0 0 2px 2px;
 }
-.module-box-body a { color: var(--kerf-graphite); }
-.module-box-body a:hover { color: var(--kerf-dykem-deep); text-decoration: none; }
+.module-box-body a { color: var(--legacy-graphite); }
+.module-box-body a:hover { color: var(--legacy-dykem-deep); text-decoration: none; }
 .module-box-body a:hover img { filter: brightness(0.75); }
-.active-cat > .module-box-title { border-color: var(--kerf-dykem); }
-.active-cat > .module-box-title > h4 { color: var(--kerf-dykem-deep); }
+.active-cat > .module-box-title { border-color: var(--legacy-dykem); }
+.active-cat > .module-box-title > h4 { color: var(--legacy-dykem-deep); }
 
 /* ---- Module pages --------------------------------------------------- */
 .zmodule_content.panel, .panel {
-    border: 1px solid var(--kerf-scribe);
+    border: 1px solid var(--legacy-scribe);
     border-radius: 2px;
     box-shadow: none;
     background: #FFFFFF;
 }
 .zmodule_content .panel-heading, .panel-heading {
-    background: var(--kerf-plate);
-    border-bottom: 1px solid var(--kerf-scribe);
+    background: var(--legacy-plate);
+    border-bottom: 1px solid var(--legacy-scribe);
 }
 .zmodule_title {
-    font-family: var(--kerf-display);
+    font-family: var(--legacy-display);
     font-weight: 600;
-    color: var(--kerf-ink);
+    color: var(--legacy-ink);
 }
-.zmodule_desc { color: var(--kerf-graphite); }
+.zmodule_desc { color: var(--legacy-graphite); }
 
 .table > thead > tr > th {
-    font-family: var(--kerf-display);
+    font-family: var(--legacy-display);
     font-weight: 600;
-    color: var(--kerf-ink);
-    border-bottom: 2px solid var(--kerf-ink);
+    color: var(--legacy-ink);
+    border-bottom: 2px solid var(--legacy-ink);
 }
 .table > tbody > tr > th {
-    font-family: var(--kerf-display);
+    font-family: var(--legacy-display);
     font-weight: 600;
-    color: var(--kerf-ink);
+    color: var(--legacy-ink);
     border-bottom: 0;
-    border-top: 1px solid var(--kerf-scribe);
+    border-top: 1px solid var(--legacy-scribe);
 }
-.table > tbody > tr > td { border-top-color: var(--kerf-scribe); }
+.table > tbody > tr > td { border-top-color: var(--legacy-scribe); }
 h1, h2, h3, h4 {
-    font-family: var(--kerf-display);
+    font-family: var(--legacy-display);
     font-weight: 600;
-    color: var(--kerf-ink);
+    color: var(--legacy-ink);
     letter-spacing: 0;
 }
 h2 { font-size: 26px; }
@@ -1220,45 +1220,45 @@ h2 { font-size: 26px; }
 
 .btn {
     border-radius: 2px;
-    font-family: var(--kerf-display);
+    font-family: var(--legacy-display);
     letter-spacing: 0.02em;
     background-image: none;
     text-shadow: none;
 }
 .btn-primary {
-    background: var(--kerf-dykem);
-    border-color: var(--kerf-dykem-deep);
+    background: var(--legacy-dykem);
+    border-color: var(--legacy-dykem-deep);
 }
 .btn-primary:hover, .btn-primary:focus, .btn-primary:active {
-    background: var(--kerf-dykem-deep);
-    border-color: var(--kerf-dykem-deep);
+    background: var(--legacy-dykem-deep);
+    border-color: var(--legacy-dykem-deep);
 }
 .btn-default {
-    background: var(--kerf-plate);
-    border-color: var(--kerf-scribe);
-    color: var(--kerf-ink);
+    background: var(--legacy-plate);
+    border-color: var(--legacy-scribe);
+    color: var(--legacy-ink);
 }
 .form-control, input[type="text"], input[type="password"], select, textarea {
     border-radius: 2px;
-    border-color: var(--kerf-scribe);
+    border-color: var(--legacy-scribe);
     box-shadow: none;
 }
-.form-control:focus { border-color: var(--kerf-dykem); box-shadow: 0 0 0 2px rgba(39, 71, 176, 0.18); }
+.form-control:focus { border-color: var(--legacy-dykem); box-shadow: 0 0 0 2px rgba(39, 71, 176, 0.18); }
 
 .alert { border-radius: 2px; border-width: 1px 1px 1px 4px; }
-.alert-info { background: #EEF2FA; border-color: #C9D3EE; border-left-color: var(--kerf-dykem); color: var(--kerf-ink); }
+.alert-info { background: #EEF2FA; border-color: #C9D3EE; border-left-color: var(--legacy-dykem); color: var(--legacy-ink); }
 .alert-success { border-left-color: #2F7D4F; }
 .alert-danger, .alert-error { border-left-color: #A3322A; }
 
 /* Account info tabs */
 .nav-tabs > li.active > a, .nav-tabs > li.active > a:hover {
-    border-top: 3px solid var(--kerf-dykem);
-    color: var(--kerf-ink);
+    border-top: 3px solid var(--legacy-dykem);
+    color: var(--legacy-ink);
 }
 .stats-row:nth-child(even) { background: #F3F5F5; }
-.progress-bar { background-color: var(--kerf-dykem); }
+.progress-bar { background-color: var(--legacy-dykem); }
 
-#footer { color: var(--kerf-graphite); }
+#footer { color: var(--legacy-graphite); }
 
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { transition: none !important; animation: none !important; }

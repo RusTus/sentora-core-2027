@@ -9,7 +9,7 @@
 
         <!-- Stylesheets -->
         <link href="/etc/styles/_shared/global-css/bootstrap.min.css" rel="stylesheet">
-        <link href="/etc/styles/Kerf/global-css/login.css" rel="stylesheet">
+        <link href="/etc/styles/Legacy/global-css/login.css" rel="stylesheet">
 
         <!-- Favicons -->
         <link rel="apple-touch-icon-precomposed" sizes="57x57"   href="/etc/styles/_shared/img/ico/apple-touch-icon-57-precomposed.png">
@@ -47,7 +47,7 @@
         <div class="loginwrapper">
             <div class="panel login-panel">
                 <div class="panel-heading login-head">
-                    <img src="/etc/styles/Kerf/img/logos/sentora_logo.png" alt="Sentora Logo" width="334" height="93">
+                    <img src="/etc/styles/Legacy/img/logos/sentora_logo.png" alt="Sentora Logo" width="334" height="93">
                 </div>
                 <div class="panel-content form-horizontal">
                 <?php

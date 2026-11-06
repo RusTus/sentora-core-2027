@@ -245,22 +245,35 @@ if [ -f "$SRC/bin/obsolete-files.txt" ]; then
     done < "$SRC/bin/obsolete-files.txt"
     [ $n -gt 0 ] && say "Removed $n file(s) the core no longer has"
 fi
-# Sentora_Default was replaced by Modern (Light and Dark): accounts on it move to
-# Modern, Light, then the old theme's folder goes (sentora-update --rollback brings it
-# back; older cores still accept "Modern"/"light" in the database)
-if [ -d "$PANEL/etc/styles/Modern" ] && [ -d "$PANEL/etc/styles/Sentora_Default" ] && [ ! -d "$SRC/etc/styles/Sentora_Default" ]; then
-    say "Moving accounts from the retired Sentora_Default theme to Modern"
-    if ( cd "$PANEL" && php -r '
-        chdir("'"$PANEL"'"); require "dryden/loader.inc.php"; require "cnf/db.php"; require "inc/dbc.inc.php";
-        $q = $zdbh->prepare("UPDATE x_accounts SET ac_usertheme_vc = :n, ac_usercss_vc = :c WHERE ac_usertheme_vc = :o");
-        $q->execute(array(":n" => "Modern", ":c" => "light", ":o" => "Sentora_Default"));
-        echo "  " . $q->rowCount() . " account(s) moved\n";
-    ' ); then
-        rm -rf -- "$PANEL/etc/styles/Sentora_Default"
-    else
-        warn "could not move accounts to Modern (Sentora_Default left in place)"
+# Retired and renamed themes: accounts on the old theme move to its replacement, then
+# the old folder goes (sentora-update --rollback brings it back; an older core falls back
+# to its own default theme for a name it does not have)
+#   retire_theme <old folder> <new folder> <variation for moved accounts, or "" to keep it>
+retire_theme() {
+    local old="$1" new="$2" css="$3"
+    if [ -d "$PANEL/etc/styles/$new" ] && [ -d "$PANEL/etc/styles/$old" ] && [ ! -d "$SRC/etc/styles/$old" ]; then
+        say "Moving accounts from the $old theme to $new"
+        if ( cd "$PANEL" && php -r '
+            chdir($argv[1]); require "dryden/loader.inc.php"; require "cnf/db.php"; require "inc/dbc.inc.php";
+            if ($argv[4] === "") {
+                $q = $zdbh->prepare("UPDATE x_accounts SET ac_usertheme_vc = :n WHERE ac_usertheme_vc = :o");
+                $q->execute(array(":n" => $argv[3], ":o" => $argv[2]));
+            } else {
+                $q = $zdbh->prepare("UPDATE x_accounts SET ac_usertheme_vc = :n, ac_usercss_vc = :c WHERE ac_usertheme_vc = :o");
+                $q->execute(array(":n" => $argv[3], ":c" => $argv[4], ":o" => $argv[2]));
+            }
+            echo "  " . $q->rowCount() . " account(s) moved\n";
+        ' "$PANEL" "$old" "$new" "$css" ); then
+            rm -rf -- "${PANEL:?}/etc/styles/$old"
+        else
+            warn "could not move accounts from $old to $new ($old left in place)"
+        fi
     fi
-fi
+}
+# Sentora_Default was replaced by Modern (Light, Dark, Auto)
+retire_theme Sentora_Default Modern light
+# Kerf was renamed Legacy (same look, one variation)
+retire_theme Kerf Legacy ""
 # Theme and module files are revalidated by the browser after each update (the panel's
 # vhost sends Cache-Control: no-cache for them; that needs mod_headers): rewrite the vhost
 if [ ! -e /etc/apache2/mods-enabled/headers.load ]; then
