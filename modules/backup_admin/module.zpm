@@ -1,45 +1,91 @@
 <div class="zmodule_content panel" id="zmodule_header_<@ ModuleName @>">
     <div class="panel-heading">
         <img src="<@ ModuleIcon @>" width="35" height="35" border="0" alt="<@ ModuleName @>">
-
-        <div class="zmodule_title">
-            <@ ModuleName @>
-        </div>
-
+        <div class="zmodule_title"><@ ModuleName @></div>
         <div class="zmodule_desc" id="zmodule_desc_<@ ModuleName @>"><@ ModuleDesc @></div>
-
     </div>
 
     <@ Result @>
+    <link rel="stylesheet" href="modules/backupmgr/assets/backup.css">
+    <link rel="stylesheet" href="modules/backup_admin/assets/admin.css">
 
-    <div class="zgrid_wrapper">
-        <h2><: Configure your Backup Settings :></h2>
-        <form action="./?module=backup_admin&action=UpdateConfig" method="post">
-            <table class="table table-striped">
-                <% loop Config %>
-                <tr valign="top">
-                    <th nowrap="nowrap"><& cleanname &></th>
-                    <td><& fieldhtml &></td>
-                    <td><& description &></td>
-                </tr>
-                <% endloop %>
-                <tr>
-                    <th colspan="3">
-                        <button class="button-loader add-row btn btn-primary" type="submit" id="button" name="inSaveSystem"><: Save Changes :></button>
-                        <button class="add-row btn btn-default" type="button" onclick="window.location.href='./?module=moduleadmin';return false;"><: Cancel :></button>
-                    </th>
-                </tr>
-            </table>
-            <@ CSFR_Tag @>
-        </form>
-        <h2><: Off-server backup :></h2>
-        <p class="text-muted"><: Every night, copies the account backups, a dump of all databases, the configuration and the mailboxes to another machine. Each night is kept as a dated snapshot in which unchanged files take no extra space. :></p>
-        <@ OffsiteForm @>
-        <@ OffsiteStatus @>
-        <h2 id="restore" style="margin-top: 26px;"><: Restore :></h2>
-        <p class="text-muted"><: Restore one account or the whole panel from the full backup on the backup machine. :></p>
-        <style>.bk-job{color:var(--sn-info, #31708f)}.bk-spin{display:inline-block;width:14px;height:14px;vertical-align:-2px;border:2px solid var(--sn-info-line, #bcdcec);border-top-color:var(--sn-info, #31708f);border-radius:50%;animation:bk-spin .9s linear infinite}@keyframes bk-spin{to{transform:rotate(360deg)}}.bk-restore{border:1px solid var(--sn-line, #ddd);border-radius:6px;padding:4px 16px 12px;margin-top:14px;background:var(--sn-soft, #fafafa)}.bk-danger{border-color:var(--sn-bad-line, #ebccd1);background:var(--sn-bad-soft, #fdf7f7)}</style>
-        <@ Restore @>
+    <div class="bk" id="bk" data-open="<@ OpenTab @>">
+        <div class="bk-cards"><@ Summary @></div>
+
+        <nav class="bk-tabs" role="tablist">
+            <button type="button" role="tab" class="bk-tab" data-tab="settings"><: Client backups :></button>
+            <button type="button" role="tab" class="bk-tab" data-tab="offsite"><: Off-server backup :></button>
+            <button type="button" role="tab" class="bk-tab" data-tab="restore"><: Restore :></button>
+        </nav>
+
+        <!-- Client backups -->
+        <section class="bk-pane" data-pane="settings">
+            <div class="bk-panel">
+                <div class="bk-panel-head"><div><h4><: Client backups :></h4>
+                    <p><: The backups clients make on their Backup page (Advanced > Backup), and the daily backup of every account. :></p></div></div>
+                <% if Config %>
+                <form class="bk-ftp" action="./?module=backup_admin&amp;action=UpdateConfig" method="post">
+                    <@ ConfigFields @>
+                    <div class="bk-form-foot bk-wide">
+                        <button class="btn btn-primary" type="submit" name="inSaveSystem"><: Save changes :></button>
+                        <a class="btn btn-default" href="./?module=moduleadmin"><: Cancel :></a>
+                    </div>
+                    <@ CSFR_Tag @>
+                </form>
+                <% endif %>
+            </div>
+        </section>
+
+        <!-- Off-server backup -->
+        <section class="bk-pane" data-pane="offsite">
+            <div class="bk-panel">
+                <div class="bk-panel-head"><div><h4><: Off-server backup :></h4>
+                    <p><: Every night, copies the account backups, a dump of all databases, the configuration and the mailboxes to another machine. Each night is kept as a dated snapshot in which unchanged files take no extra space. :></p></div></div>
+                <div class="bk-ftp-grid">
+                    <@ OffsiteForm @>
+                    <aside class="bk-ftp-status"><h5><: Status :></h5><@ OffsiteStatus @></aside>
+                </div>
+            </div>
+        </section>
+
+        <!-- Restore -->
+        <section class="bk-pane" data-pane="restore" id="restore">
+            <div class="bk-panel">
+                <div class="bk-panel-head"><div><h4><: Restore :></h4>
+                    <p><: Restore one account or the whole panel from the full backup on the backup machine. :></p></div></div>
+                <@ Restore @>
+            </div>
+        </section>
     </div>
-
+    <script>
+    (function () {
+        'use strict';
+        var root = document.getElementById('bk');
+        if (!root) { return; }
+        var each = function (sel, f) { Array.prototype.forEach.call(root.querySelectorAll(sel), f); };
+        function tab(name) {
+            each('.bk-tab', function (b) { var on = b.getAttribute('data-tab') === name; b.classList.toggle('on', on); b.setAttribute('aria-selected', on ? 'true' : 'false'); });
+            each('.bk-pane', function (p) { p.classList.toggle('on', p.getAttribute('data-pane') === name); });
+            try { sessionStorage.setItem('bk-admin-tab', name); } catch (e) { /* private window */ }
+        }
+        each('.bk-tab', function (b) { b.addEventListener('click', function () { tab(b.getAttribute('data-tab')); }); });
+        var open = root.getAttribute('data-open');
+        if (!open) { try { open = sessionStorage.getItem('bk-admin-tab'); } catch (e) { open = ''; } }
+        tab(open && root.querySelector('.bk-tab[data-tab="' + open + '"]') ? open : 'settings');
+        // a restore asks first; forms that start work show the panel's "working" overlay
+        each('form', function (f) {
+            f.addEventListener('submit', function (e) {
+                var q = f.getAttribute('data-confirm');
+                if (q && !window.confirm(q)) { e.preventDefault(); return; }
+                if (window.Sentora && Sentora.loader) { Sentora.loader.showLoader(); }
+            });
+        });
+        // the full restore button only wakes up when RESTORE is typed
+        each('.bk-confirm-word', function (i) {
+            var btn = i.form.querySelector('button[type="submit"]');
+            var sync = function () { btn.disabled = i.value.trim() !== 'RESTORE'; };
+            i.addEventListener('input', sync); sync();
+        });
+    })();
+    </script>
 </div>

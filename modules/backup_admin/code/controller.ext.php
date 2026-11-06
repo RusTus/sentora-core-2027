@@ -39,44 +39,60 @@ class module_controller extends ctrl_module
     static $ok;
 
     /**
-     * List the module's user-editable settings for the settings form.
+     * The module's user-editable settings (x_settings rows of this module).
      *
      * @global db_driver $zdbh The panel's database connection.
-     * @return array<int, array<string, string>>|false One row per setting: 'cleanname', 'name', 'description', 'value', 'fieldhtml'; false when there are none.
+     * @return array<int, array<string, mixed>> The rows, by clean name.
+     */
+    static function ConfigRows()
+    {
+        global $zdbh;
+        $moduleName = ui_module::GetModuleName();
+        $sql = $zdbh->prepare("SELECT * FROM x_settings WHERE so_module_vc=:module AND so_usereditable_en = 'true' ORDER BY so_cleanname_vc");
+        $sql->bindParam(':module', $moduleName);
+        $sql->execute();
+        return $sql->fetchAll();
+    }
+
+    /**
+     * Template flag: the module has settings to show (template: <% if Config %>).
+     *
+     * @return bool
      */
     static function getConfig()
     {
-        global $zdbh;
-        $currentuser = ctrl_users::GetUserDetail();
-        $moduleName = ui_module::GetModuleName();
+        return count(self::ConfigRows()) > 0;
+    }
 
-        $sql = "SELECT * FROM x_settings WHERE so_module_vc=:module AND so_usereditable_en = 'true' ORDER BY so_cleanname_vc";
-        $numrows = $zdbh->prepare($sql);
-        $numrows->bindParam(':module', $moduleName);
-        $numrows->execute();
-
-        //$numrows = $zdbh->query($sql);
-        if ($numrows->fetchColumn() <> 0) {
-            $sql = $zdbh->prepare($sql);
-            $res = array();
-            $sql->bindParam(':module', $moduleName);
-            $sql->execute();
-            while ($rowmailsettings = $sql->fetch()) {
-                if (ctrl_options::CheckForPredefinedOptions($rowmailsettings['so_defvalues_tx'])) {
-                    $fieldhtml = ctrl_options::OuputSettingMenuField($rowmailsettings['so_name_vc'], $rowmailsettings['so_defvalues_tx'], $rowmailsettings['so_value_tx']);
-                } else {
-                    $fieldhtml = ctrl_options::OutputSettingTextArea($rowmailsettings['so_name_vc'], $rowmailsettings['so_value_tx']);
+    /**
+     * Template HTML: the settings as form fields: a switch for true/false, a list for other
+     * fixed choices, a text box otherwise. The field names are the setting names, as
+     * doUpdateConfig() reads them; a switch also sends "false" when it is off.
+     *
+     * @return string HTML.
+     */
+    static function getConfigFields()
+    {
+        $out = '';
+        foreach (self::ConfigRows() as $r) {
+            $name = (string) $r['so_name_vc'];
+            $val = (string) $r['so_value_tx'];
+            $label = self::t($r['so_cleanname_vc']);
+            $help = self::h(preg_replace('/\s*\((true\/false)\)\s*$/i', '', ui_language::translate((string) $r['so_desc_tx'])));
+            if ((string) $r['so_defvalues_tx'] === 'true|false') {
+                $out .= '<label class="bk-switch bk-wide"><input type="hidden" name="' . self::h($name) . '" value="false"><input type="checkbox" name="' . self::h($name) . '" value="true"' . ($val === 'true' ? ' checked' : '') . '>'
+                    . '<span class="bk-toggle" aria-hidden="true"></span><span><b>' . $label . '</b><small>' . $help . '</small></span></label>';
+            } elseif (ctrl_options::CheckForPredefinedOptions($r['so_defvalues_tx'])) {
+                $opts = '';
+                foreach (explode('|', (string) $r['so_defvalues_tx']) as $o) {
+                    $opts .= '<option value="' . self::h($o) . '"' . ($o === $val ? ' selected' : '') . '>' . self::h($o) . '</option>';
                 }
-                array_push($res, array('cleanname' => ui_language::translate($rowmailsettings['so_cleanname_vc']),
-                    'name' => $rowmailsettings['so_name_vc'],
-                    'description' => ui_language::translate($rowmailsettings['so_desc_tx']),
-                    'value' => $rowmailsettings['so_value_tx'],
-                    'fieldhtml' => $fieldhtml));
+                $out .= '<label class="bk-field"><span>' . $label . '</span><select class="form-control" name="' . self::h($name) . '">' . $opts . '</select><small>' . $help . '</small></label>';
+            } else {
+                $out .= '<label class="bk-field"><span>' . $label . '</span><input class="form-control" type="text" name="' . self::h($name) . '" value="' . self::h($val) . '"><small>' . $help . '</small></label>';
             }
-            return $res;
-        } else {
-            return false;
         }
+        return $out;
     }
 
     /**
@@ -114,6 +130,153 @@ class module_controller extends ctrl_module
             }
         }
         self::$ok = true;
+    }
+
+    // --- page helpers -------------------------------------------------------------------------
+
+    /**
+     * Escape text for HTML.
+     *
+     * @param mixed $s The text.
+     * @return string
+     */
+    static function h($s)
+    {
+        return htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
+    }
+
+    /**
+     * Translated and HTML-escaped text.
+     *
+     * @param string $s The English text.
+     * @return string
+     */
+    static function t($s)
+    {
+        return self::h(ui_language::translate($s));
+    }
+
+    /**
+     * An inline SVG icon (stroked, in the text colour).
+     *
+     * @param string $name The icon: users, trash, cloud, restore, clock, check, x, plug, play, archive, sliders, alert, refresh.
+     * @return string SVG markup, or '' for an unknown name.
+     */
+    static function Icon($name)
+    {
+        $p = array(
+            'users' => '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M21.5 20a6.5 6.5 0 0 0-4-6"/>',
+            'trash' => '<path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="m6 7 1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13"/>',
+            'cloud' => '<path d="M7 18a5 5 0 1 1 1.6-9.7A6 6 0 0 1 20 11a4 4 0 0 1-1 7.9z"/>',
+            'restore' => '<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 8v4l3 2"/>',
+            'clock' => '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+            'check' => '<circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/>',
+            'x' => '<circle cx="12" cy="12" r="9"/><path d="m9 9 6 6M15 9l-6 6"/>',
+            'plug' => '<path d="M9 2v6M15 2v6"/><path d="M6 8h12v4a6 6 0 0 1-12 0z"/><path d="M12 18v4"/>',
+            'play' => '<circle cx="12" cy="12" r="9"/><path d="m10 8 6 4-6 4z"/>',
+            'archive' => '<rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9"/><path d="M10 13h4"/>',
+            'sliders' => '<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>',
+            'alert' => '<path d="M12 3 2 20h20z"/><path d="M12 10v4M12 17h.01"/>',
+            'refresh' => '<path d="M20 12a8 8 0 1 1-2.3-5.7L20 8.5"/><path d="M20 3.5v5h-5"/>',
+        );
+        return isset($p[$name]) ? '<svg class="bk-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' . $p[$name] . '</svg>' : '';
+    }
+
+    /**
+     * "3 hours ago" and the like.
+     *
+     * @param int $ts A Unix time.
+     * @return string Translated text.
+     */
+    static function Ago($ts)
+    {
+        $s = max(0, time() - (int) $ts);
+        if ($s < 60) {
+            return ui_language::translate('just now');
+        }
+        foreach (array(array(86400, 'day', 'days'), array(3600, 'hour', 'hours'), array(60, 'minute', 'minutes')) as $u) {
+            if ($s >= $u[0]) {
+                $n = (int) floor($s / $u[0]);
+                return $n . ' ' . ui_language::translate($n === 1 ? $u[1] : $u[2]) . ' ' . ui_language::translate('ago');
+            }
+        }
+        return '';
+    }
+
+    /**
+     * A date and how long ago, or "never".
+     *
+     * @param mixed $ts A Unix time, or 0.
+     * @return string HTML.
+     */
+    static function When($ts)
+    {
+        return (int) $ts > 0 ? self::h(date('Y-m-d H:i', (int) $ts)) . ' · ' . self::h(self::Ago((int) $ts)) : self::t('never');
+    }
+
+    /**
+     * The tab the page opens on: the one the last action belongs to, else '' (the page script then picks).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return string 'settings', 'offsite', 'restore' or ''.
+     */
+    static function Tab()
+    {
+        global $controller;
+        if ((string) $controller->GetControllerRequest('URL', 'snap') !== '' || self::$restoreMsg || self::$flash !== '' || isset($_SESSION['bk_restore_msg'])) {
+            return 'restore';
+        }
+        if (self::$offsiteErrors || self::$offsiteSaved || self::$offsiteQueued !== '') {
+            return 'offsite';
+        }
+        return self::$ok ? 'settings' : '';
+    }
+
+    /**
+     * Template value: the tab to open (data-tab of the page).
+     *
+     * @return string
+     */
+    static function getOpenTab()
+    {
+        return self::Tab();
+    }
+
+    /**
+     * Template HTML: four cards: client backups, how long they are kept, the off-server backup, the last restore.
+     *
+     * @return string HTML.
+     */
+    static function getSummary()
+    {
+        $opt = function ($k) { return strtolower((string) ctrl_options::GetSystemOption($k)) === 'true'; };
+        $card = function ($icon, $color, $label, $value, $detail) {
+            return '<div class="bk-card" style="--c:' . $color . '">' . self::Icon($icon) . '<div><div class="bk-card-label">' . self::t($label) . '</div>'
+                . '<div class="bk-card-value">' . $value . '</div><div class="bk-card-detail">' . $detail . '</div></div></div>';
+        };
+        $out = $card('users', '#447fb3', 'Client backups', $opt('disk_bu') ? self::t('On') : self::t('Off'),
+            $opt('schedule_bu') ? self::t('plus a daily backup of every account') : self::t('made by clients on their Backup page'));
+        $out .= $card('trash', '#f5a623', 'Kept for', $opt('purge_bu') ? self::h(ctrl_options::GetSystemOption('purge_date')) . ' ' . self::t('days') : self::t('Until deleted'),
+            $opt('purge_bu') ? self::t('older client backups are deleted') : self::t('client backups are not deleted automatically'));
+        $o = self::Offsite();
+        $st = json_decode((string) @file_get_contents('/var/lib/sentora/offsite-backup.json'), true);
+        $st = is_array($st) ? $st : array();
+        $failed = isset($st['result']) && $st['result'] !== 'ok';
+        $out .= $card('cloud', $o['offsite_enabled'] === 'true' ? ($failed ? '#ff6854' : '#1fa2b5') : '#9aa5b1', 'Off-server backup',
+            $o['offsite_enabled'] === 'true' ? sprintf(self::t('Nightly at %s'), self::h($o['offsite_time'])) : self::t('Off'),
+            $failed ? '<span class="bk-bad">' . self::t('last run failed') . '</span>' : (!empty($st['last_ok']) ? self::t('last good copy') . ' ' . self::h(self::Ago($st['last_ok'])) : self::t('no copy yet')));
+        $rs = self::RestoreJson(self::RESTORE_STATE);
+        if (is_file(self::RESTORE_REQ) || !empty($rs['running']) || !empty($rs['listing'])) {
+            $out .= $card('restore', '#8e6bd8', 'Restore', self::t('Working'), self::t('see the Restore tab'));
+        } elseif (!empty($rs['result'])) {
+            $out .= $card('restore', $rs['result'] === 'ok' ? '#2db87d' : '#ff6854', 'Last restore', $rs['result'] === 'ok' ? self::t('Done') : ($rs['result'] === 'partial' ? self::t('With problems') : self::t('Failed')),
+                self::h(self::Ago((int) ($rs['finished'] ?? 0))));
+        } else {
+            $cat = self::RestoreJson(self::RESTORE_CATALOG);
+            $n = count((array) ($cat['snapshots'] ?? array()));
+            $out .= $card('restore', '#8e6bd8', 'Restore', $n ? $n . ' ' . self::t($n === 1 ? 'snapshot' : 'snapshots') : self::t('Ready'), $n ? self::t('on the backup machine') : self::t('read the backups to list them'));
+        }
+        return $out;
     }
 
     // --- off-server backup (its own section: proper fields, an encrypted password) ------------
@@ -293,32 +456,29 @@ class module_controller extends ctrl_module
     static function getOffsiteForm()
     {
         $o = self::Offsite();
-        $h = function ($s) { return htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8'); };
-        $t = function ($s) { return ui_language::translate($s); };
-        $row = function ($label, $field, $help) use ($t) {
-            return '<tr><th nowrap="nowrap" style="width: 220px;">' . $t($label) . '</th><td style="width: 360px;">' . $field . '</td><td class="text-muted">' . $t($help) . '</td></tr>';
+        $field = function ($label, $input, $help) {
+            return '<label class="bk-field"><span>' . self::t($label) . '</span>' . $input . ($help !== '' ? '<small>' . self::t($help) . '</small>' : '') . '</label>';
         };
         $hasPw = ($o['offsite_password'] !== '');
-        $html = '<form action="./?module=backup_admin&amp;action=SaveOffsite" method="post"><table class="table table-striped">'
-            . $row('Enabled', '<label><input type="checkbox" name="inOffsiteEnabled" value="1"' . ($o['offsite_enabled'] === 'true' ? ' checked' : '') . '> ' . $t('Copy the backups every night') . '</label>', 'Off: nothing is copied (the settings are kept).')
-            . $row('Server', '<input class="form-control" name="inOffsiteServer" value="' . $h($o['offsite_server']) . '" placeholder="backup.example.com" maxlength="253">', 'The backup machine, reached over SSH. Empty: the folder below is on this server (for example an NFS mount).')
-            . $row('Port', '<input class="form-control" name="inOffsitePort" value="' . $h($o['offsite_port']) . '" inputmode="numeric" maxlength="5" style="max-width: 110px;">', 'SSH port, usually 22.')
-            . $row('Username', '<input class="form-control" name="inOffsiteUser" value="' . $h($o['offsite_user']) . '" maxlength="32" autocomplete="off">', 'The user on the backup machine.')
-            . $row('Password', '<input class="form-control" type="password" name="inOffsitePassword" value="" maxlength="256" autocomplete="new-password" placeholder="' . $h($hasPw ? $t('stored: leave empty to keep it') : $t('none: the SSH key is used')) . '">'
-                . ($hasPw ? '<label style="font-weight: normal; margin-top: 4px;"><input type="checkbox" name="inOffsiteClearPassword" value="1"> ' . $t('Remove the password and use the SSH key') . '</label>' : ''),
-                'Stored encrypted, never shown again. Without a password the SSH key /root/.ssh/sentora_offsite is used (more secure; sentora-offsite-backup --setup makes it).')
-            . $row('Folder', '<input class="form-control" name="inOffsitePath" value="' . $h($o['offsite_path']) . '" maxlength="251">', 'Where the copies go; each server gets its own folder in it, with one folder per night.')
-            . $row('Time', '<input class="form-control" type="time" name="inOffsiteTime" value="' . $h($o['offsite_time']) . '" style="max-width: 140px;">', 'Every day at this time (server time, ' . $h(date('T')) . ').')
-            . $row('Nights kept', '<input class="form-control" name="inOffsiteKeep" value="' . $h($o['offsite_keep']) . '" inputmode="numeric" maxlength="3" style="max-width: 110px;">', 'Older nights are removed from the backup machine.')
-            . $row('Mailboxes', '<label><input type="checkbox" name="inOffsiteMail" value="1"' . ($o['offsite_mail'] === 'true' ? ' checked' : '') . '> ' . $t('Include the mailboxes') . '</label>', 'Copied incrementally: only new mail is sent each night.')
-            . '<tr><th colspan="3"><button class="btn btn-primary" type="submit">' . $t('Save') . '</button></th></tr></table>' . runtime_csfr::Token() . '</form>'
-            . '<form method="post" action="./?module=backup_admin&amp;action=OffsiteCheck" style="display:inline">' . runtime_csfr::Token() . '<button class="btn btn-default" type="submit">' . $t('Test connection') . '</button></form> '
-            . '<form method="post" action="./?module=backup_admin&amp;action=OffsiteNow" style="display:inline">' . runtime_csfr::Token() . '<button class="btn btn-default" type="submit">' . $t('Back up now') . '</button></form>';
-        return $html;
+        return '<form class="bk-ftp" action="./?module=backup_admin&amp;action=SaveOffsite" method="post">' . runtime_csfr::Token()
+            . '<label class="bk-switch bk-wide"><input type="checkbox" name="inOffsiteEnabled" value="1"' . ($o['offsite_enabled'] === 'true' ? ' checked' : '') . '><span class="bk-toggle" aria-hidden="true"></span>'
+            . '<span><b>' . self::t('Copy the backups every night') . '</b><small>' . self::t('Off: nothing is copied (the settings are kept).') . '</small></span></label>'
+            . $field('Server', '<input class="form-control" type="text" name="inOffsiteServer" value="' . self::h($o['offsite_server']) . '" placeholder="backup.example.com" maxlength="253">', 'The backup machine, reached over SSH. Empty: the folder below is on this server (for example an NFS mount).')
+            . $field('Port', '<input class="form-control" type="text" name="inOffsitePort" value="' . self::h($o['offsite_port']) . '" inputmode="numeric" maxlength="5">', 'SSH port, usually 22.')
+            . $field('Username', '<input class="form-control" type="text" name="inOffsiteUser" value="' . self::h($o['offsite_user']) . '" maxlength="32" autocomplete="off">', 'The user on the backup machine.')
+            . '<label class="bk-field"><span>' . self::t('Password') . '</span><input class="form-control" type="password" name="inOffsitePassword" value="" maxlength="256" autocomplete="new-password" placeholder="' . ($hasPw ? self::t('stored: leave empty to keep it') : self::t('none: the SSH key is used')) . '">'
+                . ($hasPw ? '<span class="bk-check"><input type="checkbox" name="inOffsiteClearPassword" value="1"> ' . self::t('Remove the password and use the SSH key') . '</span>' : '')
+                . '<small>' . self::t('Stored encrypted, never shown again. Without a password the SSH key /root/.ssh/sentora_offsite is used (more secure; sentora-offsite-backup --setup makes it).') . '</small></label>'
+            . $field('Folder', '<input class="form-control" type="text" name="inOffsitePath" value="' . self::h($o['offsite_path']) . '" maxlength="251">', 'Where the copies go; each server gets its own folder in it, with one folder per night.')
+            . '<label class="bk-field"><span>' . self::t('Time') . '</span><input class="form-control" type="time" name="inOffsiteTime" value="' . self::h($o['offsite_time']) . '"><small>' . sprintf(self::t('Every day at this time (server time, %s).'), self::h(date('T'))) . '</small></label>'
+            . $field('Nights kept', '<input class="form-control" type="text" name="inOffsiteKeep" value="' . self::h($o['offsite_keep']) . '" inputmode="numeric" maxlength="3">', 'Older nights are removed from the backup machine.')
+            . '<label class="bk-switch bk-wide"><input type="checkbox" name="inOffsiteMail" value="1"' . ($o['offsite_mail'] === 'true' ? ' checked' : '') . '><span class="bk-toggle" aria-hidden="true"></span>'
+            . '<span><b>' . self::t('Include the mailboxes') . '</b><small>' . self::t('Copied incrementally: only new mail is sent each night.') . '</small></span></label>'
+            . '<div class="bk-form-foot bk-wide"><button class="btn btn-primary" type="submit">' . self::t('Save settings') . '</button></div></form>';
     }
 
     /**
-     * Build the off-server backup status table (template <@ OffsiteStatus @>).
+     * Build the off-server backup status: queued job, last connection test, last good copy and a failed run, with the Test connection and Back up now buttons (template <@ OffsiteStatus @>).
      *
      * Reads the queued request and /var/lib/sentora/offsite-backup.json written by the backup script.
      *
@@ -329,21 +489,24 @@ class module_controller extends ctrl_module
         $o = self::Offsite();
         $st = json_decode((string) @file_get_contents('/var/lib/sentora/offsite-backup.json'), true);
         $st = is_array($st) ? $st : array();
-        $h = function ($s) { return htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8'); };
-        $when = function ($ts) { return ((int) $ts > 0) ? date('Y-m-d H:i', (int) $ts) : '-'; };
-        $out = '<table class="table table-condensed" style="max-width: 900px; margin-top: 14px;">';
+        $line = function ($icon, $class, $label, $when, $message) {
+            return '<div class="bk-state ' . $class . '">' . self::Icon($icon) . '<div><b>' . self::t($label) . '</b><span>' . $when . '</span>' . ($message !== '' ? '<span class="bk-sub">' . self::h($message) . '</span>' : '') . '</div></div>';
+        };
+        $out = '';
         if ($o['offsite_request'] !== '') {
-            $out .= '<tr><th style="width: 220px;">' . ui_language::translate('Queued') . '</th><td><span class="label label-warning">' . $h(strtok($o['offsite_request'], ' ') === 'check' ? 'Test connection' : 'Back up now') . '</span> ' . ui_language::translate('the daemon runs it within 5 minutes') . '</td></tr>';
+            $out .= $line('clock', 'info', strtok($o['offsite_request'], ' ') === 'check' ? 'Connection test queued' : 'Backup queued', self::t('the daemon runs it within 5 minutes'), '');
         }
         if (isset($st['check_time'])) {
-            $out .= '<tr><th style="width: 220px;">' . ui_language::translate('Last connection test') . '</th><td>' . $h($when($st['check_time'])) . ' '
-                . (!empty($st['check_ok']) ? '<span class="label label-success">OK</span>' : '<span class="label label-danger">FAILED</span>') . ' ' . $h(isset($st['check_message']) ? $st['check_message'] : '') . '</td></tr>';
+            $ok = !empty($st['check_ok']);
+            $out .= $line($ok ? 'check' : 'x', $ok ? 'ok' : 'bad', $ok ? 'Connection test passed' : 'Connection test failed', self::When($st['check_time']), isset($st['check_message']) ? (string) $st['check_message'] : '');
         }
-        $out .= '<tr><th style="width: 220px;">' . ui_language::translate('Last good copy') . '</th><td>' . $h($when(isset($st['last_ok']) ? $st['last_ok'] : 0)) . '</td></tr>';
         if (isset($st['result']) && $st['result'] !== 'ok') {
-            $out .= '<tr><th>' . ui_language::translate('Last run') . '</th><td>' . $h($when($st['last_run'])) . ' <span class="label label-danger">FAILED</span> ' . $h($st['message']) . '</td></tr>';
+            $out .= $line('x', 'bad', 'Last run failed', self::When($st['last_run'] ?? 0), (string) ($st['message'] ?? ''));
         }
-        return $out . '</table>';
+        $out .= $line('archive', '', 'Last good copy', self::When(isset($st['last_ok']) ? $st['last_ok'] : 0), '');
+        return $out . '<div class="bk-ftp-actions">'
+            . '<form class="bk-inline" method="post" action="./?module=backup_admin&amp;action=OffsiteCheck">' . runtime_csfr::Token() . '<button class="btn btn-default btn-sm bk-btn" type="submit">' . self::Icon('plug') . '<span>' . self::t('Test connection') . '</span></button></form>'
+            . '<form class="bk-inline" method="post" action="./?module=backup_admin&amp;action=OffsiteNow">' . runtime_csfr::Token() . '<button class="btn btn-default btn-sm bk-btn" type="submit">' . self::Icon('play') . '<span>' . self::t('Back up now') . '</span></button></form></div>';
     }
 
     // --- Restore from the full panel backup (sentora-panel-restore, run by the daemon) ----------
@@ -353,6 +516,8 @@ class module_controller extends ctrl_module
     const RESTORE_CATALOG = '/var/lib/sentora/restore-catalog.json';
     /** @var array<int, array{0: string, 1: string}> Messages for getResult(): array(kind 'ok'|'error', text). */
     static $restoreMsg = array();
+    /** @var string The message of a restore request accepted just before the redirect (from the session; kept for this page). */
+    static $flash = '';
 
     /**
      * Read a JSON file of the restore tool.
@@ -513,78 +678,83 @@ class module_controller extends ctrl_module
     static function getRestore()
     {
         global $controller;
-        $h = function ($x) { return htmlspecialchars((string) $x, ENT_QUOTES, 'UTF-8'); };
-        $t = function ($x) { return ui_language::translate($x); };
         $out = '';
         // what is running or ran last
         $st = self::RestoreJson(self::RESTORE_STATE);
         $req = self::RestoreJson(self::RESTORE_REQ);
         if ($req) {
-            $out .= '<p class="bk-job"><span class="bk-spin"></span> ' . $h($t($req['action'] === 'list' ? 'Reading the backups' : 'Restore')) . ' ' . $t('queued: it starts within 5 minutes') . '.</p>';
+            $out .= '<div class="bk-job"><span class="bk-spinner" aria-hidden="true"></span><div><b>' . self::t($req['action'] === 'list' ? 'Reading the backups' : 'Restore') . ' ' . self::t('queued') . '</b><span class="bk-sub">' . self::t('It starts within 5 minutes. Reload the page to follow it.') . '</span></div></div>';
         } elseif (!empty($st['running']) || !empty($st['listing'])) {
-            $out .= '<p class="bk-job"><span class="bk-spin"></span> <strong>' . $h(!empty($st['listing']) ? $t('Reading the backups') : $t('Restoring') . ' ' . ($st['snapshot'] ?? '')) . '</strong>&hellip; '
-                . '<span class="text-muted">' . $h($st['step'] ?? '') . '</span><br><span class="text-muted">' . $t('Reload the page to follow it. The log: /var/sentora/logs/panel-restore.log') . '</span></p>';
+            $out .= '<div class="bk-job"><span class="bk-spinner" aria-hidden="true"></span><div><b>' . self::h(!empty($st['listing']) ? ui_language::translate('Reading the backups') : ui_language::translate('Restoring') . ' ' . ($st['snapshot'] ?? '')) . '…</b>'
+                . '<span>' . self::h($st['step'] ?? '') . '</span><span class="bk-sub">' . self::t('Reload the page to follow it. The log: /var/sentora/logs/panel-restore.log') . '</span></div></div>';
         } elseif (!empty($st['result'])) {
-            $icon = $st['result'] === 'ok' ? ui_status::Ok('Done') : ($st['result'] === 'partial' ? ui_status::Warn('With problems') : ui_status::Bad('Failed'));
-            $out .= '<p>' . $icon . ' ' . $h($t('Last restore') . ', ' . date('Y-m-d H:i', (int) ($st['finished'] ?? 0)) . ': ' . ($st['message'] ?? '')) . '</p>';
+            $ok = $st['result'] === 'ok';
+            $out .= '<div class="bk-state ' . ($ok ? 'ok' : 'bad') . ' bk-last">' . self::Icon($ok ? 'check' : ($st['result'] === 'partial' ? 'alert' : 'x')) . '<div><b>'
+                . self::t($ok ? 'Last restore finished' : ($st['result'] === 'partial' ? 'Last restore finished with problems' : 'Last restore failed')) . '</b><span>' . self::When($st['finished'] ?? 0) . '</span>'
+                . '<span class="bk-sub">' . self::h($st['message'] ?? '') . '</span></div></div>';
         }
         $cat = self::RestoreJson(self::RESTORE_CATALOG);
-        $out .= '<form method="post" action="./?module=backup_admin&amp;action=RestoreList#restore" style="margin-bottom: 12px;">' . runtime_csfr::Token()
-            . '<button class="btn btn-default" type="submit">' . $t('Read the backups') . '</button> <span class="text-muted">'
-            . $h(!empty($cat['time']) ? $t('Last read') . ' ' . date('Y-m-d H:i', (int) $cat['time']) . (isset($cat['target']) ? ' ' . $t('from') . ' ' . $cat['target'] : '') : $t('Lists the snapshots on the backup machine (Off-server backup above), from any server.')) . '</span></form>';
+        $out .= '<div class="bk-panel-head"><div><h4>' . self::t('Snapshots on the backup machine') . '</h4><p>'
+            . (!empty($cat['time']) ? self::t('Last read') . ' ' . self::When($cat['time']) . (isset($cat['target']) ? ' · ' . self::t('from') . ' ' . self::h($cat['target']) : '')
+                : self::t('Lists the snapshots on the backup machine (Off-server backup tab), from any server.')) . '</p></div>'
+            . '<form class="bk-inline" method="post" action="./?module=backup_admin&amp;action=RestoreList#restore">' . runtime_csfr::Token()
+            . '<button class="btn btn-default btn-sm bk-btn" type="submit">' . self::Icon('refresh') . '<span>' . self::t('Read the backups') . '</span></button></form></div>';
         if (!empty($cat['error'])) {
-            return $out . '<p class="text-danger">' . $h($t('The backups could not be read') . ': ' . $cat['error']) . '</p>';
+            return $out . '<div class="bk-state bad">' . self::Icon('x') . '<div><b>' . self::t('The backups could not be read') . '</b><span class="bk-sub">' . self::h($cat['error']) . '</span></div></div>';
         }
         $snaps = (array) ($cat['snapshots'] ?? array());
         if (!$snaps) {
-            return $out . (empty($cat['time']) ? '' : '<p class="text-muted">' . $t('No snapshots yet.') . '</p>');
+            return $out . '<p class="bk-empty">' . (empty($cat['time']) ? self::t('Read the backups to see which nights can be restored.') : self::t('No snapshots yet.')) . '</p>';
         }
         // the snapshots, newest first; one chosen
         $chosen = (string) $controller->GetControllerRequest('URL', 'snap');
         $rows = '';
         foreach ($snaps as $s) {
             $key = $s['server'] . '/' . $s['date'];
-            $sel = ($key === $chosen);
-            $rows .= '<tr' . ($sel ? ' class="info"' : '') . '><td>' . $h($s['date']) . '</td><td>' . $h($s['server']) . ($s['server'] === ($cat['this_server'] ?? '') ? ' <span class="label label-default">' . $t('this server') . '</span>' : '') . '</td>'
+            $rows .= '<tr' . ($key === $chosen ? ' class="on"' : '') . '><td><b>' . self::h($s['date']) . '</b></td><td>' . self::h($s['server'])
+                . ($s['server'] === ($cat['this_server'] ?? '') ? ' <span class="bk-tag bk-tag-info">' . self::t('this server') . '</span>' : '') . '</td>'
                 . ($s['format'] >= 2
-                    ? '<td>' . count($s['accounts']) . '</td><td>' . count($s['databases']) . '</td><td>' . $h($s['sentora'] ?? '') . '</td><td><a class="btn btn-default btn-xs" href="./?module=backup_admin&amp;snap=' . rawurlencode($key) . '#restore">' . $t('Open') . '</a></td>'
-                    : '<td colspan="4" class="text-muted">' . $t('made by an older version: restore it by hand') . '</td>') . '</tr>';
+                    ? '<td class="bk-num">' . count($s['accounts']) . '</td><td class="bk-num">' . count($s['databases']) . '</td><td>' . self::h($s['sentora'] ?? '') . '</td>'
+                        . '<td class="bk-act"><a class="btn btn-' . ($key === $chosen ? 'primary' : 'default') . ' btn-sm" href="./?module=backup_admin&amp;snap=' . rawurlencode($key) . '#restore">' . self::t('Open') . '</a></td>'
+                    : '<td colspan="4" class="bk-sub">' . self::t('made by an older version: restore it by hand') . '</td>') . '</tr>';
         }
-        $out .= '<div style="max-height: 300px; overflow-y: auto; border: 1px solid var(--sn-line, #ddd); border-radius: 4px;"><table class="table table-condensed" style="margin: 0;"><thead><tr><th>' . $t('Night') . '</th><th>' . $t('Server') . '</th><th>' . $t('Accounts') . '</th><th>'
-            . $t('Databases') . '</th><th>Sentora</th><th></th></tr></thead><tbody>' . $rows . '</tbody></table></div>';
+        $out .= '<div class="bk-scroll bk-snaps"><table class="bk-table"><thead><tr><th>' . self::t('Night') . '</th><th>' . self::t('Server') . '</th><th class="bk-num">' . self::t('Accounts') . '</th><th class="bk-num">'
+            . self::t('Databases') . '</th><th>Sentora</th><th class="bk-act"></th></tr></thead><tbody>' . $rows . '</tbody></table></div>';
         if ($chosen === '' || strpos($chosen, '/') === false) {
-            return $out . '<p class="text-muted" style="margin-top: 8px;">' . $t('Open a snapshot to see what it holds and restore from it.') . '</p>';
+            return $out . '<p class="bk-empty">' . self::t('Open a snapshot to see what it holds and restore from it.') . '</p>';
         }
         list($srv, $date) = explode('/', $chosen, 2);
         $snap = self::RestoreSnapshot($srv, $date);
         if (!$snap || (int) $snap['format'] < 2) {
             return $out;
         }
-        $hidden = '<input type="hidden" name="inServer" value="' . $h($snap['server']) . '"><input type="hidden" name="inDate" value="' . $h($snap['date']) . '">' . runtime_csfr::Token();
+        $hidden = '<input type="hidden" name="inServer" value="' . self::h($snap['server']) . '"><input type="hidden" name="inDate" value="' . self::h($snap['date']) . '">' . runtime_csfr::Token();
         $acc = '';
         $opts = '';
         foreach ($snap['accounts'] as $a) {
-            $acc .= '<tr><td><strong>' . $h($a['username']) . '</strong></td><td>' . $h(implode(', ', array_slice($a['domains'], 0, 4)) . (count($a['domains']) > 4 ? ' +' . (count($a['domains']) - 4) : '')) . '</td><td>'
-                . $h(implode(', ', $a['databases']) ?: '-') . '</td><td>' . (int) $a['mailboxes'] . '</td><td>' . (int) $a['size_mb'] . ' MB</td></tr>';
-            $opts .= '<option value="' . $h($a['username']) . '">' . $h($a['username']) . '</option>';
+            $acc .= '<tr><td><b>' . self::h($a['username']) . '</b></td><td>' . self::h(implode(', ', array_slice($a['domains'], 0, 4)) . (count($a['domains']) > 4 ? ' +' . (count($a['domains']) - 4) : '')) . '</td><td>'
+                . self::h(implode(', ', $a['databases']) ?: '–') . '</td><td class="bk-num">' . (int) $a['mailboxes'] . '</td><td class="bk-num">' . (int) $a['size_mb'] . ' MB</td></tr>';
+            $opts .= '<option value="' . self::h($a['username']) . '">' . self::h($a['username']) . '</option>';
         }
-        $out .= '<h3 style="margin-top: 18px;">' . $h($t('Snapshot') . ' ' . $snap['date'] . ' ' . $t('of') . ' ' . $snap['server']) . '</h3>'
-            . '<p class="text-muted">' . $h('Sentora-' . ($snap['sentora'] ?? '') . ', ' . $t('panel') . ' ' . ($snap['panel'] ?? '') . ', ' . count($snap['databases']) . ' ' . $t('databases') . ($snap['mail'] ? ', ' . $t('with the mailboxes') : ', ' . $t('without the mailboxes'))) . '</p>'
-            . '<div style="max-height: 260px; overflow-y: auto; border: 1px solid var(--sn-line, #ddd); border-radius: 4px;"><table class="table table-condensed table-striped" style="margin: 0;"><thead><tr><th>' . $t('Account') . '</th><th>' . $t('Domains') . '</th><th>' . $t('Databases') . '</th><th>' . $t('Mailboxes') . '</th><th>' . $t('Size') . '</th></tr></thead><tbody>' . $acc . '</tbody></table></div>'
+        $out .= '<div class="bk-snap"><div class="bk-snap-head">' . self::Icon('archive') . '<div><h4>' . self::h(ui_language::translate('Snapshot') . ' ' . $snap['date'] . ' · ' . $snap['server']) . '</h4>'
+            . '<p>' . self::h('Sentora-' . ($snap['sentora'] ?? '') . ' · ' . ui_language::translate('panel') . ' ' . ($snap['panel'] ?? '') . ' · ' . count($snap['databases']) . ' ' . ui_language::translate('databases') . ' · ' . ($snap['mail'] ? ui_language::translate('with the mailboxes') : ui_language::translate('without the mailboxes'))) . '</p></div></div>'
+            . '<div class="bk-scroll bk-accounts"><table class="bk-table"><thead><tr><th>' . self::t('Account') . '</th><th>' . self::t('Domains') . '</th><th>' . self::t('Databases') . '</th><th class="bk-num">' . self::t('Mailboxes') . '</th><th class="bk-num">' . self::t('Size') . '</th></tr></thead><tbody>' . $acc . '</tbody></table></div>'
+            . '<div class="bk-restore-grid">'
             // one account
-            . '<form method="post" action="./?module=backup_admin&amp;action=RestoreAccount&amp;snap=' . rawurlencode($chosen) . '#restore" class="bk-restore" onsubmit="return confirm(\'' . $h($t('Restore this account? What it has now is saved first.')) . '\');">'
-            . '<h4>' . $t('Restore one account') . '</h4><p>' . $t('Account') . ' <select class="form-control" name="inAccount" style="display: inline-block; width: auto;">' . $opts . '</select></p>'
-            . '<p><label><input type="checkbox" name="inPart_files" value="1" checked> ' . $t('Websites (copied as the account\'s own user)') . '</label><br>'
-            . '<label style="margin-left: 22px;"><input type="checkbox" name="inExact" value="1"> ' . $t('Also remove files the backup does not have') . '</label><br>'
-            . '<label><input type="checkbox" name="inPart_databases" value="1" checked> ' . $t('Databases and MySQL users') . '</label><br>'
-            . '<label><input type="checkbox" name="inPart_mail" value="1"' . ($snap['mail'] ? ' checked' : ' disabled') . '> ' . $t('Mailboxes') . '</label></p>'
-            . '<p class="text-muted">' . $t('The account must exist on this server with the same username (make it in Manage Clients first). What it has now is saved before anything is changed.') . '</p>'
-            . $hidden . '<button class="btn btn-primary" type="submit">' . $t('Restore this account') . '</button></form>'
+            . '<form method="post" action="./?module=backup_admin&amp;action=RestoreAccount&amp;snap=' . rawurlencode($chosen) . '#restore" class="bk-restore" data-confirm="' . self::t('Restore this account? What it has now is saved first.') . '">'
+            . '<h4>' . self::Icon('users') . self::t('Restore one account') . '</h4>'
+            . '<label class="bk-field"><span>' . self::t('Account') . '</span><select class="form-control" name="inAccount">' . $opts . '</select></label>'
+            . '<div class="bk-parts"><span class="bk-check"><input type="checkbox" name="inPart_files" value="1" checked> ' . self::t('Websites (copied as the account\'s own user)') . '</span>'
+            . '<span class="bk-check bk-indent"><input type="checkbox" name="inExact" value="1"> ' . self::t('Also remove files the backup does not have') . '</span>'
+            . '<span class="bk-check"><input type="checkbox" name="inPart_databases" value="1" checked> ' . self::t('Databases and MySQL users') . '</span>'
+            . '<span class="bk-check"><input type="checkbox" name="inPart_mail" value="1"' . ($snap['mail'] ? ' checked' : ' disabled') . '> ' . self::t('Mailboxes') . '</span></div>'
+            . '<p class="bk-sub">' . self::t('The account must exist on this server with the same username (make it in Manage Clients first). What it has now is saved before anything is changed.') . '</p>'
+            . $hidden . '<button class="btn btn-primary" type="submit">' . self::t('Restore this account') . '</button></form>'
             // the whole panel
             . '<form method="post" action="./?module=backup_admin&amp;action=RestoreFull&amp;snap=' . rawurlencode($chosen) . '#restore" class="bk-restore bk-danger">'
-            . '<h4>' . $t('Restore the whole panel') . '</h4><p>' . $t('For a new or rebuilt server: every database (the panel\'s own included), the hosting accounts\' MySQL users, the panel\'s encryption key, the certificates, every account\'s websites and the mailboxes. The daemon then rebuilds the websites, PHP and DNS. This server keeps its own name, IP address, service passwords and off-server backup settings; what it has now is saved first.') . '</p>'
-            . '<p>' . $t('Type RESTORE to confirm') . ' <input class="form-control" name="inConfirm" autocomplete="off" style="display: inline-block; width: 160px;"></p>'
-            . $hidden . '<button class="btn btn-danger" type="submit">' . $t('Restore the whole panel') . '</button></form>';
+            . '<h4>' . self::Icon('alert') . self::t('Restore the whole panel') . '</h4><p class="bk-sub">' . self::t('For a new or rebuilt server: every database (the panel\'s own included), the hosting accounts\' MySQL users, the panel\'s encryption key, the certificates, every account\'s websites and the mailboxes. The daemon then rebuilds the websites, PHP and DNS. This server keeps its own name, IP address, service passwords and off-server backup settings; what it has now is saved first.') . '</p>'
+            . '<label class="bk-field"><span>' . self::t('Type RESTORE to confirm') . '</span><input class="form-control bk-confirm-word" type="text" name="inConfirm" autocomplete="off" placeholder="RESTORE"></label>'
+            . $hidden . '<button class="btn btn-danger" type="submit">' . self::t('Restore the whole panel') . '</button></form></div></div>';
         return $out;
     }
 
@@ -606,13 +776,12 @@ class module_controller extends ctrl_module
         }
         // the message of a request accepted just before the redirect (kept for this page:
         // the template calls this twice)
-        static $flash = null;
-        if ($flash === null) {
-            $flash = isset($_SESSION['bk_restore_msg']) ? (string) $_SESSION['bk_restore_msg'] : '';
+        if (self::$flash === '' && isset($_SESSION['bk_restore_msg'])) {
+            self::$flash = (string) $_SESSION['bk_restore_msg'];
             unset($_SESSION['bk_restore_msg']);
         }
-        if ($flash !== '') {
-            return ui_sysmessage::shout(htmlspecialchars(ui_language::translate($flash), ENT_QUOTES, 'UTF-8'), 'zannounceok');
+        if (self::$flash !== '') {
+            return ui_sysmessage::shout(htmlspecialchars(ui_language::translate(self::$flash), ENT_QUOTES, 'UTF-8'), 'zannounceok');
         }
         foreach (self::$restoreMsg as $m) {
             return ui_sysmessage::shout(htmlspecialchars(ui_language::translate($m[1]), ENT_QUOTES, 'UTF-8'), $m[0] === 'ok' ? 'zannounceok' : 'zannounceerror');
