@@ -176,7 +176,7 @@ class ui_template {
         if ($tpl === null) {
             $tpl = ctrl_users::SafeTheme(self::GetUserTemplate());
             if ($tpl === '') {
-                $tpl = 'Sentora_Default';
+                $tpl = 'Modern';
             }
         }
         return $tpl;

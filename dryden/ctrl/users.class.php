@@ -20,7 +20,7 @@ class ctrl_users {
     {
         $theme = (string) $theme;
         if ($theme === '' || !preg_match('/^[A-Za-z0-9_-]{1,64}$/', $theme) || !is_dir(dirname(dirname(__DIR__)) . '/etc/styles/' . $theme)) {
-            return ($theme === '') ? '' : 'Sentora_Default';
+            return ($theme === '') ? '' : 'Modern';
         }
         return $theme;
     }

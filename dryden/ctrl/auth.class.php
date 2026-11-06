@@ -40,7 +40,7 @@ class ctrl_auth
             // The administrator's variation of that theme (for example light or dark), for
             // login pages that offer more than one; only a plain name ever reaches the page
             $loginCss = preg_match('/^[A-Za-z0-9_-]{1,64}$/', (string) $themeRow['ac_usercss_vc']) ? (string) $themeRow['ac_usercss_vc'] : '';
-            include 'etc/styles/' . ($loginTheme !== '' ? $loginTheme : 'Sentora_Default') . '/login.ztml';
+            include 'etc/styles/' . ($loginTheme !== '' ? $loginTheme : 'Modern') . '/login.ztml';
             exit;
         }
         return true;
@@ -54,7 +54,11 @@ class ctrl_auth
      */
     static function SetUserSession($zpuid = 0, $sessionSecuirty = true)
     {
-        $sessionSecuirty = runtime_sessionsecurity::getSessionSecurityEnabled();
+        // The caller decides: the login form's "Enable Session Security" box, or the
+        // current session's setting when switching account (shadowing). This used to be
+        // overwritten with the session's value, which is "off" at every new login, so
+        // the IP and browser check was never turned on.
+        $sessionSecuirty = (bool) $sessionSecuirty;
         if (isset($zpuid)) {
             // New session id at login, so an id planted before login is worthless
             if (session_status() === PHP_SESSION_ACTIVE && !headers_sent()) {

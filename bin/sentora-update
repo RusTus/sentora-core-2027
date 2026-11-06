@@ -245,6 +245,22 @@ if [ -f "$SRC/bin/obsolete-files.txt" ]; then
     done < "$SRC/bin/obsolete-files.txt"
     [ $n -gt 0 ] && say "Removed $n file(s) the core no longer has"
 fi
+# Sentora_Default was replaced by Modern (Light and Dark): accounts on it move to
+# Modern, Light, then the old theme's folder goes (sentora-update --rollback brings it
+# back; older cores still accept "Modern"/"light" in the database)
+if [ -d "$PANEL/etc/styles/Modern" ] && [ -d "$PANEL/etc/styles/Sentora_Default" ] && [ ! -d "$SRC/etc/styles/Sentora_Default" ]; then
+    say "Moving accounts from the retired Sentora_Default theme to Modern"
+    if ( cd "$PANEL" && php -r '
+        chdir("'"$PANEL"'"); require "dryden/loader.inc.php"; require "cnf/db.php"; require "inc/dbc.inc.php";
+        $q = $zdbh->prepare("UPDATE x_accounts SET ac_usertheme_vc = :n, ac_usercss_vc = :c WHERE ac_usertheme_vc = :o");
+        $q->execute(array(":n" => "Modern", ":c" => "light", ":o" => "Sentora_Default"));
+        echo "  " . $q->rowCount() . " account(s) moved\n";
+    ' ); then
+        rm -rf -- "$PANEL/etc/styles/Sentora_Default"
+    else
+        warn "could not move accounts to Modern (Sentora_Default left in place)"
+    fi
+fi
 fix_permissions
 # the release this server now runs (shown in the panel as Sentora-<version>)
 if [ -f "$SRC/VERSION" ]; then

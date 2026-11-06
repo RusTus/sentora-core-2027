@@ -152,7 +152,8 @@ if (isset($_POST['inUsername'])) {
         runtime_csfr::Protect();
 
     $rememberdetails = isset($_POST['inRemember']);
-    $inSessionSecuirty = isset($_POST['inSessionSecuirty']);
+    // The login page's "Enable Session Security" box (the old misspelled name too)
+    $inSessionSecuirty = isset($_POST['inSessionSecurity']) || isset($_POST['inSessionSecuirty']);
 
     // Too many wrong passwords for this account or from this address: refuse for
     // 15 minutes (same answer as a wrong password, so it reveals nothing)
@@ -244,13 +245,13 @@ if (isset($_SESSION['zp2fa']) && empty($_SESSION['zpuid'])) {
         exit();
     }
     $tfWrong = isset($_GET['wrong']);
-    $tfTheme = 'Sentora_Default';
+    $tfTheme = 'Modern';
     header('Content-Type: text/html; charset=utf-8');
     ?><!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Control Panel - Login code</title>
 <link href="etc/styles/<?php echo $tfTheme; ?>/global-css/bootstrap.min.css" rel="stylesheet" type="text/css">
-<style>body{background:#f4f4f4} .box{max-width:380px;margin:12vh auto;background:#fff;border:1px solid #ddd;border-radius:6px;padding:24px 28px}
+<style>body{background:#f4f6f9;color:#1f2933} .box{max-width:380px;margin:12vh auto;background:#fff;border:0;border-top:4px solid #447fb3;border-radius:6px;box-shadow:0 1px 3px rgba(20,30,40,.1),0 8px 24px rgba(20,30,40,.06);padding:24px 28px} .btn-primary{background:#447fb3;border-color:#3a6d9a} a{color:#447fb3}
 .code{font-size:28px;letter-spacing:6px;text-align:center;font-family:monospace}</style></head>
 <body><div class="box">
 <h3>Login code</h3>
@@ -328,8 +329,8 @@ if (isset($_SESSION['zp2fa_setup']) && empty($_SESSION['zpuid'])) {
     ?><!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Control Panel - Set up two-factor login</title>
-<link href="etc/styles/Sentora_Default/global-css/bootstrap.min.css" rel="stylesheet" type="text/css">
-<style>body{background:#f4f4f4} .box{max-width:460px;margin:7vh auto;background:#fff;border:1px solid #ddd;border-radius:6px;padding:24px 28px}
+<link href="etc/styles/Modern/global-css/bootstrap.min.css" rel="stylesheet" type="text/css">
+<style>body{background:#f4f6f9;color:#1f2933} .box{max-width:460px;margin:7vh auto;background:#fff;border:0;border-top:4px solid #447fb3;border-radius:6px;box-shadow:0 1px 3px rgba(20,30,40,.1),0 8px 24px rgba(20,30,40,.06);padding:24px 28px} .btn-primary{background:#447fb3;border-color:#3a6d9a} a{color:#447fb3}
 .code{font-size:28px;letter-spacing:6px;text-align:center;font-family:monospace} .qr{display:inline-block;padding:8px;border:1px solid #ddd;border-radius:4px;background:#fff}</style></head>
 <body><div class="box">
 <h3>Set up two-factor login</h3>

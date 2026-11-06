@@ -1,9 +1,9 @@
 # Modern template
 
-The Sentora_Default layout in the colours of the Server Monitor module, in two
+The panel's default template: the original Sentora layout in the colours of the Server Monitor module, in two
 variations: **Light** (`css/light.css`) and **Dark** (`css/dark.css`).
 
-Choose it in **Theme Manager**: pick *Modern*, save, then pick the variation. The
+New installs use Modern, Light. Choose the variation in **Theme Manager**. The
 variation menu stays on the Theme Manager page, so Light and Dark can be switched
 at any time. The login page follows the administrator (`zadmin`) account's choice.
 
@@ -11,7 +11,7 @@ at any time. The login page follows the administrator (`zadmin`) account's choic
 
 | File | What it is |
 | --- | --- |
-| `css/_layout.css` | Layout, a copy of `Sentora_Default/css/default.css` |
+| `css/_layout.css` | Layout (from the original Sentora_Default theme's `default.css`, which Modern replaced) |
 | `css/_modern.css` | Every colour rule, written with `--ml-*` variables |
 | `css/light.css`, `css/dark.css` | The two variations: they import the two parts above and set the `--ml-*` colours |
 | `img/icons/<module>.svg` | One icon per module ([Lucide](https://lucide.dev), ISC license, see `img/icons/LICENSE.txt`) |
