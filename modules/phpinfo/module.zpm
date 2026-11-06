@@ -1,27 +1,46 @@
 <div class="zmodule_content panel" id="zmodule_header_<@ ModuleName @>">
     <div class="panel-heading">
         <img src="<@ ModuleIcon @>" width="35" height="35" border="0" alt="<@ ModuleName @>">
-
-        <div class="zmodule_title">
-            <@ ModuleName @>
-        </div>
-
+        <div class="zmodule_title"><@ ModuleName @></div>
         <div class="zmodule_desc" id="zmodule_desc_<@ ModuleName @>"><@ ModuleDesc @></div>
-
     </div>
-
-
-    <div id="contentwrapper_phpinfo">
-        <br>
-
-        <a href="etc/apps/phpinfo/" class="btn btn-large btn-primary" target="_blank"><: View full PHP configuration :></a>
-
-        <br>
-        <br>
-
-        <div class="zform_wrapper" style="width:100%">
-            <@ PHPInfo @>
-        </div>
-    </div>
-
+    <link rel="stylesheet" href="modules/phpinfo/assets/phpinfo.css">
+    <@ PHPInfo @>
+    <script>
+    (function () {
+        'use strict';
+        var root = document.getElementById('pi');
+        if (!root) { return; }
+        var each = function (sel, f, from) { Array.prototype.forEach.call((from || root).querySelectorAll(sel), f); };
+        function tab(name) {
+            var found = false;
+            each('.pi-tab', function (b) { var on = b.getAttribute('data-tab') === name; found = found || on; b.classList.toggle('on', on); b.setAttribute('aria-selected', on ? 'true' : 'false'); });
+            if (!found) { return; }
+            each('.pi-pane', function (p) { p.classList.toggle('on', p.getAttribute('data-pane') === name); });
+            try { sessionStorage.setItem('pi-tab', name); } catch (e) { /* private window */ }
+        }
+        each('.pi-tab', function (b) { b.addEventListener('click', function () { tab(b.getAttribute('data-tab')); }); });
+        try { var last = sessionStorage.getItem('pi-tab'); if (last) { tab(last); } } catch (e) { /* private window */ }
+        // search: rows in a table, or whole extensions (opened when a setting inside matches)
+        each('.pi-search input', function (input) {
+            var pane = input.closest('.pi-pane'), count = pane.querySelector('.pi-count');
+            function run() {
+                var q = input.value.trim().toLowerCase(), shown = 0, total = 0;
+                var exts = pane.querySelectorAll('.pi-ext');
+                if (exts.length) {
+                    each('.pi-ext', function (d) {
+                        var hit = q === '' || d.getAttribute('data-s').indexOf(q) >= 0;
+                        d.hidden = !hit; total++; if (hit) { shown++; }
+                        each('.pi-row', function (r) { r.classList.toggle('pi-hit', q !== '' && r.getAttribute('data-s').indexOf(q) >= 0); }, d);
+                        if (q !== '' && hit && d.getAttribute('data-s').split(' ')[0].indexOf(q) < 0) { d.open = true; }
+                    }, pane);
+                } else {
+                    each('.pi-row', function (r) { var hit = q === '' || r.getAttribute('data-s').indexOf(q) >= 0; r.hidden = !hit; total++; if (hit) { shown++; } }, pane);
+                }
+                count.textContent = q === '' ? '' : shown + ' / ' + total;
+            }
+            input.addEventListener('input', run);
+        });
+    })();
+    </script>
 </div>

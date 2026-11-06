@@ -112,3 +112,5 @@ modules/dns_manager/assets/help_small.png
 modules/dns_manager/assets/information_big.png
 modules/dns_manager/assets/undo.png
 modules/dns_manager/assets/undo_small.png
+# PHP Info: the plain phpinfo() page (it showed the environment to every account); the module shows it all now
+etc/apps/phpinfo/index.php
