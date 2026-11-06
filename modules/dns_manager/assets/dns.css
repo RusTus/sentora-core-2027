@@ -1,538 +1,118 @@
-.disabled {
-    /* for IE */
-    filter:alpha(opacity=40);
-    opacity: 0.40;
+/* DNS Manager in the panel's style. Colours come from the theme's shared --sn-* variables
+   (etc/styles/THEMES.md), with these as the fallback, so it follows Light, Dark and Auto. */
+.dn { --dn-blue: #447fb3; --dn-green: #2db87d; --dn-amber: #f5a623; --dn-red: #ff6854; --dn-purple: #8e6bd8; --dn-teal: #1fa2b5;
+      --dn-ink: var(--sn-ink, #1f2933); --dn-muted: var(--sn-muted, #6b7785); --dn-line: var(--sn-line, #e6e9ee);
+      --dn-card: var(--sn-card, #ffffff); --dn-bg: var(--sn-soft, #f4f6f9); --dn-field-line: var(--sn-line-strong, #cfd6de);
+      --dn-hover: var(--sn-hover, #f4f6f9); --dn-accent: var(--sn-accent, #447fb3);
+      color: var(--dn-ink); background: var(--dn-bg); border-radius: 8px; padding: 18px; margin-top: 10px; }
+.dn * { box-sizing: border-box; }
+.dn-ico { width: 18px; height: 18px; flex: none; vertical-align: -4px; }
+.dn-inline { display: inline-block; margin: 0; }
+.dn-btn { display: inline-flex !important; align-items: center; gap: 6px; }
+.dn-btn .dn-ico { width: 16px; height: 16px; }
+.dn-sub { color: var(--dn-muted); font-size: 12px; }
+
+/* cards */
+.dn-card { background: var(--dn-card); border-radius: 6px; box-shadow: 0 1px 3px rgba(20,30,40,0.08); padding: 14px 16px 12px; margin-bottom: 14px; }
+.dn-card-head h4 { margin: 0 0 2px; font-size: 15px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; }
+.dn-card-head p { margin: 0 0 10px; color: var(--dn-muted); font-size: 13px; }
+.dn-head-row { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 10px 20px; }
+.dn-filter { max-width: 260px; }
+.dn-none { color: var(--dn-muted); padding: 16px 0 6px; margin: 0; }
+
+/* title bar of a domain */
+.dn-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.dn-bar-title { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.dn-bar-title > .dn-ico { width: 34px; height: 34px; color: var(--dn-accent); }
+.dn-bar-title h3 { margin: 0 0 4px; font-size: 22px; font-weight: 700; letter-spacing: -0.3px; overflow-wrap: anywhere; }
+.dn-bar-title h3 a { color: inherit; }
+.dn-bar-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.dn-changes { color: var(--sn-warn, #8f5b00); font-size: 13px; font-weight: 600; margin-right: 4px; }
+.dn-changes::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--dn-amber); margin-right: 6px; vertical-align: 1px; }
+
+/* pills and tags */
+.dn-pill { display: inline-flex; align-items: center; gap: 5px; padding: 2px 10px; border-radius: 10px; font-size: 12px; font-weight: 600; border: 1px solid; white-space: nowrap; }
+.dn-pill .dn-ico { width: 14px; height: 14px; }
+.dn-pill.ok { background: var(--sn-ok-soft, #e3f4ea); border-color: var(--sn-ok-line, #a9dcbd); color: var(--sn-ok, #1e8a4c); }
+.dn-pill.warn { background: var(--sn-warn-soft, #fff4d6); border-color: var(--sn-warn-line, #f2cf7a); color: var(--sn-warn, #8f5b00); }
+.dn-pill.bad { background: var(--sn-bad-soft, #fdeaea); border-color: var(--sn-bad-line, #f0a9a7); color: var(--sn-bad, #b42b27); }
+.dn-pill.info { background: var(--sn-info-soft, #e4f1f8); border-color: var(--sn-info-line, #b3d5e8); color: var(--sn-info, #2a5f80); }
+.dn-tag { font-size: 11px; font-weight: 600; color: var(--dn-muted); border: 1px solid var(--dn-line); border-radius: 4px; padding: 0 6px; margin-left: 6px; text-transform: uppercase; }
+
+/* tables */
+.dn-scroll { overflow-x: auto; }
+.dn-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.dn-table th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--dn-muted);
+    border-bottom: 2px solid var(--dn-line); padding: 6px 8px; white-space: nowrap; }
+.dn-table td { padding: 8px; border-bottom: 1px solid var(--dn-line); vertical-align: middle; }
+.dn-table tbody tr:last-child td { border-bottom: 0; }
+.dn-table tbody tr:hover td { background: var(--dn-hover); }
+.dn-table .dn-num { text-align: right; width: 1%; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.dn-table .dn-act { text-align: right; width: 1%; white-space: nowrap; }
+.dn-domain { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.dn-domain .dn-ico { color: var(--dn-muted); }
+.dn-host { font-family: SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; }
+.dn-preview .dn-target { font-family: SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; overflow-wrap: anywhere; }
+.dn-prio { color: var(--dn-muted); }
+.dn-type { display: inline-block; min-width: 50px; text-align: center; font-size: 11px; font-weight: 700; padding: 2px 6px; border-radius: 4px; color: #fff; background: var(--dn-blue); }
+.dn-type.t-aaaa { background: var(--dn-teal); } .dn-type.t-cname { background: var(--dn-purple); } .dn-type.t-mx { background: var(--dn-amber); }
+.dn-type.t-txt, .dn-type.t-spf { background: var(--dn-green); } .dn-type.t-ns { background: var(--dn-red); } .dn-type.t-srv { background: #5b6cc4; }
+.dn-foot { display: flex; justify-content: flex-end; gap: 8px; padding-top: 12px; margin: 8px 0 0; border-top: 1px solid var(--dn-line); }
+
+/* record tabs */
+.dn-card-records { padding-top: 6px; }
+.dn-tabs { display: flex; flex-wrap: wrap; gap: 2px; border-bottom: 1px solid var(--dn-line); margin: 0 -16px 12px; padding: 0 10px; }
+.dn-tab { background: none; border: 0; border-bottom: 3px solid transparent; padding: 10px 14px 8px; font-size: 14px; font-weight: 700; color: var(--dn-muted); cursor: pointer; margin-bottom: -1px; }
+.dn-tab:hover { color: var(--dn-ink); }
+.dn-tab.on { color: var(--dn-ink); border-bottom-color: var(--dn-accent); }
+.dn-tab:focus-visible { outline: 2px solid var(--dn-accent); outline-offset: 2px; }
+.dn-badge { display: inline-block; min-width: 20px; padding: 0 6px; border-radius: 10px; font-size: 11px; line-height: 18px; text-align: center;
+    background: var(--dn-line); color: var(--dn-muted); margin-left: 4px; }
+.dn-tab.on .dn-badge { background: var(--dn-accent); color: #fff; }
+.dn-tab.changed::after { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--dn-amber); margin-left: 6px; vertical-align: 2px; }
+.dn-pane { display: none; }
+.dn-pane.on { display: block; }
+.dn-help { display: flex; gap: 8px; align-items: flex-start; color: var(--dn-muted); font-size: 13px; margin: 2px 0 10px; }
+.dn-help .dn-ico { color: var(--dn-accent); margin-top: 1px; }
+.dn-records .form-control { height: 30px; font-size: 13px; }
+.dn-records td.dn-num .form-control { width: 90px; text-align: right; font-variant-numeric: tabular-nums; }
+.dn-records td.dn-target { width: 55%; }
+.dn-records td.dn-target .form-control { font-family: SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+.dn-records tr.dn-new td:first-child .form-control { min-width: 140px; font-family: SFMono-Regular, Menlo, Consolas, monospace; }
+.dn-records tr.dn-empty td { text-align: center; color: var(--dn-muted); padding: 18px 8px; }
+.dn-records tr.changed td { background: var(--sn-warn-soft, #fff8e6); }
+.dn-records tr.changed td:first-child { box-shadow: inset 3px 0 0 var(--dn-amber); }
+.dn-records tr.dn-new td { background: var(--sn-ok-soft, #eef9f2); }
+.dn-records tr.dn-new td:first-child { box-shadow: inset 3px 0 0 var(--dn-green); }
+.dn-records tr.deleted td { background: var(--sn-bad-soft, #fdeeee); }
+.dn-records tr.deleted td:first-child { box-shadow: inset 3px 0 0 var(--dn-red); }
+.dn-records tr.deleted .dn-host, .dn-records tr.deleted .form-control { text-decoration: line-through; opacity: 0.6; }
+.dn-warn { color: var(--sn-warn, #8f5b00); font-size: 12px; margin-top: 4px; max-width: 320px; white-space: normal; }
+.dn-icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 4px; border: 1px solid var(--dn-field-line);
+    background: var(--dn-card); color: var(--dn-muted); cursor: pointer; padding: 0; margin-left: 4px; }
+.dn-icon-btn .dn-ico { width: 16px; height: 16px; }
+.dn-icon-btn:hover { color: var(--dn-ink); border-color: var(--dn-muted); }
+.dn-delete:hover, .dn-remove:hover { color: var(--sn-bad, #b42b27); border-color: var(--sn-bad-line, #f0a9a7); }
+.dn-undo { display: none; }
+tr.changed .dn-undo, tr.deleted .dn-undo { display: inline-flex; }
+tr.deleted .dn-delete { display: none; }
+.dn-pane-foot { padding-top: 10px; margin-top: 6px; border-top: 1px solid var(--dn-line); }
+
+/* zone status */
+.dn-zone { display: flex; gap: 12px; align-items: flex-start; border-radius: 6px; padding: 12px 14px; border: 1px solid; font-size: 13px; }
+.dn-zone > .dn-ico { width: 24px; height: 24px; }
+.dn-zone b { display: block; font-size: 14px; margin-bottom: 2px; }
+.dn-zone span { opacity: 0.9; }
+.dn-zone.ok { background: var(--sn-ok-soft, #e3f4ea); border-color: var(--sn-ok-line, #a9dcbd); color: var(--sn-ok, #1e8a4c); }
+.dn-zone.warn { background: var(--sn-warn-soft, #fff4d6); border-color: var(--sn-warn-line, #f2cf7a); color: var(--sn-warn, #8f5b00); }
+.dn-zone.bad { background: var(--sn-bad-soft, #fdeaea); border-color: var(--sn-bad-line, #f0a9a7); color: var(--sn-bad, #b42b27); }
+.dn-details { margin-top: 10px; }
+.dn-details summary { display: list-item; cursor: pointer; color: var(--dn-muted); font-size: 13px; }
+.dn-raw { background: var(--dn-bg); color: var(--dn-ink); border: 1px solid var(--dn-line); border-radius: 4px; padding: 10px 12px; font-size: 12px;
+    max-height: 300px; overflow: auto; white-space: pre-wrap; margin: 8px 0 0; }
+
+@media (max-width: 640px) {
+    .dn { padding: 12px; }
+    .dn-bar-actions { width: 100%; }
+    .dn-records td.dn-num .form-control { width: 70px; }
 }
-/* @account */
-div.account > div.content > div > div.actions {
-    position: absolute;
-    top: 0;
-    right: 0;
-    vertical-align: top;
-}
-div.account > div.content > div > div.actions > a {
-    display: inline-block;
-    width: 68px;
-    min-height: 38px;
-    background-position: 50% 4px;
-    background-repeat: no-repeat;
-    padding-top: 28px;
-    font-size: 12px;
-    font-weight: bold;
-    text-align: center;
-    vertical-align: top;
-}
-div.account > div.content > div > div.actions > a.disabled:hover {
-    background-color: inherit;
-    cursor: default;
-    color: var(--sn-accent, #005297);
-}
-div.account > div.content > div > div.actions > a.hidden {
-    display: none;
-}
-div.account > div.content > div > div.actions > a.back {
-    background-image: url(./domains.png);
-    cursor: pointer;
-}
-div.account > div.content > div > div.actions > a.undo {
-    background-image: url(./undo.png);
-    cursor: pointer;
-}
-div.account > div.content > div > div.actions > a.save {
-    background-image: url(./data_into.png);
-    cursor: pointer;
-}
-/* @end */
-
-/* @accountTitle */
-div.accountTitle > div.content {
-    position: relative;
-}
-div.accountTitle > div.content > div > strong,
-div.accountTitle > div.content > div > a {
-    display: inline-block;
-    font-size: 16px;
-    font-weight: bold;
-    margin: 12px 6px 6px 14px;
-    /* color: black; */
-}
-div.accountTitle > div.content > div > a {
-    border-bottom: 1px dotted gray;
-    text-decoration: none;
-}
-div.accountTitle > div.content > div > a:hover {
-    border-bottom: 1px solid gray;
-    cursor: pointer;
-}
-/* @end */
-
-
-
-#dnsAddDomain input.text {
-    border: 1px solid silver;
-    width: 22em;
-    margin-right: 30px;
-}
-
-#dnsAddDomain input {
-    vertical-align: bottom;
-}
-
-/* @dnsInfo */
-#dnsInfo {
-    position: relative;
-}
-
-#dnsInfo span {
-    display: inline-block;
-    width: 10em;
-    text-align: right;
-    padding-right: 0.6em;
-}
-
-#dnsInfo em {
-    position: relative;
-    font-style: normal;
-    font-weight: bold;
-}
-
-#dnsInfo div.soa {
-    margin-top: 24px;
-}
-
-/* @end */
-
-#dnsRecords .ui-tabs-panel {
-    min-height:250px;
-    /*
-    height: 440px;
-    overflow: auto;
-    */
-}
-
-#dnsRecords div.header {
-    padding: 5px 10px 5px 0px;
-}
-
-#dnsRecords div.dnsRecord,
-#dnsRecords div.add {
-    padding: 10px 0 10px 0;
-    color: var(--sn-ink, #333);
-    font-size: 12px;
-}
-
-/*#dnsRecords div.dnsRecord:hover, #dnsRecords div.add:hover {
-    background-color: #e8e3e3;
-    color: inherit;
-}*/
-
-#dnsRecords div.dnsRecordError {
-    background-color: var(--sn-bad, #bf7979);
-    color: white;
-    height: 52px;
-}
-
-#dnsRecords div.records > div.description {
-    display: block;
-    margin: 4px;
-    margin-bottom: 12px;
-    padding-left: 32px;
-    padding-top: 1px;
-    /*background: url(./information_big.png) no-repeat 0 0;*/
-    /* color: #949494; */
-    min-height: 28px;
-}
-
-#dnsRecords div.row > div {
-    display: inline-block;
-    margin-right: 8px;
-    /*vertical-align: middle;*/
-}
-#dnsRecords div.row > br {
-    clear: both;
-}
-
-#dnsRecords div.records > div.deleted {
-    display: none;
-}
-
-
-#dnsRecords div.row > div > label {
-    display: inline-block;
-    font-weight: bold;
-    font-size: 9pt;
-    /* color: #999999; */
-    margin-bottom: 0;
-    padding-bottom: 1px;
-    width: 100%;
-}
-
-#dnsRecords div.row > div > span {
-    overflow: hidden;
-    white-space: nowrap;
-}
-
-#dnsRecords div.row > div > input {
-    border: 1px solid silver;
-    width: 100%;
-    min-height: 10px;
-}
-
-
-
-#dnsRecords div.row > div.hostName {
-    width: 140px;
-}
-
-/*#dnsRecords div.dnsRecord > div.hostName {
-    text-align: right;
-}*/
-#dnsRecords div.dnsRecord > div.hostName > span {
-    display: inline-block;
-    padding-top: 4px;
-    width: 100%;
-}
-#dnsRecords div.dnsRecord > div.hostName > span:hover {
-    cursor: help;
-}
-
-#dnsRecords div.dnsRecord > div.hostName > input {
-    display: inline-block;
-    width: 136px;
-    margin-left: 4px;
-}
-#dnsRecords div.row > div.in {
-    width: 14px;
-    text-align: center;
-}
-#dnsRecords div.row > div.type,
-#dnsRecords div.dnsRecordA > div.row > div.type {
-    width: 50px;
-    text-align: center;
-}
-
-#dnsRecords div.dnsRecordMX > div.row > div.type,
-#dnsRecords div.dnsRecordNS > div.row > div.type {
-    width: 24px;
-}
-
-#dnsRecords div.dnsRecordTXT > div.row > div.type,
-#dnsRecords div.dnsRecordSRV > div.row > div.type,
-#dnsRecords div.dnsRecordSPF > div.row > div.type,
-#dnsRecords div.dnsRecordPTR > div.row > div.type {
-    width: 34px;
-}
-
-#dnsRecords div.dnsRecordAAAA > div.row > div.type {
-    width: 44px;
-}
-
-#dnsRecords div.dnsRecordCNAME > div.row > div.type,
-#dnsRecords div.dnsRecordNAPTR > div.row > div.type {
-    width: 54px;
-}
-
-
-#dnsRecords div.dnsRecordURL > div.row > div.in,
-#dnsRecords div.dnsRecordURL > div.row > div.type,
-#dnsRecords div.dnsRecordPROXY > div.row > div.in,
-#dnsRecords div.dnsRecordPROXY > div.row > div.type,
-#dnsRecords div.dnsRecordSOA > div.row > div.in,
-#dnsRecords div.dnsRecordSOA > div.row > div.type {
-    display: none;
-}
-
-#dnsRecords div > div.row > div.target {
-    width: 200px;
-}
-
-#dnsRecords div.dnsRecordURL > div.row > div.target,
-#dnsRecords div.dnsRecordPROXY > div.row > div.target {
-    width: 470px;
-}
-#dnsRecords div.dnsRecordCNAME > div.row > div.target,
-#dnsRecords div.dnsRecordTXT > div.row > div.target,
-#dnsRecords div.dnsRecordSPF > div.row > div.target {
-    width: 360px;
-}
-
-#dnsRecords div.row > div.TTL,
-#dnsRecords div.row > div.priority {
-    width: 54px;
-}
-
-#dnsRecords div.row > div.weight {
-    width: 50px;
-}
-#dnsRecords div.row > div.port {
-    width: 38px;
-}
-
-#dnsRecords #typeSOA div.dnsRecord {
-    height: auto;
-    border-bottom: none;
-}
-#dnsRecords #typeSOA div.dnsRecord > div {
-    height: auto;
-}
-
-#dnsRecords #typeSOA div.dnsRecord:hover {
-    background-color: inherit;
-}
-
-#dnsRecords #typeSOA div.row > div {
-    width: 80px;
-}
-
-#dnsRecords #typeSOA div.row > div.primary,
-#dnsRecords #typeSOA div.row > div.hostmaster {
-    display: inline-block;
-    clear: both;
-    width: 300px;
-}
-
-#dnsRecords #typeSOA div.row > div.serial {
-    width: 100px;
-}
-
-#dnsRecords div.row > div.order,
-#dnsRecords div.row > div.preference,
-#dnsRecords div.row > div.flags {
-    width: 70px;
-}
-
-#dnsRecords div.row > div.service,
-#dnsRecords div.row > div.regex {
-    width: 80px;
-}
-#dnsRecords div.row > div.replacement {
-    width: 90px;
-}
-
-#dnsRecords div.records > div.hidden {
-    display: none;
-}
-
-#dnsRecords div.records > div.add > span {
-    margin: 0 auto;
-    /* background: url(./add.png) no-repeat 0 3px; */
-    padding-left: 20px;
-    display: block;
-    height: 22px;
-    width: 230px;
-}
-#dnsRecords div.records > div.add > span:hover {
-    cursor: pointer;
-}
-#dnsRecords div.records > div.add > span > span {
-    /* border-bottom: 1px dotted black; */
-    vertical-align: middle;
-}
-
-/*#dnsRecords div.dnsRecord > span.delete {
-    padding: 0;
-    margin-left: 4px;
-    width: 16px;
-    height: 16px;
-    background: url(./delete_small.png) no-repeat 0 0;
-    position: absolute;
-    right: 0;
-    top: 8px;
-}*/
-
-
-/*#dnsRecords div.dnsRecord > span.undo {
-    padding: 0;
-    margin-left: 4px;
-    width: 16px;
-    height: 16px;
-    background: url(./undo_small.png) no-repeat 0 0;
-    display: none;
-    position: absolute;
-    right: 22px;
-    top: 8px;
-}*/
-
-
-#dnsRecords div.row > div.errorMessage {
-    background: url(/icons/16x16/plain/error.png) no-repeat 10px 1px;
-    padding-left: 30px;
-    display: block;
-    clear: both;
-    font-weight: bold;
-}
-
-#dnsRecords div.dnsRecordError > span.undo {
-    display: inline;
-}
-
-#dnsRecords div.help  {
-    background: url(/icons/24x24/plain/information.png) no-repeat 0 4px;
-    padding-left: 30px;
-}
-
-
-#dnsImport div.content > div {
-    padding: 1em;
-    border-top: 1px solid silver;
-}
-#dnsImport div.content > div:hover {
-    background-color: var(--sn-soft, #e8e3e3);
-    color: inherit;
-}
-
-#dnsImport div.content > div > label {
-}
-#dnsImport div.content > div > textarea {
-    width: 90%;
-    margin-top: 4px;
-    margin-left: 24px;
-    border: 1px solid silver;
-    height: 10em;
-}
-
-#dnsImport div.content > div > input.axfr {
-    width: 10em;
-    margin-top: 4px;
-    margin-left: 24px;
-    border: 1px solid silver;
-    padding-left: 18px;
-    background: url(/icons/16x16/plain/server.png) no-repeat 0 2px var(--sn-card, white);
-    min-height: 18px;
-}
-
-#dnsImport div.content > div.description {
-    padding: 1em;
-    border-top: none;
-}
-#dnsImport div.content > div.description:hover {
-    background-color: inherit;
-}
-#dnsImport div.content > div > span.example {
-    padding-left: 10px;
-}
-
-
-#dnsExport div.content > div.output {
-    white-space: pre;
-    background-color: var(--sn-card, white);
-    font-size: 12px;
-    font-family: monospace;
-    overflow: auto;
-    padding: 1em;
-    height: 440px;
-}
-
-
-.inlineBlock {
-    display: inline-block;
-}
-
-.tabError {
-    background-color: var(--sn-bad, #bf7979);
-}
-
-.ui-tabs .ui-tabs-panel {
-    padding: 0.6em 0.5em;
-}
-
-
-
-
-
-
-
-
-#inDomain {
-    height: 44px;
-    line-height: 48px;
-    width: 230px;
-    margin-right: 5px;
-}
-
-
-.dnsRecord:nth-child(even) {
-    background-color: var(--sn-soft, #F9F9F9);
-}
-
-#dnsRecords .tab-content > .tab-pane{
-     color: var(--sn-ink, #333);
-}
-
-.row.new:nth-child(even) {
-    background-color: var(--sn-ok-soft, #DFF0D8);
-}
-
-#dnsRecords .row.dnsRecord.new {
-    background-color: var(--sn-ok-soft, #DFF0D8);
-    border-color: var(--sn-ok-line, #D6E9C6);
-}
-#dnsRecords .row.dnsRecord.deleted {
-    background-color: var(--sn-bad-soft, #F2DEDE);
-    border-color: var(--sn-bad-line, #EED3D7);
-}
-
-#dnsRecords div.dnsRecord > .delete {
-    float: right;
-    letter-spacing: 1pt;
-    padding: 2px 6px 2px 6px;
-    margin: 0 10px 0 0;
-}
-#dnsRecords div.dnsRecord > .delete:hover {
-    cursor: pointer;
-}
-#dnsRecords div.dnsRecord > .undo {
-    display: none;
-    float: right;
-    letter-spacing: 1pt;
-    padding: 2px 6px 2px 6px;
-    margin: 3px 10px 0 0;
-}
-
-#dnsRecords div.dnsRecord > .undo:hover {
-    cursor: pointer;
-}
-
-#dnsRecords .description {
-    padding: 20px 0 20px 0;
-    color: var(--sn-muted, #777);
-}
-
-
-#dnsRecords div.row {
-    border-top: 1px solid var(--sn-line, #EEE);
-    position: relative;
-    margin-left: 0px;
-    margin-right: 0px;
-    padding-left: 5px;
-}
-
-/* Add Strike through to Deleted DNS Rows */
-#dnsRecords .row.dnsRecord.deleted span,
-#dnsRecords .row.dnsRecord.deleted .input-small,
-#dnsRecords .row.dnsRecord.deleted div {
-        text-decoration: line-through;
-}
-#dnsRecords .row.dnsRecord.deleted .input-small{
-    filter: alpha(opacity=40);
-    opacity: 0.40;
-}
-
-.actions label {
-    margin-right: 10px;
-}
-#dnsRecords .row > .actions {
-    float: right;
-    margin-right: -3px;
-}
-
-
-
-
-
-
-
-
-
-
-

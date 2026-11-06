@@ -101,3 +101,14 @@ etc/lib/PHPMailer/language/phpmailer.lang-zh.php
 etc/lib/PHPMailer/language/phpmailer.lang-zh_cn.php
 # Usage Viewer: a leftover pChart demo with fixed data, reachable without logging in
 modules/usage_viewer/assets/totals.php
+# Sencrypt and DNS Manager: pictures their rebuilt pages no longer use
+modules/sencrypt/assets/third_party.png
+modules/sencrypt/assets/settings.png
+modules/dns_manager/assets/add.png
+modules/dns_manager/assets/data_into.png
+modules/dns_manager/assets/delete_small.png
+modules/dns_manager/assets/domains.png
+modules/dns_manager/assets/help_small.png
+modules/dns_manager/assets/information_big.png
+modules/dns_manager/assets/undo.png
+modules/dns_manager/assets/undo_small.png

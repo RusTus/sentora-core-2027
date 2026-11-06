@@ -56,26 +56,85 @@ class module_controller extends ctrl_module
             self::$ResultErr = $ErrorText;
     }
 
-    /* Load DNS CSS and JS files */
-
     /**
      * The module's CSS and JavaScript tags (template <@ Init @>).
      *
-     * @global runtime_controller $controller The request controller.
      * @return string The HTML <link> and <script> tags.
      */
     static function getInit()
     {
-        global $controller;
-        $line = '<link rel="stylesheet" type="text/css" href="modules/' . $controller->GetControllerRequest('URL', 'module') . '/assets/dns.css">';
-        $line .= '<script type="text/javascript" src="modules/' . $controller->GetControllerRequest('URL', 'module') . '/assets/dns.js"></script>';
-        return $line;
+        return '<link rel="stylesheet" type="text/css" href="modules/dns_manager/assets/dns.css">'
+            . '<script src="modules/dns_manager/assets/dns.js" defer></script>';
     }
 
-    /*
-     * Determine which DNS page to show
-     * Domain List or DNS Records
+    /**
+     * Escape text for HTML.
+     *
+     * @param mixed $s The text.
+     * @return string
      */
+    static function h($s)
+    {
+        return htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
+    }
+
+    /**
+     * Translated and HTML-escaped text.
+     *
+     * @param string $s The English text.
+     * @return string
+     */
+    static function t($s)
+    {
+        return self::h(ui_language::translate($s));
+    }
+
+    /**
+     * An inline SVG icon (stroked, in the text colour).
+     *
+     * @param string $name The icon: globe, back, save, undo, plus, trash, check, alert, x, info, edit, list.
+     * @return string SVG markup, or '' for an unknown name.
+     */
+    static function Icon($name)
+    {
+        $p = array(
+            'globe' => '<circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18"/>',
+            'back' => '<path d="m15 18-6-6 6-6"/>',
+            'save' => '<path d="M5 3h11l3 3v13a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2z"/><path d="M8 3v5h7V3"/><path d="M8 21v-7h8v7"/>',
+            'undo' => '<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>',
+            'plus' => '<path d="M12 5v14M5 12h14"/>',
+            'trash' => '<path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="m6 7 1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13"/>',
+            'check' => '<circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/>',
+            'alert' => '<path d="M12 3 2 20h20z"/><path d="M12 10v4M12 17h.01"/>',
+            'x' => '<circle cx="12" cy="12" r="9"/><path d="m9 9 6 6M15 9l-6 6"/>',
+            'info' => '<circle cx="12" cy="12" r="9"/><path d="M12 16v-5M12 8h.01"/>',
+            'edit' => '<path d="M12 20h8"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
+            'list' => '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
+        );
+        if (!isset($p[$name])) {
+            return '';
+        }
+        return '<svg class="dn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' . $p[$name] . '</svg>';
+    }
+
+    /**
+     * The record types the page shows, in order, with their help text.
+     *
+     * @return array<string, string> Type => description (English).
+     */
+    static function RecordTypes()
+    {
+        return array(
+            'A' => "An IPv4 address for a host name, e.g. '192.0.2.10'. Use @ for the domain itself.",
+            'AAAA' => "An IPv6 address for a host name, e.g. '2001:db8::10'. Use @ for the domain itself.",
+            'CNAME' => "Makes a host name an alias of another name, e.g. 'www' pointing to '@' or to 'host.example.com'. A host name with a CNAME can have no other record.",
+            'MX' => "The servers that receive this domain's email, tried in order of priority (lowest first). The host name is usually left as @; the target is a host name such as 'mail.example.com'.",
+            'TXT' => "Text for other services to read: SPF ('v=spf1 ...'), DKIM and DMARC keys, and ownership checks for Google, Microsoft and others.",
+            'SRV' => "Where a service runs: priority, weight, port and target host. The host name names the service and protocol, e.g. '_sip._tcp'.",
+            'SPF' => "The old SPF record type. Mail servers no longer read it: keep SPF in a TXT record instead.",
+            'NS' => "The name servers that answer for this domain. They should match the name servers set at the domain's registrar.",
+        );
+    }
 
     /**
      * Determine which DNS page to show: the domain list or a domain's records (template <@ RecordAction @>).
@@ -92,196 +151,220 @@ class module_controller extends ctrl_module
         global $controller;
         $currentuser = ctrl_users::GetUserDetail();
         if (!fs_director::CheckForEmptyValue($controller->GetControllerRequest('FORM', 'domainID'))) {
-            $display = self::DisplayRecords();
-        } elseif (fs_director::CheckForEmptyValue(self::$editdomain)) {
-            $display = self::DisplayDomains();
-        } else {
-            //Create default records if no records are found for the domain.
-            if (fs_director::CheckForEmptyValue(self::$editdomain)) {
-                $domainID = $controller->GetControllerRequest('FORM', 'domainID');
-            } else {
-                $domainID = self::$editdomain;
-            }
-
-            $sql = "SELECT COUNT(*) FROM x_dns WHERE dn_acc_fk=:userid AND dn_vhost_fk=:domainID AND dn_deleted_ts IS NULL";
-            $numrows = $zdbh->prepare($sql);
-            $numrows->bindParam(':userid', $currentuser['userid']);
-            $numrows->bindParam(':domainID', $domainID);
-
-            if ($numrows->execute()) {
-                if ($numrows->fetchColumn() == 0) {
-                    $display = self::DisplayDefaultRecords();
-                } else {
-                    $display = self::DisplayRecords();
-                }
-            }
+            return self::DisplayRecords();
         }
-        return $display;
+        if (fs_director::CheckForEmptyValue(self::$editdomain)) {
+            return self::DisplayDomains();
+        }
+        $domainID = self::$editdomain;
+        $numrows = $zdbh->prepare("SELECT COUNT(*) FROM x_dns WHERE dn_acc_fk=:userid AND dn_vhost_fk=:domainID AND dn_deleted_ts IS NULL");
+        $numrows->bindParam(':userid', $currentuser['userid']);
+        $numrows->bindParam(':domainID', $domainID);
+        $numrows->execute();
+        return ((int) $numrows->fetchColumn() === 0) ? self::DisplayDefaultRecords() : self::DisplayRecords();
     }
 
-    /*
-     * Allow user to Create Initial Domain DNS records for the First time
+    /**
+     * One of the account's domains (not subdomains), by ID.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param mixed $domainID The domain (x_vhosts) ID.
+     * @return array<string, mixed>|false The x_vhosts row, or false when it is not the account's.
      */
+    static function OwnDomain($domainID)
+    {
+        global $zdbh;
+        $currentuser = ctrl_users::GetUserDetail();
+        $sql = $zdbh->prepare("SELECT * FROM x_vhosts WHERE vh_id_pk=:domainID AND vh_acc_fk=:userid AND vh_type_in != 2 AND vh_deleted_ts IS NULL");
+        $sql->bindParam(':domainID', $domainID);
+        $sql->bindParam(':userid', $currentuser['userid']);
+        $sql->execute();
+        return $sql->fetch();
+    }
 
     /**
-     * Build the page that offers to create the default records for a domain that has none.
+     * A form button that opens a domain's records (posts to DisplayRecords with the session token).
      *
-     * @global db_driver $zdbh The panel's database connection (unused).
-     * @global runtime_controller $controller The request controller.
+     * @param int|string $domainID The domain ID.
+     * @param string $label The button text (English).
+     * @param string $icon The icon name.
+     * @param string $class Extra button classes.
+     * @return string HTML.
+     */
+    static function OpenButton($domainID, $label, $icon, $class)
+    {
+        return '<form class="dn-inline" action="./?module=dns_manager&amp;action=DisplayRecords" method="post">'
+            . '<input type="hidden" name="inDomain" value="' . self::h($domainID) . '">' . self::getCSFR_Tag()
+            . '<button type="submit" class="btn ' . $class . ' dn-btn">' . self::Icon($icon) . '<span>' . self::t($label) . '</span></button></form>';
+    }
+
+    /**
+     * A record's target as the form shows it: TXT and SPF values are stored with slashes added (CleanRecord()).
+     *
+     * @param mixed $target The stored target.
+     * @param string $type The record type.
+     * @return string
+     */
+    static function ShownTarget($target, $type)
+    {
+        return ($type === 'TXT' || $type === 'SPF') ? stripslashes((string) $target) : (string) $target;
+    }
+
+    /**
+     * Allow user to Create Initial Domain DNS records for the First time.
+     *
+     * Shows the records that would be made (the account's own list in x_dns_create, else the default one).
+     *
+     * @global db_driver $zdbh The panel's database connection.
      * @return string The HTML.
      */
     static function DisplayDefaultRecords()
     {
         global $zdbh;
-        global $controller;
         $currentuser = ctrl_users::GetUserDetail();
-        $line = "";
-        $line .= "<div class=\"zgrid_wrapper\">";
+        $domain = self::OwnDomain(self::$editdomain);
+        if (!$domain) {
+            return self::DisplayDomains();
+        }
+        $ip = ctrl_options::GetSystemOption('server_ip');
+        if (fs_director::CheckForEmptyValue($ip)) {
+            $ip = isset($_SERVER['SERVER_ADDR']) ? $_SERVER['SERVER_ADDR'] : '';
+        }
+        $count = $zdbh->prepare('SELECT COUNT(*) FROM x_dns_create WHERE dc_acc_fk=:userId');
+        $count->bindParam(':userId', $currentuser['userid']);
+        $count->execute();
+        $owner = ((int) $count->fetchColumn() > 0) ? (int) $currentuser['userid'] : 0;
+        $list = $zdbh->prepare('SELECT * FROM x_dns_create WHERE dc_acc_fk=:owner ORDER BY dc_id_pk');
+        $list->bindParam(':owner', $owner);
+        $list->execute();
+        $rows = '';
+        while ($r = $list->fetch()) {
+            $target = str_replace(array(':IP:', ':DOMAIN:'), array($ip, $domain['vh_name_vc']), (string) $r['dc_target_vc']);
+            $prio = in_array($r['dc_type_vc'], array('MX', 'SRV'), true) && $r['dc_priority_in'] !== null ? '<span class="dn-prio">' . (int) $r['dc_priority_in'] . '</span> ' : '';
+            $rows .= '<tr><td><span class="dn-type t-' . self::h(strtolower($r['dc_type_vc'])) . '">' . self::h($r['dc_type_vc']) . '</span></td><td class="dn-host">' . self::h($r['dc_host_vc'])
+                . '</td><td class="dn-target">' . $prio . self::h($target) . '</td><td class="dn-num">' . self::h(self::TtlText($r['dc_ttl_in'])) . '</td></tr>';
+        }
 
-
-        $line .= "<div id=\"dnsTitle\" class=\"account accountTitle\">";
-        $line .= "<div class=\"content\"><h2>" . ui_language::translate("Create Default DNS Records") . "</h2>";
-        $line .= "" . ui_language::translate("No records were found for this domain.  Click the button below to set up your domain records for the first time") . "";
-        $line .= "<div>";
-        $line .= "<div class=\"actions\"><a class=\"back\" href=\"./?module=" . htmlspecialchars((string) $controller->GetControllerRequest('URL', 'module'), ENT_QUOTES, 'UTF-8') . "\">Domain List</a></div>";
-        $line .= "</div><br class=\"clear\">";
-        $line .= '</div>';
-        $line .= '</div>';
-
-
-        $line .= "<form action=\"./?module=dns_manager&action=CreateDefaultRecords\" method=\"post\">";
-        $line .= "<table class=\"zform\">";
-        $line .= "<tr>";
-        $line .= "<td>";
-        $line .= '<button type="submit" class="btn btn-primary"><i class="glyphicon glyphicon-pencil"></i> ' . ui_language::translate("Create Records") . '</button>';
-        $line .= "</td>";
-        $line .= "</tr>";
-        $line .= "</table>";
-        $line .= "<input type=\"hidden\" name=\"inDomain\" value =\"" . htmlspecialchars((string) $controller->GetControllerRequest('FORM', 'inDomain'), ENT_QUOTES, 'UTF-8') . "\" />";
-        $line .= "<input type=\"hidden\" name=\"inUserID\" value =\"" . $currentuser['userid'] . "\" />";
-        $line .= self::getCSFR_Tag();
-        $line .= '</form>';
-        $line .= '</div>';
+        $line = '<div class="dn" id="dn">';
+        $line .= '<div class="dn-bar"><div class="dn-bar-title">' . self::Icon('globe') . '<div><h3>' . self::h($domain['vh_name_vc']) . '</h3><span class="dn-sub">' . self::t('No DNS records yet') . '</span></div></div>'
+            . '<div class="dn-bar-actions"><a class="btn btn-default dn-btn" href="./?module=dns_manager">' . self::Icon('back') . '<span>' . self::t('All domains') . '</span></a></div></div>';
+        $line .= '<div class="dn-card"><div class="dn-card-head"><h4>' . self::t('Set up DNS for this domain') . '</h4><p>'
+            . self::t('These records point the domain, its www and mail at this server and name its name servers. You can change or add to them afterwards.') . '</p></div>';
+        if ($rows !== '') {
+            $line .= '<div class="dn-scroll"><table class="dn-table dn-preview"><thead><tr><th>' . self::t('Type') . '</th><th>' . self::t('Host') . '</th><th>' . self::t('Target') . '</th><th class="dn-num">TTL</th></tr></thead><tbody>' . $rows . '</tbody></table></div>';
+        }
+        $line .= '<form class="dn-foot" action="./?module=dns_manager&amp;action=CreateDefaultRecords" method="post">'
+            . '<input type="hidden" name="inDomain" value="' . self::h($domain['vh_id_pk']) . '">'
+            . '<input type="hidden" name="inUserID" value="' . self::h($currentuser['userid']) . '">' . self::getCSFR_Tag()
+            . '<button type="submit" class="btn btn-primary dn-btn">' . self::Icon('plus') . '<span>' . self::t('Create these records') . '</span></button></form>';
+        $line .= '</div></div>';
         return $line;
+    }
+
+    /**
+     * A TTL in words, e.g. 3600 => "1 hour".
+     *
+     * @param mixed $s The TTL in seconds.
+     * @return string
+     */
+    static function TtlText($s)
+    {
+        $s = (int) $s;
+        foreach (array(array(604800, 'week', 'weeks'), array(86400, 'day', 'days'), array(3600, 'hour', 'hours'), array(60, 'minute', 'minutes')) as $u) {
+            if ($s >= $u[0] && $s % $u[0] === 0) {
+                $n = $s / $u[0];
+                return $n . ' ' . ui_language::translate($n === 1 ? $u[1] : $u[2]);
+            }
+        }
+        return $s . ' s';
     }
 
     /**
      * Build the tab with one record type's records of a domain, and the template row for new records.
      *
+     * The field names (ttl[id], target[id], delete[id], hostName[new_n] ...) are what SaveDNS() and CheckForErrors() read.
+     *
      * @global db_driver $zdbh The panel's database connection.
-     * @global runtime_controller $controller The request controller (unused).
      * @param string $type The record type ('A', 'AAAA', 'CNAME', 'MX', 'TXT', 'SRV', 'SPF' or 'NS').
-     * @param int|string $ttl The default TTL for new records.
-     * @param string $description HTML help text shown above the records.
-     * @param int|string $userID The account ID that owns the records.
-     * @param int|string $domainID The domain (x_vhosts) ID.
-     * @return string|null The HTML, or null when the type is not in the allowed_types setting.
+     * @param array<int, array<string, mixed>> $records The domain's records of this type (x_dns rows).
+     * @param string $domainName The domain name.
+     * @param bool $on Whether this tab is the open one.
+     * @return string The HTML.
      */
-    static function DnsRecordField($type, $ttl, $description, $userID, $domainID)
+    static function DnsRecordField($type, $records, $domainName, $on)
     {
-        global $zdbh;
-        global $controller;
-        /* Begin DNS records */
-        if (self::IsTypeAllowed($type)) {
-            if ($type === 'A') {
-                $activeCss = 'active';
-                if (ctrl_options::GetSystemOption('custom_ip') == 'false') {
-                    $custom_ip = "READONLY";
-                } else {
-                    $custom_ip = NULL;
-                }
-            } else {
-                $activeCss = '';
-                $custom_ip = NULL;
-            }
-
-            $line = '<!-- ' . $type . ' RECORDS -->';
-            $line .= '<div class="tab-pane ' . $activeCss . '" id="type' . $type . '">';
-            $line .= '<div class="description">' . $description . '</div>';
-            $line .= '<div class="header row">';
-            $line .= '<div class="hostName"><label class="enableToolTip">' . ui_language::translate('Host Name') . '</label></div>';
-            $line .= '<div class="TTL"><label class="enableToolTip">TTL</label></div>';
-            $line .= '<div class="in">&nbsp;</div>';
-            $line .= '<div class="type">&nbsp;</div>';
-            if ($type === 'MX') {
-                $line .= '<div class="priority"><label class="enableToolTip">' . ui_language::translate('Priority') . '</label></div>';
-            } elseif ($type === 'SRV') {
-                $line .= '<div class="priority"><label class="enableToolTip">' . ui_language::translate('Priority') . '</label></div>';
-                $line .= '<div class="weight"><label class="enableToolTip">' . ui_language::translate('Weight') . '</label></div>';
-                $line .= '<div class="port"><label class="enableToolTip">' . ui_language::translate('Port') . '</label></div>';
-            }
-            $line .= '<div class="target"><label class="enableToolTip">' . ui_language::translate('Target') . '</label></div>';
-            $line .= '<div class="actions"><label>' . ui_language::translate('Actions') . '</label></div>';
-            $line .= '<br>';
-            $line .= '</div>';
-
-            $sql = $zdbh->prepare("SELECT * FROM x_dns WHERE dn_acc_fk=:userid AND dn_type_vc=:type AND dn_vhost_fk=:domainID AND dn_deleted_ts IS NULL ORDER BY dn_host_vc ASC");
-            $sql->bindParam(':type', $type);
-            $sql->bindParam(':userid', $userID);
-            $sql->bindParam(':domainID', $domainID);
-            $sql->execute();
-
-            while ($rowdns = $sql->fetch()) {
-                $line .= '<div class="dnsRecord row">';
-                $line .= '<div class="hostName"><span>' . htmlspecialchars((string) $rowdns['dn_host_vc'], ENT_QUOTES, 'UTF-8') . '</span></div>';
-                $line .= '<div class="TTL">';
-                $line .= '<input name="ttl[' . $rowdns['dn_id_pk'] . ']" value="' . $rowdns['dn_ttl_in'] . '" class="input-small" type="text">';
-                $line .= '<input name="original_ttl[' . $rowdns['dn_id_pk'] . ']" value="' . $rowdns['dn_ttl_in'] . '" type="hidden"></div>';
-                $line .= '<div class="in">IN</div>';
-                $line .= '<div class="type">' . $type . '</div>';
-
-                if ($type === 'MX') {
-                    $line .= '<div class="priority"><input name="priority[' . $rowdns['dn_id_pk'] . ']" value="' . $rowdns['dn_priority_in'] . '" type="text" class="input-small"><input name="original_priority[' . $rowdns['dn_id_pk'] . ']" value="' . $rowdns['dn_priority_in'] . '" type="hidden"></div>';
-                } elseif ($type === 'SRV') {
-                    $line .= '<div class="priority"><input name="priority[' . $rowdns['dn_id_pk'] . ']" value="' . $rowdns['dn_priority_in'] . '" class="input-small" type="text"><input name="original_priority[' . $rowdns['dn_id_pk'] . ']" value="' . $rowdns['dn_priority_in'] . '" type="hidden"></div>';
-                    $line .= '<div class="weight"><input name="weight[' . $rowdns['dn_id_pk'] . ']" value="' . $rowdns['dn_weight_in'] . '" class="input-small" type="text"><input name="original_weight[' . $rowdns['dn_id_pk'] . ']" value="' . $rowdns['dn_weight_in'] . '" type="hidden"></div>';
-                    $line .= '<div class="port"><input name="port[' . $rowdns['dn_id_pk'] . ']" value="' . $rowdns['dn_port_in'] . '" type="text" class="input-small"><input name="original_port[' . $rowdns['dn_id_pk'] . ']" value="' . $rowdns['dn_port_in'] . '" type="hidden"></div>';
-                }
-                $line .= '<div class="target">';
-                $line .= '<input name="target[' . $rowdns['dn_id_pk'] . ']" value="' . htmlspecialchars((string) $rowdns['dn_target_vc'], ENT_QUOTES, 'UTF-8') . '" class="input-small" type="text" ' . $custom_ip . '>';
-                $line .= '<input name="original_target[' . $rowdns['dn_id_pk'] . ']" value="' . htmlspecialchars((string) $rowdns['dn_target_vc'], ENT_QUOTES, 'UTF-8') . '" type="hidden">';
-                $line .= '</div>';
-                $line .= '<button type="button" class="delete btn btn-danger btn-mini">Delete</button>';
-                $line .= '<button type="button" class="undo btn btn-success btn-mini">Undo</button>';
-                $line .= '<input name="type[' . $rowdns['dn_id_pk'] . ']" value="' . $type . '" type="hidden">';
-                $line .= '<input class="delete" name="delete[' . $rowdns['dn_id_pk'] . ']" value="false" type="hidden">';
-                $line .= '<br>';
-                $line .= '</div>';
-            }
-            $line .= '<div class="add row"><button type="submit" class="add-row btn btn-primary"><i class="glyphicon glyphicon-pencil"></i> ' . ui_language::translate("Add New Record") . '</button>
-
-           <button type="submit" class="save disabled btn btn-primary btn-default pull-right">' . ui_language::translate("Save") . '</button></div>';
-
-            // New Record Template
-            $line .= '<div class="newRecord row" style="display: none">';
-            $line .= '<div class="hostName"><input name="proto_hostName" class="input-small" type="text" placeholder="' . ui_language::translate('Host Name') . '"></div>';
-
-            $line .= '<div class="TTL"><input name="proto_ttl" value="' . $ttl . '" class="input-small" type="text" placeholder="' . ui_language::translate('TTL') . '"></div>';
-            $line .= '<div class="in">IN</div>';
-            $line .= '<div class="type">' . $type . '</div>';
-            if ($type === 'MX') {
-                $line .= '<div class="priority"><input name="proto_priority" class="input-small" type="text" placeholder="' . ui_language::translate('Priority') . '"></div>';
-            } elseif ($type === 'SRV') {
-                $line .= '<div class="priority"><input name="proto_priority" class="input-small" type="text" placeholder="' . ui_language::translate('Priority') . '"></div>';
-                $line .= '<div class="weight"><input name="proto_weight" class="input-small" type="text" placeholder="' . ui_language::translate('Weight') . '"></div>';
-                $line .= '<div class="port"><input name="proto_port" class="input-small" type="text" placeholder="' . ui_language::translate('Port') . '"></div>';
-            }
-
-            $line .= '<div class="target"><input name="proto_target" class="input-small" type="text" placeholder="' . ui_language::translate('Target') . '"></div>';
-            $line .= '<input class="delete" name="proto_delete" value="false" type="hidden"><button type="button" class="delete btn btn-danger btn-mini">Delete</button><input name="proto_type" value="' . $type . '" type="hidden">';
-            $line .= '</div>';
-            $line .= '</div> <!-- END ' . $type . ' RECORDS -->';
-            return $line;
+        $lockIP = ($type === 'A' && ctrl_options::GetSystemOption('custom_ip') == 'false');
+        $serverIP = ctrl_options::GetSystemOption('server_ip');
+        if (fs_director::CheckForEmptyValue($serverIP)) {
+            $serverIP = isset($_SERVER['SERVER_ADDR']) ? $_SERVER['SERVER_ADDR'] : '';
         }
+        $prio = ($type === 'MX' || $type === 'SRV');
+        $srv = ($type === 'SRV');
+        $types = self::RecordTypes();
+        $num = function ($name, $id, $value, $label) {
+            return '<td class="dn-num"><input class="form-control input-sm" name="' . $name . '[' . $id . ']" value="' . self::h($value) . '" inputmode="numeric" aria-label="' . self::t($label) . '">'
+                . '<input type="hidden" name="original_' . $name . '[' . $id . ']" value="' . self::h($value) . '"></td>';
+        };
+
+        $line = '<section class="dn-pane' . ($on ? ' on' : '') . '" data-pane="' . $type . '" role="tabpanel">';
+        $line .= '<p class="dn-help">' . self::Icon('info') . '<span>' . self::t($types[$type]) . '</span></p>';
+        $line .= '<div class="dn-scroll"><table class="dn-table dn-records"><thead><tr>';
+        $line .= '<th>' . self::t('Host name') . '</th><th class="dn-num">TTL</th>';
+        if ($prio) {
+            $line .= '<th class="dn-num">' . self::t('Priority') . '</th>';
+        }
+        if ($srv) {
+            $line .= '<th class="dn-num">' . self::t('Weight') . '</th><th class="dn-num">' . self::t('Port') . '</th>';
+        }
+        $line .= '<th>' . self::t('Target') . '</th><th class="dn-act"></th></tr></thead><tbody>';
+
+        foreach ($records as $r) {
+            $id = (int) $r['dn_id_pk'];
+            $host = (string) $r['dn_host_vc'];
+            $full = ($host === '@' || $host === '') ? $domainName : $host . '.' . $domainName;
+            $line .= '<tr class="dn-row">';
+            $line .= '<td><b class="dn-host">' . self::h($host) . '</b><div class="dn-sub">' . self::h($full) . '</div></td>';
+            $line .= $num('ttl', $id, $r['dn_ttl_in'], 'TTL');
+            if ($prio) {
+                $line .= $num('priority', $id, $r['dn_priority_in'], 'Priority');
+            }
+            if ($srv) {
+                $line .= $num('weight', $id, $r['dn_weight_in'], 'Weight') . $num('port', $id, $r['dn_port_in'], 'Port');
+            }
+            $line .= '<td class="dn-target"><input class="form-control input-sm" name="target[' . $id . ']" value="' . self::h(self::ShownTarget($r['dn_target_vc'], $type)) . '"' . ($lockIP ? ' readonly title="' . self::t('Only the server IP address can be used.') . '"' : '') . ' aria-label="' . self::t('Target') . '">'
+                . '<input type="hidden" name="original_target[' . $id . ']" value="' . self::h(self::ShownTarget($r['dn_target_vc'], $type)) . '"></td>';
+            $line .= '<td class="dn-act"><input type="hidden" name="type[' . $id . ']" value="' . $type . '"><input type="hidden" class="dn-del" name="delete[' . $id . ']" value="false">'
+                . '<button type="button" class="dn-icon-btn dn-undo" title="' . self::t('Undo') . '">' . self::Icon('undo') . '</button>'
+                . '<button type="button" class="dn-icon-btn dn-delete" title="' . self::t('Delete') . '">' . self::Icon('trash') . '</button></td>';
+            $line .= '</tr>';
+        }
+        $line .= '<tr class="dn-empty"' . ($records ? ' hidden' : '') . '><td colspan="' . (4 + ($prio ? 1 : 0) + ($srv ? 2 : 0)) . '">' . sprintf(self::t('No %s records.'), $type) . '</td></tr>';
+        $line .= '</tbody></table></div>';
+
+        // New record template (copied by dns.js; "proto_" becomes "<name>[new_n]")
+        $line .= '<template class="dn-proto"><tr class="dn-row dn-new">';
+        $line .= '<td><input class="form-control input-sm" name="proto_hostName" placeholder="' . ($type === 'MX' || $type === 'NS' ? '@' : self::t('e.g. www or @')) . '" aria-label="' . self::t('Host name') . '"><div class="dn-sub dn-full"></div><div class="dn-warn" hidden></div></td>';
+        $line .= '<td class="dn-num"><input class="form-control input-sm" name="proto_ttl" value="' . ($type === 'NS' ? 172800 : 3600) . '" inputmode="numeric" aria-label="TTL"></td>';
+        if ($prio) {
+            $line .= '<td class="dn-num"><input class="form-control input-sm" name="proto_priority" value="10" inputmode="numeric" aria-label="' . self::t('Priority') . '"></td>';
+        }
+        if ($srv) {
+            $line .= '<td class="dn-num"><input class="form-control input-sm" name="proto_weight" value="0" inputmode="numeric" aria-label="' . self::t('Weight') . '"></td>'
+                . '<td class="dn-num"><input class="form-control input-sm" name="proto_port" inputmode="numeric" aria-label="' . self::t('Port') . '"></td>';
+        }
+        $placeholder = array('A' => '192.0.2.10', 'AAAA' => '2001:db8::10', 'CNAME' => '@', 'MX' => 'mail.' . $domainName, 'TXT' => 'v=spf1 a mx ~all', 'SRV' => 'sip.' . $domainName, 'SPF' => 'v=spf1 a mx ~all', 'NS' => 'ns1.' . $domainName);
+        $line .= '<td class="dn-target"><input class="form-control input-sm" name="proto_target"' . ($lockIP ? ' value="' . self::h($serverIP) . '" readonly' : ' placeholder="' . self::h($placeholder[$type]) . '"') . ' aria-label="' . self::t('Target') . '"></td>';
+        $line .= '<td class="dn-act"><input type="hidden" name="proto_type" value="' . $type . '"><input type="hidden" class="dn-del" name="proto_delete" value="false">'
+            . '<button type="button" class="dn-icon-btn dn-remove" title="' . self::t('Remove') . '">' . self::Icon('trash') . '</button></td>';
+        $line .= '</tr></template>';
+
+        $line .= '<div class="dn-pane-foot"><button type="button" class="btn btn-default dn-btn dn-add">' . self::Icon('plus') . '<span>' . sprintf(self::t('Add %s record'), $type) . '</span></button></div>';
+        $line .= '</section>';
+        return $line;
     }
 
-    /*
-     * Build and show DNS Record HTML output
-     * TODO: Break into smaller Functions
-     */
-
     /**
-     * Build and show DNS Record HTML output: the zone check result and one tab per record type.
+     * Build and show DNS Record HTML output: one tab per record type and the zone check result.
      *
      * @global db_driver $zdbh The panel's database connection.
      * @global runtime_controller $controller The request controller.
@@ -289,220 +372,139 @@ class module_controller extends ctrl_module
      */
     static function DisplayRecords()
     {
-        //Post Debug
         global $zdbh;
         global $controller;
         $currentuser = ctrl_users::GetUserDetail();
-        if (fs_director::CheckForEmptyValue(self::$editdomain)) {
-            $domainID = $controller->GetControllerRequest('FORM', 'domainID');
-        } else {
-            $domainID = self::$editdomain;
+        $domainID = fs_director::CheckForEmptyValue(self::$editdomain) ? $controller->GetControllerRequest('FORM', 'domainID') : self::$editdomain;
+        // Only this account's own domains (the ID can come from the posted form)
+        $domain = self::OwnDomain($domainID);
+        if (!$domain) {
+            return self::DisplayDomains();
         }
-        $numrows2 = $zdbh->prepare("SELECT * FROM x_vhosts WHERE vh_id_pk=:domainID AND vh_type_in !=2 AND vh_deleted_ts IS NULL");
-        $numrows2->bindParam(':domainID', $domainID);
-        $numrows2->execute();
-        $domain = $numrows2->fetch();
+        $domainID = $domain['vh_id_pk'];
+        $domainName = (string) $domain['vh_name_vc'];
 
-        // Check DNS Zone File for Errors
-        $zone_message = self::CheckZoneRecord($domainID);
-        $zone_message = str_replace((string) self::$zonecheckFile, '', $zone_message);
+        // the records, by type
+        $byType = array();
+        $sql = $zdbh->prepare("SELECT * FROM x_dns WHERE dn_acc_fk=:userid AND dn_vhost_fk=:domainID AND dn_deleted_ts IS NULL ORDER BY dn_host_vc ASC, dn_priority_in ASC");
+        $sql->bindParam(':userid', $currentuser['userid']);
+        $sql->bindParam(':domainID', $domainID);
+        $sql->execute();
+        while ($r = $sql->fetch()) {
+            $byType[(string) $r['dn_type_vc']][] = $r;
+        }
+        // types to show: the allowed ones (SPF only when the domain still has some), and any
+        // type the domain has records of, so every record is posted back with the form
+        $shown = array();
+        foreach (array_keys(self::RecordTypes()) as $type) {
+            if ((self::IsTypeAllowed($type) && ($type !== 'SPF' || !empty($byType['SPF']))) || !empty($byType[$type])) {
+                $shown[] = $type;
+            }
+        }
+
+        // DNS zone check
+        $zone_message = trim(str_replace((string) self::$zonecheckFile, '', (string) self::CheckZoneRecord($domainID)));
         if (strstr(strtoupper($zone_message), "OK")) {
             if (substr_count($zone_message, ":") >= 2) {
-                $zone_error_message = '<font color="orange">' . ui_language::translate('Your DNS zone has been loaded, but with errors. Some features may not work until corrected.') . '</font>';
+                $zone = array('warn', 'alert', 'Loaded with warnings', 'Your DNS zone has been loaded, but with errors. Some features may not work until corrected.');
             } else {
-                $zone_error_message = '<font color="green">' . ui_language::translate('Your DNS zone has been loaded without errors.') . '</font>';
+                $zone = array('ok', 'check', 'Zone OK', 'Your DNS zone has been loaded without errors.');
             }
-            $zone_status = ui_status::Ok('Your DNS zone is loaded');
         } else {
-            $zone_error_message = '<font color="red">' . ui_language::translate('Errors detected have prevented your DNS zone from being loaded. Please correct the error(s) listed below. Until these errors are fixed, your DNS will not work.') . '</font>';
-            $zone_status = ui_status::Bad('Your DNS zone has errors');
+            $zone = array('bad', 'x', 'Zone has errors', 'Errors detected have prevented your DNS zone from being loaded. Please correct the error(s) listed below. Until these errors are fixed, your DNS will not work.');
         }
+        $pending = in_array((string) $domainID, explode(',', (string) ctrl_options::GetSystemOption('dns_hasupdates')), true);
 
-        // Top Edit buttons
-        $line = '<!-- DNS FORM -->';
-        $line .= '<div id="dnsTitle" class="account accountTitle">';
-        $line .= '<div class="content"><h4>' . ui_language::translate('DNS records for') . ':  <a href="http://' . $domain['vh_name_vc'] . '" target="_blank">' . $domain['vh_name_vc'] . '</a></h4>';
-        $line .= '<div>';
-        $line .= '<div class="actions"><a class="undo disabled" rel="popover" data-title="Undo" data-content="Undo all un-saved changes." data-placement="top">' . ui_language::translate('Undo Changes') . '</a><a class="save disabled">' . ui_language::translate('Save Changes') . '</a><a class="back" href="./?module=' . $controller->GetControllerRequest('URL', 'module') . '">' . ui_language::translate('Domain List') . '</a></div>';
-        $line .= '</div><br class="clear">';
-        $line .= '</div>';
-        $line .= '</div>';
+        $line = '<div class="dn" id="dn" data-domain="' . self::h($domainName) . '" data-leave="' . self::t('There are unsaved changes. Leave without saving them?') . '"'
+            . ' data-mx-warn="' . self::t('An MX host name is usually left as @. With a name here, the address becomes user@name.') . '"'
+            . ' data-dup-warn="' . self::t('This already ends with the domain name: the record would be for') . '"'
+            . ' data-cname-warn="' . self::t('A CNAME on @ breaks the domain\'s other records (mail, name servers).') . '">';
+        $line .= '<form action="./?module=dns_manager&amp;action=SaveDNS" method="post" class="dn-form">';
+        $line .= '<input id="domainName" name="domainName" value="' . self::h($domainName) . '" type="hidden">';
+        $line .= '<input id="domainID" name="domainID" value="' . self::h($domainID) . '" type="hidden">';
+        $line .= '<input name="newRecords" value="0" type="hidden" class="dn-count">';
 
-        $line .= '<form action="./?module=dns_manager&action=SaveDNS" method="post">';
-        $line .= '<input id="domainName" name="domainName" value="' . $domain['vh_name_vc'] . '" type="hidden">';
-        $line .= '<input id="domainID" name="domainID" value="' . $domain['vh_id_pk'] . '" type="hidden">';
+        // title bar
+        $line .= '<div class="dn-bar"><div class="dn-bar-title">' . self::Icon('globe') . '<div><h3><a href="http://' . self::h($domainName) . '" target="_blank" rel="noopener noreferrer">' . self::h($domainName) . '</a></h3>'
+            . '<span class="dn-pill ' . $zone[0] . '">' . self::Icon($zone[1]) . self::t($zone[2]) . '</span>'
+            . ($pending ? ' <span class="dn-pill info">' . self::t('Publishing within 5 minutes') . '</span>' : '') . '</div></div>';
+        $line .= '<div class="dn-bar-actions"><span class="dn-changes" hidden>' . self::t('Unsaved changes') . '</span>'
+            . '<a class="btn btn-default dn-btn" href="./?module=dns_manager">' . self::Icon('back') . '<span>' . self::t('All domains') . '</span></a>'
+            . '<button type="button" class="btn btn-default dn-btn dn-undo-all" disabled>' . self::Icon('undo') . '<span>' . self::t('Undo changes') . '</span></button>'
+            . '<button type="submit" class="btn btn-primary dn-btn dn-save" disabled>' . self::Icon('save') . '<span>' . self::t('Save changes') . '</span></button></div></div>';
 
-        $line .= '<!-- TABS -->';
-        $line .= '<div id="dnsRecords">';
-
-        $line .= '<ul class="nav nav-tabs">';
-        if (self::IsTypeAllowed('A')) {
-            $line .= '    <li class="active"><a href="#typeA" data-toggle="tab">A</a></li>';
+        // tabs and records
+        $line .= '<div class="dn-card dn-card-records"><nav class="dn-tabs" role="tablist">';
+        foreach ($shown as $i => $type) {
+            $n = isset($byType[$type]) ? count($byType[$type]) : 0;
+            $line .= '<button type="button" role="tab" class="dn-tab' . ($i === 0 ? ' on' : '') . '" data-tab="' . $type . '">' . $type . ' <span class="dn-badge">' . $n . '</span></button>';
         }
-        if (self::IsTypeAllowed('AAAA')) {
-            $line .= '    <li><a href="#typeAAAA" data-toggle="tab">AAAA</a></li>';
+        $line .= '</nav>';
+        foreach ($shown as $i => $type) {
+            $line .= self::DnsRecordField($type, isset($byType[$type]) ? $byType[$type] : array(), $domainName, $i === 0);
         }
-        if (self::IsTypeAllowed('CNAME')) {
-            $line .= '    <li><a href="#typeCNAME" data-toggle="tab">CNAME</a></li>';
-        }
-        if (self::IsTypeAllowed('MX')) {
-            $line .= '    <li><a href="#typeMX" data-toggle="tab">MX</a></li>';
-        }
-        if (self::IsTypeAllowed('TXT')) {
-            $line .= '    <li><a href="#typeTXT" data-toggle="tab">TXT</a></li>';
-        }
-        if (self::IsTypeAllowed('SRV')) {
-            $line .= '    <li><a href="#typeSRV" data-toggle="tab">SRV</a></li>';
-        }
-        //if (self::IsTypeAllowed('SPF')) {
-            //$line .= '    <li><a href="#typeSPF" data-toggle="tab">SPF</a></li>';
-        //}
-        if (self::IsTypeAllowed('NS')) {
-            $line .= '    <li><a href="#typeNS" data-toggle="tab">NS</a></li>';
-        }
-        $line .= '</ul>';
-        $line .= '<!-- END TABS -->';
-
-        $line .= '<div class="tab-content">';
-
-        $aDescription = ui_language::translate("The A record contains an IPv4 address. Its target is an IPv4 address, e.g. '192.168.1.1'.");
-        $aaaaDescription = ui_language::translate("The AAAA record contains an IPv6 address. Its target is an IPv6 address, e.g. '2607:fe90:2::1'.");
-        $cnameDescription = ui_language::translate("The CNAME record specifies the canonical name of a record. Its target is a fully qualified domain name, e.g.
-'webserver-01.example.com'.");
-        $mxDescription = ui_language::translate("The MX record specifies a mail exchanger host for a domain. Each mail exchanger has a priority or preference that is a numeric value between 0 and 65535.  Its target is a fully qualified domain name, e.g. 'mail.example.com'.");
-        $txtDescription = ui_language::translate("The TXT field can be used to attach textual data to a domain.");
-        $srvDescription = ui_language::translate("SRV records can be used to encode the location and port of services on a domain name.  Its target is a fully qualified domain name, e.g. 'host.example.com'.");
-        $spfDescription = ui_language::translate("SPF records is used to store Sender Policy Framework details.  Its target is a text string, e.g.<br>'v=spf1 a:192.168.1.1 include:example.com mx ptr -all' (Click <a href=\"http://www.microsoft.com/mscorp/safety/content/technologies/senderid/wizard/\" target=\"_blank\">HERE</a> for the Microsoft SPF Wizard.)");
-        $nsDescription = ui_language::translate("Nameserver record. Specifies nameservers for a domain. Its target is a fully qualified domain name, e.g.  'ns1.example.com'.  The records should match what the domain name has registered with the internet root servers.");
-
-        $tts = 86400;
-        $line .= self::DnsRecordField('A', $tts, $aDescription, $currentuser['userid'], $domainID);
-        $line .= self::DnsRecordField('AAAA', $tts, $aaaaDescription, $currentuser['userid'], $domainID);
-        $line .= self::DnsRecordField('CNAME', $tts, $cnameDescription, $currentuser['userid'], $domainID);
-        $line .= self::DnsRecordField('MX', $tts, $mxDescription, $currentuser['userid'], $domainID);
-        $line .= self::DnsRecordField('TXT', $tts, $txtDescription, $currentuser['userid'], $domainID);
-        $line .= self::DnsRecordField('SRV', $tts, $srvDescription, $currentuser['userid'], $domainID);
-        $line .= self::DnsRecordField('SPF', $tts, $spfDescription, $currentuser['userid'], $domainID);
-        $line .= self::DnsRecordField('NS', $tts, $nsDescription, $currentuser['userid'], $domainID);
-
-        $line .= '<input name="newRecords" value="0" type="hidden">';
-        $line .= '</div> <!-- END TABS CONTENT -->';
-        /* END TABS SECTION */
-        $line .= '</div> <!-- END TABS -->';
-
-        // Bottom Edit buttons
-        $line .= "<div id=\"dnsTitle\" class=\"account accountTitle\">";
-        $line .= "<div class=\"content\">";
-        $line .= "<div>";
-        $line .= "<div class=\"actions\"><a class=\"undo disabled\">" . ui_language::translate("Undo Changes") . "</a><a class=\"save disabled\">" . ui_language::translate("Save Changes") . "</a><a class=\"back\" href=\"./?module=" . htmlspecialchars((string) $controller->GetControllerRequest('URL', 'module'), ENT_QUOTES, 'UTF-8') . "\">" . ui_language::translate("Domain List") . "</a></div>";
-        $line .= "</div><br class=\"clear\">";
         $line .= '</div>';
         $line .= self::getCSFR_Tag();
-        $line .= "</form>";
-        $line .= "<!-- END DNS FORM -->";
-        $line .= "<div class=\"zgrid_wrapper\">";
-        $line .= "<h2>DNS Status for domain: " . $domain['vh_name_vc'] . "</h2>";
-        $line .= "<table class=\"none\" cellpadding=\"0\" cellspacing=\"0\"><tr valign=\"top\"><td>";
-        $line .= $zone_status;
-        $line .= "</td><td>" . $zone_error_message . "<br><br>" . ui_language::translate("Please note that changes to your zone records can take up to 24 hours before they become 'live'.") . "<br><br><b>" . ui_language::translate("Output of DNS zone checker:") . "</b><br>";
-        $line .= $zone_message;
-        $line .= "</td></tr></table>";
-        $line .= '</div>';
-        $line .= '</div>';
+        $line .= '</form>';
 
-
-        $line .='
-<div id="dns-modal" class="modal fade in" tabindex="-1" role="dialog" style="display: none;">
-   <div class="modal-dialog">
-       <div class="alert alert-block alert-error fade in">
-           <h4 class="alert-heading">Oh snap! You got an error!</h4>
-           <p>Change this and that and try again. Duis mollis, est non commodo luctus, nisi erat porttitor ligula, eget lacinia odio sem nec elit. Cras mattis consectetur purus sit amet fermentum.</p>
-           <p>
-           <a class="btn btn-danger" href="#" data-dismiss="modal">Ok</a>
-           </p>
-       </div><!-- /.modal-content -->
-   </div><!-- /.modal-dalog -->
-</div>';
-
+        // zone check
+        $line .= '<div class="dn-card"><div class="dn-card-head"><h4>' . self::t('DNS status') . '</h4></div>';
+        $line .= '<div class="dn-zone ' . $zone[0] . '">' . self::Icon($zone[1]) . '<div><b>' . self::t($zone[3]) . '</b><span>'
+            . self::t("Saved changes are published within 5 minutes. Other servers may keep the old records for up to their TTL (often an hour, at most 24 hours).") . '</span></div></div>';
+        if ($zone_message !== '') {
+            $line .= '<details class="dn-details"' . ($zone[0] === 'ok' ? '' : ' open') . '><summary>' . self::t('Output of the DNS zone checker') . '</summary><pre class="dn-raw">' . self::h($zone_message) . '</pre></details>';
+        }
+        $line .= '</div></div>';
         return $line;
     }
 
-    /*
-     * Show Domain Dropdown list/entrance page
-     * If no domains exist it shows an Empty list
-     * TODO: Tell them to add a domain if no domains exist
-     */
-
     /**
-     * Show the domain drop-down list (entrance page); the list is empty when the account has no domains.
+     * Show the account's domains, each with its record count, whether changes are waiting to be published and an edit button.
      *
      * @global db_driver $zdbh The panel's database connection.
-     * @global runtime_controller $controller The request controller (unused).
      * @return string The HTML.
      */
     static function DisplayDomains()
     {
         global $zdbh;
-        global $controller;
         $currentuser = ctrl_users::GetUserDetail();
-        $line = '<div class="zgrid_wrapper">';
-        $line .= "<h2>" . ui_language::translate("Manage Domains") . "</h2>";
-        $line .= "" . ui_language::translate("Choose fom the list of domains below") . "";
-        $line .= "<form name=DisplayDNS action=\"./?module=dns_manager&action=DisplayRecords\" method=\"post\">";
-        $line .= "<br><br>";
-        $line .= "<table class=\"zform\">";
-        $line .= "<tr>";
-        $line .= "<td><select name=\"inDomain\" id=\"inDomain\">";
-        $line .= "<option value=\"\" selected=\"selected\">-- " . ui_language::translate("Select a domain") . " --</option>";
-        $sql = $zdbh->prepare("SELECT * FROM x_vhosts WHERE vh_acc_fk=:userid AND vh_type_in !=2 AND vh_deleted_ts IS NULL");
+        $sql = $zdbh->prepare("SELECT v.vh_id_pk, v.vh_name_vc, v.vh_type_in,
+                (SELECT COUNT(*) FROM x_dns d WHERE d.dn_vhost_fk = v.vh_id_pk AND d.dn_acc_fk = v.vh_acc_fk AND d.dn_deleted_ts IS NULL) AS records
+            FROM x_vhosts v WHERE v.vh_acc_fk=:userid AND v.vh_type_in != 2 AND v.vh_deleted_ts IS NULL ORDER BY v.vh_name_vc ASC");
         $sql->bindParam(':userid', $currentuser['userid']);
         $sql->execute();
-        while ($rowdomains = $sql->fetch()) {
-            $line .= "<option value=\"" . $rowdomains['vh_id_pk'] . "\">" . $rowdomains['vh_name_vc'] . "</option>";
-        }
-        $line .= "</select></td>";
-        $line .= "<td>";
-        $line .= '<button type="submit" class="btn btn-large btn-primary" name="inSelect" value="1"><i class="glyphicon glyphicon-pencil"></i>  ' . ui_language::translate("Edit") . '</button>';
-        $line .= '</td>';
-        $line .= '</tr>';
-        $line .= '</table>';
-        $line .= self::getCSFR_Tag();
-        $line .= '</form>';
-        $line .= '<p>&nbsp;</p>';
-        $line .= '</div>';
-        return $line;
-    }
+        $domains = $sql->fetchAll();
+        $pending = explode(',', (string) ctrl_options::GetSystemOption('dns_hasupdates'));
 
-    /**
-     * Handle the edit/delete buttons of a client list (left over from another module).
-     *
-     * Checks the CSRF token. Refers to self::$clientid and self::DeleteClient(), which
-     * this class does not have.
-     *
-     * @global db_driver $zdbh The panel's database connection.
-     * @global runtime_controller $controller The request controller.
-     * @return void
-     */
-    static function doEditClient()
-    {
-        global $zdbh;
-        global $controller;
-        runtime_csfr::Protect();
-        $currentuser = ctrl_users::GetUserDetail();
-        $sql = $zdbh->prepare("SELECT * FROM x_accounts WHERE ac_reseller_fk=:userid AND ac_deleted_ts IS NULL");
-        $sql->bindParam(':userid', $currentuser['userid']);
-        $sql->execute();
-        while ($rowclients = $sql->fetch()) {
-            if (!fs_director::CheckForEmptyValue($controller->GetControllerRequest('FORM', 'inEdit_' . $rowclients['ac_id_pk'] . ''))) {
-                self::$editdomain = TRUE;
-                self::$clientid = $rowclients['ac_id_pk'];
-                return;
-            }
-            if (!fs_director::CheckForEmptyValue($controller->GetControllerRequest('FORM', 'inDelete_' . $rowclients['ac_id_pk'] . ''))) {
-                self::DeleteClient($rowclients['ac_id_pk']);
-                return;
-            }
+        $line = '<div class="dn" id="dn">';
+        $line .= '<div class="dn-card"><div class="dn-card-head dn-head-row"><div><h4>' . self::t('Your domains') . '</h4><p>'
+            . self::t('Choose a domain to see and change its DNS records: where the website and mail are, name servers, and text records such as SPF and DKIM.') . '</p></div>';
+        if (count($domains) > 8) {
+            $line .= '<input type="search" class="form-control dn-filter" placeholder="' . self::t('Find a domain') . '" aria-label="' . self::t('Find a domain') . '">';
         }
+        $line .= '</div>';
+        if (!$domains) {
+            $line .= '<p class="dn-none">' . self::t('You have no domains yet. Add one in Domains, and its DNS records can be set up here.') . '</p></div></div>';
+            return $line;
+        }
+        $line .= '<div class="dn-scroll"><table class="dn-table dn-domains"><thead><tr><th>' . self::t('Domain') . '</th><th class="dn-num">' . self::t('Records') . '</th><th>' . self::t('Status') . '</th><th class="dn-act"></th></tr></thead><tbody>';
+        foreach ($domains as $d) {
+            $n = (int) $d['records'];
+            if ($n === 0) {
+                $status = '<span class="dn-pill warn">' . self::t('Not set up') . '</span>';
+            } elseif (in_array((string) $d['vh_id_pk'], $pending, true)) {
+                $status = '<span class="dn-pill info">' . self::t('Publishing within 5 minutes') . '</span>';
+            } else {
+                $status = '<span class="dn-pill ok">' . self::t('Published') . '</span>';
+            }
+            $kind = ((int) $d['vh_type_in'] === 3) ? ' <span class="dn-tag">' . self::t('parked') . '</span>' : '';
+            $line .= '<tr data-name="' . self::h($d['vh_name_vc']) . '"><td><div class="dn-domain">' . self::Icon('globe') . '<b>' . self::h($d['vh_name_vc']) . '</b>' . $kind . '</div></td>'
+                . '<td class="dn-num">' . $n . '</td><td>' . $status . '</td><td class="dn-act">'
+                . ($n === 0 ? self::OpenButton($d['vh_id_pk'], 'Set up DNS', 'plus', 'btn-primary btn-sm') : self::OpenButton($d['vh_id_pk'], 'Edit records', 'edit', 'btn-default btn-sm'))
+                . '</td></tr>';
+        }
+        $line .= '</tbody></table></div></div></div>';
+        return $line;
     }
 
     /**
@@ -1101,15 +1103,26 @@ class module_controller extends ctrl_module
                     if ($delete[$NewId] == "false" && !fs_director::CheckForEmptyValue($type[$NewId])) {
                         //HOSTNAME
                         if (isset($hostName[$NewId]) && !fs_director::CheckForEmptyValue($hostName[$NewId]) && $hostName[$NewId] != "@") {
-                            //Check that hostname does not already exist.
-                            $numrows = $zdbh->prepare('SELECT dn_id_pk FROM x_dns WHERE dn_host_vc=:hostName2 AND dn_vhost_fk=:domainID AND dn_deleted_ts IS NULL');
-                            $hostName2 = $hostName[$NewId];
+                            // A host name with a CNAME can have no other record, and a record can
+                            // not be added twice; other types may share a name (A and AAAA for www,
+                            // several TXT records). Records being deleted in this save do not count.
+                            $numrows = $zdbh->prepare('SELECT dn_id_pk, dn_type_vc, dn_target_vc FROM x_dns WHERE dn_host_vc=:hostName2 AND dn_vhost_fk=:domainID AND dn_deleted_ts IS NULL');
+                            $hostName2 = strtolower(trim((string) $hostName[$NewId]));
                             $numrows->bindParam(':hostName2', $hostName2);
                             $numrows->bindParam(':domainID', $domainID);
                             $numrows->execute();
-                            if ($numrows->fetch()) {
-                                self::SetError('Hostnames must be unique.');
-                                return FALSE;
+                            while ($same = $numrows->fetch()) {
+                                if (isset($delete[$same['dn_id_pk']]) && $delete[$same['dn_id_pk']] == "true") {
+                                    continue;
+                                }
+                                if ($type[$NewId] == 'CNAME' || $same['dn_type_vc'] == 'CNAME') {
+                                    self::SetError('A host name with a CNAME record can have no other record.');
+                                    return FALSE;
+                                }
+                                if ($same['dn_type_vc'] == $type[$NewId] && (string) $same['dn_target_vc'] === self::CleanRecord(isset($target[$NewId]) ? $target[$NewId] : '', $type[$NewId])) {
+                                    self::SetError('That record already exists.');
+                                    return FALSE;
+                                }
                             }
 
                             if ($type[$NewId] != "SRV") {
