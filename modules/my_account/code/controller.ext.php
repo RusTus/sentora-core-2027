@@ -58,6 +58,44 @@ class module_controller extends ctrl_module
     }
 
     /**
+     * Template HTML: the language options (as HTML, not a template loop: loops share one
+     * variable, so a loop inside the account form's loop would replace its values).
+     *
+     * @return string HTML option tags.
+     */
+    static function getLanguageOptions()
+    {
+        $out = '';
+        foreach (self::getLangList() as $l) {
+            $out .= '<option value="' . $l['language'] . '"' . ($l['selected'] !== '' ? ' selected' : '') . '>' . $l['label'] . '</option>';
+        }
+        return $out;
+    }
+
+    /**
+     * Template HTML: who is logged in: initials, name, username, account type, package and last login.
+     *
+     * @return string HTML.
+     */
+    static function getAccountCard()
+    {
+        $u = ctrl_users::GetUserDetail();
+        $h = function ($s) { return htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8'); };
+        $name = trim((string) $u['fullname']) !== '' ? (string) $u['fullname'] : (string) $u['username'];
+        $parts = preg_split('/\s+/u', trim($name));
+        $initials = mb_strtoupper(mb_substr($parts[0], 0, 1) . (count($parts) > 1 ? mb_substr(end($parts), 0, 1) : mb_substr($parts[0], 1, 1)));
+        $facts = '<span class="ma-pill">' . $h(ui_language::translate((string) $u['usergroup'])) . '</span>';
+        if ((string) $u['packagename'] !== '') {
+            $facts .= '<span>' . $h(ui_language::translate('Package')) . ' <b>' . $h($u['packagename']) . '</b></span>';
+        }
+        if ((int) $u['lastlogon'] > 0) {
+            $facts .= '<span>' . $h(ui_language::translate('Last login')) . ' <b>' . $h(date('Y-m-d H:i', (int) $u['lastlogon'])) . '</b></span>';
+        }
+        return '<div class="ma-who"><div class="ma-avatar" aria-hidden="true">' . $h($initials) . '</div><div><div class="ma-name">' . $h($name) . '</div>'
+            . '<div class="ma-facts"><span class="ma-user">' . $h($u['username']) . '</span>' . $facts . '</div></div></div>';
+    }
+
+    /**
      * List the panel's languages for the language drop-down (<% loop LangList %>).
      *
      * @return array<int, array<string, string>> Rows with 'language' (code) and 'selected' ('SELECTED' or '').
@@ -76,7 +114,11 @@ class module_controller extends ctrl_module
                 } else {
                     $selected = "";
                 }
-                array_push($res, array('language' => $lang, 'selected' => $selected));
+                $names = array('en' => 'English', 'de' => 'Deutsch', 'fr' => 'Français', 'es' => 'Español', 'it' => 'Italiano', 'nl' => 'Nederlands', 'pt' => 'Português',
+                    'pl' => 'Polski', 'ru' => 'Русский', 'tr' => 'Türkçe', 'sv' => 'Svenska', 'da' => 'Dansk', 'no' => 'Norsk', 'fi' => 'Suomi', 'cs' => 'Čeština', 'hu' => 'Magyar',
+                    'ro' => 'Română', 'el' => 'Ελληνικά', 'ja' => '日本語', 'zh' => '中文', 'ko' => '한국어', 'ar' => 'العربية', 'he' => 'עברית');
+                $label = isset($names[$lang]) ? $names[$lang] . ' (' . $lang . ')' : strtoupper($lang);
+                array_push($res, array('language' => htmlspecialchars($lang, ENT_QUOTES, 'UTF-8'), 'label' => htmlspecialchars($label, ENT_QUOTES, 'UTF-8'), 'selected' => $selected));
             }
         }
         return $res;
@@ -466,11 +508,14 @@ class module_controller extends ctrl_module
         if (!in_array($default, $names, true)) {
             $default = ui_template::DefaultCSS(ctrl_users::SafeTheme(ui_template::GetUserTemplate()));
         }
-        $res = array(array('value' => '', 'label' => htmlspecialchars(ui_language::translate('Theme default') . ' (' . ui_template::CSSLabel($default) . ')', ENT_QUOTES),
-            'selected' => $mine === '' ? 'selected' : ''));
+        $preview = function ($n) { return in_array($n, array('light', 'dark', 'auto'), true) ? $n : 'other'; };
+        $res = array(array('value' => '', 'label' => htmlspecialchars(ui_language::translate('Theme default'), ENT_QUOTES),
+            'detail' => htmlspecialchars(ui_language::translate(ui_template::CSSLabel($default)), ENT_QUOTES), 'preview' => $preview($default),
+            'selected' => $mine === '' ? 'selected' : '', 'checked' => $mine === '' ? 'checked' : ''));
         foreach ($names as $n) {
             $res[] = array('value' => htmlspecialchars($n, ENT_QUOTES), 'label' => htmlspecialchars(ui_language::translate(ui_template::CSSLabel($n)), ENT_QUOTES),
-                'selected' => $mine === $n ? 'selected' : '');
+                'detail' => $n === 'auto' ? htmlspecialchars(ui_language::translate('follows your computer'), ENT_QUOTES) : '', 'preview' => $preview($n),
+                'selected' => $mine === $n ? 'selected' : '', 'checked' => $mine === $n ? 'checked' : '');
         }
         return $res;
     }

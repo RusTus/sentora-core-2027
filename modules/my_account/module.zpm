@@ -1,134 +1,114 @@
 <div class="zmodule_content panel" id="zmodule_header_<@ ModuleName @>">
     <div class="panel-heading">
         <img src="<@ ModuleIcon @>" width="35" height="35" border="0" alt="<@ ModuleName @>">
-
-        <div class="zmodule_title">
-            <@ ModuleName @>
-        </div>
-
+        <div class="zmodule_title"><@ ModuleName @></div>
         <div class="zmodule_desc" id="zmodule_desc_<@ ModuleName @>"><@ ModuleDesc @></div>
-
     </div>
-
     <@ Result @>
+    <link rel="stylesheet" href="modules/my_account/assets/account.css">
 
-    <% loop AccountSettings %>
-    <% endloop %>
+    <div class="ma" id="ma">
+        <@ AccountCard @>
 
-    <div class="zform_wrapper">
-        <h2><: Enter your account details :></h2>
-        <form action="./?module=my_account&action=UpdateAccountSettings" method="post">
-            <table class="table table-striped">
-                <tr>
-                    <th><: Full name :>:</th>
-                    <td><input name="inFullname" type="text" id="inFullname" size="40" value="<& fullname &>" /></td>
-                </tr>
-                <tr>
-                    <th><: Email Address :>:</th>
-                    <td><input name="inEmail" type="text" id="inEmail" size="40" value="<& email &>" /></td>
-                </tr>
-                <tr>
-                    <th><: Phone Number :>:</th>
-                    <td><input name="inPhone" type="text" id="inPhone" size="20" value="<& phone &>" /></td>
-                </tr>
-                <tr>
-                    <th><: Choose Language :>:</th>
-                    <td>
-                        <select name="inLanguage" id="inLanguage" style="width:65px;">
+        <div class="ma-grid">
+            <!-- Profile -->
+            <% loop AccountSettings %>
+            <form class="ma-card ma-profile" action="./?module=my_account&amp;action=UpdateAccountSettings" method="post">
+                <h4><svg class="ma-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg><: Your details :></h4>
+                <div class="ma-fields">
+                    <label class="ma-field"><span><: Full name :></span><input class="form-control" name="inFullname" type="text" id="inFullname" value="<& fullname &>" autocomplete="name"></label>
+                    <label class="ma-field"><span><: Email address :></span><input class="form-control" name="inEmail" type="email" id="inEmail" value="<& email &>" autocomplete="email" required>
+                        <small><: Where the panel sends notices, and password reset links. :></small></label>
+                    <label class="ma-field"><span><: Phone number :></span><input class="form-control" name="inPhone" type="tel" id="inPhone" value="<& phone &>" autocomplete="tel"></label>
+                    <label class="ma-field"><span><: Language :></span>
+                        <select class="form-control" name="inLanguage" id="inLanguage">
+                            <@ LanguageOptions @>
+                        </select></label>
+                    <label class="ma-field ma-wide"><span><: Postal address :></span><textarea class="form-control" name="inAddress" id="inAddress" rows="3" autocomplete="street-address"><& address &></textarea></label>
+                    <label class="ma-field"><span><: Postal code :></span><input class="form-control" name="inPostalCode" type="text" id="inPostalCode" value="<& postcode &>" autocomplete="postal-code"></label>
+                </div>
+                <div class="ma-foot"><@ CSFR_Tag @><button class="btn btn-primary" type="submit"><: Save details :></button>
+                    <a class="ma-link" href="./?module=password_assistant"><: Change your password :></a></div>
+            </form>
+            <% endloop %>
 
-                            <% loop LangList %>
-                            <option value="<& language &>" <& selected &>><& language &></option>"
-                            <% endloop %>
+            <div class="ma-side">
+                <!-- Appearance -->
+                <% if AppearanceAvailable %>
+                <form class="ma-card" action="./?module=my_account&amp;action=SetAppearance" method="post">
+                    <h4><svg class="ma-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18z" fill="currentColor"/></svg><: Appearance :></h4>
+                    <div class="ma-looks" role="radiogroup">
+                        <% loop AppearanceList %>
+                        <label class="ma-look"><input type="radio" name="inAppearance" value="<& value &>" <& checked &>>
+                            <span class="ma-preview p-<& preview &>" aria-hidden="true"><i></i><i></i><i></i></span>
+                            <b><& label &></b><small><& detail &></small></label>
+                        <% endloop %>
+                    </div>
+                    <p class="ma-note"><: Auto follows your computer's light or dark setting. Only you see this choice. :></p>
+                    <div class="ma-foot"><@ CSFR_Tag @><button class="btn btn-primary" type="submit"><: Save appearance :></button></div>
+                </form>
+                <% endif %>
 
-                        </select>
-                    </td>
-                </tr>
-                <% loop AccountSettings %>
-                <% endloop %>
-                <tr>
-                    <th><: Postal Address :>:</th>
-                    <td><textarea name="inAddress" id="inAddress" cols="45" rows="5"><& address &></textarea></td>
-                </tr>
-                <tr>
-                    <th><: Postal Code :>:</th>
-                    <td><input name="inPostalCode" type="text" id="inPostalCode" size="15" value="<& postcode &>" /></td>
-                </tr>
-                <tr>
-                    <th>&nbsp;</th>
-                    <td align="right"><@ CSFR_Tag @><button class="button-loader btn btn-primary" id="button" type="submit" ><: Update Account :></button</td>
-                </tr>
-            </table>
-        </form>
+                <!-- Two-factor login -->
+                <% if TwoFactorAvailable %>
+                <div class="ma-card ma-2fa">
+                    <h4><svg class="ma-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg><: Two-factor login :>
+                        <% if TwoFactorOn %><span class="ma-state on"><: On :></span><% endif %>
+                        <% if TwoFactorPending %><span class="ma-state wait"><: Being set up :></span><% endif %>
+                        <% if TwoFactorOff %><span class="ma-state off"><: Off :></span><% endif %></h4>
+
+                    <% if TwoFactorOff %>
+                    <p><: Protect your login with a 6-digit code from an authenticator app (Google Authenticator, Microsoft Authenticator, Aegis, 1Password and others). A stolen password alone is then not enough. :></p>
+                    <form action="./?module=my_account&amp;action=TwoFactorBegin" method="post">
+                        <button class="btn btn-primary" type="submit"><: Set up two-factor login :></button>
+                        <@ CSFR_Tag @>
+                    </form>
+                    <% endif %>
+
+                    <% if TwoFactorPending %>
+                    <ol class="ma-steps">
+                        <li><: Scan this code with your authenticator app :>
+                            <div class="ma-qr"><@ TwoFactorQr @></div>
+                            <span class="ma-sub"><: Can not scan it? Add an account in the app with this key (time based): :></span>
+                            <code class="ma-key"><@ TwoFactorSecret @></code>
+                            <a class="ma-link" href="<@ TwoFactorUri @>"><: On this phone: open it in the app :></a></li>
+                        <li><: Enter the 6-digit code it shows :>
+                            <form class="ma-code" action="./?module=my_account&amp;action=TwoFactorConfirm" method="post">
+                                <input class="form-control" name="inTwoFactorCode" inputmode="numeric" maxlength="7" autocomplete="one-time-code" placeholder="123 456" required>
+                                <button class="btn btn-primary" type="submit"><: Turn on :></button>
+                                <@ CSFR_Tag @>
+                            </form></li>
+                    </ol>
+                    <form action="./?module=my_account&amp;action=TwoFactorDisable" method="post">
+                        <button class="btn btn-default btn-sm" type="submit"><: Cancel :></button>
+                        <@ CSFR_Tag @>
+                    </form>
+                    <% endif %>
+
+                    <% if TwoFactorOn %>
+                    <@ TwoFactorCodes @>
+                    <div class="ma-row"><span><: Recovery codes left :></span><b class="ma-big"><@ TwoFactorRecoveryLeft @></b></div>
+                    <p class="ma-sub"><: Each recovery code logs you in once if you lose your phone. :></p>
+                    <form class="ma-code" action="./?module=my_account&amp;action=TwoFactorNewCodes" method="post">
+                        <label><span><: New recovery codes (the old ones stop working): enter a current code :></span>
+                            <span class="ma-code-row"><input class="form-control" name="inTwoFactorCode" inputmode="numeric" maxlength="7" autocomplete="one-time-code" placeholder="123 456" required>
+                            <button class="btn btn-default" type="submit"><: Make new codes :></button></span></label>
+                        <@ CSFR_Tag @>
+                    </form>
+                    <% if TwoFactorForced %>
+                    <p class="ma-note"><: This server requires two-factor login for every account, so it can not be turned off. If you lose your phone, ask your administrator. :></p>
+                    <% else %>
+                    <form class="ma-code ma-off" action="./?module=my_account&amp;action=TwoFactorDisable" method="post">
+                        <label><span><: To turn it off, enter a current code :></span>
+                            <span class="ma-code-row"><input class="form-control" name="inTwoFactorCode" inputmode="numeric" maxlength="7" autocomplete="one-time-code" placeholder="123 456" required>
+                            <button class="btn btn-danger" type="submit"><: Turn off :></button></span></label>
+                        <@ CSFR_Tag @>
+                    </form>
+                    <% endif %>
+                    <% endif %>
+                </div>
+                <% endif %>
+            </div>
+        </div>
     </div>
-
-    <% if AppearanceAvailable %>
-    <div class="zform_wrapper">
-        <h2><: Appearance :></h2>
-        <form action="./?module=my_account&action=SetAppearance" method="post" class="form-inline">
-            <table class="table table-striped">
-                <tr>
-                    <th><: Theme variation :>:</th>
-                    <td>
-                        <select name="inAppearance" id="inAppearance">
-                            <% loop AppearanceList %>
-                            <option value="<& value &>" <& selected &>><& label &></option>
-                            <% endloop %>
-                        </select>
-                        <span class="help-block"><: Auto follows your computer's light or dark setting. Only you see this choice. :></span>
-                    </td>
-                </tr>
-                <tr>
-                    <th>&nbsp;</th>
-                    <td align="right"><@ CSFR_Tag @><button class="button-loader btn btn-primary" type="submit"><: Save :></button></td>
-                </tr>
-            </table>
-        </form>
-    </div>
-    <% endif %>
-
-    <% if TwoFactorAvailable %>
-    <div class="zform_wrapper">
-        <h2><: Two-factor login :></h2>
-        <% if TwoFactorOff %>
-        <p><: Protect your login with a 6-digit code from an authenticator app (Google Authenticator, Microsoft Authenticator, Aegis, 1Password and others). :></p>
-        <form action="./?module=my_account&action=TwoFactorBegin" method="post">
-            <button class="btn btn-primary" type="submit"><: Set up two-factor login :></button>
-            <@ CSFR_Tag @>
-        </form>
-        <% endif %>
-        <% if TwoFactorPending %>
-        <p><: Scan this QR code with your authenticator app (Google Authenticator, Microsoft Authenticator, Authy, 1Password and the like): :></p>
-        <div style="display: inline-block; padding: 8px; background: #fff; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 10px;"><@ TwoFactorQr @></div>
-        <p class="text-muted" style="font-size: 13px;"><: If you cannot scan it, add an account in the app with this key (time based) :>: <code style="font-size: 15px"><@ TwoFactorSecret @></code> &nbsp; <: Setting it up on this phone :>: <a href="<@ TwoFactorUri @>"><: Open in app :></a></p>
-        <form action="./?module=my_account&action=TwoFactorConfirm" method="post" class="form-inline">
-            <: Then enter the code it shows :>: <input class="form-control" name="inTwoFactorCode" inputmode="numeric" maxlength="7" size="8" autocomplete="off" required>
-            <button class="btn btn-primary" type="submit"><: Turn on :></button>
-            <@ CSFR_Tag @>
-        </form>
-        <form action="./?module=my_account&action=TwoFactorDisable" method="post" style="margin-top: 8px">
-            <button class="btn btn-default" type="submit"><: Cancel :></button>
-            <@ CSFR_Tag @>
-        </form>
-        <% endif %>
-        <% if TwoFactorOn %>
-        <p><strong><: Two-factor login is on for your account. :></strong></p>
-        <@ TwoFactorCodes @>
-        <p><: Recovery codes left :>: <strong><@ TwoFactorRecoveryLeft @></strong> <span class="text-muted"><: (each logs you in once if you lose your phone) :></span></p>
-        <form action="./?module=my_account&action=TwoFactorNewCodes" method="post" class="form-inline" style="margin-bottom: 10px;">
-            <: To make a new set (the old codes stop working), enter a current code :>: <input class="form-control" name="inTwoFactorCode" inputmode="numeric" maxlength="7" size="8" autocomplete="off" required>
-            <button class="btn btn-default" type="submit"><: Make new codes :></button>
-            <@ CSFR_Tag @>
-        </form>
-        <% if TwoFactorForced %>
-        <p class="text-muted"><: This server requires two-factor login for every account, so it can not be turned off. If you lose your phone, ask your administrator. :></p>
-        <% else %>
-        <form action="./?module=my_account&action=TwoFactorDisable" method="post" class="form-inline">
-            <: To turn it off, enter a current code :>: <input class="form-control" name="inTwoFactorCode" inputmode="numeric" maxlength="7" size="8" autocomplete="off" required>
-            <button class="btn btn-danger" type="submit"><: Turn off :></button>
-            <@ CSFR_Tag @>
-        </form>
-        <% endif %>
-        <% endif %>
-    </div>
-    <% endif %>
 </div>
