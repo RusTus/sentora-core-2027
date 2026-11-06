@@ -1,7 +1,26 @@
 <?php
 
+/**
+ * Forwarders module: OnAfterDeleteClient hook.
+ *
+ * Removes the forwarders of deleted clients from the mail server and marks them
+ * deleted in the panel.
+ *
+ * @package Sentora
+ * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
+ */
+
 DeleteForwardersForDeletedClient();
 
+/**
+ * Mark the forwarders of every deleted client as deleted.
+ *
+ * Includes the mail server's hook file (e.g. postfix.php), which removes the
+ * forwarders' aliases from the mail database, then sets fw_deleted_ts on x_forwarders.
+ *
+ * @global db_driver $zdbh The panel's database connection.
+ * @return void
+ */
 function DeleteForwardersForDeletedClient() {
     global $zdbh;
     $deletedclients = array();

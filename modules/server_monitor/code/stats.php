@@ -25,6 +25,12 @@ if (!$user || (int) $user['usergroupid'] !== 1) {
     exit('{"error":"Administrators only."}');
 }
 
+/**
+ * Read a whole file, quietly.
+ *
+ * @param string $f The file path (e.g. /proc/stat).
+ * @return string The contents, or '' when it can not be read.
+ */
 function sm_read($f)
 {
     $s = @file_get_contents($f);

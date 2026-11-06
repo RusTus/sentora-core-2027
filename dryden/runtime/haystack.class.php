@@ -13,6 +13,9 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  */
+/**
+ * String search helpers.
+ */
 class runtime_haystack {
 
     /**

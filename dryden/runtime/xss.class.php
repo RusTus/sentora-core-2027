@@ -13,6 +13,9 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  */
+/**
+ * Cross-site scripting (XSS) filters for user input before it is shown.
+ */
 class runtime_xss {
 
     /**
@@ -91,7 +94,7 @@ class runtime_xss {
      * Use htmlentities this will by default protect against 99% of attacks
      * @author Sam Mottley (smottley@zpanelcp.com)
      * @param string $data the data that needs cleaning
-     * @param string $ENT specify how to handle quotes
+     * @param int $ENT specify how to handle quotes (ENT_* flags)
      * @param string $type Type of encoding to use
      * @return string The Clean String.
      */
@@ -104,8 +107,9 @@ class runtime_xss {
      * Use htmlspecialchars this will by default protect against 99% of attacks
      * @author Sam Mottley (smottley@zpanelcp.com)
      * @param string $data the data that needs cleaning
-     * @param string $ENT specify how to handle quotes
+     * @param int $ENT specify how to handle quotes (ENT_* flags)
      * @param string $type Type of encoding to use
+     * @param bool $doubleEncoding Encode existing entities again. Default false.
      * @return string The Clean String.
      */
     static public function htmlspecialcharsProtection($data='', $ENT = ENT_QUOTES, $type = 'UTF-8', $doubleEncoding = false) {
@@ -116,8 +120,11 @@ class runtime_xss {
     /**
      * Run though selected cleaners
      * @author Sam Mottley (smottley@zpanelcp.com)
-     * @param Array $settings What cleans you want to run through. True And False. 
      * @param string $data the data that needs cleaning
+     * @param bool[] $settings What cleans you want to run through. True And False. Seven flags:
+     *                         0 fixEntitys, 1 removeAttribute, 2 removeJavaVB, 3 removeCssAttack,
+     *                         4 removeNameSpace, 5 removeHarmfullStrings, 6 htmlentities.
+     *                         htmlspecialchars is always applied.
      * @return string The Clean String.
      */
     static public function xssClean($data='', $settings=array(true, true, true, true, true, true, true)) {

@@ -13,32 +13,43 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  */
+/**
+ * Request controller: holds the request data and dispatches module actions.
+ *
+ * Init() snapshots GET, POST, SESSION and COOKIE, loads the requested module and
+ * calls the module_controller::do<action>() method for a valid POST action.
+ */
 class runtime_controller
 {
 
     /**
-     * @var array All current request 'get' variables.
+     * @var array<int, array<string, mixed>> All current request 'get' variables (index 0 holds $_GET).
      */
     private $vars_get;
 
     /**
-     * @var array All current request 'post' variables.
+     * @var array<int, array<string, mixed>> All current request 'post' variables (index 0 holds $_POST).
      */
     private $vars_post;
 
     /**
-     * @var array All current request 'session' variables.
+     * @var array<int, array<string, mixed>> All current request 'session' variables (index 0 holds $_SESSION).
      */
     private $vars_session;
 
     /**
-     * @var array All current request 'cookie' variables.
+     * @var array<int, array<string, mixed>> All current request 'cookie' variables (index 0 holds $_COOKIE).
      */
     private $vars_cookie;
 
     /**
      * Get the latest requests and updates the values avaliable to the model/view.
+     *
+     * Shows the login template when nobody is logged in, loads the requested module
+     * and, for a CSRF-valid POST with an 'action', calls module_controller::do<action>().
+     *
      * @author Bobby Allen (ballen@bobbyallen.me)
+     * @return void
      */
     public function Init()
     {
@@ -82,7 +93,7 @@ class runtime_controller
      * @author Bobby Allen (ballen@bobbyallen.me)
      * @param string $type The type of request data to return.
      * @param string $name The named key of the array.
-     * @retrun mixed Returns that array data if avaliable (is set) otherwise will return 'false'.
+     * @return mixed The request value if it is set (string, array or any session value), otherwise false.
      */
     public function GetControllerRequest($type, $name)
     {
@@ -118,7 +129,7 @@ class runtime_controller
      * Grabs the list of all controller requests for a given type.
      * @author Bobby Allen (ballen@bobbyallen.me)
      * @param string $type What type of requests would you like to see? (URL, USER, FORM or COOKIE)
-     * @return array List of all set variables for the requested type.
+     * @return array<string, mixed> List of all set variables for the requested type.
      */
     public function GetAllControllerRequests($type = "URL")
     {
@@ -136,7 +147,7 @@ class runtime_controller
 
     /**
      * Gets the current framework requested action.
-     * @return boolean
+     * @return string|false The 'action' URL value, or false when none is set.
      */
     public function GetAction()
     {
@@ -147,7 +158,7 @@ class runtime_controller
 
     /**
      * Gets the current framework requested module 'options'.
-     * @return boolean
+     * @return string|false The 'options' URL value, or false when none is set.
      */
     public function GetOptions()
     {
@@ -158,7 +169,7 @@ class runtime_controller
 
     /**
      * Gets and returns the name of the current module.
-     * @return boolean
+     * @return string|false The 'module' URL value, or false when none is set.
      */
     public function GetCurrentModule()
     {
@@ -170,9 +181,9 @@ class runtime_controller
     /**
      * Displays Controller debug infomation (mainly for module development and debugging)
      * @author Bobby Allen (ballen@bobbyallen.me)
-     * @global string $script_memory The current amount of memory that the script it using.
-     * @global int $starttime The microtime of when the script started executing.
-     * @return string HTML output of the debug infomation.
+     * @global mixed $script_memory Never assigned anywhere in the panel (null); passed to debug_execution::ScriptMemoryUsage(), which ignores it.
+     * @global float $starttime The microtime of when the script started executing (set in dryden/loader.inc.php).
+     * @return string|false HTML output of the debug infomation, or false when 'debug' is not in the URL.
      */
     public function OutputControllerDebug()
     {
@@ -220,7 +231,7 @@ class runtime_controller
     /**
      * Checks if the current script is running in CLI mode (eg. as a cron job)
      * @author Bobby Allen (ballen@bobbyallen.me)
-     * @return boolean
+     * @return bool True when there is no HTTP User-Agent header.
      */
     static function IsCLI()
     {
@@ -232,7 +243,8 @@ class runtime_controller
     /**
      * Used in hooks to communicate with the modules controller.ext.php
      * @author Bobby Allen (ballen@bobbyallen.me)
-     * @param string $module_path The full path to the module.
+     * @param string $module_path The full path to the module's hooks directory (the hook file's dirname).
+     * @return void
      */
     static function ModuleControllerCode($module_path)
     {

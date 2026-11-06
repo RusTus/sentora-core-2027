@@ -11,9 +11,15 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  */
+/**
+ * Services module: XMWS web service methods.
+ */
 class webservice extends ws_xmws
 {
 
+    /**
+     * @var array<string, int> Service name => local TCP port checked by GetServiceStatus().
+     */
     static $localports = array(
         'http' => 80,
 		'https' => 443,
@@ -31,7 +37,7 @@ class webservice extends ws_xmws
     /**
      * Returns the status of all standard Sentora hosting ports and the current server uptime.
      * @author Bobby Allen (ballen@bobbyallen.me)
-     * @return type 
+     * @return array<string, string> Response data: 'response' (empty) and 'content' (portstatus section and serveruptime tag).
      */
     function GetServiceStatus()
     {
@@ -54,6 +60,11 @@ class webservice extends ws_xmws
         return $dataobject->getDataObject();
     }
 
+    /**
+     * Check one local port (request tag: port).
+     *
+     * @return array<string, string> Response data: 'response' (empty) and 'content' (portstatus section: port, status 1 or 0).
+     */
     function GetPortStatus()
     {
         $request_data = $this->RawXMWSToArray($this->wsdata);

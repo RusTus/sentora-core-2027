@@ -12,14 +12,17 @@
  * @link http://www.sentora.org
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  */
+/**
+ * Output buffering helper: captures what a piece of code prints.
+ */
 class runtime_outputbuffer
 {
 
     /**
      * Captures the content from the output buffer.
      * @author Bobby Allen (ballen@bobbyallen.me)
-     * @param callable command The code of which to return the output buffer for.
-     * @return string The output buffer contents.
+     * @param Closure $command The code of which to return the output buffer for.
+     * @return string|false The output buffer contents (false if buffering failed).
      */
     public static function Capture(Closure $command)
     {

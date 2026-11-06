@@ -1,7 +1,26 @@
 <?php
 
+/**
+ * Distribution Lists module: OnAfterDeleteClient hook.
+ *
+ * Removes the distribution lists of deleted clients from the mail server and marks
+ * them deleted in the panel.
+ *
+ * @package Sentora
+ * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
+ */
+
 DeleteDistListForDeletedClient();
 
+/**
+ * Mark the distribution lists of every deleted client as deleted.
+ *
+ * Includes the mail server's hook file (e.g. postfix.php), which removes the lists'
+ * aliases from the mail database, then sets dl_deleted_ts on x_distlists.
+ *
+ * @global db_driver $zdbh The panel's database connection.
+ * @return void
+ */
 function DeleteDistListForDeletedClient() {
     global $zdbh;
     $deletedclients = array();

@@ -1,5 +1,15 @@
 <?php
 
+/**
+ * Usage Viewer module: pChart 3D pie chart example.
+ *
+ * Draws a pie chart from fixed sample data (the 'used' URL value is read but not
+ * used); the module's pages use etc/lib/pChart2/sentora/z3DPie.php instead.
+ *
+ * @package Sentora
+ * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
+ */
+
 /* CAT:Pie charts */
 
 /* pChart library inclusions */

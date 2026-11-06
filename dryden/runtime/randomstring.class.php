@@ -14,13 +14,16 @@
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  */
 
+/**
+ * Cryptographically secure random strings for tokens, keys and salts.
+ */
 class runtime_randomstring{
     /**
      * Generate a random string
      * @author Sam Mottley (smottley@zpanelcp.com)
-     * @param int $size The size of the hash default 50 
-     * @param string $charachters list of all allowed chars
-     * @param string $hash True or False or Type of algeritherm to hash the the mixed string with. Hash may break other settings depending on the argirithom selected.
+     * @param int|false $size The size of the hash default 50 (false or below 1 also means 50)
+     * @param string $characters list of all allowed chars
+     * @param bool|string $hash True or False or Type of algeritherm to hash the the mixed string with. Any non-false value now gives a sha256 hex digest (the algorithm name is ignored).
      * @return string A random string
      */    
      static public function randomHash($size = 50, $characters='1234567890qwertyuiopasdfghjklzxcvbnm', $hash = false) {

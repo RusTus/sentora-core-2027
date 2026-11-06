@@ -1,7 +1,25 @@
 <?php
 
+/**
+ * MySQL Users module: OnAfterDeleteClient hook.
+ *
+ * Drops the MySQL users of deleted clients and marks them deleted in the panel.
+ *
+ * @package Sentora
+ * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
+ */
+
 DeleteClientDatabaseUser();
 
+/**
+ * Drop the MySQL users of every deleted client.
+ *
+ * For each user: DROP USER in MySQL (when it exists), set mu_deleted_ts and delete
+ * its x_mysql_dbmap rows.
+ *
+ * @global db_driver $zdbh The panel's database connection.
+ * @return false|null False when a database error stopped it, otherwise null.
+ */
 function DeleteClientDatabaseUser() {
     global $zdbh;
     $sql = "SELECT * FROM x_accounts WHERE ac_deleted_ts IS NOT NULL";

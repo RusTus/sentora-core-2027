@@ -26,32 +26,66 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
  */
+/**
+ * Manage Clients module: controller.
+ *
+ * Lets administrators and resellers list, create, edit, disable, delete and move
+ * their client accounts, and reset a client's two-factor login.
+ */
 class module_controller extends ctrl_module
 {
 
+    /** @var mixed Not used. */
     static $complete;
+    /** @var mixed Not used. */
     static $error;
+    /** @var bool|null True when the user name is already taken. */
     static $alreadyexists;
+    /** @var bool|null True when the user name has invalid characters. */
     static $badname;
+    /** @var bool|null True when the password does not meet the character rules. */
 	static $badpass;
+    /** @var bool|null True when the email address is not valid. */
     static $bademail;
+    /** @var bool|null True when the password is shorter than password_minlength. */
     static $badpasswordlength;
+    /** @var bool|null True when no user name was given. */
     static $userblank;
+    /** @var bool|null True when no email address was given. */
     static $emailblank;
+    /** @var bool|null True when no password was given. */
     static $passwordblank;
+    /** @var bool|null True when no (or an unknown) package was chosen. */
     static $packageblank;
+    /** @var bool|null True when no (or an unknown) group was chosen. */
     static $groupblank;
+    /** @var bool|null True when the last change was saved (shown by getResult()). */
     static $ok;
+    /** @var mixed Not used. */
     static $edit;
+    /** @var mixed Not used. */
     static $clientid;
+    /** @var mixed Not used. */
     static $clientpkgid;
+    /** @var bool|null True after a client was created, so the create form is shown empty. */
     static $resetform;
+    /** @var bool|null True when the email address is already used by another account. */
     static $not_unique_email;
+    /** @var string|null Reset two-factor: the client's name (null when nothing was reset). */
     static $tfreset = null; // Reset two-factor: the client's name
+    /** @var string|null The account already using the address, if the viewer may know it ('' when not). */
     static $email_owner; // the account already using the address, if the viewer may know it
 
     /**
-     * The 'worker' methods.
+     * List the enabled client accounts of a reseller (start of the 'worker' methods).
+     *
+     * The 'zadmin' account is left out. Each row is the client's ctrl_users::GetUserDetail()
+     * plus 'created', 'diskspacereadable', 'diskspacequotareadable', 'bandwidthreadable',
+     * 'bandwidthquotareadable', 'numclients' and 'tfreset' (reset button HTML or '').
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $uid Optional. The reseller's account ID; 0 lists every enabled account. Default 0.
+     * @return array<int, array<string, mixed>>|false One row per client; false when there are none.
      */
     static function ListClients($uid = 0)
     {
@@ -108,6 +142,16 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * List the reseller's clients that a deleted client's accounts can be moved to.
+     *
+     * Only clients in the Administrators or Resellers group, other than $moveid.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $moveid The ID of the client being deleted (left out of the list).
+     * @param int|string $uid The reseller's account ID.
+     * @return array<int, array<string, mixed>>|false One row per client: 'moveclientid', 'moveclientname'; false when the reseller has no clients.
+     */
     static function ListAllClients($moveid, $uid)
     {
         global $zdbh;
@@ -139,6 +183,16 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * List the disabled client accounts of a reseller.
+     *
+     * Each row is the client's ctrl_users::GetUserDetail() plus the readable disk and
+     * bandwidth usage and quota fields.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $uid The reseller's account ID.
+     * @return array<int, array<string, mixed>>|false One row per client; false when there are none.
+     */
     static function ListDisabledClients($uid)
     {
         global $zdbh;
@@ -168,6 +222,13 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Get the profile of one client account (cleaned for HTML output).
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string|null $uid The client's account ID.
+     * @return array<int, array<string, mixed>>|false A single row: 'fullname', 'username', 'userid', 'postcode', 'address', 'phone', 'email'; false when there is no profile.
+     */
     static function ListCurrentClient($uid)
     {
         global $zdbh;
@@ -198,6 +259,16 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * List the user groups an account may give its clients.
+     *
+     * Administrators get every group of their reseller (with 'groupselected'), others
+     * only the "Users" group.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $uid The account ID.
+     * @return array<int, array<string, mixed>>|false One row per group: 'groupid', 'groupname', 'groupselected'; false when there are none.
+     */
     static function ListGroups($uid)
     {
         global $zdbh;
@@ -235,6 +306,15 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * List the groups for the edit form, with the client's current group selected.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string|false $uid The client's account ID (from ?other=).
+     * @param int|string $rid The reseller ID whose groups are listed.
+     * @param int|string $id The account ID of the viewer (decides whether all groups are shown).
+     * @return array<int, array<string, mixed>>|false One row per group: 'groupid', 'groupname', 'groupselected'; false when there are none.
+     */
     static function ListCurrentGroups($uid, $rid, $id)
     {
         global $zdbh;
@@ -277,6 +357,13 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * List the packages of a reseller.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $uid The reseller's account ID.
+     * @return array<int, array<string, mixed>>|false One row per package: 'packageid', 'packagename'; false when there are none.
+     */
     static function ListPackages($uid)
     {
         global $zdbh;
@@ -300,6 +387,14 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * List the reseller's packages for the edit form, with the client's package selected.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string|false $uid The client's account ID (from ?other=).
+     * @param int|string $rid The reseller's account ID.
+     * @return array<int, array<string, mixed>>|false One row per package: 'packageid', 'packagename', 'packageselected'; false when there are none.
+     */
     static function ListCurrentPackages($uid, $rid)
     {
         global $zdbh;
@@ -329,6 +424,17 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Set one column of a client's x_accounts row.
+     *
+     * Not called anywhere. The column name is bound as an SQL parameter, which does not work.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $userid The client's account ID.
+     * @param string $column The column name.
+     * @param mixed $value The new value.
+     * @return true Always true.
+     */
     static function SetClientAccount($userid, $column, $value)
     {
         global $zdbh;
@@ -344,6 +450,17 @@ class module_controller extends ctrl_module
         return true;
     }
 
+    /**
+     * Set one column of a client's x_profiles row.
+     *
+     * Not called anywhere. The column name is bound as an SQL parameter, which does not work.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $userid The client's account ID.
+     * @param string $column The column name.
+     * @param mixed $value The new value.
+     * @return true Always true.
+     */
     static function SetClientProfile($userid, $column, $value)
     {
         global $zdbh;
@@ -357,6 +474,17 @@ class module_controller extends ctrl_module
         return true;
     }
 
+    /**
+     * Delete a client and move its own clients, packages and groups to another account.
+     *
+     * Marks the account deleted (the OnAfterDeleteClient hooks then clean up its
+     * mailboxes, databases and so on). Sets self::$ok.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $userid The client's account ID.
+     * @param int|string $moveid The account that takes over the client's clients, packages and groups.
+     * @return true Always true.
+     */
     static function ExecuteDeleteClient($userid, $moveid)
     {
         global $zdbh;
@@ -395,6 +523,25 @@ class module_controller extends ctrl_module
         return true;
     }
 
+    /**
+     * Save the edit form for a client.
+     *
+     * Optionally sets a new password, updates the account and profile and enables or
+     * disables the account. Sets self::$ok on success.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $clientid The client's account ID.
+     * @param int|string $package The package ID.
+     * @param int|string $enabled 1 enabled, 0 disabled.
+     * @param int|string $group The group ID.
+     * @param string $fullname Full name.
+     * @param string $email Email address.
+     * @param string $address Postal address.
+     * @param string $post Postcode.
+     * @param string $phone Phone number.
+     * @param string $newpass New password, or '' to keep the current one.
+     * @return bool True when saved, false when the new password is not valid.
+     */
     static function ExecuteUpdateClient($clientid, $package, $enabled, $group, $fullname, $email, $address, $post, $phone, $newpass)
     {
         global $zdbh;
@@ -451,6 +598,13 @@ class module_controller extends ctrl_module
         return true;
     }
 
+    /**
+     * Enable a client account.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $userid The client's account ID.
+     * @return true Always true.
+     */
     static function EnableClient($userid)
     {
         runtime_hook::Execute('OnBeforeEnableClient');
@@ -462,6 +616,13 @@ class module_controller extends ctrl_module
         return true;
     }
 
+    /**
+     * Disable a client account.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $userid The client's account ID.
+     * @return true Always true.
+     */
     static function DisableClient($userid)
     {
         runtime_hook::Execute('OnBeforeDisableClient');
@@ -473,6 +634,12 @@ class module_controller extends ctrl_module
         return true;
     }
 
+    /**
+     * Build the checked attributes of the enabled/disabled radio buttons.
+     *
+     * @param int|string|false $userid The client's account ID.
+     * @return array<int, array<string, string>> One row: 'echecked', 'dchecked' ("CHECKED" or '').
+     */
     static function CheckEnabledHTML($userid)
     {
         $currentuser = ctrl_users::GetUserDetail($userid);
@@ -489,6 +656,13 @@ class module_controller extends ctrl_module
         return $res;
     }
 
+    /**
+     * Check whether a reseller has at least one package.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $userid The reseller's account ID.
+     * @return bool True when it has a package (or the query failed).
+     */
     static function CheckHasPackage($userid)
     {
         global $zdbh;
@@ -504,6 +678,28 @@ class module_controller extends ctrl_module
         return true;
     }
 
+    /**
+     * Create a client account.
+     *
+     * Validates the input, inserts the account, profile and bandwidth rows and, when
+     * asked, emails the welcome message. The daemon creates the account's folders.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $uid The reseller's account ID.
+     * @param string $username The new user name.
+     * @param int|string $packageid The package ID.
+     * @param int|string $groupid The group ID.
+     * @param string $fullname Full name.
+     * @param string $email Email address.
+     * @param string $address Postal address.
+     * @param string $post Postcode.
+     * @param string $phone Phone number.
+     * @param string $password The password.
+     * @param int|string $sendemail Non-zero to send the welcome email.
+     * @param string $emailsubject Welcome email subject ({{username}}, {{password}}, {{fullname}} are replaced).
+     * @param string $emailbody Welcome email body (also {{controlpanelurl}}).
+     * @return bool True when created, false when validation failed.
+     */
     static function ExecuteCreateClient($uid, $username, $packageid, $groupid, $fullname, $email, $address, $post, $phone, $password, $sendemail, $emailsubject, $emailbody)
     {
         global $zdbh;
@@ -574,9 +770,9 @@ class module_controller extends ctrl_module
             }
             $port = ctrl_options::GetSystemOption('sentora_port');
             $domain = ctrl_options::GetSystemOption('sentora_domain');
-            # If using non-standard port
+            // If using non-standard port
             if ($port !== "80" && $port !== "443" && !empty($port)) {
-                # Append port to domain
+                // Append port to domain
                 $domain .= ":" . $port;
             }
             $emailsubject = str_replace("{{username}}", $username, $emailsubject);
@@ -603,6 +799,10 @@ class module_controller extends ctrl_module
      * Which account already uses an email address, as far as the viewer may know:
      * administrators see any account; a reseller only their own clients (otherwise
      * an empty string, so other resellers' clients can not be found by trying addresses)
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param string $email The email address.
+     * @return string The account's user name, or ''.
      */
     static function EmailOwnerFor($email)
     {
@@ -620,6 +820,19 @@ class module_controller extends ctrl_module
         return '';
     }
 
+    /**
+     * Validate a new client.
+     *
+     * Sets the matching error flag (self::$userblank, self::$alreadyexists, ...) on failure.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param string $username The user name.
+     * @param int|string $packageid The package ID.
+     * @param int|string $groupid The group ID.
+     * @param string $email The email address.
+     * @param string $password The password.
+     * @return bool|null True when the client can be created; false (or null for an unknown group) when not.
+     */
     static function CheckCreateForErrors($username, $packageid, $groupid, $email, $password)
     {
         global $zdbh;
@@ -732,12 +945,24 @@ class module_controller extends ctrl_module
         return true;
     }
 
+	/**
+	 * Check the password rules: a digit, a lower and an upper case letter (or ends in '-').
+	 *
+	 * @param string $password The password.
+	 * @return bool True when the password is acceptable.
+	 */
 	static function IsValidPassword($password)
     {
         //return preg_match('/(?=.*\d)(?=.*[a-z])(?=.*[A-Z]).{6,}/', $password) || preg_match('/-$/', $password) == 1;
 		return preg_match('/(?=.*\d)(?=.*[a-z])(?=.*[A-Z])/', $password) || preg_match('/-$/', $password) == 1;
     }
 	
+	/**
+	 * Check an email address with PHP's email filter.
+	 *
+	 * @param string $email The email address.
+	 * @return bool True when valid.
+	 */
 	static function IsValidEmail($email)
 	{
 		if (!filter_var($email, FILTER_SANITIZE_EMAIL))
@@ -747,6 +972,12 @@ class module_controller extends ctrl_module
 		return true;
 	}
 
+    /**
+     * Check a user name: letters, digits and '-', 1-63 characters, not ending in '-'.
+     *
+     * @param string $username The user name.
+     * @return bool True when valid.
+     */
     static function IsValidUserName($username)
     {
         if (!preg_match('/^[a-z\d][a-z\d-]{0,62}$/i', $username) || preg_match('/-$/', $username)) {
@@ -755,6 +986,12 @@ class module_controller extends ctrl_module
         return true;
     }
 
+    /**
+     * Read the welcome email template (setting 'welcome_message').
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return string|false The template, or false when the setting does not exist.
+     */
     static function DefaultEmailBody()
     {
         global $zdbh;
@@ -774,9 +1011,10 @@ class module_controller extends ctrl_module
 
     /**
      * Checks if the user already exists in the x_accounts table.
-     * @global type $zdbh The ZPanelX database handle.
-     * @param type $username The username to check against.
-     * @return boolean
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param string|null $username The username to check against.
+     * @return bool True when it exists (or the query failed).
      */
     static function CheckUserExists($username)
     {
@@ -797,8 +1035,11 @@ class module_controller extends ctrl_module
 
     /**
      * Check if the Shadowing module is enabled/exists.
-     * @global type $zdbh The ZPanelX database handle.
-     * @return boolean
+     *
+     * Template flag <% if ShadowEnabled %>.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return bool True when it is enabled (or the query failed).
      */
     static function getShadowEnabled()
     {
@@ -821,7 +1062,10 @@ class module_controller extends ctrl_module
      */
 
     /**
-     * Webinterface sudo methods.
+     * Handle the create client form (start of the web interface methods).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return bool True when the client was created.
      */
     static function doCreateClient()
     {
@@ -847,6 +1091,12 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Handle the client list buttons: Edit, Delete (redirect and exit) or Reset two-factor.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return void
+     */
     static function doEditClient()
     {
         global $controller;
@@ -872,6 +1122,12 @@ class module_controller extends ctrl_module
         return;
     }
 
+    /**
+     * Handle the disabled client list buttons: Edit or Delete (redirect and exit).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return void
+     */
     static function doEditDisabledClient()
     {
         global $controller;
@@ -891,6 +1147,12 @@ class module_controller extends ctrl_module
         return;
     }
 
+    /**
+     * Handle the delete confirmation form.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return bool True when deleted; false when the client or move target is not allowed.
+     */
     static function doDeleteClient()
     {
         global $controller;
@@ -906,6 +1168,12 @@ class module_controller extends ctrl_module
         return false;
     }
 
+    /**
+     * Handle the edit client form.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return bool True when saved.
+     */
     static function doUpdateClient()
     {
         global $controller;
@@ -921,6 +1189,11 @@ class module_controller extends ctrl_module
         return false;
     }
 
+    /**
+     * Template loop <% loop ClientList %>: the logged-in reseller's enabled clients.
+     *
+     * @return array<int, array<string, mixed>>|false See ListClients().
+     */
     static function getClientList()
     {
         $currentuser = ctrl_users::GetUserDetail();
@@ -932,6 +1205,12 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Template loop <% loop AllClientList %>: accounts the client in ?other= can be moved to.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return array<int, array<string, mixed>>|false See ListAllClients().
+     */
     static function getAllClientList()
     {
         global $controller;
@@ -945,6 +1224,11 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Template loop <% loop DisabledClientList %>: the logged-in reseller's disabled clients.
+     *
+     * @return array<int, array<string, mixed>>|false See ListDisabledClients().
+     */
     static function getDisabledClientList()
     {
         $currentuser = ctrl_users::GetUserDetail();
@@ -956,6 +1240,12 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * The profile of the client in ?other=.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return array<int, array<string, mixed>>|false See ListCurrentClient().
+     */
     static function getCurrentClient()
     {
         global $controller;
@@ -971,6 +1261,9 @@ class module_controller extends ctrl_module
     /**
      * A group this account may give a client: one of the groups it is offered
      * (owned by its reseller), and never Administrators unless it is an administrator.
+     *
+     * @param mixed $gid The group ID from the form.
+     * @return bool True when the group may be used.
      */
     static function AllowedGroup($gid)
     {
@@ -986,6 +1279,12 @@ class module_controller extends ctrl_module
         return false;
     }
 
+    /**
+     * Template loop <% loop GroupList %>: groups the logged-in user may give a new client.
+     *
+     * @global runtime_controller $controller The request controller (not used).
+     * @return array<int, array<string, mixed>>|false One row per group: 'groupid', 'groupname', 'groupselected'; false when there are none.
+     */
     static function getGroupList()
     {
         global $controller;
@@ -999,6 +1298,12 @@ class module_controller extends ctrl_module
         return count($groups) ? $groups : false;
     }
 
+    /**
+     * Template loop <% loop CurrentGroupList %>: groups for the edit form.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return array<int, array<string, mixed>>|false See ListCurrentGroups().
+     */
     static function getCurrentGroupList()
     {
         global $controller;
@@ -1006,6 +1311,12 @@ class module_controller extends ctrl_module
         return self::ListCurrentGroups($controller->GetControllerRequest('URL', 'other'), $currentuser['resellerid'], $currentuser['userid']);
     }
 
+    /**
+     * Template loop <% loop PackageList %>: the logged-in reseller's packages.
+     *
+     * @global runtime_controller $controller The request controller (not used).
+     * @return array<int, array<string, mixed>>|false See ListPackages().
+     */
     static function getPackageList()
     {
         global $controller;
@@ -1013,6 +1324,12 @@ class module_controller extends ctrl_module
         return self::ListPackages($currentuser['userid']);
     }
 
+    /**
+     * Template loop <% loop CurrentPackageList %>: packages for the edit form.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return array<int, array<string, mixed>>|false See ListCurrentPackages().
+     */
     static function getCurrentPackageList()
     {
         global $controller;
@@ -1020,12 +1337,24 @@ class module_controller extends ctrl_module
         return self::ListCurrentPackages($controller->GetControllerRequest('URL', 'other'), $currentuser['userid']);
     }
 
+    /**
+     * Template loop <% loop CheckEnabledHTML %>: the enabled/disabled radio states.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return array<int, array<string, string>> See CheckEnabledHTML().
+     */
     static function getCheckEnabledHTML()
     {
         global $controller;
         return self::CheckEnabledHTML($controller->GetControllerRequest('URL', 'other'));
     }
 
+    /**
+     * Template flag <% if HasPackage %>: does the logged-in reseller have a package?
+     *
+     * @global runtime_controller $controller The request controller (not used).
+     * @return bool
+     */
     static function getHasPackage()
     {
         global $controller;
@@ -1033,6 +1362,12 @@ class module_controller extends ctrl_module
         return self::CheckHasPackage($currentuser['userid']);
     }
 
+    /**
+     * Whether the logged-in user has packages (same check as getHasPackage()).
+     *
+     * @global runtime_controller $controller The request controller (not used).
+     * @return bool
+     */
     static function getIsReseller()
     {
         global $controller;
@@ -1040,6 +1375,12 @@ class module_controller extends ctrl_module
         return self::CheckHasPackage($currentuser['userid']);
     }
 
+    /**
+     * Template flag <% if isCreateClient %>: show the list and create form?
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return bool True when there is no ?show=.
+     */
     static function getisCreateClient()
     {
         global $controller;
@@ -1049,6 +1390,14 @@ class module_controller extends ctrl_module
         return false;
     }
 
+    /**
+     * Template flag <% if isDeleteClient %>: show the delete view?
+     *
+     * @global runtime_controller $controller The request controller.
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string|null $uid Optional. The account ID. Default null (the logged-in user).
+     * @return bool|null True when ?show=Delete and the client in ?other= is the user's; null when it is not.
+     */
     static function getisDeleteClient($uid = null)
     {
         global $controller;
@@ -1074,6 +1423,14 @@ class module_controller extends ctrl_module
         return (isset($urlvars['show'])) && ($urlvars['show'] == "Delete");
     }
 
+    /**
+     * Template flag <% if isEditClient %>: show the edit view?
+     *
+     * @global runtime_controller $controller The request controller.
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string|null $uid Optional. The account ID. Default null (the logged-in user).
+     * @return bool|null True when ?show=Edit and the client in ?other= is the user's; null when it is not.
+     */
     static function getisEditClient($uid = null)
     {
         global $controller;
@@ -1099,6 +1456,12 @@ class module_controller extends ctrl_module
         return (isset($urlvars['show'])) && ($urlvars['show'] == "Edit");
     }
 
+    /**
+     * Template value <@ EditCurrentName @>: user name of the client in ?other=.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return mixed The value ('' when there is no ?other=; null when there is no profile).
+     */
     static function getEditCurrentName()
     {
         global $controller;
@@ -1110,6 +1473,12 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Template value <@ EditCurrentEmail @>: email of the client in ?other=.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return mixed The value ('' when there is no ?other=; null when there is no profile).
+     */
     static function getEditCurrentEmail()
     {
         global $controller;
@@ -1121,6 +1490,12 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Template value <@ EditCurrentFullName @>: full name of the client in ?other=.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return mixed The value ('' when there is no ?other=; null when there is no profile).
+     */
     static function getEditCurrentFullName()
     {
         global $controller;
@@ -1132,6 +1507,12 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Template value <@ EditCurrentPost @>: postcode of the client in ?other=.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return mixed The value ('' when there is no ?other=; null when there is no profile).
+     */
     static function getEditCurrentPost()
     {
         global $controller;
@@ -1143,6 +1524,12 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Template value <@ EditCurrentID @>: account ID of the client in ?other=.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return mixed The value ('' when there is no ?other=; null when there is no profile).
+     */
     static function getEditCurrentID()
     {
         global $controller;
@@ -1154,6 +1541,12 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Template value <@ EditCurrentAddress @>: postal address of the client in ?other=.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return mixed The value ('' when there is no ?other=; null when there is no profile).
+     */
     static function getEditCurrentAddress()
     {
         global $controller;
@@ -1165,6 +1558,12 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Template value <@ EditCurrentPhone @>: phone number of the client in ?other=.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return mixed The value ('' when there is no ?other=; null when there is no profile).
+     */
     static function getEditCurrentPhone()
     {
         global $controller;
@@ -1176,12 +1575,24 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Template value <@ DefaultEmailBody @>: the welcome email template.
+     *
+     * @global runtime_controller $controller The request controller (not used).
+     * @return string|false See DefaultEmailBody().
+     */
     static function getDefaultEmailBody()
     {
         global $controller;
         return self::DefaultEmailBody();
     }
 
+    /**
+     * Template value <@ FormName @>: the posted user name, to refill the create form.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return mixed The posted value, or null after a successful create or when not posted.
+     */
     static function getFormName()
     {
         global $controller;
@@ -1192,6 +1603,12 @@ class module_controller extends ctrl_module
         return;
     }
 
+    /**
+     * Template value <@ FormFullName @>: the posted full name, to refill the create form.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return mixed The posted value, or null after a successful create or when not posted.
+     */
     static function getFormFullName()
     {
         global $controller;
@@ -1202,6 +1619,12 @@ class module_controller extends ctrl_module
         return;
     }
 
+    /**
+     * Template value <@ FormEmail @>: the posted email, to refill the create form.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return mixed The posted value, or null after a successful create or when not posted.
+     */
     static function getFormEmail()
     {
         global $controller;
@@ -1212,6 +1635,12 @@ class module_controller extends ctrl_module
         return;
     }
 
+    /**
+     * Template value <@ FormAddress @>: the posted address, to refill the create form.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return mixed The posted value, or null after a successful create or when not posted.
+     */
     static function getFormAddress()
     {
         global $controller;
@@ -1222,6 +1651,12 @@ class module_controller extends ctrl_module
         return;
     }
 
+    /**
+     * Template value <@ FormPost @>: the posted postcode, to refill the create form.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return mixed The posted value, or null after a successful create or when not posted.
+     */
     static function getFormPost()
     {
         global $controller;
@@ -1232,6 +1667,12 @@ class module_controller extends ctrl_module
         return;
     }
 
+    /**
+     * Template value <@ FormPhone @>: the posted phone number, to refill the create form.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return mixed The posted value, or null after a successful create or when not posted.
+     */
     static function getFormPhone()
     {
         global $controller;
@@ -1255,6 +1696,11 @@ class module_controller extends ctrl_module
         return $password;
     }
 */
+    /**
+     * Template value <@ MinPassLength @>: the minimum password length shown in the form.
+     *
+     * @return int|string The 'password_minlength' option (a string) when above 9, otherwise 9.
+     */
     static function getMinPassLength()
     {
         $minpasswordlength = ctrl_options::GetSystemOption('password_minlength');
@@ -1267,6 +1713,11 @@ class module_controller extends ctrl_module
         return $uselength;
     }
 
+    /**
+     * Template value <@ Result @>: the outcome of the last action.
+     *
+     * @return string|null The error or success message HTML, or null when there is none.
+     */
     static function getResult()
     {
         if (!fs_director::CheckForEmptyValue(self::$userblank)) {

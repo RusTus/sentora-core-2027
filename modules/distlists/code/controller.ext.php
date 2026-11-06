@@ -26,22 +26,42 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
  */
+/**
+ * Distribution Lists module: controller.
+ *
+ * Lists, creates and deletes mail distribution lists and their members; the mail
+ * server specific file (e.g. code/postfix.php) is included to update the mail database.
+ */
 class module_controller extends ctrl_module
 {
 
+    /** @var bool|null True when the last change was saved (shown by getResult()). */
     static $ok;
+    /** @var bool|null Not used. */
     static $edit;
+    /** @var bool|null True when the address is already used by a mailbox, alias, forwarder or list. */
     static $alreadyexists;
+    /** @var bool|null True when the address is not a valid email address. */
     static $validemail;
+    /** @var bool|null True when no address was given. */
     static $noaddress;
+    /** @var bool|null True when the domain is not one of the user's domains. */
     static $validdomain;
+    /** @var bool|null Tells the mail server file to delete a list. */
     static $delete;
+    /** @var bool|null Tells the mail server file to create a list. */
     static $create;
+    /** @var bool|null Tells the mail server file to remove a list member. */
     static $deleteuser;
+    /** @var bool|null Tells the mail server file to add a list member. */
     static $createuser;
 
     /**
-     * The 'worker' methods.
+     * List the distribution lists of an account (start of the 'worker' methods).
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $uid The account ID.
+     * @return array<int, array<string, mixed>>|false One row per list: 'address', 'totalmb' (member count), 'id'; false when there are none.
      */
     static function ListDist($uid)
     {
@@ -71,6 +91,13 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Get one distribution list of the logged-in account.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $id The list ID (dl_id_pk), from the URL or form.
+     * @return array<int, array<string, mixed>>|false A single row: 'address', 'id'; false when not found or not owned.
+     */
     static function ListCurrentDist($id)
     {
         // Only this account's own records (the id comes from ?other= or the form)
@@ -97,6 +124,13 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * List the members of a distribution list of the logged-in account.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string|false $id The list ID (dl_id_pk), from the URL or form.
+     * @return array<int, array<string, mixed>>|false One row per member: 'address', 'distlist' (the list address), 'id'; false when there are none or the list is not owned.
+     */
     static function ListDistUsers($id)
     {
         // Only this account's own records (the id comes from ?other= or the form)
@@ -130,6 +164,13 @@ class module_controller extends ctrl_module
         return false;
     }
 
+    /**
+     * List the mailboxes of an account.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $uid The account ID.
+     * @return array<int, array<string, mixed>>|false One row per mailbox: 'address', 'id'; false when there are none.
+     */
     static function ListMailbox($uid)
     {
         global $zdbh;
@@ -155,9 +196,12 @@ class module_controller extends ctrl_module
 
     /**
      * Produces a list of domain names only.
-     * @global db_driver $zdbh
-     * @param int $uid
-     * @return boolean
+     *
+     * Template loop <% loop DomainList %>.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string|null $uid Optional. The account ID. Default null (the logged-in user).
+     * @return array<int, array<string, string>>|false One row per enabled domain: 'domain'; false when there are none.
      */
     static function getDomainList($uid = null)
     {
@@ -181,6 +225,19 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Create a distribution list.
+     *
+     * Validates the address, includes the mail server file to add the alias and inserts
+     * the x_distlists row. Sets self::$ok on success.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller.
+     * @param int|string $uid The account ID.
+     * @param string $inAddress The local part of the address.
+     * @param string $inDomain The domain (must be one of the user's domains).
+     * @return bool True when created, false when validation failed.
+     */
     static function ExecuteAddDistList($uid, $inAddress, $inDomain)
     {
         global $zdbh;
@@ -213,6 +270,17 @@ class module_controller extends ctrl_module
         return true;
     }
 
+    /**
+     * Delete a distribution list and its members.
+     *
+     * Includes the mail server file to remove the alias, then marks the list and its
+     * members deleted. Sets self::$ok.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller.
+     * @param int|string $dl_id_pk The list ID.
+     * @return void
+     */
     static function ExecuteDeleteDistList($dl_id_pk)
     {
         global $zdbh;
@@ -243,6 +311,20 @@ class module_controller extends ctrl_module
         self::$ok = true;
     }
 
+    /**
+     * Add a member address to a distribution list.
+     *
+     * Validates the posted address (see CheckCreateForErrorsDistListUser()), includes the
+     * mail server file to update the alias and inserts the x_distlistusers row.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller.
+     * @param int|string $du_distlist_fk The list ID.
+     * @param string $address The member address local part.
+     * @param string $domain The member address domain.
+     * @param string $dladdress The list address (not used; the mail server file reads $rowdl).
+     * @return bool True when added, false when validation failed.
+     */
     static function ExecuteAddDistListUser($du_distlist_fk, $address, $domain, $dladdress)
     {
         global $zdbh;
@@ -281,6 +363,16 @@ class module_controller extends ctrl_module
         return true;
     }
 
+    /**
+     * Remove a member from a distribution list.
+     *
+     * Includes the mail server file to update the alias, then marks the member deleted.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller.
+     * @param int|string $du_id_pk The member ID.
+     * @return true Always true.
+     */
     static function ExecuteDeleteDistListUser($du_id_pk)
     {
         global $zdbh;
@@ -314,6 +406,16 @@ class module_controller extends ctrl_module
         return true;
     }
 
+    /**
+     * Validate a new distribution list address.
+     *
+     * Sets self::$noaddress, self::$validemail, self::$validdomain or self::$alreadyexists on failure.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param string $inAddress The local part of the address.
+     * @param string $inDomain The domain.
+     * @return bool True when the address can be used.
+     */
     static function CheckCreateForErrors($inAddress, $inDomain)
     {
         global $zdbh;
@@ -369,6 +471,15 @@ class module_controller extends ctrl_module
         return true;
     }
 
+    /**
+     * Validate the posted new list member (inAddAddress, inAddDomain, inDLID).
+     *
+     * Sets self::$noaddress or self::$validemail on failure.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller.
+     * @return bool True when the member can be added.
+     */
     static function CheckCreateForErrorsDistListUser()
     {
         global $zdbh;
@@ -398,15 +509,22 @@ class module_controller extends ctrl_module
         return true;
     }
 
+    /**
+     * Check an email address against a simple pattern.
+     *
+     * @param string $email The full address.
+     * @return bool True when it looks like a valid address.
+     */
     static function IsValidEmail($email)
     {
         return preg_match('/^[a-z0-9]+([_\\.-][a-z0-9]+)*@([a-z0-9]+([\.-][a-z0-9]+)*)+\\.[a-z]{2,}$/i', $email) == 1;
     }
     
     /**
-     * 
-     * @param string $domain
-     * @return boolean
+     * Check that a domain is one of the logged-in user's domains.
+     *
+     * @param string $domain The domain name.
+     * @return bool True when the user owns the domain.
      */
     static function IsValidDomain($domain)
     {
@@ -426,7 +544,12 @@ class module_controller extends ctrl_module
      */
 
     /**
-     * Webinterface sudo methods.
+     * Handle the list page's Edit/Delete buttons (start of the web interface methods).
+     *
+     * Redirects to the edit or delete view of the chosen list and exits.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return void
      */
     static function doEditDistList()
     {
@@ -447,6 +570,12 @@ class module_controller extends ctrl_module
         return;
     }
 
+    /**
+     * Handle the delete confirmation form.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return false|null False when the list is missing or not owned, otherwise null.
+     */
     static function doConfirmDeleteDistList()
     {
         global $controller;
@@ -459,6 +588,14 @@ class module_controller extends ctrl_module
         return self::ExecuteDeleteDistList($formvars['inDelete']);
     }
 
+    /**
+     * Handle the edit form: add a member or remove one.
+     *
+     * Redirects back to the edit view with status=ok and exits after a change.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return false|null False when the list is not owned, otherwise null.
+     */
     static function doUpdateDistList()
     {
         global $controller;
@@ -485,6 +622,12 @@ class module_controller extends ctrl_module
         return;
     }
 
+    /**
+     * Handle the create form.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return bool True when the list was created.
+     */
     static function doAddDistList()
     {
         global $controller;
@@ -494,18 +637,35 @@ class module_controller extends ctrl_module
         return self::ExecuteAddDistList($currentuser['userid'], $formvars['inAddress'], $formvars['inDomain']);
     }
 
+    /**
+     * Template loop <% loop DistList %>: the logged-in user's lists.
+     *
+     * @return array<int, array<string, mixed>>|false See ListDist().
+     */
     static function getDistList()
     {
         $currentuser = ctrl_users::GetUserDetail();
         return self::ListDist($currentuser['userid']);
     }
 
+    /**
+     * Template loop <% loop DistListUsers %>: members of the list in ?other=.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return array<int, array<string, mixed>>|false See ListDistUsers().
+     */
     static function getDistListUsers()
     {
         global $controller;
         return self::ListDistUsers($controller->GetControllerRequest('URL', 'other'));
     }
 
+    /**
+     * Template value <@ CurrentDistListID @>: the ID of the list in ?other=.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return mixed The list ID ('' when there is no ?other=; null when the list is not owned).
+     */
     static function getCurrentDistListID()
     {
         global $controller;
@@ -517,6 +677,12 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Template value <@ CurrentDistList @>: the address of the list in ?other=.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return mixed The list address ('' when there is no ?other=; null when the list is not owned).
+     */
     static function getCurrentDistList()
     {
         global $controller;
@@ -528,6 +694,14 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Template flag <% if isEditDistList %>: show the edit view?
+     *
+     * @global runtime_controller $controller The request controller.
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string|null $uid Optional. The account ID. Default null (the logged-in user).
+     * @return bool|null True when ?show=Edit and the list in ?other= is the user's; null when it is not.
+     */
     static function getisEditDistList($uid = null)
     {
         global $controller;
@@ -553,6 +727,14 @@ class module_controller extends ctrl_module
         return (isset($urlvars['show'])) && ($urlvars['show'] == "Edit");
     }
 
+    /**
+     * Template flag <% if isDeleteDistList %>: show the delete view?
+     *
+     * @global runtime_controller $controller The request controller.
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string|null $uid Optional. The account ID. Default null (the logged-in user).
+     * @return bool|null True when ?show=Delete and the list in ?other= is the user's; null when it is not.
+     */
     static function getisDeleteDistList($uid = null)
     {
         global $controller;
@@ -578,6 +760,12 @@ class module_controller extends ctrl_module
         return (isset($urlvars['show'])) && ($urlvars['show'] == "Delete");
     }
 
+    /**
+     * Template flag <% if isCreateDistList %>: show the list and create form?
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return bool True when there is no ?show=.
+     */
     static function getisCreateDistList()
     {
         global $controller;
@@ -587,6 +775,11 @@ class module_controller extends ctrl_module
         return false;
     }
 
+    /**
+     * Template flag <% if QuotaLimit %>: may the user create another list?
+     *
+     * @return bool True when the quota is unlimited (-1) or not used up.
+     */
     static function getQuotaLimit()
     {
         $currentuser = ctrl_users::GetUserDetail();
@@ -594,6 +787,12 @@ class module_controller extends ctrl_module
                 ($currentuser['distlistsquota'] > ctrl_users::GetQuotaUsages('distlists', $currentuser['userid']));
     }
 
+    /**
+     * Template value <@ DistListUsagepChart @>: the quota usage pie chart.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return string An <img> tag (the "unlimited" image when the quota is -1).
+     */
     static function getDistListUsagepChart()
     {
 		global $controller;
@@ -615,6 +814,12 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Template value <@ ResultURL @>: success message after a redirect with status=ok.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return string|null The message HTML, or null.
+     */
     static function getResultURL()
     {
         global $controller;
@@ -624,6 +829,11 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Template value <@ Result @>: the outcome of the last action.
+     *
+     * @return string|null The error or success message HTML, or null when there is none.
+     */
     static function getResult()
     {
         if (!fs_director::CheckForEmptyValue(self::$alreadyexists)) {

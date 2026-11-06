@@ -13,12 +13,19 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  */
+/**
+ * Runs module hook files (modules/NAME/hooks/HOOK.hook.php).
+ */
 class runtime_hook {
 
     /**
      * Executes a hook file at the called position.
      * @author Bobby Allen (ballen@bobbyallen.me)
+     * Includes the HOOK.hook.php file of every module's hooks folder and logs each one.
+     *
+     * @author Bobby Allen (ballen@bobbyallen.me)
      * @param string $name The name of the hook of which to execute.
+     * @return void
      */
     static function Execute($name) {
         $hook_log = new debug_logger();

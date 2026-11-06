@@ -26,11 +26,24 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
  */
+/**
+ * Theme Manager module: controller.
+ *
+ * Lets a reseller choose the panel theme and its variation (CSS) for itself and all
+ * of its clients.
+ */
 class module_controller extends ctrl_module
 {
 
     /**
-     * The 'worker' methods.
+     * Set the theme for an account and all of its clients (start of the 'worker' methods).
+     *
+     * Also resets the variation to the new theme's default.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $uid The account ID.
+     * @param string $theme The theme (folder) name, already checked.
+     * @return true Always true.
      */
     static function ExecuteUpdateTheme($uid, $theme)
     {
@@ -52,6 +65,14 @@ class module_controller extends ctrl_module
         return true;
     }
 
+    /**
+     * Set the theme variation (CSS) for an account and all of its clients.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $uid The account ID.
+     * @param string $css The variation name ('' for none).
+     * @return true Always true.
+     */
     static function ExecuteUpdateCSS($uid, $css)
     {
         global $zdbh;
@@ -67,11 +88,24 @@ class module_controller extends ctrl_module
         return true;
     }
 
+    /**
+     * Get the theme of the logged-in user.
+     *
+     * @param int|string $uid Not used (the current user's template is returned).
+     * @return string The theme name.
+     */
     static function ExecuteShowCurrentTheme($uid)
     {
         return ui_template::GetUserTemplate();
     }
 
+    /**
+     * Get the theme variation of an account.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $uid The account ID.
+     * @return string|false The variation name, or false when the account does not exist.
+     */
     static function ExecuteShowCurrentCSS($uid)
     {
         global $zdbh;
@@ -87,11 +121,21 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * List the installed themes.
+     *
+     * @return array<int, array<string, string>> One entry per theme: 'name'.
+     */
     static function ExecuteStylesList()
     {
         return ui_template::ListAvaliableTemplates();
     }
 
+    /**
+     * List the variations of the logged-in user's current theme.
+     *
+     * @return array<int, array<string, string>> One entry per variation: 'name'.
+     */
     static function ExecuteCSSList()
     {
         $currentuser = ctrl_users::GetUserDetail();
@@ -103,7 +147,10 @@ class module_controller extends ctrl_module
      */
 
     /**
-     * Webinterface sudo methods.
+     * The logged-in user's theme (start of the web interface methods).
+     *
+     * @global runtime_controller $controller The request controller (not used).
+     * @return string The theme name.
      */
     static function getCurrentTheme()
     {
@@ -112,6 +159,12 @@ class module_controller extends ctrl_module
         return self::ExecuteShowCurrentTheme($currentuser['userid']);
     }
 
+    /**
+     * The logged-in user's theme variation.
+     *
+     * @global runtime_controller $controller The request controller (not used).
+     * @return string|false The variation name, or false.
+     */
     static function getCurrentCSS()
     {
         global $controller;
@@ -119,6 +172,11 @@ class module_controller extends ctrl_module
         return self::ExecuteShowCurrentCSS($currentuser['userid']);
     }
 
+    /**
+     * Template value <@ SelectThemeMenu @>: the <option> list of themes.
+     *
+     * @return string The HTML options, the current theme selected.
+     */
     static function getSelectThemeMenu()
     {
         $html = "";
@@ -132,6 +190,11 @@ class module_controller extends ctrl_module
         return $html;
     }
 
+    /**
+     * Template value <@ SelectCSSMenu @>: the <option> list of variations.
+     *
+     * @return string The HTML options, the current variation selected.
+     */
     static function getSelectCSSMenu()
     {
         $html = "";
@@ -146,6 +209,12 @@ class module_controller extends ctrl_module
         return $html;
     }
 
+    /**
+     * Template flag <% if IsSelectCSS %>: does the current theme have more than one variation?
+     *
+     * @global runtime_controller $controller The request controller (not used).
+     * @return bool
+     */
     static function getIsSelectCSS()
     {
         global $controller;
@@ -154,6 +223,14 @@ class module_controller extends ctrl_module
         return count(self::ExecuteCSSList()) > 1;
     }
 
+    /**
+     * Handle the theme form: save the theme and redirect, then exit.
+     *
+     * Redirects with selectcss=true when the theme has several variations, else saved=true.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return void Always ends with exit.
+     */
     static function doSaveTheme()
     {
         global $controller;
@@ -176,6 +253,12 @@ class module_controller extends ctrl_module
         exit;
     }
 
+    /**
+     * Handle the variation form: save it, redirect with saved=true and exit.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return void Always ends with exit.
+     */
     static function doSaveCSS()
     {
         global $controller;
@@ -191,6 +274,12 @@ class module_controller extends ctrl_module
         exit;
     }
 
+    /**
+     * Template value <@ Result @>: the message after a save.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return string|false The message HTML, or false when there is none.
+     */
     static function getResult()
     {
         global $controller;

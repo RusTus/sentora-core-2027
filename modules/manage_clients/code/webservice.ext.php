@@ -11,9 +11,19 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  */
+/**
+ * Manage Clients module: XMWS web service methods.
+ *
+ * Each method reads the request XML in $this->wsdata and returns the response data.
+ */
 class webservice extends ws_xmws
 {
 
+    /**
+     * Delete a client (request tags: uid, optional moveid; default move target 1).
+     *
+     * @return array<string, string> Response data: 'response' (empty) and 'content' (uid and deleted tags).
+     */
     function DeleteClient()
     {
         $request_data = $this->RawXMWSToArray($this->wsdata);
@@ -26,6 +36,11 @@ class webservice extends ws_xmws
         return $dataobject->getDataObject();
     }
 
+    /**
+     * Enable a client (request tag: uid).
+     *
+     * @return array<string, string> Response data: 'response' (empty) and 'content' (uid and enabled tags).
+     */
     function EnableClient()
     {
         $request_data = $this->RawXMWSToArray($this->wsdata);
@@ -37,6 +52,11 @@ class webservice extends ws_xmws
         return $dataobject->getDataObject();
     }
 
+    /**
+     * Disable a client (request tag: uid).
+     *
+     * @return array<string, string> Response data: 'response' (empty) and 'content' (uid and disabled tags).
+     */
     function DisableClient()
     {
         $request_data = $this->RawXMWSToArray($this->wsdata);
@@ -48,6 +68,11 @@ class webservice extends ws_xmws
         return $dataobject->getDataObject();
     }
 
+    /**
+     * List the enabled clients of a reseller (request tag: uid).
+     *
+     * @return array<string, string> Response data: 'response' (empty) and 'content' (one client section per client).
+     */
     public function GetAllClients()
     {
         $request_data = $this->RawXMWSToArray($this->wsdata);
@@ -69,6 +94,11 @@ class webservice extends ws_xmws
         return $dataobject->getDataObject();
     }
 
+    /**
+     * Create a client from the request tags (resellerid, username, packageid, groupid, ...).
+     *
+     * @return array<string, string> Response data: 'response' (empty) and 'content' ("true" when created, else "false").
+     */
     public function CreateClient()
     {
         $request_data = $this->RawXMWSToArray($this->wsdata);
@@ -85,6 +115,11 @@ class webservice extends ws_xmws
         return $dataobject->getDataObject();
     }
 
+    /**
+     * Check whether a user name is taken (request tag: username).
+     *
+     * @return array<string, string> Response data: 'response' (empty) and 'content' ("true" or "false").
+     */
     public function UsernameExists()
     {
         $request_data = $this->RawXMWSToArray($this->wsdata);

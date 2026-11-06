@@ -13,6 +13,11 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  */
+/**
+ * Cross-site request forgery (CSRF) token handling for panel forms and AJAX calls.
+ *
+ * The token lives in $_SESSION['zpcsfr'] and is posted back as 'csfr_token'.
+ */
 class runtime_csfr {
 
     /**
@@ -30,8 +35,11 @@ class runtime_csfr {
 
     /**
      * Generates a new CSFR token.
+     *
+     * Stores a new random hash in $_SESSION['zpcsfr'].
+     *
      * @author Bobby Allen (ballen@bobbyallen.me)
-     * @return bool
+     * @return true Always true.
      */
     static function Tokeniser() {
         $_SESSION['zpcsfr'] = runtime_randomstring::randomHash();
@@ -40,12 +48,12 @@ class runtime_csfr {
 
     /**
      * Verfies that the submitted form has a valid CSFR token.
-     * @author Bobby Allen (ballen@bobbyallen.me)
-     * @return bool
-     */
-    /**
+     *
      * Sentora: is the posted token right? (Does not replace the token, so a module's
      * own Protect() in the same request still works.)
+     *
+     * @author Bobby Allen (ballen@bobbyallen.me)
+     * @return bool True when the posted 'csfr_token' matches the session token.
      */
     static function Valid() {
         return isset($_POST['csfr_token'], $_SESSION['zpcsfr']) && is_string($_POST['csfr_token'])
@@ -55,6 +63,10 @@ class runtime_csfr {
     /**
      * Sentora: adds the token to every form that posts, in a whole page of panel
      * output (so no module's form can miss it).
+     *
+     * @param string $html The page HTML.
+     * @return string The HTML with a hidden 'csfr_token' field after every POST <form> tag
+     *                (unchanged when there is no form or no active session).
      */
     static function AddToForms($html) {
         if (stripos($html, '<form') === false || session_status() !== PHP_SESSION_ACTIVE) {
@@ -70,6 +82,10 @@ class runtime_csfr {
     /**
      * Sentora: puts the token in a <meta name="csfr-token"> in the page head, so the
      * panel's own AJAX calls (which have no form) can send it.
+     *
+     * @param string $html The page HTML.
+     * @return string The HTML with the meta tag after the <head> tag (unchanged when there
+     *                is no head or no active session).
      */
     static function AddToHead($html) {
         if (stripos($html, '<head') === false || session_status() !== PHP_SESSION_ACTIVE) {
@@ -82,6 +98,14 @@ class runtime_csfr {
         return preg_replace('/(<head\b[^>]*>)/i', '$1' . $meta, $html, 1);
     }
 
+    /**
+     * Check the posted CSRF token and stop the request when it is wrong.
+     *
+     * On success a new token is generated. On failure an error page is printed and
+     * the script ends with die().
+     *
+     * @return true True when the token is valid (otherwise the script dies).
+     */
     static function Protect() {
         if (isset($_POST['csfr_token'], $_SESSION['zpcsfr']) && is_string($_POST['csfr_token']) && hash_equals((string) $_SESSION['zpcsfr'], $_POST['csfr_token'])) {
             self::Tokeniser();

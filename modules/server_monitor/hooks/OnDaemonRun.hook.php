@@ -24,6 +24,16 @@ if (is_file($saInstalling) && time() - (int) filemtime($saInstalling) < 7200) {
 }
 echo "END Server alerts" . fs_filehandler::NewLine();
 
+/**
+ * Read a Sentora Config setting, adding it with its default when it does not exist.
+ *
+ * @global db_driver $zdbh The panel's database connection.
+ * @param string $name The setting name (so_name_vc).
+ * @param string $clean The label shown in Sentora Config.
+ * @param string $default The value to store and return when the setting is new.
+ * @param string $desc The description shown in Sentora Config.
+ * @return string The setting's value.
+ */
 function SentoraAlertSetting($name, $clean, $default, $desc)
 {
     global $zdbh;
@@ -38,6 +48,16 @@ function SentoraAlertSetting($name, $clean, $default, $desc)
     return (string) $row['so_value_tx'];
 }
 
+/**
+ * Check disks, services, the mail queue and the off-server backup, and email alerts.
+ *
+ * Compares with the state in /var/lib/sentora/alerts.json so each problem is emailed
+ * when it starts, daily while it lasts and once when resolved; also writes alerts.log
+ * and echoes a summary for the daemon log.
+ *
+ * @global db_driver $zdbh The panel's database connection.
+ * @return void
+ */
 function SentoraServerAlerts()
 {
     global $zdbh;

@@ -13,14 +13,20 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  */
+/**
+ * Simple key/value container used to pass data to templates.
+ */
 class runtime_dataobject {
 
     /**
      * The associated array of which to store all dataobject entites in.
-     * @var array
+     * @var array<string, string>
      */
     protected $object;
 
+    /**
+     * Start with an empty data object.
+     */
     function __construct() {
         $this->object = array();
     }
@@ -28,8 +34,11 @@ class runtime_dataobject {
     /**
      * Used to 'push' an associated array on to the object's $object array.
      * @author Bobby Allen (ballen@bobbyallen.me)
-     * @param array $arr The associative array data to add to the object.
-     * @return obj
+     * Any further arguments are merged in too: arrays key by key, scalars become
+     * keys with an empty string value.
+     *
+     * @param array<string,string> &$arr The associative array to add the data to (by reference).
+     * @return array<string, string> The object's $object array.
      */
     private function array_push_associative(&$arr) {
         $args = func_get_args();
@@ -49,7 +58,8 @@ class runtime_dataobject {
      * Enables an easy to use key/value pushing to the data object.
      * @author Bobby Allen (ballen@bobbyallen.me)
      * @param string $name The name of the key.
-     * @param string $value The value of the key.
+     * @param mixed $value The value of the key (converted to a string).
+     * @return void
      */
     public function addItemValue($name, $value) {
         $this->array_push_associative($this->object, array("$name" => "$value"));
@@ -58,7 +68,7 @@ class runtime_dataobject {
     /**
      * Returns an associated array (data object)
      * @author Bobby Allen (ballen@bobbyallen.me)
-     * @return array The dataobject contents.
+     * @return array<string, string> The dataobject contents.
      */
     public function getDataObject() {
         return $this->object;

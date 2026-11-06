@@ -26,21 +26,41 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
  */
+/**
+ * Forwarders module: controller.
+ *
+ * Lists, creates and deletes mail forwarders; the mail server specific file (e.g.
+ * code/postfix.php) is included to update the mail database.
+ */
 class module_controller extends ctrl_module
 {
 
+    /** @var bool|null True when the last change was saved (shown by getResult()). */
     static $ok;
+    /** @var bool|null True when a password was missing (never set in this module). */
     static $password;
+    /** @var bool|null True when the address already exists (never set in this module). */
     static $alreadyexists;
+    /** @var bool|null True when the mailbox would be forwarded to itself. */
     static $alreadyexistssame;
+    /** @var bool|null True when the destination is not a valid email address. */
     static $validemail;
+    /** @var bool|null True when the source is not one of the user's mailboxes. */
     static $validmailbox;
+    /** @var bool|null True when no source address was given. */
     static $noaddress;
+    /** @var bool|null Tells the mail server file to delete a forwarder. */
     static $delete;
+    /** @var bool|null Tells the mail server file to create a forwarder. */
     static $create;
 
     /**
-     * The 'worker' methods.
+     * List the forwarders of an account (start of the 'worker' methods).
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller (not used).
+     * @param int|string $uid The account ID.
+     * @return array<int, array<string, mixed>>|false One row per forwarder: 'address', 'destination', 'status' (keep-copy icon HTML), 'id'; false when there are none.
      */
     static function ListForwarders($uid)
     {
@@ -73,6 +93,13 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Get one forwarder of the logged-in account.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $fid The forwarder ID (fw_id_pk), from the URL or form.
+     * @return array<int, array<string, mixed>>|false A single row: 'address', 'destination', 'id'; false when not found or not owned.
+     */
     static function ListCurrentForwarder($fid)
     {
         // Only this account's own records (the id comes from ?other= or the form)
@@ -102,9 +129,12 @@ class module_controller extends ctrl_module
 
     /**
      * Produces a list of mailboxes only.
-     * @global db_driver $zdbh
-     * @param int $uid
-     * @return boolean
+     *
+     * Template loop <% loop MailboxList %>.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string|null $uid Optional. The account ID. Default null (the logged-in user).
+     * @return array<int, array<string, mixed>>|false One row per mailbox: 'address', 'id'; false when there are none.
      */
     static function getMailboxList($uid = null)
     {
@@ -128,6 +158,21 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Create a forwarder from one of the user's mailboxes.
+     *
+     * Validates the input, includes the mail server file to update the alias and inserts
+     * the x_forwarders row. Sets self::$ok on success.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller.
+     * @param int|string $uid The account ID.
+     * @param string $address The source mailbox address.
+     * @param string $dname The destination local part.
+     * @param string $ddomain The destination domain.
+     * @param int $keepmessage 1 to keep a copy in the source mailbox, else 0.
+     * @return bool True when created, false when validation failed.
+     */
     static function ExecuteCreateForwarder($uid, $address, $dname, $ddomain, $keepmessage)
     {
         global $zdbh;
@@ -165,6 +210,17 @@ class module_controller extends ctrl_module
         return true;
     }
 
+    /**
+     * Delete a forwarder.
+     *
+     * Includes the mail server file to reset the alias, then marks the forwarder deleted.
+     * Sets self::$ok.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller.
+     * @param int|string $fw_id_pk The forwarder ID.
+     * @return void
+     */
     static function ExecuteDeleteForwarder($fw_id_pk)
     {
         global $zdbh;
@@ -189,6 +245,20 @@ class module_controller extends ctrl_module
         self::$ok = true;
     }
 
+    /**
+     * Validate a new forwarder.
+     *
+     * Reads the source address from the posted 'inAddress' (the $address argument is
+     * overwritten). Sets self::$noaddress, self::$validemail, self::$validmailbox or
+     * self::$alreadyexistssame on failure.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @param string $address The source mailbox address (ignored, see above).
+     * @param string $dname The destination local part.
+     * @param string $ddomain The destination domain.
+     * @param int $keepmessage Keep-copy flag (not used).
+     * @return bool True when the forwarder can be created.
+     */
     static function CheckCreateForErrors($address, $dname, $ddomain, $keepmessage)
     {
         global $controller;
@@ -214,15 +284,22 @@ class module_controller extends ctrl_module
         return true;
     }
 
+    /**
+     * Check an email address against a simple pattern.
+     *
+     * @param string $email The full address.
+     * @return bool True when it looks like a valid address.
+     */
     static function IsValidEmail($email)
     {
         return preg_match('/^[a-z0-9]+([_\\.-][a-z0-9]+)*@([a-z0-9]+([\.-][a-z0-9]+)*)+\\.[a-z]{2,}$/i', $email) == 1;
     }
     
     /**
-     * 
-     * @param string $address
-     * @return boolean
+     * Check that an address is one of the logged-in user's mailboxes.
+     *
+     * @param string $address The mailbox address.
+     * @return bool True when the user owns the mailbox.
      */
     static function IsValidMailbox($address)
     {
@@ -239,7 +316,10 @@ class module_controller extends ctrl_module
      */
 
     /**
-     * Webinterface sudo methods.
+     * Handle the create form (start of the web interface methods).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return true Always true.
      */
     static function doCreateForwarder()
     {
@@ -253,6 +333,12 @@ class module_controller extends ctrl_module
         return true;
     }
 
+    /**
+     * Handle a list Delete button: redirect to the delete view and exit.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return true True when no Delete button matched (otherwise the script exits).
+     */
     static function doDeleteForwarder()
     {
         global $controller;
@@ -268,6 +354,12 @@ class module_controller extends ctrl_module
         return true;
     }
 
+    /**
+     * Handle the delete confirmation form.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return false|null False when the forwarder is missing or not owned, otherwise null.
+     */
     static function doConfirmDeleteForwarder()
     {
         global $controller;
@@ -280,6 +372,12 @@ class module_controller extends ctrl_module
         return self::ExecuteDeleteForwarder($formvars['inDelete']);
     }
 
+    /**
+     * Template loop <% loop ForwarderList %>: the logged-in user's forwarders.
+     *
+     * @global runtime_controller $controller The request controller (not used).
+     * @return array<int, array<string, mixed>>|false See ListForwarders().
+     */
     static function getForwarderList()
     {
         global $controller;
@@ -287,6 +385,12 @@ class module_controller extends ctrl_module
         return self::ListForwarders($currentuser['userid']);
     }
 
+    /**
+     * Template flag <% if isCreateForwarder %>: show the list and create form?
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return bool True when there is no ?show=.
+     */
     static function getisCreateForwarder()
     {
         global $controller;
@@ -294,6 +398,14 @@ class module_controller extends ctrl_module
         return !isset($urlvars['show']);
     }
 
+    /**
+     * Template flag <% if isDeleteForwarder %>: show the delete view?
+     *
+     * @global runtime_controller $controller The request controller.
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string|null $uid Optional. The account ID. Default null (the logged-in user).
+     * @return bool|null True when ?show=Delete and the forwarder in ?other= is the user's; null when it is not.
+     */
     static function getisDeleteForwarder($uid = null)
     {
         global $controller;
@@ -319,6 +431,12 @@ class module_controller extends ctrl_module
         return (isset($urlvars['show'])) && ($urlvars['show'] == "Delete");
     }
 
+    /**
+     * Template value <@ EditCurrentForwarderName @>: address of the forwarder in ?other=.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return mixed The address ('' when there is no ?other=; null when it is not owned).
+     */
     static function getEditCurrentForwarderName()
     {
         global $controller;
@@ -330,6 +448,12 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Template value <@ EditCurrentForwarderID @>: ID of the forwarder in ?other=.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return mixed The ID ('' when there is no ?other=; null when it is not owned).
+     */
     static function getEditCurrentForwarderID()
     {
         global $controller;
@@ -341,6 +465,13 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Read a mail setting from x_mail_settings.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param string $name The setting name (mbs_name_vc).
+     * @return string|false The value, or false when the setting does not exist.
+     */
     static function GetMailOption($name)
     {
         global $zdbh;
@@ -352,6 +483,11 @@ class module_controller extends ctrl_module
         return ($result) ? $result['mbs_value_tx'] : false;
     }
 
+    /**
+     * Template flag <% if QuotaLimit %>: may the user create another forwarder?
+     *
+     * @return bool True when the quota is unlimited (-1) or not used up.
+     */
     static function getQuotaLimit()
     {
         $currentuser = ctrl_users::GetUserDetail();
@@ -359,6 +495,12 @@ class module_controller extends ctrl_module
                 ($currentuser['forwardersquota'] > ctrl_users::GetQuotaUsages('forwarders', $currentuser['userid']));
     }
 
+    /**
+     * Template value <@ ForwardUsagepChart @>: the quota usage pie chart.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return string An <img> tag (the "unlimited" image when the quota is -1).
+     */
     static function getForwardUsagepChart()
     {
 		global $controller;
@@ -380,6 +522,11 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Template value <@ Result @>: the outcome of the last action.
+     *
+     * @return string|null The error or success message HTML, or null when there is none.
+     */
     static function getResult()
     {
         if (!fs_director::CheckForEmptyValue(self::$alreadyexistssame)) {

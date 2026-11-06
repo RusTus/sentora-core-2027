@@ -26,30 +26,61 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
  */
+/**
+ * MySQL Users module: controller.
+ *
+ * Creates and deletes MySQL users, grants and revokes their access to the account's
+ * databases, resets and (after the panel password) shows their passwords.
+ */
 class module_controller extends ctrl_module
 {
 
+    /** @var bool|null True when the MySQL user name is already taken. */
     static $alreadyexists;
+    /** @var bool|null True when the database is already mapped to the user. */
     static $dbalreadyadded;
+    /** @var bool|null True when the user name or database was left blank. */
     static $blank;
+    /** @var bool|null True when the new password was left blank. */
 	static $blankpassword;
+    /** @var bool|null True when the user name is not valid. */
     static $badname;
+    /** @var bool|null True when the password does not meet the character rules. */
     static $badpass;
+    /** @var bool|null True when the password is shorter than password_minlength. */
 	static $badpasswordlength;
+    /** @var bool|null True when someone tried to create a user named 'root'. */
     static $rootabuse;
+    /** @var bool|null True when the access host is not a valid IP address. */
     static $badIP;
+    /** @var bool|null True when the last change was saved (shown by getResult()). */
     static $ok;
+    /** @var string|null Name of the user just created (shown once with its password). */
     static $newuser = null; // shown once: the panel keeps no copy of the password
+    /** @var string|null Generated password of the user just created. */
     static $newpass = null;
+    /** @var string|null Show password: the user name whose password is shown. */
     static $shownuser = null; // Show password
+    /** @var string|null Show password: the decrypted password ('' when none is stored). */
     static $shownpass = null;
+    /** @var array{0: string, 1: string, 2: string}|null Show password: form action, button name and user name for the panel password prompt. */
     static $askpw = null;   // Show password: ask for the panel password first
+    /** @var bool|null True when the panel password given for Show password was wrong. */
     static $wrongpw = null;
 
     /**
      * The 'worker' methods.
      */
-	# tg - Set user name input max characters minus prefix
+	// tg - Set user name input max characters minus prefix
+    /**
+     * Template value <@ MaxCharAllowed @>: how many characters the user name may have.
+     *
+     * MySQL user names are at most 32 characters and get the prefix "<panel user>_".
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller (not used).
+     * @return int|false 32 minus the prefix length, or false when the prefix is too long.
+     */
     static function getMaxCharAllowed()
     {
         global $zdbh;
@@ -70,6 +101,15 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Look for database mappings of a MySQL user whose database was deleted.
+     *
+     * Does nothing with them yet (the clean-up step is empty).
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $uid The account ID (bound to mm_user_fk).
+     * @return bool True when the user has mappings, otherwise false.
+     */
     static function CleanOrphanDatabases($uid)
     {
         global $zdbh;
@@ -99,6 +139,13 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * List the MySQL users of an account.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $uid The account ID.
+     * @return array<int, array<string, mixed>>|false One row per user: 'userid', 'username', 'dbpassword' (always ''), 'totaldb', 'accesshtml', 'access'; false when there are none.
+     */
     static function ListUsers($uid)
     {
         global $zdbh;
@@ -138,6 +185,13 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * List the MySQL databases of an account.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $uid The account ID.
+     * @return array<int, array<string, mixed>>|false One row per database: 'mysqlid', 'mysqlname'; false when there are none.
+     */
     static function ListDatabases($uid)
     {
         global $zdbh;
@@ -161,6 +215,13 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * List the databases a MySQL user has access to.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string|false $uid The MySQL user ID (mu_id_pk).
+     * @return array<int, array<string, mixed>>|false One row per mapping: 'mmid', 'mmaccount', 'mmuserid', 'mmdbid', 'mmdbname'; false when there are none.
+     */
     static function ListUserDatabases($uid)
     {
         global $zdbh;
@@ -193,6 +254,13 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Get one MySQL user of the logged-in account.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $mid The MySQL user ID (mu_id_pk), from the URL or form.
+     * @return array<int, array<string, mixed>>|false A single row: 'userid', 'username'; false when not found or not owned.
+     */
     static function ListCurrentUser($mid)
     {
         // Only this account's own records (the id comes from ?other= or the form)
@@ -219,7 +287,14 @@ class module_controller extends ctrl_module
         }
     }
 
-    /** is the database (by id) one of the account's own, not deleted */
+    /**
+     * is the database (by id) one of the account's own, not deleted
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $uid The account ID.
+     * @param int|string $database The database ID (my_id_pk).
+     * @return bool True when the account owns the database.
+     */
     static function AccountOwnsDatabase($uid, $database)
     {
         global $zdbh;
@@ -231,6 +306,21 @@ class module_controller extends ctrl_module
         return (int) $q->fetchColumn() > 0;
     }
 
+    /**
+     * Create a MySQL user with access to one of the account's databases.
+     *
+     * Prefixes the name with "<panel user>_", generates a random password, creates the
+     * user in MySQL, grants it the database and stores it (password encrypted). Sets
+     * self::$newuser, self::$newpass and self::$ok.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller (not used).
+     * @param int|string $uid The account ID.
+     * @param string $username The user name without prefix.
+     * @param int|string $database The database ID.
+     * @param string $access The host the user may connect from ('%', 'localhost' or an IP).
+     * @return bool True when created, false when validation failed or the database is not the account's.
+     */
     static function ExecuteCreateUser($uid, $username, $database, $access)
     {
         global $zdbh;
@@ -331,6 +421,17 @@ class module_controller extends ctrl_module
         return true;
     }
 
+    /**
+     * Validate a new MySQL user.
+     *
+     * Sets self::$blank, self::$rootabuse, self::$alreadyexists, self::$badname or self::$badIP on failure.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param string $username The full (prefixed) user name.
+     * @param int|string $database The database ID.
+     * @param string $access The access host.
+     * @return bool True when the user can be created.
+     */
     static function CheckCreateForErrors($username, $database, $access)
     {
         global $zdbh;
@@ -384,6 +485,16 @@ class module_controller extends ctrl_module
         return true;
     }
 
+    /**
+     * Check that a database is not already mapped to a MySQL user.
+     *
+     * Sets self::$dbalreadyadded on failure.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $userid The MySQL user ID.
+     * @param int|string $database The database ID.
+     * @return bool True when it can be added.
+     */
     static function CheckAddForErrors($userid, $database)
     {
         global $zdbh;
@@ -401,6 +512,15 @@ class module_controller extends ctrl_module
         return true;
     }
 
+    /**
+     * Delete a MySQL user and its database mappings.
+     *
+     * Drops the user from MySQL when it exists. Sets self::$ok.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $mu_id_pk The MySQL user ID.
+     * @return true Always true.
+     */
     static function ExecuteDeleteUser($mu_id_pk)
     {
         global $zdbh;
@@ -444,6 +564,18 @@ class module_controller extends ctrl_module
         return true;
     }
 
+    /**
+     * Give a MySQL user access to a database.
+     *
+     * Both must belong to the account. Grants all privileges and adds the mapping.
+     * Sets self::$ok.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string|null $uid The account ID ('' or null: the logged-in user).
+     * @param int|string $myuserid The MySQL user ID.
+     * @param int|string $dbid The database ID.
+     * @return bool True when added; false when already mapped or not the account's.
+     */
     static function ExecuteAddDB($uid, $myuserid, $dbid)
     {
         global $zdbh;
@@ -502,6 +634,16 @@ class module_controller extends ctrl_module
         return true;
     }
 
+    /**
+     * Remove a MySQL user's access to a database.
+     *
+     * Revokes the privileges and deletes the mapping. Sets self::$ok.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $myuserid The MySQL user ID.
+     * @param int|string $mapid The mapping ID (mm_id_pk).
+     * @return true Always true.
+     */
     static function ExecuteRemoveDB($myuserid, $mapid)
     { // <-- mmid = dbmaps
         global $zdbh;
@@ -538,6 +680,16 @@ class module_controller extends ctrl_module
         return true;
     }
 
+    /**
+     * Set a new password for a MySQL user.
+     *
+     * Changes it in MySQL and stores the encrypted copy. Sets self::$ok.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $myuserid The MySQL user ID.
+     * @param string $password The new password.
+     * @return bool True when done, false when the password is not valid.
+     */
     static function ExecuteResetPassword($myuserid, $password)
     {
         global $zdbh;
@@ -585,7 +737,14 @@ class module_controller extends ctrl_module
         return true;
     }
 
-    /** room for the encrypted password (older databases have 40 characters) */
+    /**
+     * room for the encrypted password (older databases have 40 characters)
+     *
+     * Widens x_mysql_users.mu_pass_vc to VARCHAR(255) if needed, once per request.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return void
+     */
     static function EnsurePassColumn()
     {
         global $zdbh;
@@ -600,6 +759,14 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Validate a new password.
+     *
+     * Sets self::$blankpassword, self::$badpasswordlength or self::$badpass on failure.
+     *
+     * @param string $password The password.
+     * @return bool True when the password can be used.
+     */
     static function CheckPasswordForErrors($password)
     {
 		// Check to make sure the password is not blank before we go any further...
@@ -619,13 +786,19 @@ class module_controller extends ctrl_module
         return true;
     }
 
+    /**
+     * Check a MySQL user name: letters, digits, '-' and '_', at most 32 characters, not ending in '-'.
+     *
+     * @param string $username The full (prefixed) user name.
+     * @return bool True when valid.
+     */
     static function IsValidUserName($username)
     {
-		# tg - Added regx [a-z\d_] to allow underscore
+		// tg - Added regx [a-z\d_] to allow underscore
         if (!preg_match('/^[a-z\d][a-z\d-][a-z\d_]{0,62}$/i', $username) || preg_match('/-$/', $username)) {
             return false;
         } else {
-			# tg - Updated user name max size check
+			// tg - Updated user name max size check
             if (strlen($username) < 33) {
                 // Enforce the MySQL username limit! (http://dev.mysql.com/doc/refman/4.1/en/user-names.html)
                 return true;
@@ -634,6 +807,12 @@ class module_controller extends ctrl_module
         }
     }
 
+	/**
+	 * Check the password rules: 8+ characters with a digit, a lower and an upper case letter (or ends in '-').
+	 *
+	 * @param string $password The password.
+	 * @return bool True when acceptable.
+	 */
 	static function IsValidPassword($password)
     {
         return preg_match('/(?=.*\d)(?=.*[a-z])(?=.*[A-Z]).{8,}/', $password) || preg_match('/-$/', $password) == 1;
@@ -646,7 +825,10 @@ class module_controller extends ctrl_module
      */
 
     /**
-     * Webinterface sudo methods.
+     * Handle the create user form (start of the web interface methods).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return bool True when the user was created.
      */
     static function doCreateUser()
     {
@@ -664,6 +846,16 @@ class module_controller extends ctrl_module
         return false;
     }
 
+    /**
+     * Handle the user list buttons: Edit or Delete (redirect and exit), or Show password.
+     *
+     * Show password asks for the panel password first (self::$askpw / self::$wrongpw) and
+     * then sets self::$shownuser and self::$shownpass.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @global db_driver $zdbh The panel's database connection.
+     * @return void
+     */
     static function doEditUser()
     {
         global $controller;
@@ -708,6 +900,12 @@ class module_controller extends ctrl_module
         return;
     }
 
+    /**
+     * Handle the add database form.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return bool True when the access was added.
+     */
     static function doAddDB()
     {
         global $controller;
@@ -725,6 +923,12 @@ class module_controller extends ctrl_module
         return false;
     }
 
+    /**
+     * Handle a Remove button in the user's database list.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return bool True when the access was removed.
+     */
     static function doRemoveDB()
     {
         global $controller;
@@ -747,6 +951,12 @@ class module_controller extends ctrl_module
         return false;
     }
 
+    /**
+     * Handle the delete confirmation form.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return bool True when the user was deleted.
+     */
     static function doConfirmDeleteUser()
     {
         global $controller;
@@ -761,6 +971,12 @@ class module_controller extends ctrl_module
         return false;
     }
 
+    /**
+     * Handle the reset password form.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return bool True when the password was changed.
+     */
     static function doResetPW()
     {
         global $controller;
@@ -775,6 +991,12 @@ class module_controller extends ctrl_module
         return false;
     }
 
+    /**
+     * Template loop <% loop UserList %>: the logged-in user's MySQL users.
+     *
+     * @global runtime_controller $controller The request controller (not used).
+     * @return array<int, array<string, mixed>>|false See ListUsers().
+     */
     static function getUserList()
     {
         global $controller;
@@ -782,6 +1004,12 @@ class module_controller extends ctrl_module
         return self::ListUsers($currentuser['userid']);
     }
 
+    /**
+     * Template loop <% loop DatabaseList %>: the logged-in user's databases.
+     *
+     * @global runtime_controller $controller The request controller (not used).
+     * @return array<int, array<string, mixed>>|false See ListDatabases().
+     */
     static function getDatabaseList()
     {
         global $controller;
@@ -789,6 +1017,12 @@ class module_controller extends ctrl_module
         return self::ListDatabases($currentuser['userid']);
     }
 
+    /**
+     * Template loop <% loop UserDatabaseList %>: databases of the MySQL user in ?other=.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return array<int, array<string, mixed>>|false See ListUserDatabases().
+     */
     static function getUserDatabaseList()
     {
         global $controller;
@@ -796,6 +1030,14 @@ class module_controller extends ctrl_module
         return self::ListUserDatabases($controller->GetControllerRequest('URL', 'other'));
     }
 
+    /**
+     * Template flag <% if isDeleteUser %>: show the delete view?
+     *
+     * @global runtime_controller $controller The request controller.
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string|null $uid Optional. The account ID. Default null (the logged-in user).
+     * @return bool|null True when ?show=Delete and the user in ?other= is the account's; null when it is not.
+     */
     static function getisDeleteUser($uid = null)
     {
         global $controller;
@@ -822,6 +1064,14 @@ class module_controller extends ctrl_module
 		
     }
 
+    /**
+     * Template flag <% if isEditUser %>: show the edit view?
+     *
+     * @global runtime_controller $controller The request controller.
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string|null $uid Optional. The account ID. Default null (the logged-in user).
+     * @return bool|null True when ?show=Edit and the user in ?other= is the account's; null when it is not.
+     */
     static function getisEditUser($uid = null)
     {
 		
@@ -848,6 +1098,12 @@ class module_controller extends ctrl_module
         return (isset($urlvars['show'])) && ($urlvars['show'] == "Edit");
     }
 
+    /**
+     * Template flag <% if isCreateUser %>: show the list and create form?
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return bool True when there is no ?show=.
+     */
     static function getisCreateUser()
     {
         global $controller;
@@ -857,6 +1113,12 @@ class module_controller extends ctrl_module
         return false;
     }
 
+    /**
+     * Template value <@ CurrentUserName @>: the panel user name (the MySQL user name prefix).
+     *
+     * @global runtime_controller $controller The request controller (not used).
+     * @return string
+     */
     static function getCurrentUserName()
     {
         global $controller;
@@ -864,6 +1126,12 @@ class module_controller extends ctrl_module
         return $currentuser['username'];
     }
 
+    /**
+     * Template value <@ EditCurrentUserName @>: name of the MySQL user in ?other=.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return mixed The name ('' when there is no ?other=; null when it is not owned).
+     */
     static function getEditCurrentUserName()
     {
         global $controller;
@@ -875,6 +1143,12 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Template value <@ EditCurrentUserID @>: ID of the MySQL user in ?other=.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return mixed The ID ('' when there is no ?other=; null when it is not owned).
+     */
     static function getEditCurrentUserID()
     {
         global $controller;
@@ -886,11 +1160,21 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Template value <@ MysqlUsagepChart @>: always the "unlimited" image.
+     *
+     * @return string An <img> tag.
+     */
     static function getMysqlUsagepChart()
     {
         return '<img src="' . ui_template::AssetPath('img/misc/unlimited.png') . '" alt="' . ui_language::translate('Unlimited') . '"/>';
     }
 
+    /**
+     * Template value <@ MinPassLength @>: the minimum password length shown in the forms.
+     *
+     * @return int|string The 'password_minlength' option (a string) when above 9, otherwise 9.
+     */
     static function getMinPassLength()
     {
         $minpasswordlength = ctrl_options::GetSystemOption('password_minlength');
@@ -903,6 +1187,11 @@ class module_controller extends ctrl_module
         return $uselength;
     }
 
+    /**
+     * Template value <@ Result @>: the outcome of the last action.
+     *
+     * @return string|null The message HTML (error, password prompt, shown or new password, success), or null.
+     */
     static function getResult()
     {
         if (!fs_director::CheckForEmptyValue(self::$blank)) {

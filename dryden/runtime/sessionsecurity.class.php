@@ -12,13 +12,16 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  */
+/**
+ * Session hijacking protection: binds the session to the user agent, IP and a salt cookie.
+ */
 class runtime_sessionsecurity {
     
     /*****The below are generic function used more than once*****/
     /**
      * Regenerate the PHPSID  
      * @author Sam Mottley (smottley@zpanelcp.com)
-     * @return boolean.
+     * @return bool True when the session ID was regenerated.
      */
     static public function sessionRegen(){
          if(session_regenerate_id()){
@@ -31,7 +34,7 @@ class runtime_sessionsecurity {
     /**
      * Get users ip address 
      * @author Sam Mottley (smottley@zpanelcp.com)
-     * @return string The Clean IP.
+     * @return string The IP followed by a space (REMOTE_ADDR first, then forwarded headers).
      */
     static public function findIP() {
         //$ip = $_SERVER["REMOTE_ADDR"];
@@ -48,7 +51,7 @@ class runtime_sessionsecurity {
     /**
      * Distroys the current session
      * @author Sam Mottley (smottley@zpanelcp.com)
-     * @return string The Clean IP.
+     * @return true Always true.
      */
     static public function destroyCurrentSession(){
         $_SESSION['zpuid'] = null;
@@ -60,7 +63,7 @@ class runtime_sessionsecurity {
     /**
      * Get users details that are spefic for the individual user only
      * @author Sam Mottley (smottley@zpanelcp.com)
-     * @return string The data.
+     * @return string The data: the IP (with trailing space) followed by the session user ID.
      */
     static public function userSpeficData(){
         $ip = self::findIP();
@@ -73,7 +76,7 @@ class runtime_sessionsecurity {
     /**
      * This function will set the users agent in a secure session and hashes
      * @author Sam Mottley (smottley@zpanelcp.com)
-     * @return boolean.
+     * @return void
      */
     static public function setUserAgent(){
         $_SESSION['HTTP_USER_AGENT'] = sha1($_SERVER['HTTP_USER_AGENT'],self::userSpeficData());
@@ -82,7 +85,7 @@ class runtime_sessionsecurity {
     /**
      * This function will set the users cookie login ID in a secure cookie and hashes
      * @author Sam Mottley (smottley@zpanelcp.com)
-     * @return boolean.
+     * @return true Always true.
      */
     static public function setCookie(){ 
         $random = runtime_randomstring::randomHash(100);
@@ -98,7 +101,7 @@ class runtime_sessionsecurity {
     /**
      * This function will set the users IP in a secure session and hashes
      * @author Sam Mottley (smottley@zpanelcp.com)
-     * @return boolean.
+     * @return void
      */
     static public function setUserIP(){
         $_SESSION['ip'] = sha1(self::findIP(), self::userSpeficData());
@@ -107,7 +110,8 @@ class runtime_sessionsecurity {
     /**
      * This set whether session security is enabled 
      * @author Sam Mottley (smottley@zpanelcp.com)
-     * @return boolean.
+     * @param bool $option True to enable IP/user agent checks for this session.
+     * @return bool The value that was set.
      */
     static public function setSessionSecurityEnabled($option){
         if($option == true){
@@ -158,7 +162,7 @@ class runtime_sessionsecurity {
     }
     
     /**
-     * This returns the current provied users agent via headers and THEN hashes
+     * This returns the current provied salt cookie (not hashed)
      * @author Sam Mottley (smottley@zpanelcp.com)
      * @return string The data.
      */
@@ -178,7 +182,7 @@ class runtime_sessionsecurity {
     /**
      * This returns whether the user set the session secuirty option on login
      * @author Sam Mottley (smottley@zpanelcp.com)
-     * @return boolean.
+     * @return bool
      */
     static public function getSessionSecurityEnabled(){
         if(isset($_SESSION['zSessionSecurityEnabled']) && $_SESSION['zSessionSecurityEnabled'] == 1){ 
@@ -193,7 +197,7 @@ class runtime_sessionsecurity {
     /**
      * This checks wether the set user agent for the session is the same one as what is currently being provied
      * @author Sam Mottley (smottley@zpanelcp.com)
-     * @return boolean.
+     * @return bool
      */
     static public function checkAgent(){
         $userSetAgent = self::getSetUserAgent();
@@ -209,7 +213,7 @@ class runtime_sessionsecurity {
     /**
      * This checks wether the set user ip for the session is the same one as what is currently being provied
      * @author Sam Mottley (smottley@zpanelcp.com)
-     * @return boolean.
+     * @return bool
      */
     static public function checkIP(){
         $userSetIP = self::getSetIP();
@@ -223,9 +227,9 @@ class runtime_sessionsecurity {
     }
     
     /**
-     * This checks wether the set user ip for the session is the same one as what is currently being provied
+     * This checks wether the salt cookie sent by the browser is the same one as the session's
      * @author Sam Mottley (smottley@zpanelcp.com)
-     * @return boolean.
+     * @return bool
      */
     static public function checkCookie(){
         $userSetCookie = self::getSetCookie();
@@ -241,7 +245,7 @@ class runtime_sessionsecurity {
     /**
      * This checks wheather the user is behind a proxy
      * @author Sam Mottley (smottley@zpanelcp.com)
-     * @return boolean
+     * @return bool
      */
     static public function checkProxy(){
         if (@$_SERVER['HTTP_X_FORWARDED_FOR']|| @$_SERVER['HTTP_X_FORWARDED']|| @$_SERVER['HTTP_FORWARDED_FOR']|| @$_SERVER['HTTP_CLIENT_IP']|| @$_SERVER['HTTP_VIA']|| @in_array($_SERVER['REMOTE_PORT'], array(8080,80,6588,8000,3128,553,554))|| @fsockopen($_SERVER['REMOTE_ADDR'], 80, $errno, $errstr, 1)){
@@ -254,7 +258,7 @@ class runtime_sessionsecurity {
     /**
      * Check if session secuirty enabled
      * @author Sam Mottley (smottley@zpanelcp.com)
-     * @return boolean
+     * @return bool
      */
     static public function checkSessionSecurityEnabled(){
         if(self::getSessionSecurityEnabled()){
@@ -267,8 +271,11 @@ class runtime_sessionsecurity {
     /*****Below is the heart of the class*****/
     /**
      * This checks wheather the session has been stolen or not
+     *
+     * Destroys the session when a check fails.
+     *
      * @author Sam Mottley (smottley@zpanelcp.com)
-     * @return boolean
+     * @return bool True when the session looks genuine.
      */
     static public function antiSessionHijacking(){
         $checkIP = self::checkIP();

@@ -65,17 +65,24 @@ header('Content-type: application/json');
 echo json_encode($return);
 
 
-/* Check if it is an xmlhttprequest request */
+/**
+ * Check if the current request is an XMLHttpRequest (AJAX) request.
+ *
+ * @return bool True when the X-Requested-With header is "XMLHttpRequest".
+ */
 function isAjax() {
     return isset($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest';
 }
 
 /**
- * 
- * @global db_driver $zdbh
- * @param type $uid
- * @param type $order
- * @return boolean
+ * Save the dashboard module category order for an account.
+ *
+ * Writes x_accounts.ac_catorder_vc for the given account.
+ *
+ * @global db_driver $zdbh The panel's database connection.
+ * @param int|string $uid The account ID (from the session 'zpuid').
+ * @param string|false $order The JSON-encoded category order list (json_encode() output).
+ * @return int Number of rows updated (0 when nothing changed, so the caller treats it as falsy).
  */
 function UpdateModuleOrder($uid, $order) {
     global $zdbh;

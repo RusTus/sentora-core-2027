@@ -27,87 +27,182 @@
  *
  * @change P.Peyremorte added unlimited, factorization in functions
  */
+/**
+ * Usage Viewer module: controller.
+ *
+ * Shows the logged-in user's disk, bandwidth and package usage against the quotas.
+ * DisplayUsagepChart() (template <@ Usage @>) fills the static usage figures that the
+ * other charts then use.
+ */
 class module_controller extends ctrl_module
 {
 
+    /** @var int|string The disk quota in bytes (0: no quota). Set by DisplayUsagepChart(). */
     static $diskquota;
+    /** @var int|string|null Disk space used in bytes. Set by DisplayUsagepChart(). */
     static $diskspace;
+    /** @var int|string|null Bandwidth used this month in bytes. Set by DisplayUsagepChart(). */
     static $bandwidth;
+    /** @var int|string The bandwidth quota in bytes (0: no quota). Set by DisplayUsagepChart(). */
     static $bandwidthquota;
+    /** @var int|string|null Number of domains in use. Set by DisplayUsagepChart(). */
     static $domains;
+    /** @var int|string The domains quota (-1: unlimited). Set by DisplayUsagepChart(). */
     static $domainsquota;
+    /** @var int|string|null Number of sub-domains in use. Set by DisplayUsagepChart(). */
     static $subdomains;
+    /** @var int|string The sub-domains quota (-1: unlimited). Set by DisplayUsagepChart(). */
     static $subdomainsquota;
+    /** @var int|string|null Number of parked domains in use. Set by DisplayUsagepChart(). */
     static $parkeddomains;
+    /** @var int|string The parked domains quota (-1: unlimited). Set by DisplayUsagepChart(). */
     static $parkeddomainsquota;
+    /** @var int|string|null Number of MySQL databases in use. Set by DisplayUsagepChart(). */
     static $mysql;
+    /** @var int|string The MySQL databases quota (-1: unlimited). Set by DisplayUsagepChart(). */
     static $mysqlquota;
+    /** @var int|string|null Number of FTP accounts in use. Set by DisplayUsagepChart(). */
     static $ftpaccounts;
+    /** @var int|string The FTP accounts quota (-1: unlimited). Set by DisplayUsagepChart(). */
     static $ftpaccountsquota;
+    /** @var int|string|null Number of mailboxes in use. Set by DisplayUsagepChart(). */
     static $mailboxes;
+    /** @var int|string The mailboxes quota (-1: unlimited). Set by DisplayUsagepChart(). */
     static $mailboxquota;
+    /** @var int|string|null Number of mail forwarders in use. Set by DisplayUsagepChart(). */
     static $forwarders;
+    /** @var int|string The forwarders quota (-1: unlimited). Set by DisplayUsagepChart(). */
     static $forwardersquota;
+    /** @var int|string Number of distribution lists in use (0 when none). Set by DisplayUsagepChart(). */
     static $distlists;
+    /** @var int|string The distribution lists quota (-1: unlimited). Set by DisplayUsagepChart(). */
     static $distlistsquota;
 
+    /**
+     * Return the chart HTML only when the pChart library is installed.
+     *
+     * @param string $display The chart HTML.
+     * @return string The HTML, or "pChart Library Not Found.".
+     */
     static private function check_pChart($display)
     {
         return (file_exists('etc/lib/pChart2/pChart/pData.php')) ? $display : 'pChart Library Not Found.';
     }
 
+    /**
+     * Template value <@ Usage @>: the disk pie chart and the package usage table.
+     *
+     * Must run before the other charts: it fills the static usage figures.
+     *
+     * @return string The chart HTML, or "pChart Library Not Found.".
+     */
     static function getUsage()
     {
         return self::check_pChart(self::DisplayUsagepChart());
     }
 
+    /**
+     * Template value <@ DomainsUsage @>: the domains usage chart.
+     *
+     * @return string The chart HTML, or "pChart Library Not Found.".
+     */
     static function getDomainsUsage()
     {
         return self::check_pChart(self::DisplayDomainsUsagepChart());
     }
 
+    /**
+     * Template value <@ SubDomainsUsage @>: the sub-domains usage chart.
+     *
+     * @return string The chart HTML, or "pChart Library Not Found.".
+     */
     static function getSubDomainsUsage()
     {
         return self::check_pChart(self::DisplaySubDomainsUsagepChart());
     }
 
+    /**
+     * Template value <@ ParkedDomainsUsage @>: the parked domains usage chart.
+     *
+     * @return string The chart HTML, or "pChart Library Not Found.".
+     */
     static function getParkedDomainsUsage()
     {
         return self::check_pChart(self::DisplayParkedDomainsUsagepChart());
     }
 
+    /**
+     * Template value <@ MysqlUsage @>: the MySQL databases usage chart.
+     *
+     * @return string The chart HTML, or "pChart Library Not Found.".
+     */
     static function getMysqlUsage()
     {
         return self::check_pChart(self::DisplayMysqlUsagepChart());
     }
 
+    /**
+     * Template value <@ FTPUsage @>: the FTP accounts usage chart.
+     *
+     * @return string The chart HTML, or "pChart Library Not Found.".
+     */
     static function getFTPUsage()
     {
         return self::check_pChart(self::DisplayFTPUsagepChart());
     }
 
+    /**
+     * Template value <@ MailboxUsage @>: the mailboxes usage chart.
+     *
+     * @return string The chart HTML, or "pChart Library Not Found.".
+     */
     static function getMailboxUsage()
     {
         return self::check_pChart(self::DisplayMailboxUsagepChart());
     }
 
+    /**
+     * Template value <@ ForwardersUsage @>: the forwarders usage chart.
+     *
+     * @return string The chart HTML, or "pChart Library Not Found.".
+     */
     static function getForwardersUsage()
     {
         return self::check_pChart(self::DisplayForwardersUsagepChart());
     }
 
+    /**
+     * Template value <@ DistListUsage @>: the distribution lists usage chart.
+     *
+     * @return string The chart HTML, or "pChart Library Not Found.".
+     */
     static function getDistListUsage()
     {
         return self::check_pChart(self::DisplayDistListUsagepChart());
     }
 
-    #Begin Display Methods
+    //Begin Display Methods
 
+    /**
+     * Turn an empty value into 0.
+     *
+     * @param mixed $value A quota or usage value.
+     * @return mixed The value, or 0 when it is empty.
+     */
     static function empty_as_0($value)
     {
         return (empty($value)) ? 0 : $value;
     }
 
+    /**
+     * Build one row of the package usage table.
+     *
+     * @param string $name The resource label (translated).
+     * @param int|string|float|null $used The amount used.
+     * @param int|string $quota The quota (below 0: unlimited).
+     * @param bool $human Optional. Show the amounts as file sizes. Default false.
+     * @return string The <tr> HTML with a progress bar image.
+     */
     static function build_row_usage($name, $used, $quota, $human = false)
     {
         $res = '<tr><th nowrap="nowrap">' . ui_language::translate($name) . ':</th><td nowrap="nowrap">' . (($human) ? fs_director::ShowHumanFileSize($used) : $used);
@@ -119,6 +214,15 @@ class module_controller extends ctrl_module
         return $res . '</td></tr>';
     }
 
+    /**
+     * Build the disk usage pie chart and package usage table.
+     *
+     * Reads the user's quotas and usage into the static properties used by the other charts.
+     *
+     * @global db_driver $zdbh The panel's database connection (not used).
+     * @global runtime_controller $controller The request controller.
+     * @return string The HTML.
+     */
     static function DisplayUsagepChart()
     {
         global $zdbh;
@@ -202,6 +306,15 @@ class module_controller extends ctrl_module
         return $line;
     }
 
+    /**
+     * Build one usage pie chart with its heading.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @param string $name The heading (translated).
+     * @param int|string|null $used The amount used.
+     * @param int|string $maximum The quota (below 0: unlimited, shows the unlimited image).
+     * @return string The HTML.
+     */
     static private function DisplayChart($name, $used, $maximum)
     {
 		global $controller;
@@ -218,46 +331,95 @@ class module_controller extends ctrl_module
         return '<h2>' . ui_language::translate($name) . '</h2>' . $res;
     }
 
+    /**
+     * The domains usage chart.
+     *
+     * @return string The HTML.
+     */
     static function DisplayDomainsUsagepChart()
     {
         return self::DisplayChart('Domain Usage', self::$domains, self::$domainsquota);
     }
 
+    /**
+     * The sub-domains usage chart.
+     *
+     * @return string The HTML.
+     */
     static function DisplaySubDomainsUsagepChart()
     {
         return self::DisplayChart('Sub-Domain Usage', self::$subdomains, self::$subdomainsquota);
     }
 
+    /**
+     * The parked domains usage chart.
+     *
+     * @return string The HTML.
+     */
     static function DisplayParkedDomainsUsagepChart()
     {
         return self::DisplayChart('Parked-Domain Usage', self::$parkeddomains, self::$parkeddomainsquota);
     }
 
+    /**
+     * The MySQL databases usage chart.
+     *
+     * @return string The HTML.
+     */
     static function DisplayMysqlUsagepChart()
     {
         return self::DisplayChart('MySQL&reg Database Usage', self::$mysql, self::$mysqlquota);
     }
 
+    /**
+     * The mailboxes usage chart.
+     *
+     * @return string The HTML.
+     */
     static function DisplayMailboxUsagepChart()
     {
         return self::DisplayChart('Mailbox Usage', self::$mailboxes, self::$mailboxquota);
     }
 
+    /**
+     * The FTP accounts usage chart.
+     *
+     * @return string The HTML.
+     */
     static function DisplayFTPUsagepChart()
     {
         return self::DisplayChart('FTP Usage', self::$ftpaccounts, self::$ftpaccountsquota);
     }
 
+    /**
+     * The forwarders usage chart.
+     *
+     * @return string The HTML.
+     */
     static function DisplayForwardersUsagepChart()
     {
         return self::DisplayChart('Forwarders Usage', self::$forwarders, self::$forwardersquota);
     }
 
+    /**
+     * The distribution lists usage chart.
+     *
+     * @return string The HTML.
+     */
     static function DisplayDistListUsagepChart()
     {
         return self::DisplayChart('Distribution List Usage', self::$distlists, self::$distlistsquota);
     }
 
+    /**
+     * Build a progress bar image for one resource of the logged-in user.
+     *
+     * Not called anywhere in the panel.
+     *
+     * @param string $total The resource name for ctrl_users::GetQuotaUsages() (e.g. 'domains').
+     * @param string $quota The quota key in the user details (e.g. 'domainquota').
+     * @return string The <img> HTML, or '' when the quota is 0.
+     */
     static function DisplaypBar($total, $quota)
     {
         $currentuser = ctrl_users::GetUserDetail();

@@ -11,12 +11,16 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  */
+/**
+ * Usage Viewer module: XMWS web service methods.
+ */
 class webservice extends ws_xmws {
 
     /**
      * Get usage stats for the entire server.
-     * @global type $zdbh
-     * @return type 
+     * @global db_driver $zdbh The panel's database connection.
+     * @return array<string, string> Response data: 'response' (empty) and 'content' (stats section: account,
+     *                               cron, FTP, MySQL, package and vhost counts; disk and bandwidth are "TODO").
      */
     function GetServerUsageStats() {
         global $zdbh;

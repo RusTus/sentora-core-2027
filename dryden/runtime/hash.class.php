@@ -13,17 +13,20 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  */
+/**
+ * Bcrypt (Blowfish) password hashing with the server's crypto key mixed into the salt.
+ */
 class runtime_hash {
 
     /**
      * The password of which you wish to hash.
-     * @var string $password The password string of which to create a hash from. 
+     * @var string|null $password The password string of which to create a hash from. 
      */
     var $password = null;
 
     /**
      * The 'salt' this should ideally be 22 characters in lengh. Only '.', '/' and aphanumrical values are allowed!
-     * @var string $salt The salt to use for the hash process. (22 characters in lengh)
+     * @var string|null $salt The salt to use for the hash process. (22 characters in lengh)
      */
     var $salt = null;
 
@@ -32,6 +35,8 @@ class runtime_hash {
      * 10 = 1,024
      * 11 = 2,048
      * 12 = 4,086
+     *
+     * @var int The bcrypt cost factor (log2 of the number of rounds).
      */
     var $cost = 12;
 
@@ -50,7 +55,7 @@ class runtime_hash {
     /**
      * Instead of using the constructor to set the password, you can also use this 'setter' method.
      * @param string $password The password string of which to create a hash from. 
-     * @return boolean
+     * @return false|null False when the password is empty, otherwise nothing (null).
      */
     public function SetPassword($password = '') {
         if (!empty($password)) {
@@ -63,7 +68,7 @@ class runtime_hash {
     /**
      * Instead of using the constructor to set the salt, you can also use this 'setter' method.
      * @param string $salt The salt to use for the hash process. (22 characters in lengh)
-     * @return boolean
+     * @return false|null False when the salt is empty, otherwise nothing (null).
      */
     public function SetSalt($salt = '') {
         if (!empty($salt)) {
@@ -76,6 +81,7 @@ class runtime_hash {
     /**
      * A 'setter' method to set the cost (strenght) of the encryption.
      * @param int $cost Numbe of rounds (2 to the power 10) eg. 10 = 1,024, 11 = 2,048, 12 = 4,096 (Default is 12 (4,096))
+     * @return false|null False when the cost is not above 0, otherwise nothing (null).
      */
     public function SetCost($cost = 0) {
         if ($cost > 0) {
@@ -87,7 +93,11 @@ class runtime_hash {
 
     /**
      * Main method for generating the bcrypt hash.
-     * @return boolean Will return false if fails (the user didn't define a password or the version of PHP does not support Blowfish, PHP 5.3.0+ is required!) or the password hash if successful.
+     *
+     * Loads cnf/security.php for the server crypto key.
+     *
+     * @global array<string, string> $security Security settings from cnf/security.php ('server_crypto_key').
+     * @return string|false Will return false if fails (the user didn't define a password or the version of PHP does not support Blowfish, PHP 5.3.0+ is required!) or the password hash if successful.
      */
     public function Crypt() {
         require_once ctrl_options::GetSystemOption('sentora_root') . 'cnf/security.php';
@@ -117,7 +127,7 @@ class runtime_hash {
     /**
      * Breaks the generated bcrypt string down to extract the various parts (the salt and the hash from the entire string)
      * @param  string $crypto A generated Blowfish hash.
-     * @return object Split parts of the cyrpto string.
+     * @return object Split parts of the cyrpto string: properties Algorithm, Cost, Salt and Hash (all strings).
      */
     public function CryptParts($crypto) {
         $algoritm = substr($crypto, 0, 4);
