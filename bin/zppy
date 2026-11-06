@@ -31,6 +31,65 @@ global $zdbh;
 $repo_file = "etc/zppy-cache/repo.list";
 $package_file = "etc/zppy-cache/package.list";
 
+/**
+ * A repository's address: "https://host/path" as written (GitHub serves only HTTPS), or
+ * http:// in front of the old form "host[:port][/path]"
+ */
+function zppy_base($repo)
+{
+    $repo = rtrim(trim((string) $repo), '/');
+    return (stripos($repo, 'https://') === 0) ? $repo : 'http://' . $repo;
+}
+
+/**
+ * Download <module>.zpp from a repository into etc/zppy-cache/package-downloads/ and
+ * check it against the repository's SHA256SUMS when it has one (a file that does not
+ * match is deleted). true when the file is there and fine.
+ */
+function zppy_download($repo, $module)
+{
+    global $rootPath;
+    if (!preg_match('/^[A-Za-z0-9_-]{1,64}$/', (string) $module)) {
+        fwrite(STDOUT, "Invalid module name.\n");
+        return false;
+    }
+    $dir = $rootPath . 'etc/zppy-cache/package-downloads/';
+    $file = $dir . $module . '.zpp';
+    if (is_file($file) || is_link($file)) {
+        unlink($file);
+    }
+    $url = zppy_base($repo) . '/' . $module . '.zpp';
+    exec('wget -q -T 60 -UZppyClient -O ' . escapeshellarg($file) . ' ' . escapeshellarg($url), $out, $rc);
+    if ($rc !== 0 || !is_file($file) || filesize($file) === 0) {
+        @unlink($file);
+        fwrite(STDOUT, "Could not download " . $url . "\n");
+        return false;
+    }
+    $ctx = stream_context_create(array('http' => array('timeout' => 20)));
+    $sums = @file_get_contents(zppy_base($repo) . '/SHA256SUMS', false, $ctx, 0, 1048576);
+    if ($sums === false || $sums === '') {
+        fwrite(STDOUT, "The repository has no SHA256SUMS: " . $module . ".zpp is not checked.\n");
+        return true;
+    }
+    $want = '';
+    foreach (preg_split('/\r\n|\r|\n/', $sums) as $line) {
+        if (preg_match('/^([0-9a-f]{64})\s+\*?' . preg_quote($module, '/') . '\.zpp$/i', trim($line), $m)) {
+            $want = strtolower($m[1]);
+        }
+    }
+    if ($want === '') {
+        fwrite(STDOUT, "SHA256SUMS does not list " . $module . ".zpp: it is not checked.\n");
+        return true;
+    }
+    if (!hash_equals($want, hash_file('sha256', $file))) {
+        unlink($file);
+        fwrite(STDOUT, $module . ".zpp does not match the repository's SHA256SUMS: not installed.\n");
+        return false;
+    }
+    fwrite(STDOUT, $module . ".zpp matches the repository's SHA256SUMS.\n");
+    return true;
+}
+
 if (!runtime_controller::IsCLI())
     exit(1);
 
@@ -48,12 +107,9 @@ if ((isset($argv[1])) && ($argv[1] == 'install')) {
         $this_line = preg_split('/\t/', $line);
         if ($this_line[0] == $argv[2]) {
             $isfound = true;
-            if (fs_director::CheckFileExists('etc/zppy-cache/package-downloads/' . $argv[2] . '.zpp')) {
-                unlink('etc/zppy-cache/package-downloads/' . $argv[2] . '.zpp');
+            if (!zppy_download($this_line[1], $argv[2])) {
+                exit(1);
             }
-            chdir('etc/zppy-cache/package-downloads/');
-            exec("wget -UZppyClient http://" . $this_line[1] . "/" . $argv[2] . ".zpp");
-            chdir($rootPath);
             if ($isfound) {
                 if (!fs_director::CheckFolderExists(ctrl_options::GetSystemOption('sentora_root') . 'modules/' . $argv[2])) {
                     if (fs_director::CreateDirectory('modules/' . $argv[2])) {
@@ -106,12 +162,9 @@ if ((isset($argv[1])) && ($argv[1] == 'upgrade')) {
     foreach ($lines as $line) {
         $this_line = preg_split('/\t/', $line);
         if ($this_line[0] == $argv[2]) {
-            if (fs_director::CheckFileExists('etc/zppy-cache/package-downloads/' . $argv[2] . '.zpp')) {
-                unlink('etc/zppy-cache/package-downloads/' . $argv[2] . '.zpp');
+            if (!zppy_download($this_line[1], $argv[2])) {
+                exit(1);
             }
-            chdir('etc/zppy-cache/package-downloads/');
-            exec("wget -UZppyClient http://" . $this_line[1] . "/" . $argv[2] . ".zpp");
-            chdir($rootPath);
         }
     }
     if (!fs_director::CheckFolderExists(ctrl_options::GetSystemOption('sentora_root') . 'modules/' . $argv[2])) {
@@ -146,8 +199,8 @@ if ((isset($argv[1])) && ($argv[1] == 'remove')) {
         exit(0);
     }
     if (fs_director::CheckFolderExists('modules/' . $argv[2])) {
-        $sql = $zdbh->prepare("SELECT mo_id_pk FROM x_modules WHERE mo_folder_vc = '" . $argv[2] . "'");
-        $sql->execute();
+        $sql = $zdbh->prepare("SELECT mo_id_pk FROM x_modules WHERE mo_folder_vc = :f");
+        $sql->execute(array(':f' => $argv[2]));
         $moduleid = $sql->fetch();
         if (isset($argv[3]) && $argv[3] == '-y') {
             $confirm = 'y';
@@ -162,10 +215,10 @@ if ((isset($argv[1])) && ($argv[1] == 'remove')) {
             if (fs_director::CheckFileExists($extra_config))
                 include($extra_config);
             ctrl_groups::DeleteGroupModulePermissions(0, $moduleid['mo_id_pk']);
-            $sql = $zdbh->prepare("DELETE FROM x_modules WHERE mo_folder_vc = '$argv[2]'");
-            $sql->execute();
-            $sql = $zdbh->prepare("DELETE FROM x_settings WHERE so_module_vc = '$argv[2]'");
-            $sql->execute();
+            $sql = $zdbh->prepare("DELETE FROM x_modules WHERE mo_folder_vc = :f");
+            $sql->execute(array(':f' => $argv[2]));
+            $sql = $zdbh->prepare("DELETE FROM x_settings WHERE so_module_vc = :f");
+            $sql->execute(array(':f' => $argv[2]));
             if (!fs_director::RemoveDirectory('modules/' . $argv[2])) {
                 fwrite(STDOUT, "Could not removed the module directory!\n");
                 exit(1);
@@ -292,7 +345,7 @@ if ((isset($argv[1])) && ($argv[1] == 'update')) {
         } else {
             if ($line != "") {
                 fwrite(STDOUT, "  Connecting to " . $line . "\n");
-                $packagects = @file_get_contents("http://" . $line . "/packages.txt");
+                $packagects = @file_get_contents(zppy_base($line) . "/packages.txt", false, stream_context_create(array('http' => array('timeout' => 20))));
                 fwrite(STDOUT, "  Getting list from " . $line . "\n");
                 if ($packagects) {
                     $currconf = file_get_contents($package_file);

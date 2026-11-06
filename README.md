@@ -27,9 +27,10 @@ Sentora-2027 runs a web hosting server from the browser: websites, domains and D
 - [Requirements](#requirements)
 - [Installing](#installing)
 - [After installing](#after-installing)
-- [Building the release zips](#building-the-release-zips)
+- [Making a release](#making-a-release)
 - [Updating](#updating)
 - [Backups and restore](#backups-and-restore)
+- [Add-on modules](#add-on-modules)
 - [Security](#security)
 - [Repository layout](#repository-layout)
 - [Documentation](#documentation)
@@ -52,26 +53,23 @@ Modules include the panel's own File Manager, Cron Manager (with a file picker),
 ## Requirements
 
 - A clean install of Ubuntu 26.04 LTS (amd64). No other release or distribution is supported.
-- Root access.
-- A correct clock. The installer checks it against the download server and stops if it is more than 2 minutes off.
+- Root access, and access to github.com from the server.
+- A correct clock. The installer checks it and stops if it is more than 2 minutes off.
 - A host name for the panel (for example `panel.example.com`) and the server's IP address.
-- Access to the download server that holds the release files. It is set by `SENTORA_DOWNLOAD_URL` at the top of `sentora2027-ub26.04`.
 
 ## Installing
 
-Put these files on the download server, in the folder `SENTORA_DOWNLOAD_URL` points to:
+The installer downloads everything it needs from the GitHub releases of the two repositories:
 
-| File | What it is |
+| Release | Files |
 | --- | --- |
-| `sentora2027-ub26.04` | The installer |
-| `sentora-core-2027.zip` | The panel (this repository) |
-| `sentora-installers-2027.zip` | Service configuration, SQL and build sources |
-| `sentora-php-8.2-ubuntu26.04-amd64.tar.gz` to `8.4` | Optional extra PHP versions (a missing file means that version is not installed) |
-| `SHA256SUMS` | Checksums used by `sentora-update` |
+| [sentora-core-2027](https://github.com/RusTus/sentora-core-2027/releases) | `sentora-core-2027.zip` |
+| [sentora-installers-2027](https://github.com/RusTus/sentora-installers-2027/releases) | `sentora2027-ub26.04` (the installer), `sentora-installers-2027.zip`, `sentora-php-8.2-ubuntu26.04-amd64.tar.gz` to `8.4` (optional extra PHP versions) |
 
-Then, on the new server, as root:
+Each download is checked against the SHA-256 GitHub lists for it. On the new server, as root:
 
 ```bash
+wget https://github.com/RusTus/sentora-installers-2027/releases/download/current/sentora2027-ub26.04
 bash sentora2027-ub26.04
 ```
 
@@ -86,6 +84,14 @@ bash sentora2027-ub26.04 -t America/Chicago -d panel.example.com -i public
 | `-t <time zone>` | Time zone, for example `Europe/London` |
 | `-d <host name>` | The panel's host name (needs `-i`) |
 | `-i <address>` | The server's IP address, or `local` / `public` to use the detected one (needs `-d`) |
+
+Settings at the top of the installer choose where it downloads from:
+
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| `SENTORA_RELEASE_TAG` | `current` | The release to install from both repositories; `latest` takes the newest, pre-releases included |
+| `SENTORA_CORE_REPO`, `SENTORA_INSTALLERS_REPO` | `RusTus/sentora-core-2027`, `RusTus/sentora-installers-2027` | The repositories |
+| `SENTORA_DOWNLOAD_URL` | empty | A folder on your own web server holding all the files instead of GitHub |
 
 ## After installing
 
@@ -108,33 +114,49 @@ From another computer, these check what visitors can reach:
 > [!TIP]
 > Once the panel's host name is in public DNS, issue a Let's Encrypt certificate with **Sencrypt**. Mail and FTP switch to it within 5 minutes.
 
-## Building the release zips
+## Making a release
 
-The installer and `sentora-update` expect each zip to hold one top folder named like the zip. From a clone of each repository:
+1. Build the zips from a clone of each repository (each zip holds one top folder named like the zip):
 
-```bash
-git archive --prefix=sentora-core-2027/ -o sentora-core-2027.zip master2027
-git archive --prefix=sentora-installers-2027/ -o sentora-installers-2027.zip master2027
-sha256sum sentora2027-ub26.04 sentora-*.zip sentora-php-*.tar.gz > SHA256SUMS
-```
+   ```bash
+   git archive --prefix=sentora-core-2027/ -o sentora-core-2027.zip master2027
+   git archive --prefix=sentora-installers-2027/ -o sentora-installers-2027.zip master2027
+   ```
 
-Copy them, with the installer, to the download server.
+2. Both repositories have one release with the tag **`current`**. In each, open that release, click **Edit**, delete the old files and attach the new ones:
+   - core: `sentora-core-2027.zip`
+   - installers: `sentora2027-ub26.04`, `sentora-installers-2027.zip` and the PHP bundles
+3. Save the release (leave it published, not as a draft).
+
+New installs and `sentora-update` take the files from the `current` release, so they get the new version as soon as it's saved. GitHub lists each file's SHA-256 on the release page; the installer and `sentora-update` check every download against it.
 
 ## Updating
 
 ```bash
-sentora-update --check      # is there a newer version?
+sentora-update --check      # is there a newer release?
 sentora-update              # back up the panel, then update it (asks first)
 sentora-update --rollback   # list the backups and restore one
 ```
 
-`sentora-update` updates the panel only, and keeps this server's own settings. Changes to the service configuration (Postfix, Dovecot, Apache and so on) are described in the [change log](CHANGELOG.md).
+`sentora-update` installs the core zip from the `current` release of [sentora-core-2027](https://github.com/RusTus/sentora-core-2027/releases), and knows a new version by its changed SHA-256. To use another release, set `TAG="<tag>"` in `/etc/sentora/update.conf` (`TAG="latest"` takes the newest release, pre-releases included). It updates the panel only and keeps this server's own settings; changes to the service configuration (Postfix, Dovecot, Apache and so on) are described in the [change log](CHANGELOG.md).
 
 ## Backups and restore
 
 - **Client backups:** each account can back up its own websites, databases and mail from the panel.
 - **Full panel backups:** **Admin > Backup Config** copies every account, database, mailbox and the panel's configuration to another machine each night, as a structured snapshot.
 - **Restore:** the same page, or `sentora-panel-restore`, restores one account or the whole panel, also on a new server. What is there before is always saved first.
+
+## Add-on modules
+
+Optional modules are installed from **Admin > Repo Browser**, which lists the Sentora-2027 add-on repository by default:
+
+| Module | What it does |
+| --- | --- |
+| PHP-Adminer | Adminer for each account's own MySQL databases |
+| Webalizer Stats | Webalizer traffic reports per domain |
+| Visitor Stats | Visitors reports per domain |
+
+The modules live in the [`sentora-repo` folder](https://github.com/RusTus/sentora-installers-2027/tree/master2027/sentora-repo) of the installers repository. Every download is checked against its `SHA256SUMS`.
 
 ## Security
 

@@ -1,4 +1,7 @@
 # Sentora ZPPY repo list.
-store.sentora.org/repo
-repo.sentora.org/repo
+# The Sentora-2027 add-on modules (PHP-Adminer, Webalizer Stats, Visitor Stats) on GitHub
+https://raw.githubusercontent.com/RusTus/sentora-installers-2027/master2027/sentora-repo
+# The original Sentora repositories (offline at the time of writing):
+# store.sentora.org/repo
+# repo.sentora.org/repo
 # User defined settings.

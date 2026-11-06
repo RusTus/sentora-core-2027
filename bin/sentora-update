@@ -1,14 +1,15 @@
 #!/bin/bash
 # sentora-update: update the Sentora panel (the core) in place, safely.
 #
-#   sentora-update              update from the download server (asks first)
+#   sentora-update              update from the GitHub release (asks first)
 #   sentora-update --yes        the same without asking
 #   sentora-update --check      only say whether an update is available
 #   sentora-update --rollback   list the backups and restore one
 #   sentora-update --rollback /var/sentora/backups/panel-before-update-....tar.gz
 #
-# What it does: downloads sentora-core-2027.zip (checked against SHA256SUMS when the
-# download server has one), backs up the panel (the last 5 backups are kept), copies
+# What it does: downloads sentora-core-2027.zip from the "current" release of
+# github.com/RusTus/sentora-core-2027 (checked against the SHA-256 GitHub lists for
+# it), backs up the panel (the last 5 backups are kept), copies
 # the new core over the old one without touching this server's own files (database
 # settings and key in cnf/, zsudo, the template cache, Matomo's config, the
 # repository lists, installed add-on modules), removes files the core no longer has,
@@ -28,9 +29,17 @@ CONF=/etc/sentora/update.conf
 ZIP=sentora-core-2027.zip
 KEEP=5
 
-URL="http://hembackup1.hemsaw.local/installers"
+# Where updates come from: the GitHub release of the core repository with this tag
+# ("current": a new version replaces its files; TAG="latest" takes the newest release,
+# pre-releases included); or, with URL set, a folder on your own web server holding
+# sentora-core-2027.zip and SHA256SUMS.
+REPO="RusTus/sentora-core-2027"
+TAG="current"
+URL=""
+GITHUB="https://github.com"
+API="https://api.github.com"
 # shellcheck disable=SC1090
-[ -f "$CONF" ] && . "$CONF"          # may set URL=...
+[ -f "$CONF" ] && . "$CONF"          # may set REPO=, TAG= or URL= (GITHUB= and API= for tests)
 URL=${SENTORA_UPDATE_URL:-$URL}
 
 say()  { echo -e "\e[1;34m==>\e[0m $*"; }
@@ -40,6 +49,8 @@ die()  { echo -e "\e[1;31mERROR:\e[0m $*"; exit 1; }
 [ "$(id -u)" -eq 0 ] || die "run this as root"
 exec 9> /run/sentora-update.lock
 flock -n 9 || die "another sentora-update is running"
+# services and jobs started from here must not keep the lock after this script ends
+systemctl() { command systemctl "$@" 9>&-; }
 
 MODE=update; YES=0; RESTORE=""
 case "${1:-}" in
@@ -85,7 +96,7 @@ php_reload() {
 
 finish() {
     say "Running the Sentora daemon once"
-    php "$PANEL/bin/daemon.php" > /var/sentora/logs/daemon-last-run.log 2>&1 || warn "the daemon run reported an error (see /var/sentora/logs/daemon-last-run.log)"
+    php "$PANEL/bin/daemon.php" > /var/sentora/logs/daemon-last-run.log 2>&1 9>&- || warn "the daemon run reported an error (see /var/sentora/logs/daemon-last-run.log)"
     if [ -x "$PANEL/bin/sentora-post-install-check" ]; then
         say "Checking the installation"
         "$PANEL/bin/sentora-post-install-check" | grep -E "^Result:|^No failures|^Fix the FAIL"
@@ -122,16 +133,62 @@ fi
 # --- download -------------------------------------------------------------------------
 need rsync rsync; need unzip unzip
 TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
-say "Downloading $URL/$ZIP"
-wget -q -O "$TMP/$ZIP" "$URL/$ZIP" || die "could not download $URL/$ZIP"
+LAST=$(cut -d' ' -f1 "$STATE" 2> /dev/null)
+WANT=""; RTAG=""
+if [ -n "$URL" ]; then
+    DL="$URL/$ZIP"
+else
+    # GitHub's release API: the release's tag and the zip's SHA-256
+    if [ "$TAG" = "latest" ]; then
+        Q="$API/repos/$REPO/releases?per_page=1"
+    else
+        Q="$API/repos/$REPO/releases/tags/$TAG"
+    fi
+    INFO=$(wget -q -T 20 -O - --header="Accept: application/vnd.github+json" "$Q" 2> /dev/null | php -r '
+        $d = json_decode(stream_get_contents(STDIN), true);
+        if (isset($d[0])) { $d = $d[0]; }
+        if (!is_array($d) || empty($d["tag_name"])) { exit(1); }
+        $sum = "";
+        foreach ((array) ($d["assets"] ?? array()) as $a) {
+            if (($a["name"] ?? "") === $argv[1]) { $sum = preg_replace("/^sha256:/", "", (string) ($a["digest"] ?? "")); }
+        }
+        echo $d["tag_name"], " ", $sum === "" ? "-" : $sum, " ", empty($d["prerelease"]) ? "release" : "pre-release";
+    ' "$ZIP" 2> /dev/null)
+    if [ -n "$INFO" ]; then
+        read -r RTAG WANT KIND <<< "$INFO"
+        [ "$WANT" = "-" ] && WANT=""
+        DL="$GITHUB/$REPO/releases/download/$RTAG/$ZIP"
+        say "Newest: $KIND $RTAG of $REPO"
+    else
+        warn "GitHub's release API did not answer (no network to api.github.com, or its hourly limit): the download is not checked"
+        RTAG="$TAG"
+        if [ "$TAG" = "latest" ]; then
+            # the release feed lists pre-releases too, newest first, without the API's limit
+            RTAG=$(wget -q -T 20 -O - "$GITHUB/$REPO/releases.atom" 2> /dev/null \
+                | grep -o 'releases/tag/[^"<]*' | head -1 | sed 's|releases/tag/||')
+            [ -n "$RTAG" ] || die "could not find the newest release of $REPO (no network to github.com?)"
+            say "Newest release of $REPO: $RTAG"
+        fi
+        DL="$GITHUB/$REPO/releases/download/$RTAG/$ZIP"
+    fi
+    # Known without downloading: is it the version installed?
+    if [ "$MODE" = check ] && [ -n "$WANT" ]; then
+        [ "$WANT" = "$LAST" ] && echo "Up to date (installed $(cut -d' ' -f2- "$STATE"))." || echo "An update is available ($RTAG): run sentora-update."
+        exit 0
+    fi
+fi
+say "Downloading $DL"
+wget -q -O "$TMP/$ZIP" "$DL" || die "could not download $DL"
 SUM=$(sha256sum "$TMP/$ZIP" | cut -d' ' -f1)
-if wget -q -O "$TMP/SHA256SUMS" "$URL/SHA256SUMS" 2> /dev/null && grep -q " $ZIP\$\| \*$ZIP\$" "$TMP/SHA256SUMS"; then
+if [ -n "$WANT" ]; then
+    [ "$SUM" = "$WANT" ] || die "$ZIP does not match the SHA-256 GitHub lists for it: nothing was changed"
+    say "Checksum matches the release"
+elif [ -n "$URL" ] && wget -q -O "$TMP/SHA256SUMS" "$URL/SHA256SUMS" 2> /dev/null && grep -qE " \*?$ZIP\$" "$TMP/SHA256SUMS"; then
     grep -E " \*?$ZIP\$" "$TMP/SHA256SUMS" | cut -d' ' -f1 | grep -qx "$SUM" || die "$ZIP does not match SHA256SUMS on the download server"
     say "Checksum matches SHA256SUMS"
 else
-    warn "no SHA256SUMS on the download server: the download is not checked"
+    warn "the download is not checked (no checksum available)"
 fi
-LAST=$(cut -d' ' -f1 "$STATE" 2> /dev/null)
 if [ "$MODE" = check ]; then
     [ "$SUM" = "$LAST" ] && echo "Up to date (installed $(cut -d' ' -f2- "$STATE"))." || echo "An update is available: run sentora-update."
     exit 0
@@ -198,6 +255,15 @@ if [ -f "$SRC/VERSION" ]; then
 fi
 
 # --- new core modules, and the bundled apps' databases ----------------------------------------
+# --- the add-on repository moved from the internal server to GitHub -----------------
+ADDONS="https://raw.githubusercontent.com/RusTus/sentora-installers-2027/master2027/sentora-repo"
+RL="$PANEL/etc/zppy-cache/repo.list"
+if [ -f "$RL" ] && ! grep -qxF "$ADDONS" "$RL"; then
+    say "Add-on repository: $ADDONS"
+    sed -i '/^hembackup1\.hemsaw\.local\/sentora-repo\/\?$/d' "$RL"
+    echo "$ADDONS" >> "$RL"
+    php "$PANEL/bin/zppy" update > /dev/null 2>&1 9>&- || warn "could not read the add-on repository's package list yet"
+fi
 say "Registering new modules"
 SRC_MODULES=$(cd "$SRC/modules" && ls -d -- */ | tr -d '/' | tr '\n' ' ')
 ( cd "$PANEL" && php -r '
@@ -252,6 +318,6 @@ if [ -n "$RC_AFTER" ] && [ "$RC_BEFORE" != "$RC_AFTER" ]; then
 fi
 
 php_reload
-echo "$SUM $(date '+%Y-%m-%d %H:%M')" > "$STATE"
+echo "$SUM ${RTAG:+$RTAG, }$(date '+%Y-%m-%d %H:%M')" > "$STATE"
 finish
 say "Updated. To go back: sentora-update --rollback $B"
