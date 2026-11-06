@@ -3,8 +3,9 @@
 /**
  * Core module daemon hook: disk and bandwidth usage of every client account.
  *
- * Stores each account's disk usage and adds the bandwidth from each domain's
- * bandwidth log to this month's x_bandwidth row, setting the over-quota flags.
+ * Stores each account's disk usage (website files plus the mail of its domains in
+ * /var/sentora/vmail/) and adds the bandwidth from each domain's bandwidth log to
+ * this month's x_bandwidth row, setting the over-quota flags (this month's row only).
  *
  * @package Sentora
  * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
@@ -19,25 +20,27 @@ $userssql = $zdbh->query("SELECT ac_id_pk, ac_user_vc FROM x_accounts WHERE ac_d
 echo fs_filehandler::NewLine() . "START Calculating disk Usage for all client accounts.." . fs_filehandler::NewLine();
 while ($userdir = $userssql->fetch()) {
     $homedirectory = ctrl_options::GetSystemOption('hosted_dir') . $userdir['ac_user_vc'];
-    if (fs_director::CheckFolderExists($homedirectory)) {
-		// START - tg - Include vmail folder size in total disk space used
-		// https://github.com/sentora/sentora-core/pull/308
-        $sumzero = 0;
-        $idmail = $userdir['ac_id_pk'];
-        $usersmail = $zdbh->prepare("SELECT DISTINCT vh_acc_fk,vh_name_vc FROM x_vhosts WHERE vh_acc_fk=:idmail");
-        $usersmail->bindParam(':idmail', $idmail);
-        $usersmail->execute();
-        while ($usermaildir = $usersmail->fetch()) {
-          $maildirectory = "/var/sentora/vmail/" . $usermaildir['vh_name_vc'];
-          if (fs_director::CheckFolderExists($maildirectory)) {
+    // Mail counts toward the disk quota too: Dovecot keeps each domain's mail in
+    // /var/sentora/vmail/<domain>/. This was added up into $sumzero but never added to
+    // $size, so mailboxes were left out of the usage figure and the quota.
+    // https://github.com/sentora/sentora-core/pull/308
+    $sumzero = 0;
+    $idmail = $userdir['ac_id_pk'];
+    $usersmail = $zdbh->prepare("SELECT DISTINCT vh_name_vc FROM x_vhosts WHERE vh_acc_fk=:idmail AND vh_deleted_ts IS NULL");
+    $usersmail->bindParam(':idmail', $idmail);
+    $usersmail->execute();
+    while ($usermaildir = $usersmail->fetch()) {
+        // a domain name only, never a path
+        if (!preg_match('/^[A-Za-z0-9][A-Za-z0-9.-]*$/', (string) $usermaildir['vh_name_vc']) || strpos((string) $usermaildir['vh_name_vc'], '..') !== false) {
+            continue;
+        }
+        $maildirectory = "/var/sentora/vmail/" . $usermaildir['vh_name_vc'];
+        if (fs_director::CheckFolderExists($maildirectory)) {
             $sumzero = $sumzero + fs_director::GetDirectorySize($maildirectory);
-          }
-        };
-		// END
-        $size = fs_director::GetDirectorySize($homedirectory);
-    } else {
-        $size = 0;
+        }
     }
+    $filesize = fs_director::CheckFolderExists($homedirectory) ? fs_director::GetDirectorySize($homedirectory) : 0;
+    $size = $filesize + $sumzero;
     $currentuser = ctrl_users::GetUserDetail($userdir['ac_id_pk']);
     $numrows = $zdbh->prepare("SELECT COUNT(*) AS total FROM x_bandwidth WHERE bd_month_in = :date AND bd_acc_fk = :ac_id_pk");
     $date = date("Ym");
@@ -54,9 +57,11 @@ while ($userdir = $userssql->fetch()) {
         $numrows3->execute();
     }
 
-    $updatesql = $zdbh->prepare("UPDATE x_bandwidth SET bd_diskamount_bi = :size WHERE bd_acc_fk =:ac_id_pk");
+    // This month's row only (without the month, every run overwrote all past months)
+    $updatesql = $zdbh->prepare("UPDATE x_bandwidth SET bd_diskamount_bi = :size WHERE bd_acc_fk =:ac_id_pk AND bd_month_in = :date");
     $updatesql->bindParam(':size', $size);
     $updatesql->bindParam(':ac_id_pk', $userdir['ac_id_pk']);
+    $updatesql->bindParam(':date', $date);
     $updatesql->execute();
     
     $numrows = $zdbh->prepare("SELECT * FROM x_bandwidth WHERE bd_month_in = :date AND bd_acc_fk = :ac_id_pk");
@@ -67,17 +72,19 @@ while ($userdir = $userssql->fetch()) {
     $checksize = $numrows->fetch();
     
     if ($checksize['bd_diskamount_bi'] > $currentuser['diskquota']) {
-        $updatesql = $zdbh->prepare("UPDATE x_bandwidth SET bd_diskover_in = 1 WHERE bd_acc_fk =:ac_id_pk");
+        $updatesql = $zdbh->prepare("UPDATE x_bandwidth SET bd_diskover_in = 1 WHERE bd_acc_fk =:ac_id_pk AND bd_month_in = :date");
         $updatesql->bindParam(':ac_id_pk', $userdir['ac_id_pk']);
+        $updatesql->bindParam(':date', $date);
         $updatesql->execute();
     } else {
-        $updatesql = $zdbh->prepare("UPDATE x_bandwidth SET bd_diskover_in = 0 WHERE bd_acc_fk =:ac_id_pk");
+        $updatesql = $zdbh->prepare("UPDATE x_bandwidth SET bd_diskover_in = 0 WHERE bd_acc_fk =:ac_id_pk AND bd_month_in = :date");
         $updatesql->bindParam(':ac_id_pk', $userdir['ac_id_pk']);
+        $updatesql->bindParam(':date', $date);
         $updatesql->execute();
     }
 
 
-    echo "Disk usage for user \"" . $userdir['ac_user_vc'] . "\" is: " . $size . " (" . fs_director::ShowHumanFileSize($size) . ")" . fs_filehandler::NewLine();
+    echo "Disk usage for user \"" . $userdir['ac_user_vc'] . "\" is: " . $size . " (" . fs_director::ShowHumanFileSize($size) . ": files " . fs_director::ShowHumanFileSize($filesize) . ", mail " . fs_director::ShowHumanFileSize($sumzero) . ")" . fs_filehandler::NewLine();
 }
 echo "END Calculating disk usage" . fs_filehandler::NewLine();
 
@@ -123,12 +130,14 @@ if ($checksql['total'] > 0) {
         $checksize = $numrows->fetch();
         
         if ($checksize['bd_transamount_bi'] > $domainowner['bandwidthquota']) {
-            $updatesql = $zdbh->prepare("UPDATE x_bandwidth SET bd_transover_in = 1 WHERE bd_acc_fk = :vh_acc_fk");
+            $updatesql = $zdbh->prepare("UPDATE x_bandwidth SET bd_transover_in = 1 WHERE bd_acc_fk = :vh_acc_fk AND bd_month_in = :date");
             $updatesql->bindParam(':vh_acc_fk', $domain['vh_acc_fk']);
+            $updatesql->bindParam(':date', $date);
             $updatesql->execute();
         } else {
-            $updatesql = $zdbh->prepare("UPDATE x_bandwidth SET bd_transover_in = 0 WHERE bd_acc_fk =:vh_acc_fk");
+            $updatesql = $zdbh->prepare("UPDATE x_bandwidth SET bd_transover_in = 0 WHERE bd_acc_fk = :vh_acc_fk AND bd_month_in = :date");
             $updatesql->bindParam(':vh_acc_fk', $domain['vh_acc_fk']);
+            $updatesql->bindParam(':date', $date);
             $updatesql->execute();
         }
     }
