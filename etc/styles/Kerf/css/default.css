@@ -1000,7 +1000,7 @@ i.greyscale[class^="icon-"]:before, i.greyscale[class*=" icon-"]:before { conten
 /* =====================================================================
    Kerf: a Sentora theme for a machine-shop network.
    Brushed-steel surfaces, layout-fluid blue for anything you can act on,
-   and one saw-tooth edge under the top bar. Everything else stays quiet.
+   and a plain straight top bar. Everything else stays quiet.
    ===================================================================== */
 /* Barlow Semi Condensed, SIL Open Font License (fonts/barlow/OFL.txt) */
 @font-face {
@@ -1050,21 +1050,11 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     outline-offset: 2px;
 }
 
-/* ---- Top bar with the saw-tooth edge -------------------------------- */
+/* ---- Top bar ------------------------------------------------------- */
 .navbar-inverse {
     background: var(--kerf-ink);
     border: 0;
     font-family: var(--kerf-display);
-}
-.navbar-inverse::after {
-    /* Rip-saw teeth: a straight face and a sloped back on each tooth */
-    content: "";
-    display: block;
-    position: absolute;
-    left: 0; right: 0; bottom: -9px;
-    height: 9px;
-    background: linear-gradient(to bottom left, var(--kerf-ink) 50%, transparent 50%) 0 0 / 18px 9px repeat-x;
-    pointer-events: none;
 }
 .navbar-inverse .nav > li > a {
     color: #C9D3D8;
