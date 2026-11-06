@@ -49,7 +49,9 @@ function DeleteApacheClientFiles()
             $numrows2->bindParam( ':user', $user );
             if ( $numrows2->execute() ) {
                 if ( $numrows2->fetchColumn() == 0 ) {
-                    if ( file_exists( ctrl_options::GetSystemOption( 'hosted_dir' ) . $rowdeletedaccounts[ 'ac_user_vc' ] ) ) {
+                    // Never with an empty or odd user name (the path would be every account's folder)
+                    if ( preg_match( '/^[A-Za-z0-9][A-Za-z0-9._-]*$/', (string) $rowdeletedaccounts[ 'ac_user_vc' ] ) && strpos( (string) $rowdeletedaccounts[ 'ac_user_vc' ], '..' ) === false
+                        && file_exists( ctrl_options::GetSystemOption( 'hosted_dir' ) . $rowdeletedaccounts[ 'ac_user_vc' ] ) ) {
                         fs_director::RemoveDirectory( ctrl_options::GetSystemOption( 'hosted_dir' ) . $rowdeletedaccounts[ 'ac_user_vc' ] );
                     }
                 }

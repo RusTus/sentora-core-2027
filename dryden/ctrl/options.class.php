@@ -151,6 +151,9 @@ class ctrl_options {
      * @return string The HTML code for the generated text field.
      */
     public static function OutputSettingTextField($name, $cval = "") {
+        // Escaped: a setting's value (or a name) must never close the field and add HTML
+        $name = htmlspecialchars((string) $name, ENT_QUOTES, 'UTF-8');
+        $cval = htmlspecialchars((string) $cval, ENT_QUOTES, 'UTF-8');
         if ($cval == "")
             return "<input type=\"text\" name=\"" . $name . "\" id=\"" . $name . "\">\n";
         return "<input type=\"text\" name=\"" . $name . "\" id=\"" . $name . "\" value=\"" . $cval . "\">\n";
@@ -164,6 +167,9 @@ class ctrl_options {
      * @return string The HTML code for the generated textarea field.
      */
     public static function OutputSettingTextArea($name, $cval = "") {
+        // Escaped: a value containing "</textarea>" must not end the field and add HTML
+        $name = htmlspecialchars((string) $name, ENT_QUOTES, 'UTF-8');
+        $cval = htmlspecialchars((string) $cval, ENT_QUOTES, 'UTF-8');
         return "<textarea cols=\"30\" rows=\"1\" name=\"" . $name . "\">" . $cval . "</textarea>";
     }
 
@@ -177,9 +183,12 @@ class ctrl_options {
      */
     public static function OuputSettingMenuField($name, $dval, $cval = "") {
         $values = explode("|", $dval);
+        $name = htmlspecialchars((string) $name, ENT_QUOTES, 'UTF-8');
         $field = "<select name=\"" . $name . "\" id=\"" . $name . "\">\n";
-        foreach ($values as $option) {
-            if ($cval != $option) {
+        foreach ($values as $rawOption) {
+            // compared unescaped, printed escaped
+            $option = htmlspecialchars((string) $rawOption, ENT_QUOTES, 'UTF-8');
+            if ($cval != $rawOption) {
                 $field .= "\t<option value=\"" . $option . "\">" . $option . "</option>\n";
             } else {
                 $field .= "\t<option value=\"" . $option . "\" selected=\"selected\">" . $option . "</option>\n";

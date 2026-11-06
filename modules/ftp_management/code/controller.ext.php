@@ -304,7 +304,7 @@ class module_controller extends ctrl_module
                 $full_path = ctrl_options::GetSystemOption('hosted_dir') . $currentuser['username'] . $homedirectory_to_use . '/';
                 // Create the new home directory... (If it doesnt already exist.)
                 if (!file_exists($full_path)) {
-                    @mkdir($full_path, 777);
+                    @mkdir($full_path, 0770); // octal (777 decimal was mode 1411; fixed on the next line anyway)
                     fs_director::SetFileSystemPermissions($full_path, 0770);
                 }
             } else if ($home == 3) {
@@ -427,7 +427,7 @@ class module_controller extends ctrl_module
 	 *
 	 * @global db_driver $zdbh The panel's database connection (unused).
 	 * @param string $password The password.
-	 * @return bool True when there is an error (but false when the password is too short).
+	 * @return bool True when there is an error (blank, too short, or not valid), false otherwise.
 	 */
 	static function CheckPasswordForErrors($password)
     {
@@ -439,10 +439,11 @@ class module_controller extends ctrl_module
             self::$blankpassword = TRUE;
             $retval = TRUE;
         }
-		// Check for password length...
+		// Check for password length... (true = there IS an error; this returned false, so a
+		// blank or too-short password was accepted on reset)
 		if (strlen($password) < ctrl_options::GetSystemOption('password_minlength')) {
 			self::$badpasswordlength = true;
-			return false;
+			return true;
 		}
         // Check for invalid password
         if (!self::IsValidPassword($password)) {
@@ -533,6 +534,11 @@ class module_controller extends ctrl_module
     {
         global $controller;
         runtime_csfr::Protect();
+        // The package's limit on FTP accounts, checked here as well: the page only hides the
+        // form at the limit, so a posted form could create more than the package allows
+        if (!self::getQuotaLimit()) {
+            return false;
+        }
         $currentuser = ctrl_users::GetUserDetail();
         $formvars = $controller->GetAllControllerRequests('FORM');
         if (self::ExecuteCreateFTP($currentuser['userid'], $formvars['inFTPUsername'] ?? '', $formvars['inPassword'] ?? '', $formvars['inDestination'] ?? '', $formvars['inDomainDestination'] ?? '', $formvars['inAccess'] ?? '', $formvars['inAutoHome'] ?? '')) {

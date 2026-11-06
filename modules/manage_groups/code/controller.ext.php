@@ -290,6 +290,54 @@ class module_controller extends ctrl_module
     }
 
     /**
+     * Is this group one of the logged-in reseller's own groups?
+     *
+     * Only those (never the built-in Administrators, Resellers and Users groups, nor
+     * another reseller's groups) may be renamed or deleted here: the page lists no
+     * others, and the group ID comes from the form, so it is checked again on save.
+     *
+     * @param mixed $gid The group ID from the form or URL.
+     * @return bool True when the current account owns the group.
+     */
+    static function OwnsGroup($gid)
+    {
+        if (!is_scalar($gid) || (string) $gid === '') {
+            return false;
+        }
+        $currentuser = ctrl_users::GetUserDetail();
+        foreach ((self::ListGroups($currentuser['userid']) ?: array()) as $row) {
+            if ((string) $row['groupid'] === (string) $gid) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Is this a group the members of a deleted group may be moved to?
+     *
+     * The same choice the delete page offers (the reseller's own other groups), so a
+     * posted ID can not move clients into Administrators or another reseller's group.
+     *
+     * @param mixed $mgid The target group ID from the form.
+     * @param mixed $gid The group being deleted.
+     * @return bool True when the target is one the page offered.
+     */
+    static function ValidMoveTarget($mgid, $gid)
+    {
+        if (!is_scalar($mgid) || (string) $mgid === '') {
+            return false;
+        }
+        $currentuser = ctrl_users::GetUserDetail();
+        foreach ((self::GroupMoveTo($currentuser['userid'], $gid) ?: array()) as $row) {
+            if ((string) $row['groupid'] === (string) $mgid) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * Handle the create form: create the posted group for the logged-in reseller.
      *
      * Checks the CSRF token.
@@ -356,7 +404,12 @@ class module_controller extends ctrl_module
         } else {
             $inMoveGroup = "";
         }
-        if (self::ExecuteDeleteGroup($formvars['inGroupID'], $inMoveGroup))
+        // Only the reseller's own group, and members only to a group the page offered
+        $gid = isset($formvars['inGroupID']) ? $formvars['inGroupID'] : '';
+        if (!self::OwnsGroup($gid) || ($inMoveGroup !== '' && !self::ValidMoveTarget($inMoveGroup, $gid))) {
+            return false;
+        }
+        if (self::ExecuteDeleteGroup($gid, $inMoveGroup))
             return true;
         return false;
     }
@@ -374,6 +427,10 @@ class module_controller extends ctrl_module
         global $controller;
         runtime_csfr::Protect();
         $formvars = $controller->GetAllControllerRequests('FORM');
+        // Only the reseller's own group (the ID comes from the form)
+        if (!isset($formvars['inGroupID']) || !self::OwnsGroup($formvars['inGroupID'])) {
+            return false;
+        }
         if (self::ExectuteUpdateGroup($formvars['inGroupID'], $formvars['inGroupName'], $formvars['inDesc']))
             return true;
         return false;
@@ -422,8 +479,8 @@ class module_controller extends ctrl_module
             return;
         }
 
-        // Show User Info
-        return (isset($urlvars['show'])) && ($urlvars['show'] == "Delete");
+        // Show User Info, for one of the reseller's own groups only
+        return (isset($urlvars['show'])) && ($urlvars['show'] == "Delete") && isset($urlvars['other']) && self::OwnsGroup($urlvars['other']);
     }
 
     /**
@@ -454,8 +511,8 @@ class module_controller extends ctrl_module
             return;
         }
 
-        // Show User Info
-        return (isset($urlvars['show'])) && ($urlvars['show'] == "Edit");
+        // Show User Info, for one of the reseller's own groups only
+        return (isset($urlvars['show'])) && ($urlvars['show'] == "Edit") && isset($urlvars['other']) && self::OwnsGroup($urlvars['other']);
     }
 
     /**

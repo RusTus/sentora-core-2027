@@ -617,10 +617,14 @@ class module_controller extends ctrl_module {
         $formvars = $controller->GetAllControllerRequests('FORM');
 		// Only this account's own domains (the name comes from the form, and is also
 		// used in file paths, so a "../" or another account's domain must never get through)
-		if (!self::OwnsDomainName(isset($formvars['inDomain']) ? $formvars['inDomain'] : '')) {
+		// The check is on inName, the value that goes into the path (the buttons send only
+		// inName; checking inDomain refused every real download and let a posted inDomain
+		// of one's own domain pass with an inName of "../another-account")
+		$domain = isset($formvars['inName']) ? (string) $formvars['inName'] : '';
+		if (!self::OwnsDomainName($domain)) {
 			return false;
 		}
-        if (self::ExecuteDownload($formvars['inName'], $currentuser["username"])) {
+        if (self::ExecuteDownload($domain, $currentuser["username"])) {
             return true;
 		}
     }
@@ -730,13 +734,15 @@ class module_controller extends ctrl_module {
         $formvars = $controller->GetAllControllerRequests('FORM');
 		// Only this account's own domains (the name comes from the form, and is also
 		// used in file paths, so a "../" or another account's domain must never get through)
-		if (!self::OwnsDomainName(isset($formvars['inDomain']) ? $formvars['inDomain'] : '')) {
+		// The check is on inName, the value that goes into the path (see doDownload)
+		$domain = isset($formvars['inName']) ? (string) $formvars['inName'] : '';
+		if (!self::OwnsDomainName($domain)) {
 			return false;
 		}
 		
 		$sub_module = "third_party";
 		
-        if (self::ExecuteTPDelete($formvars['inName'], $currentuser["username"], $sub_module)) {
+        if (self::ExecuteTPDelete($domain, $currentuser["username"], $sub_module)) {
             return true;
 		}
     }

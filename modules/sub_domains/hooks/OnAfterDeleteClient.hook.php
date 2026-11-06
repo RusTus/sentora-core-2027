@@ -48,7 +48,10 @@ function DeleteSubDomainsForDeletedClient() {
         }
         if ($deletedir == true) {
             $currentuser = ctrl_users::GetUserDetail($deletedclient);
-            if (is_dir(ctrl_options::GetSystemOption('hosted_dir') . $currentuser['username'])) {
+            // Never with an empty or odd user name: the path would be the folder of every
+            // account (hosted_dir itself) or somewhere else entirely
+            if (preg_match('/^[A-Za-z0-9][A-Za-z0-9._-]*$/', (string) $currentuser['username']) && strpos((string) $currentuser['username'], '..') === false
+                && is_dir(ctrl_options::GetSystemOption('hosted_dir') . $currentuser['username'])) {
                 fs_filehandler::RemoveDirectory(ctrl_options::GetSystemOption('hosted_dir') . $currentuser['username']);
             }
         }

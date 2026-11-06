@@ -30,8 +30,17 @@ class ui_moduleloader {
         global $zdbh;
         $user = ctrl_users::GetUserDetail();
 
+        // The saved order goes into the SQL, so only whole-number category IDs are used
+        // (it is JSON the browser sent; anything else falls back to the default order)
+        $order = '';
         if (isset($user['catorder']) && $user['catorder'] != '') {
-            $order = trim($user['catorder'], '[]');
+            $ids = json_decode((string) $user['catorder'], true);
+            if (is_array($ids)) {
+                $ids = array_values(array_filter($ids, function ($v) { return is_scalar($v) && ctype_digit((string) $v); }));
+                $order = implode(',', array_map('intval', $ids));
+            }
+        }
+        if ($order !== '') {
             $sql = 'SELECT * FROM `x_modcats`ORDER BY FIELD(`mc_id_pk`, '.$order.')';
         } else if($catname != ''){
             $sql = 'SELECT * FROM x_modcats WHERE mc_name_vc = :catname';

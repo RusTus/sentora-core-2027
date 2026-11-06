@@ -143,7 +143,7 @@ class module_controller extends ctrl_module
         $line .= "<div class=\"content\"><h2>" . ui_language::translate("Create Default DNS Records") . "</h2>";
         $line .= "" . ui_language::translate("No records were found for this domain.  Click the button below to set up your domain records for the first time") . "";
         $line .= "<div>";
-        $line .= "<div class=\"actions\"><a class=\"back\" href=\"./?module=" . $controller->GetControllerRequest('URL', 'module') . "\">Domain List</a></div>";
+        $line .= "<div class=\"actions\"><a class=\"back\" href=\"./?module=" . htmlspecialchars((string) $controller->GetControllerRequest('URL', 'module'), ENT_QUOTES, 'UTF-8') . "\">Domain List</a></div>";
         $line .= "</div><br class=\"clear\">";
         $line .= '</div>';
         $line .= '</div>';
@@ -157,7 +157,7 @@ class module_controller extends ctrl_module
         $line .= "</td>";
         $line .= "</tr>";
         $line .= "</table>";
-        $line .= "<input type=\"hidden\" name=\"inDomain\" value =\"" . $controller->GetControllerRequest('FORM', 'inDomain') . "\" />";
+        $line .= "<input type=\"hidden\" name=\"inDomain\" value =\"" . htmlspecialchars((string) $controller->GetControllerRequest('FORM', 'inDomain'), ENT_QUOTES, 'UTF-8') . "\" />";
         $line .= "<input type=\"hidden\" name=\"inUserID\" value =\"" . $currentuser['userid'] . "\" />";
         $line .= self::getCSFR_Tag();
         $line .= '</form>';
@@ -394,7 +394,7 @@ class module_controller extends ctrl_module
         $line .= "<div id=\"dnsTitle\" class=\"account accountTitle\">";
         $line .= "<div class=\"content\">";
         $line .= "<div>";
-        $line .= "<div class=\"actions\"><a class=\"undo disabled\">" . ui_language::translate("Undo Changes") . "</a><a class=\"save disabled\">" . ui_language::translate("Save Changes") . "</a><a class=\"back\" href=\"./?module=" . $controller->GetControllerRequest('URL', 'module') . "\">" . ui_language::translate("Domain List") . "</a></div>";
+        $line .= "<div class=\"actions\"><a class=\"undo disabled\">" . ui_language::translate("Undo Changes") . "</a><a class=\"save disabled\">" . ui_language::translate("Save Changes") . "</a><a class=\"back\" href=\"./?module=" . htmlspecialchars((string) $controller->GetControllerRequest('URL', 'module'), ENT_QUOTES, 'UTF-8') . "\">" . ui_language::translate("Domain List") . "</a></div>";
         $line .= "</div><br class=\"clear\">";
         $line .= '</div>';
         $line .= self::getCSFR_Tag();

@@ -323,6 +323,11 @@ class module_controller extends ctrl_module
     {
         global $controller;
         runtime_csfr::Protect();
+        // The package's limit on forwarders, checked here as well: the page only hides the
+        // form at the limit, so a posted form could create more than the package allows
+        if (!self::getQuotaLimit()) {
+            return false;
+        }
         $currentuser = ctrl_users::GetUserDetail();
         $formvars = $controller->GetAllControllerRequests('FORM');
         $keepmessage = (isset($formvars['inKeepMessage'])) ? fs_director::GetCheckboxValue($formvars['inKeepMessage']) : 0;

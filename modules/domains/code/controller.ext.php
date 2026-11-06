@@ -476,6 +476,11 @@ class module_controller extends ctrl_module
     {
         global $controller;
         runtime_csfr::Protect();
+        // The package's limit on domains, checked here as well: the page only hides the
+        // form at the limit, so a posted form could create more than the package allows
+        if (!self::getCreateDomain()) {
+            return false;
+        }
         $currentuser = ctrl_users::GetUserDetail();
         $formvars = $controller->GetAllControllerRequests('FORM');
         if (self::ExecuteAddDomain($currentuser['userid'], $formvars['inDomain'], $formvars['inDestination'], $formvars['inAutoHome'], isset($formvars['inPhpVersion']) ? $formvars['inPhpVersion'] : '')) {

@@ -62,7 +62,10 @@ class module_controller extends ctrl_module
                     $fieldhtml = ctrl_options::OutputSettingTextArea($rowsettings['so_name_vc'], $rowsettings['so_value_tx']);
                 }
                 if (strpos(ctrl_options::OutputSettingTextArea($rowsettings['so_name_vc']),'smtp_password') !== false) {
-                    $fieldhtml = '<input type="password" name="smtp_password" value="'.$rowsettings['so_value_tx'].'">';
+                    // The stored password is never sent to the browser: an empty box keeps it
+                    // (doUpdateConfig skips empty fields), typing a new one replaces it
+                    $fieldhtml = '<input type="password" name="smtp_password" value="" autocomplete="new-password" placeholder="'
+                        . htmlspecialchars(ui_language::translate((string) $rowsettings['so_value_tx'] !== '' ? 'Saved (leave empty to keep it)' : 'Not set'), ENT_QUOTES, 'UTF-8') . '">';
                 }
                 array_push($res, array('cleanname' => ui_language::translate($rowsettings['so_cleanname_vc']),
                     'name' => $rowsettings['so_name_vc'],

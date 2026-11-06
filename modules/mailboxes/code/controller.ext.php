@@ -423,26 +423,28 @@ class module_controller extends ctrl_module
 	/**
 	 * Check a new password; sets the matching error flag.
 	 *
-	 * Note the inverted meaning: true means there is an error.
+	 * Note the inverted meaning: true means there is an error. Used when updating a
+	 * mailbox, where an empty password keeps the current one.
 	 *
 	 * @global db_driver $zdbh The panel's database connection (unused).
-	 * @param string $password The password.
-	 * @return bool True when there is an error, false otherwise (also false when it is too short).
+	 * @param string $password The password ('' = keep the current one).
+	 * @return bool True when there is an error (too short, or not valid), false otherwise.
 	 */
 	static function CheckPasswordForErrors($password)
     {
         global $zdbh;
         $retval = FALSE;
 		
-		// Check to make sure the password is not blank before we go any further...
-        if ($password == '') {
-            self::$password = TRUE;
-            $retval = TRUE;
+		// Updating a mailbox: an empty password keeps the current one (postfix.php only
+		// writes a password that is not empty), so it is not an error
+        if ((string) $password === '') {
+            return false;
         }
-		// Check for password length...
+		// Check for password length... (true = there IS an error; this returned false, so
+		// a password shorter than password_minlength was accepted)
 		if (strlen($password) < ctrl_options::GetSystemOption('password_minlength')) {
 			self::$badpasswordlength = true;
-			return false;
+			return true;
 		}
         // Check for invalid password
         if (!self::IsValidPassword($password)) {
@@ -465,6 +467,11 @@ class module_controller extends ctrl_module
     {
         global $controller;
         runtime_csfr::Protect();
+        // The package's limit on mailboxes, checked here as well: the page only hides the
+        // form at the limit, so a posted form could create more than the package allows
+        if (!self::getQuotaLimit()) {
+            return false;
+        }
         $currentuser = ctrl_users::GetUserDetail();
         $formvars = $controller->GetAllControllerRequests('FORM');
         if (self::ExecuteAddMailbox($currentuser['userid'], $formvars['inAddress'], $formvars['inDomain'], $formvars['inPassword']))

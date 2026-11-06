@@ -662,7 +662,8 @@ class module_controller extends ctrl_module
         $numrows->execute();
         $rowuser = $numrows->fetch();
 
-        $sql = $zdbh->prepare("REVOKE ALL PRIVILEGES ON `" . $rowdb['my_name_vc'] . "`.* FROM '" . $rowuser['mu_name_vc'] . "'@'" . $rowuser['mu_access_vc'] . "'");
+        // Escaped like the GRANT in ExecuteCreateUser (the names are validated when made)
+        $sql = $zdbh->prepare("REVOKE ALL PRIVILEGES ON `" . $zdbh->mysqlRealEscapeString((string) $rowdb['my_name_vc']) . "`.* FROM `" . $zdbh->mysqlRealEscapeString((string) $rowuser['mu_name_vc']) . "`@`" . $zdbh->mysqlRealEscapeString((string) $rowuser['mu_access_vc']) . "`");
         $sql->execute();
 
         $sql = $zdbh->prepare("FLUSH PRIVILEGES");

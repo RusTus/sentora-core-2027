@@ -99,3 +99,5 @@ etc/lib/PHPMailer/language/phpmailer.lang-tr.php
 etc/lib/PHPMailer/language/phpmailer.lang-uk.php
 etc/lib/PHPMailer/language/phpmailer.lang-zh.php
 etc/lib/PHPMailer/language/phpmailer.lang-zh_cn.php
+# Usage Viewer: a leftover pChart demo with fixed data, reachable without logging in
+modules/usage_viewer/assets/totals.php

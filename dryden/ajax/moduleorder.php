@@ -41,7 +41,15 @@ if (isset($_SESSION['zpuid'])) {
 
             //ChromePhp::log($_POST['moduleorder']);
 
-            $order = json_encode($_POST['moduleorder']);
+            // Only a list of category IDs (numbers) is stored
+            $ids = is_array($_POST['moduleorder']) ? array_values($_POST['moduleorder']) : array();
+            foreach ($ids as $id) {
+                if (!is_scalar($id) || !ctype_digit((string) $id)) {
+                    $ids = array();
+                    break;
+                }
+            }
+            $order = json_encode(array_map('strval', $ids));
 
             // Store in DB a JSON string like this [1","2","3","4","5","6","7","8"]
             if(UpdateModuleOrder($_SESSION['zpuid'], $order)){

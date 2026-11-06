@@ -187,6 +187,33 @@ class module_controller extends ctrl_module
     }
 
     /**
+     * May the logged-in account delete this FAQ?
+     *
+     * The same rule the list uses to show the delete button: the FAQ's own author, or an
+     * administrator. The ID comes from the form, so it is checked again on delete.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param mixed $fq_id_pk The FAQ ID from the form or URL.
+     * @return bool True when the FAQ exists, is not deleted, and the account may delete it.
+     */
+    static function CanDeleteFaq($fq_id_pk)
+    {
+        global $zdbh;
+        if (!is_scalar($fq_id_pk) || !ctype_digit((string) $fq_id_pk)) {
+            return false;
+        }
+        $currentuser = ctrl_users::GetUserDetail();
+        $sql = $zdbh->prepare("SELECT fq_acc_fk FROM x_faqs WHERE fq_id_pk = :id AND fq_deleted_ts IS NULL");
+        $sql->bindParam(':id', $fq_id_pk);
+        $sql->execute();
+        $owner = $sql->fetchColumn();
+        if ($owner === false) {
+            return false;
+        }
+        return $currentuser['usergroup'] == "Administrators" || (string) $owner === (string) $currentuser['userid'];
+    }
+
+    /**
      * Delete the FAQ confirmed on the form.
      *
      * @global runtime_controller $controller The request controller.
@@ -197,6 +224,10 @@ class module_controller extends ctrl_module
         global $controller;
         runtime_csfr::Protect();
         $formvars = $controller->GetAllControllerRequests('FORM');
+        // Only an FAQ the account may delete (its own, or any for an administrator)
+        if (!isset($formvars['inDelete']) || !self::CanDeleteFaq($formvars['inDelete'])) {
+            return false;
+        }
         if (self::ExecuteDeleteFaq($formvars['inDelete']))
             return true;
         return false;
@@ -206,13 +237,17 @@ class module_controller extends ctrl_module
      * Add the FAQ item posted on the form (global when added by an administrator).
      *
      * @global runtime_controller $controller The request controller.
-     * @return void
+     * @return false|null False when the account may not add FAQs (not an administrator or reseller), else null.
      */
     static function doAddFaq()
     {
         global $controller;
         runtime_csfr::Protect();
         $currentuser = ctrl_users::GetUserDetail();
+        // Only administrators and resellers add FAQs (the form is shown to them only)
+        if (!self::getAddFAQS()) {
+            return false;
+        }
         if (!fs_director::CheckForEmptyValue($controller->GetControllerRequest('FORM', 'inAdd'))) {
             $question = $controller->GetControllerRequest('FORM', 'question');
             $answer = $controller->GetControllerRequest('FORM', 'answer');
@@ -297,13 +332,13 @@ class module_controller extends ctrl_module
      * Check whether the delete confirmation is shown (<% if isDeleteFAQ %>).
      *
      * @global runtime_controller $controller The request controller.
-     * @return bool True when the URL has show=Delete.
+     * @return bool True when the URL has show=Delete for an FAQ the account may delete.
      */
     static function getisDeleteFAQ()
     {
         global $controller;
         $urlvars = $controller->GetAllControllerRequests('URL');
-        if ((isset($urlvars['show'])) && ($urlvars['show'] == "Delete"))
+        if ((isset($urlvars['show'])) && ($urlvars['show'] == "Delete") && isset($urlvars['other']) && self::CanDeleteFaq($urlvars['other']))
             return true;
         return false;
     }
