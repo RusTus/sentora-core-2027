@@ -64,12 +64,11 @@
 					if ($detectedip != $oldip['so_value_tx']){
 						if (filter_var($detectedip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)){
 							echo "IP Address has changed: Updating server IP and all DNS zone records now..." . fs_filehandler::NewLine();
-			        		$sql = $zdbh->prepare("UPDATE x_settings SET so_value_tx='" . $detectedip . "' WHERE so_name_vc='server_ip'");
-			        		$sql->execute();
-			        		$sql = $zdbh->prepare("UPDATE x_dns SET dn_target_vc='" . $detectedip . "' WHERE dn_target_vc='".$oldip['so_value_tx']."'");
-			        		$sql->execute();
-			        		$sql = $zdbh->prepare("UPDATE x_autoip SET ai_newip_vc='" . $detectedip . "', ai_oldip_vc='".$oldip['so_value_tx']."', ai_lastupdate_ts='".time()."' WHERE ai_id_pk=1");
-			        		$sql->execute();
+			        		// bound values, not pasted into the SQL
+			        		$zdbh->prepare("UPDATE x_settings SET so_value_tx = :new WHERE so_name_vc = 'server_ip'")->execute(array(':new' => $detectedip));
+			        		$zdbh->prepare("UPDATE x_dns SET dn_target_vc = :new WHERE dn_target_vc = :old")->execute(array(':new' => $detectedip, ':old' => (string) $oldip['so_value_tx']));
+			        		$zdbh->prepare("UPDATE x_autoip SET ai_newip_vc = :new, ai_oldip_vc = :old, ai_lastupdate_ts = :ts WHERE ai_id_pk = 1")
+			        			->execute(array(':new' => $detectedip, ':old' => (string) $oldip['so_value_tx'], ':ts' => (string) time()));
 							TriggerDNSUpdateAutoIPHook("0");
 							//TriggerApacheUpdateAutoIPHook();
 							if ($autoipsettings['ai_email_vc'] != ""){
@@ -79,7 +78,7 @@
 									if (IsValidAutoIPEmail($email)){
 										echo "Sending alert email to: " . $email . fs_filehandler::NewLine();
 										$emailsubject = "AutoIP Alert";
-										$emailbody = "Your ZPanel IP address has been changed!\r\rOld IP: ".$oldip['so_value_tx']."\rNew IP: ".$detectedip."\r\rAutoIP has updated your settings.";
+										$emailbody = "The IP address of your Sentora panel has changed.\r\rOld IP: ".$oldip['so_value_tx']."\rNew IP: ".$detectedip."\r\rAutoIP has updated your settings.";
 									    $phpmailer = new sys_email();
 							        	$phpmailer->Subject = $emailsubject;
 								        $phpmailer->Body = $emailbody;
@@ -104,7 +103,7 @@
 						echo "IP Address has NOT changed." . fs_filehandler::NewLine();
 					}
 				} else {
-					echo "AutoIP DIABLED..." . fs_filehandler::NewLine();
+					echo "AutoIP DISABLED..." . fs_filehandler::NewLine();
 				}			
 			}			
 		}

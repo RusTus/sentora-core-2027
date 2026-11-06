@@ -13,7 +13,7 @@
  * "what is my IP" address), the script and emails run on a change, and switch it on
  * or off. The daemon hook does the update.
  */
-class module_controller {
+class module_controller extends ctrl_module {
 
 	/** @var bool|null True when the settings were saved (shown by getResult()). */
 	static $ok;
@@ -83,9 +83,9 @@ class module_controller {
 				} else {
 					$ischecked = "";
 				}
-                array_push($res, array('ai_script_vc'     => $row['ai_script_vc'],
-									   'ai_email_vc'      => $row['ai_email_vc'],
-									   'ai_command_vc'    => $row['ai_command_vc'],
+                array_push($res, array('ai_script_vc' => htmlspecialchars((string) $row['ai_script_vc'], ENT_QUOTES, 'UTF-8'),
+									   'ai_email_vc' => htmlspecialchars((string) $row['ai_email_vc'], ENT_QUOTES, 'UTF-8'),
+									   'ai_command_vc' => htmlspecialchars((string) $row['ai_command_vc'], ENT_QUOTES, 'UTF-8'),
 									   'ai_newip_vc'      => $row['ai_newip_vc'],
 									   'ai_oldip_vc'      => ctrl_options::GetOption('server_ip'),
 									   'ai_enabled_in'    => $row['ai_enabled_in'],
@@ -131,10 +131,11 @@ class module_controller {
             self::$bad = true;
             return false;
         }
+        // (ai_lastupdate_ts is the time of the last IP change, set by the daemon: not touched here)
         $sql = $zdbh->prepare("UPDATE x_autoip SET ai_script_vc = :script, ai_command_vc = :command,
-                               ai_enabled_in = :enabled, ai_email_vc = :email, ai_lastupdate_ts = :ts WHERE ai_id_pk = 1");
+                               ai_enabled_in = :enabled, ai_email_vc = :email WHERE ai_id_pk = 1");
         $sql->execute(array(':script' => $inScript, ':command' => $inCommand, ':enabled' => $inEnabled ? 1 : 0,
-                            ':email' => implode(',', $emails), ':ts' => (string) time()));
+                            ':email' => implode(',', $emails)));
         self::$ok = true;
         return true;
     }
@@ -199,113 +200,113 @@ class module_controller {
         }
     }
 	
+
+    // --- the page -------------------------------------------------------------------------
+
     /**
-     * Ask the configured address for this server's public IP (template: <@ DetectedIP @>).
+     * Escape text for HTML.
      *
-     * @global db_driver $zdbh The panel's database connection.
-     * @return string The detected public IPv4 address, an "IP NOT DETECTED" HTML message, or '' for non-administrators.
+     * @param mixed $x The text.
+     * @return string
      */
-    static function getDetectedIP() {
-		global $zdbh;
-		$error = "<font color=\"red\">IP NOT DETECTED</font>";
-		if (!self::IsAdmin()) {
-			return '';
-		}
-		$getip = $zdbh->query("SELECT ai_command_vc FROM x_autoip")->fetch();
-        if ($getip && self::ValidCommand($getip['ai_command_vc'])) {
-			$detectedip = NULL;
-			try {
-				$detectedip = @file_get_contents($getip['ai_command_vc'], false, stream_context_create(array('http' => array('timeout' => 5))));
-			} catch (Exception $e) {
-				return $error;
-			}
-			$regexp = "^\b(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b^";
-			$matchresult = preg_match_all($regexp, $detectedip, $matches);
-			if(!empty($matchresult)){
-				//print_r($matches);
-				$detectedip = $matches[0][0];
-			} else {
-				return $error;
-			}
-			if (filter_var($detectedip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)){
-				return $detectedip;
-			} else {
-				return $error;
-			}
-		} else {
-			return $error;
-		}
+    static function h($x)
+    {
+        return htmlspecialchars((string) $x, ENT_QUOTES, 'UTF-8');
     }
 
     /**
-     * Return the status icon (template: <@ StatusIcon @>).
+     * Translated and HTML-escaped text.
      *
-     * @global db_driver $zdbh The panel's database connection.
-     * @global runtime_controller $controller The request controller. Declared but not used.
-     * @return string Icon HTML (enabled and in sync, check the settings, disabled), or '' for non-administrators.
+     * @param string $x The English text.
+     * @return string
      */
-    static function getStatusIcon() {
-		global $zdbh;
-		if (!self::IsAdmin()) {
-			return '';
-		}
-		global $controller;
-		$enabled  = ui_status::Ok('Enabled');
-		$disabled = ui_status::Bad('Disabled');
-		$caution  = ui_status::Warn('Check the settings');
-		$getenabled = $zdbh->query("SELECT * FROM x_autoip")->fetch();
-        if ($getenabled) {
-			if ($getenabled['ai_enabled_in'] == 1){
-				if (self::getDetectedIP() == ctrl_options::GetOption('server_ip')){
-					return $enabled;
-				} else {
-					if (self::getDetectedIP() == "<font color=\"red\">IP NOT DETECTED</font>"){
-						return $caution;
-					}
-					return $caution;
-				}
-			} else {
-				return $disabled;
-			}
-		} else {
-			return $disabled;
-		}
+    static function t($x)
+    {
+        return self::h(ui_language::translate($x));
     }
 
     /**
-     * Return the status message (template: <@ StatusMessage @>).
+     * The public IPv4 address this server is seen from, asked as the daemon asks: the
+     * configured service first, then three others. Asked once per page.
      *
      * @global db_driver $zdbh The panel's database connection.
-     * @global runtime_controller $controller The request controller. Declared but not used.
-     * @return string HTML message, or '' for non-administrators.
+     * @return array{0: string, 1: string} The address ('' when no service answered) and the service that answered.
      */
-    static function getStatusMessage() {
-		global $zdbh;
-		if (!self::IsAdmin()) {
-			return '';
-		}
-		global $controller;
-		$enabled  = "<font color=\"green\">AutoIP is ENABLED and IP Address is in sync with reported public IP</font>";
-		$disabled = "<font color=\"red\">AutoIP is DISABLED</font>";
-		$error    = "<font color=\"red\">AutoIP cannot determine Public IP Address.  IP will NOT be updated.</font>";
-		$caution  = "<font color=\"orange\">AutoIP is ENABLED but IP Address is different than reported public IP.<br>IP address will be updated on next daemon run.</font>";
-		$getenabled = $zdbh->query("SELECT * FROM x_autoip")->fetch();
-        if ($getenabled) {
-			if ($getenabled['ai_enabled_in'] == 1){
-				if (self::getDetectedIP() == ctrl_options::GetOption('server_ip')){
-					return $enabled;
-				} else {
-					if (self::getDetectedIP() == "<font color=\"red\">IP NOT DETECTED</font>"){
-						return $error;
-					}
-					return $caution;
-				}
-			} else {
-				return $disabled;
-			}
-		} else {
-			return $disabled;
-		}
+    static function Detect()
+    {
+        global $zdbh;
+        static $found = null;
+        if ($found !== null) {
+            return $found;
+        }
+        $row = $zdbh->query("SELECT ai_command_vc FROM x_autoip")->fetch();
+        $own = ($row && self::ValidCommand($row['ai_command_vc'])) ? trim((string) $row['ai_command_vc']) : 'https://api.ipify.org';
+        $ctx = stream_context_create(array('http' => array('timeout' => 4), 'https' => array('timeout' => 4)));
+        foreach (array_unique(array($own, 'https://api.ipify.org', 'https://ipv4.icanhazip.com', 'https://checkip.amazonaws.com')) as $url) {
+            $answer = (string) @file_get_contents($url, false, $ctx, 0, 4096);
+            if (preg_match('/\b((?:25[0-5]|2[0-4]\d|1?\d?\d)(?:\.(?:25[0-5]|2[0-4]\d|1?\d?\d)){3})\b/', $answer, $m)
+                && filter_var($m[1], FILTER_VALIDATE_IP, FILTER_FLAG_IPV4 | FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
+                return $found = array($m[1], $url);
+            }
+        }
+        return $found = array('', '');
+    }
+
+    /**
+     * Template HTML: the state (in sync, about to change, not detected or off), the panel's
+     * IP beside the detected public one, and the last change.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return string HTML.
+     */
+    static function getStatus()
+    {
+        global $zdbh;
+        if (!self::IsAdmin()) {
+            return '';
+        }
+        $row = $zdbh->query("SELECT * FROM x_autoip")->fetch();
+        $on = $row && (int) $row['ai_enabled_in'] === 1;
+        $panel = (string) ctrl_options::GetSystemOption('server_ip');
+        list($ip, $via) = self::Detect();
+        if (!$on) {
+            $state = array('off', 'AutoIP is off', 'The panel keeps its IP address as it is. Switch AutoIP on below to follow the public address.');
+        } elseif ($ip === '') {
+            $state = array('bad', 'The public IP address can not be found', 'None of the IP services answered from this server. Nothing is changed until one does: check the address of the service below, and that the server can reach the internet.');
+        } elseif ($ip === $panel) {
+            $state = array('ok', 'In sync', 'The panel\'s IP address is the public one.');
+        } else {
+            $state = array('warn', 'The IP address will be updated', 'The public address is not the panel\'s. Within 5 minutes the daemon sets the new one for the panel and in every DNS record that has the old one.');
+        }
+        $ico = array('off' => '<circle cx="12" cy="12" r="9"/><path d="M9 12h6"/>', 'bad' => '<circle cx="12" cy="12" r="9"/><path d="m9 9 6 6M15 9l-6 6"/>',
+            'ok' => '<circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/>', 'warn' => '<path d="M20 12a8 8 0 1 1-2.3-5.7L20 8.5"/><path d="M20 3.5v5h-5"/>');
+        $svg = function ($p) { return '<svg class="ai-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' . $p . '</svg>'; };
+        $out = '<div class="ai-state ' . $state[0] . '">' . $svg($ico[$state[0]]) . '<div><b>' . self::t($state[1]) . '</b><span>' . self::t($state[2]) . '</span></div></div>';
+        $out .= '<div class="ai-ips"><div class="ai-ip"><span>' . self::t('The panel\'s IP address') . '</span><b>' . self::h($panel !== '' ? $panel : '–') . '</b><small>' . self::t('Used for the panel and new DNS records') . '</small></div>'
+            . '<div class="ai-arrow' . ($ip !== '' && $ip !== $panel ? ' diff' : '') . '" aria-hidden="true">' . ($ip !== '' && $ip === $panel ? '=' : '&larr;') . '</div>'
+            . '<div class="ai-ip"><span>' . self::t('Public IP address now') . '</span><b>' . self::h($ip !== '' ? $ip : '–') . '</b><small>'
+            . ($via !== '' ? self::t('as seen by') . ' ' . self::h(parse_url($via, PHP_URL_HOST)) : self::t('not found')) . '</small></div></div>';
+        if ($row && (string) $row['ai_lastupdate_ts'] !== '' && (string) $row['ai_newip_vc'] !== '') {
+            $out .= '<p class="ai-last">' . self::t('Last change') . ': <b>' . self::h($row['ai_oldip_vc']) . '</b> &rarr; <b>' . self::h($row['ai_newip_vc']) . '</b>, '
+                . self::h(date('Y-m-d H:i', (int) $row['ai_lastupdate_ts'])) . '</p>';
+        } else {
+            $out .= '<p class="ai-last">' . self::t('AutoIP has not changed the IP address yet.') . '</p>';
+        }
+        return $out;
+    }
+
+    /**
+     * Template HTML: a few IP services to pick from (they fill the service field).
+     *
+     * @return string HTML.
+     */
+    static function getServices()
+    {
+        $out = '';
+        foreach (array('https://api.ipify.org', 'https://ipv4.icanhazip.com', 'https://checkip.amazonaws.com', 'http://myip.dnsomatic.com/') as $u) {
+            $out .= '<button type="button" class="ai-chip" data-url="' . self::h($u) . '">' . self::h(parse_url($u, PHP_URL_HOST)) . '</button>';
+        }
+        return $out;
     }
 
     /**
@@ -341,28 +342,6 @@ class module_controller {
 	 */
 	static function getDescription() {
 			return ui_module::GetModuleDescription();
-    }
-
-	/**
-	 * Return the module name (template: <@ ModuleName @>).
-	 *
-	 * @return string
-	 */
-	static function getModuleName() {
-		$module_name = ui_module::GetModuleName();
-        return $module_name;
-    }
-
-	/**
-	 * Return the module's icon URL (template: <@ ModuleIcon @>).
-	 *
-	 * @global runtime_controller $controller The request controller.
-	 * @return string An absolute path: /modules/<module>/assets/icon.png.
-	 */
-	static function getModuleIcon() {
-		global $controller;
-		$module_icon = "/modules/" . $controller->GetControllerRequest('URL', 'module') . "/assets/icon.png";
-        return $module_icon;
     }
 
     /**
