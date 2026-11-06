@@ -1,0 +1,47 @@
+/*!
+ * Matomo - free/libre analytics platform
+ *
+ * @link    https://matomo.org
+ * @license https://www.gnu.org/licenses/gpl-3.0.html GPL v3 or later
+ */
+
+import { Orderable } from '../Orderable';
+import { Category } from '../ReportingMenu/Category';
+import { Subcategory } from '../ReportingMenu/Subcategory';
+
+export interface ClientComponent {
+  plugin: string;
+  name: string;
+  props?: Record<string, unknown>;
+}
+
+export interface Widget extends Orderable {
+  uniqueId?: string;
+  name?: string;
+  module?: string;
+  action?: string;
+  viewDataTable?: string;
+  parameters?: Record<string, unknown>;
+  category?: Category;
+  subcategory?: Subcategory;
+  isContainer?: boolean;
+  isReport?: boolean;
+  middlewareParameters?: Record<string, unknown>;
+  clientComponent?: ClientComponent;
+  documentation?: string;
+  layout?: string;
+  isWide?: boolean;
+  isFirstInPage?: boolean;
+}
+
+// get around DeepReadonly<> not being able to handle recursive types by moving the
+// recursive properties to subtypes that are only referenced when needed
+export interface WidgetContainer extends Widget {
+  widgets?: Widget[];
+}
+
+export interface GroupedWidgets {
+  group: boolean;
+  left?: Widget[];
+  right?: Widget[];
+}

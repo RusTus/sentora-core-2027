@@ -1,0 +1,26 @@
+{% extends "dashboard.twig" %}
+
+{% block notification %}
+    {% include "@CoreHome/_notifications.twig" %}
+{% endblock %}
+
+{% set bodyId = 'site-without-data' %}
+
+{% block topcontrols %}
+    {% if not isSingleSite %}
+    {% include "@CoreHome/_siteSelectHeader.twig" %}
+    {% endif %}
+{% endblock %}
+
+{% block content %}
+    {% set ctaEventContent %}
+        {% include "@SitesManager/_siteWithoutDataCta.twig" %}
+    {% endset %}
+
+    <div
+        vue-entry="SitesManager.SiteWithoutData"
+        cta-content="{{ ctaEventContent|json_encode }}"
+        after-tracking-methods-content="{{ afterTrackingMethodsContent|json_encode }}"
+    ></div>
+
+{% endblock %}

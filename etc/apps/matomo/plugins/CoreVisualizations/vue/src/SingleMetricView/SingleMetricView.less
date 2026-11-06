@@ -1,0 +1,76 @@
+.singleMetricView {
+  margin: 5px 12px 10px;
+  display: inline-block;
+
+  &.loading {
+    opacity: 0.5;
+  }
+
+  span, .metric-sparkline {
+    margin-right: 3.5px;
+  }
+
+  .metric-value {
+    display: inline-block;
+    font-size: 14px;
+    line-height: 25px;
+    vertical-align: top;
+    margin-left: 3px;
+  }
+
+  .metric-sparkline {
+    display: inline-block;
+    vertical-align: top;
+    img {
+      width: 100px;
+      height: 25px;
+    }
+  }
+
+  .metricEvolution {
+    font-weight: bold;
+    font-size: 12px;
+
+    > span {
+      display: inline-block;
+
+      &:not(.positive-evolution):not(.negative-evolution) {
+        margin-left: 8px;
+      }
+    }
+
+    .evolution-up::before,
+    .evolution-down::before {
+      content: "";
+      display: inline-block;
+      height: 7px;
+      width: 12px;
+      margin-right: 3.5px;
+      background: no-repeat center center;
+    }
+
+    // arrow points up/down depending on the value change, its colour matches
+    // whether that change is good (positive) or bad (negative) for the metric
+    .evolution-up.positive-evolution::before {
+      background-image: url(plugins/MultiSites/images/arrow_up.svg);
+    }
+    .evolution-up.negative-evolution::before {
+      background-image: url(plugins/MultiSites/images/arrow_up_red.svg);
+    }
+    .evolution-down.positive-evolution::before {
+      background-image: url(plugins/MultiSites/images/arrow_down_green.svg);
+    }
+    .evolution-down.negative-evolution::before {
+      background-image: url(plugins/MultiSites/images/arrow_down.svg);
+    }
+  }
+}
+
+[vue-entry="CoreVisualizations.SingleMetricView"] {
+  display: block;
+}
+
+.single-metric-view-picker {
+  margin-left: 6px;
+  display: inline-block;
+}

@@ -1,0 +1,109 @@
+h1,
+ h2,
+ h3,
+ h4 {
+  &.card-title {
+    color: @theme-color-text !important;
+
+    a {
+      color: @theme-color-text !important;
+    }
+  }
+}
+
+.card.hoverable:hover {
+  @media print {
+    box-shadow: 0 2px 5px 0 rgba(0, 0, 0, 0.16), 0 2px 10px 0 rgba(0, 0, 0, 0.12);
+  }
+}
+
+.card {
+  background-color: @theme-color-background-contrast;
+
+  border-radius: 8px;
+  box-shadow: none;
+  border: 1px solid @theme-color-background-lowContrast;
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    color: @theme-color-text;
+  }
+
+  .card-action a:not(.btn):not(.btn-large):not(.btn-floating) {
+    color: @theme-color-link !important;
+  }
+
+  > .card-content {
+    .card-table {
+      margin: 16px 0 16px -20px;
+      box-shadow: 0 0;
+      width: ~"calc(100% + 40px)";
+      border-radius: 0;
+      border-right: none;
+      border-left: none;
+    }
+  }
+
+  .card-content {
+    color: @theme-color-text;
+
+    .card-title {
+      font-size: 20px;
+      margin-bottom: 20px;
+      display: block;
+      font-weight: 400;
+      line-height: 24px;
+    }
+  }
+
+  .card-title + .card-description {
+    margin-top: -12px;
+  }
+
+  .card-description {
+    margin-bottom: 16px;
+    font-size: 16px;
+    font-weight: 400;
+  }
+}
+
+.card-introduction {
+  max-width: 900px;
+}
+
+.card-table + .tableActionBar,
+.tableFooterLabel + .tableActionBar {
+  margin: 0 0 0 -20px;
+}
+
+.card-with-image {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+
+  .card-image {
+    margin: 25px 20px;
+  }
+}
+
+@media only screen and (max-width: 767px) {
+  .card > .card-content {
+    .contentTableWrapper {
+      margin: 16px 0 16px -20px;
+      width: ~"calc(100% + 40px)";
+      overflow-x: auto;
+    }
+
+    .contentTableWrapper > .card-table {
+      margin: 0;
+      min-width: 100%;
+      width: auto;
+    }
+  }
+
+  .contentTableWrapper + .tableActionBar {
+    margin: 0 0 0 -20px;
+  }
+}

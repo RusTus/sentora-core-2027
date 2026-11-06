@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<module>
+    <name>Dashboard</name>
+    <version>200</version>
+    <desc>Your dashboard: what to do next and how your account is doing, at a glance. Add, remove and arrange its widgets.</desc>
+    <authors>
+        <author email="">Sentora</author>
+    </authors>
+    <updateurl></updateurl>
+    <type>user</type>
+    <defaultcat>Account Information</defaultcat>
+</module>

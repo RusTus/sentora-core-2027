@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<module>
+    <name>SpamAV</name>
+    <version>200</version>
+    <desc>Spam and virus protection for your mailboxes: what was caught, and how spam is handled for each mailbox.</desc>
+    <authors>
+        <author email="">Sentora</author>
+    </authors>
+    <updateurl></updateurl>
+    <type>user</type>
+    <defaultcat>Mail</defaultcat>
+</module>

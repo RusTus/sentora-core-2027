@@ -1,0 +1,25 @@
+<div class="zmodule_content panel" id="zmodule_header_<@ ModuleName @>">
+    <div class="panel-heading">
+        <img src="<@ ModuleIcon @>" width="35" height="35" border="0" alt="<@ ModuleName @>">
+        <div class="zmodule_title"><@ ModuleName @></div>
+        <div class="zmodule_desc" id="zmodule_desc_<@ ModuleName @>"><@ ModuleDesc @></div>
+    </div>
+    <@ Result @>
+    <div class="zgrid_wrapper">
+        <% if IsNotInstalled %>
+        <div class="alert alert-warning"><: Matomo is not set up on this server. :></div>
+        <% endif %>
+        <% if IsInstalled %>
+        <p><: Every domain starts with visits from the web server logs, imported every hour. For more detail (time on page, screen sizes, live visitors) add the tracking code to your pages and switch the domain to it. :></p>
+        <table class="table table-striped">
+            <tr><th><: Domain :></th><th><: Visits from :></th><th></th></tr>
+            <@ DomainRows @>
+        </table>
+        <@ Code @>
+        <@ Frame @>
+        <% if IsAdmin %>
+        <p class="text-muted"><: Administrators: the full Matomo (all sites, settings) is at :> <a href="<@ MatomoUrl @>" target="_blank" rel="noopener"><@ MatomoUrl @></a> <: with the Matomo super user from the installer's password list. :></p>
+        <% endif %>
+        <% endif %>
+    </div>
+</div>

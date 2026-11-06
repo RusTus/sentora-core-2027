@@ -1,0 +1,10 @@
+Sentora changes to Matomo 5.14.2 (reapply when replacing Matomo):
+
+1. plugins/SentoraSync/ (new plugin): the sentora:sync console command the
+   Sentora daemon uses to create sites, users, access and tokens.
+2. core/Plugin/Controller.php: isPatchedUbuntuPhp() and the
+   SENTORA_UBUNTU_PHP_FIXED list. Matomo's "Urgent PHP security update" warning
+   compares only PHP's version number; Ubuntu fixes PHP without changing it, so
+   the warning is skipped when Ubuntu's fixed build (php8.5 8.5.4-0ubuntu1.5 or
+   later) is installed and running. Matomo's file integrity check will list this
+   file as modified.

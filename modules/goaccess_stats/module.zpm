@@ -1,0 +1,25 @@
+<div class="zmodule_content panel" id="zmodule_header_<@ ModuleName @>">
+    <div class="panel-heading">
+        <img src="<@ ModuleIcon @>" width="35" height="35" border="0" alt="<@ ModuleName @>">
+        <div class="zmodule_title"><@ ModuleName @></div>
+        <div class="zmodule_desc" id="zmodule_desc_<@ ModuleName @>"><@ ModuleDesc @></div>
+    </div>
+    <div class="zgrid_wrapper">
+        <% if IsNotInstalled %>
+        <div class="alert alert-warning"><: GoAccess is not installed on this server (it is built by the Sentora installer into /opt/sentora-goaccess). :></div>
+        <% endif %>
+        <% if IsInstalled %>
+        <% if HasNoReports %>
+        <div class="alert alert-info"><: You have no websites yet. Reports appear here once you add a domain and it has had visitors. :></div>
+        <% endif %>
+        <% if HasReports %>
+        <p><: Reports are made every hour from the web server logs, and keep up to a year of history. :></p>
+        <@ ReportPicker @>
+        <@ Frame @>
+        <% endif %>
+        <% if IsAdmin %>
+        <p class="text-muted"><: GoAccess also has a live terminal view; over SSH, as root: :> <code>/opt/sentora-goaccess/bin/goaccess /var/sentora/logs/domains/&lt;user&gt;/&lt;domain&gt;-access.log --log-format=COMBINED</code></p>
+        <% endif %>
+        <% endif %>
+    </div>
+</div>

@@ -1,0 +1,18 @@
+<div class="zmodule_content panel" id="zmodule_header_<@ ModuleName @>">
+    <link rel="stylesheet" href="modules/dashboard/assets/dashboard.css">
+    <div class="panel-heading dw-head">
+        <img src="<@ ModuleIcon @>" width="35" height="35" border="0" alt="" style="margin-right: 4px;">
+        <div style="flex: 1 1 auto;">
+            <div class="zmodule_title"><@ Greeting @></div>
+            <div class="zmodule_desc"><: Here is your dashboard. Arrange it with the widgets you find useful. :></div>
+        </div>
+        <a class="btn btn-primary btn-lg dw-continue" href="./"><: Continue to your panel administration :> &rarr;</a>
+    </div>
+    <div class="zgrid_wrapper">
+        <@ Result @>
+        <@ Widgets @>
+        <div class="dw-picker">
+            <@ WidgetPicker @>
+        </div>
+    </div>
+</div>

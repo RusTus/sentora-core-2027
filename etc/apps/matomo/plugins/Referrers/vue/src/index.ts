@@ -1,0 +1,9 @@
+/*!
+ * Matomo - free/libre analytics platform
+ *
+ * @link    https://matomo.org
+ * @license https://www.gnu.org/licenses/gpl-3.0.html GPL v3 or later
+ */
+
+export { default as CampaignBuilder } from './CampaignBuilder/CampaignBuilder.vue';
+export { default as CampaignBuilderWidget } from './CampaignBuilderWidget/CampaignBuilderWidget.vue';

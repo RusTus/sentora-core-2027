@@ -1,0 +1,28 @@
+/* Dashboard */
+.dw-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.dw-head .zmodule_title { font-size: 24px; }
+.dw-continue { white-space: nowrap; }
+.dw-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 16px; margin: 6px 0 18px; }
+.dw-card { border: 1px solid #ddd; border-radius: 6px; background: #fff; display: flex; flex-direction: column; }
+.dw-card > header { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid #eee; background: #f8f8f8; border-radius: 6px 6px 0 0; }
+.dw-card h4 { margin: 0; font-size: 16px; font-weight: 600; }
+.dw-tools .btn-link { color: #888; font-size: 14px; padding: 0 5px; }
+.dw-tools .btn-link:hover { color: #333; text-decoration: none; }
+.dw-body { padding: 12px 14px; }
+.dw-steps { list-style: none; padding: 0; margin: 0; }
+.dw-steps li { display: flex; gap: 10px; align-items: flex-start; padding: 7px 0; border-bottom: 1px solid #f1f1f1; }
+.dw-steps li:last-child { border-bottom: 0; }
+.dw-steps li.is-done strong { color: #3c763d; }
+.dw-todo, .dw-done { flex: 0 0 24px; height: 24px; border-radius: 50%; text-align: center; line-height: 24px; font-size: 12px; font-weight: 700; }
+.dw-todo { background: #e8eef5; color: #31708f; }
+.dw-done { background: #dff0d8; color: #3c763d; font-size: 14px; }
+.dw-tip { flex: 0 0 24px; width: 24px; height: 24px; border-radius: 50%; text-align: center; line-height: 24px; font-size: 12px; font-weight: 700; font-style: italic; font-family: Georgia, serif; background: #fcf8e3; color: #8a6d3b; }
+.dw-bar { height: 6px; background: #eee; border-radius: 3px; overflow: hidden; margin-top: 4px; }
+.dw-bar > span { display: block; height: 100%; background: #5cb85c; }
+.dw-bar.is-mid > span { background: #f0ad4e; }
+.dw-bar.is-high > span { background: #d9534f; }
+.dw-usage { width: 100%; }
+.dw-usage th { font-weight: 600; padding: 5px 10px 5px 0; white-space: nowrap; vertical-align: top; width: 40%; }
+.dw-usage td { padding: 5px 0; }
+.dw-list { padding-left: 18px; margin-bottom: 10px; }
+.dw-picker { padding: 12px 0 4px; border-top: 1px solid #eee; }

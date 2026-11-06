@@ -1,0 +1,9 @@
+{
+    "auth": false,
+    "checkupdate": 0,
+    "debug": false,
+    "lang": "en",
+    "skin": "skin-blue",
+    "viewsadmin": [],
+    "defaultView": "serverinfos.php"
+}

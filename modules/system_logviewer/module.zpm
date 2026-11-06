@@ -1,0 +1,38 @@
+<div class="zmodule_content panel" id="zmodule_header_<@ ModuleName @>">
+    <div class="panel-heading">
+        <img src="<@ ModuleIcon @>" width="35" height="35" border="0" alt="<@ ModuleName @>">
+        <div class="zmodule_title"><@ ModuleName @></div>
+        <div class="zmodule_desc" id="zmodule_desc_<@ ModuleName @>"><@ ModuleDesc @></div>
+    </div>
+    <div class="zgrid_wrapper">
+        <% if LogList %>
+        <p><: Open a log to follow it live. New lines appear every two seconds. :></p>
+        <table class="table table-striped">
+            <tr>
+                <th><: View :></th>
+                <th><: Log :></th>
+                <th><: Service :></th>
+                <th><: Size :></th>
+                <th><: Changed :></th>
+                <th><: Readable :></th>
+            </tr>
+            <% loop LogList %>
+            <tr>
+                <td nowrap="nowrap">
+                    <a href="modules/system_logviewer/code/view.php?id=<& id &>&amp;theme=dark" target="_blank" rel="noopener" title="<: Dark :>"><img src="modules/system_logviewer/assets/log1.png" alt="<: Dark :>" border="0"></a>
+                    <a href="modules/system_logviewer/code/view.php?id=<& id &>&amp;theme=light" target="_blank" rel="noopener" title="<: Light :>"><img src="modules/system_logviewer/assets/log2.png" alt="<: Light :>" border="0"></a>
+                </td>
+                <td><code><& path &></code></td>
+                <td><& group &></td>
+                <td nowrap="nowrap"><& size &></td>
+                <td nowrap="nowrap"><& changed &></td>
+                <td><& readable &></td>
+            </tr>
+            <% endloop %>
+        </table>
+        <p class="text-muted"><: Logs marked no belong to root or the adm group, which the panel can not read: it runs as its own user, with no more rights than it needs. Read those on the server as root, for example with tail -f. :></p>
+        <% else %>
+        <p><: No log files were found. :></p>
+        <% endif %>
+    </div>
+</div>

@@ -1,0 +1,30 @@
+<div class="zmodule_content panel" id="zmodule_header_<@ ModuleName @>">
+    <div class="panel-heading">
+        <img src="<@ ModuleIcon @>" width="35" height="35" border="0" alt="<@ ModuleName @>">
+        <div class="zmodule_title">
+            <@ ModuleName @>
+        </div>
+        <div class="zmodule_desc" id="zmodule_desc_<@ ModuleName @>"><@ ModuleDesc @></div>
+    </div>
+
+    <@ Result @>
+
+    <div class="zgrid_wrapper">
+        <h2><: Available PHP versions :></h2>
+        <form action="./?module=php_versions&action=SaveVersions" method="post">
+            <table class="table table-striped">
+                <tr>
+                    <th><: Enabled :></th>
+                    <th><: Version :></th>
+                    <th><: Service :></th>
+                    <th><: Security support :></th>
+                    <th><: Domains using it :></th>
+                </tr>
+                <@ VersionRows @>
+            </table>
+            <p><: Domains and subdomains can only choose enabled versions. If you disable a version, the domains that use it run on the default PHP until you enable it again; their choice is kept. Changes apply at the next daemon run (within 5 minutes). :></p>
+            <button class="button-loader btn btn-primary" type="submit" name="SaveVersions" value="1"><: Save :></button>
+            <@ CSFR_Tag @>
+        </form>
+    </div>
+</div>

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<module>
+    <name>File Manager</name>
+    <version>200</version>
+    <defaultcat>File Management</defaultcat>
+    <desc>Manage the files in your hosting folder: upload by drag and drop, edit text files, create folders, and zip or unzip archives.</desc>
+    <authorname>Sentora for Ubuntu 26.04 (built on Tiny File Manager)</authorname>
+    <authoremail></authoremail>
+    <authorurl>https://tinyfilemanager.github.io/</authorurl>
+    <updateurl></updateurl>
+</module>

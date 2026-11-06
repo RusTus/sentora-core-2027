@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<module>
+    <name>Widget Admin</name>
+    <version>200</version>
+    <desc>Choose which dashboard widgets each group may use and which are on by default, and upload new widgets.</desc>
+    <authors>
+        <author email="">Sentora</author>
+    </authors>
+    <updateurl></updateurl>
+    <type>user</type>
+    <defaultcat>Server Admin</defaultcat>
+</module>

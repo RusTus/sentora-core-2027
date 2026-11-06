@@ -1,0 +1,169 @@
+.tagManagerManageSelect,
+.tagManagerManageEdit {
+
+  .multiPairField {
+    margin-right: -0.75rem;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+
+    .form-group.row {
+      margin-left: -0.75rem;
+    }
+
+    .input-field {
+      padding-right: 0;
+      margin: 0;
+    }
+  }
+
+  .comparisonField {
+    max-width: 275px !important;
+  }
+
+  textarea.materialize-textarea {
+    min-height: 3rem;
+  }
+
+  .multiple {
+    .innerFormField {
+      margin-right: 0.75rem;
+      max-width: 350px;
+      .form-group.row {
+        margin-top: 2px;
+        margin-bottom: 2px;
+      }
+    }
+    .innerFormField,
+    input, select {
+      width: ~"calc(100% - 60px)";
+    }
+
+    .fieldUiControl:has(input[id^='consentTypes-p1-']) {
+      width: 300px !important;
+    }
+
+    .innerFormField input, select{
+      width: 100%;
+    }
+
+    .icon-edit {
+      margin-right: 8px;
+    }
+
+    .icon-edit, .icon-plus, .icon-minus {
+      position: relative;
+      cursor: pointer !important;
+    }
+
+  }
+}
+
+.tagManagerVariableList,
+.tagManagerManageSelect,
+.tagManagerManageEdit {
+
+  .triggerConditionNode {
+    color: @color-silver !important;
+    font-style: italic;
+  }
+
+  .collection.with-header {
+    border-color: @theme-color-border-alternative;
+
+    .collection-header {
+      background-color: @theme-color-background-tinyContrast;
+      border-bottom-color: @theme-color-border-alternative;
+    }
+    .collection-item {
+      cursor: pointer;
+      min-height: auto;
+      background-color: @theme-color-background-contrast;
+      border-bottom-color: @theme-color-border-alternative;
+      &:hover {
+        background-color: @theme-color-background-tinyContrast;
+      }
+    }
+
+    .disabledTemplate {
+      opacity: 0.6;
+      cursor: help;
+    }
+
+    .icon-edit,
+    .icon-help {
+      color: @theme-color-link;
+    }
+    .icon-help {
+      cursor: help;
+    }
+    .avatar .circle {
+      padding: 6px;
+      border-radius: 0 !important;
+    }
+    // The Matomo icon is a wide SVG (the "M" mark); let it keep its aspect
+    // ratio at the same height as the square icons instead of being squeezed
+    // to fit the square slot (which made it look small). Because it is wider
+    // than the 42px square slot, nudge it left so its centre lines up with the
+    // other icons (centre x = 15px left + 21px) instead of crowding the text.
+    .avatar .circle[src$="MatomoIcon.svg"] {
+      width: auto;
+      height: 42px;
+      left: 8px;
+    }
+    // Monochrome (single dark colour) type icons are nearly invisible on the
+    // dark collection background. Invert them in dark mode via the shared
+    // illustration filter (which resolves to `none` in light mode, so this is
+    // safe to apply unconditionally). Colourful brand logos (Google, Hotjar,
+    // etracker, etc.) are deliberately excluded so their colours are preserved.
+    .avatar .circle[src$="pointer.svg"],
+    .avatar .circle[src$="pageview.svg"],
+    .avatar .circle[src$="code.svg"],
+    .avatar .circle[src$="form.svg"],
+    .avatar .circle[src$="image.svg"],
+    .avatar .circle[src$="show.svg"],
+    .avatar .circle[src$="timer.svg"],
+    .avatar .circle[src$="error.svg"],
+    .avatar .circle[src$="fullscreen.svg"],
+    .avatar .circle[src$="interaction.svg"],
+    .avatar .circle[src$="click-data-attribute-variable.svg"],
+    .avatar .circle[src$="drift.svg"],
+    .avatar .circle[src$="pingdom.svg"],
+    .avatar .circle[src$="raygun.svg"],
+    .avatar .circle[src$="sentry.svg"],
+    .avatar .circle[src$="google-consent-mode.svg"] {
+      filter: @theme-filter-on-illustration;
+    }
+  }
+}
+
+.tagManagerVariableList {
+  .collection-item {
+    cursor: auto !important;
+    &:hover {
+      background-color: @theme-color-background-contrast !important;
+    }
+  }
+}
+
+.tagManagerManageEdit {
+  .fieldVariableTemplate label {
+    display: inline-block;
+  }
+}
+
+.tag-ui-confirm.ui-confirm {
+  h2 {
+    text-align: left;
+  }
+}
+
+body.tagmanager .modal.open .expandableList {
+  position: relative;
+}
+
+.editVariable {
+  .form-group.row.matomo-form-field:has(#customData-p1-0) {
+    margin-top: -1rem;
+    margin-bottom: -1rem;
+  }
+}

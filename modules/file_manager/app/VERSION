@@ -1,0 +1,8 @@
+Sentora File Manager 200
+Tiny File Manager 2.6 plus fixes, commit 4149143 (2026-07-20), https://github.com/prasathmani/tinyfilemanager
+  - includes the CSRF check (2025-10-13) and CWE-626 (2026-07-20) fixes made after the 2.6 release
+Bundled locally (no CDN): Bootstrap 5.3.3, Dropzone 5.9.3, Font Awesome 4.7.0, highlight.js 11.9.0,
+  Ace 1.32.2, jQuery 3.6.1, DataTables 1.13.1 (Bootstrap and jQuery match Tiny File Manager's pinned hashes)
+Sentora changes to tinyfilemanager.inc.php: refuses to run unless started by index.php, and
+  takes the asset list from config.php. Everything else is in index.php, bootstrap.inc.php,
+  raw.php and config.php.

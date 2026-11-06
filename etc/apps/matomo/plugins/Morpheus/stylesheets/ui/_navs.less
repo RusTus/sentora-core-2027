@@ -1,0 +1,122 @@
+// Most of this is Bootstrap code and can be removed when switching to Bootstrap
+
+.nav {
+  margin-bottom: 20px;
+  padding-left: 0; // Override default ul/ol
+  list-style: none;
+
+  > li {
+    position: relative;
+    display: block;
+
+    > a {
+      position: relative;
+      display: block;
+      padding: 11px 70px;
+      text-decoration: none;
+    }
+  }
+}
+// .clearfix
+.nav::before,
+ .nav::after {
+  display: table;
+  content: " ";
+}
+
+.nav::after {
+  clear: both;
+}
+
+.nav-pills {
+  > li {
+    float: left;
+    border: 1px solid @color-silver-l85;
+    border-left: 0;
+
+    &:first-child {
+      border-radius: 3px 0 0 3px;
+      border: 1px solid @color-silver-l85;
+    }
+
+    &:last-child {
+      border-radius: 0 3px 3px 0;
+    }
+
+    > a {
+      color: @theme-color-link;
+      background-color: @theme-color-background-tinyContrast;
+
+      &:hover,
+      &:focus {
+        background-color: @theme-color-background-contrast;
+      }
+    }
+
+    &.active > a {
+      color: @theme-color-text;
+      background-color: @theme-color-background-base;
+      cursor: default;
+    }
+  }
+}
+
+nav .sidenav-trigger {
+  margin: 0;
+}
+
+.sidenav {
+  background: @theme-color-background-contrast;
+
+  li {
+    > a {
+      color: @theme-color-text-contrast;
+      text-decoration: none;
+
+      &:focus,
+      &:hover {
+        color: @theme-color-text;
+      }
+
+      > i {
+        color: inherit;
+      }
+    }
+
+    > div > a {
+      text-decoration: none;
+      color: @theme-color-text-contrast;
+      display: block;
+      font-size: 14px;
+      font-weight: 500;
+      height: 48px;
+      line-height: 48px;
+      padding: 0 32px;
+
+      &:focus,
+      &:hover {
+        color: @theme-color-text;
+      }
+
+      > .badge-menu-item {
+        top: 6px;
+        right: 35px;
+        left: unset;
+      }
+    }
+
+    .collapsible-body {
+      background: @theme-color-background-contrast;
+    }
+  }
+}
+
+@media only screen and (max-width: 992px) {
+  #mobile-top-menu {
+    li[role="menuitem"] {
+      > a {
+        padding: 0 32px;
+      }
+    }
+  }
+}

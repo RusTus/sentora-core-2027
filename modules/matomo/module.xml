@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<module>
+    <name>Matomo</name>
+    <version>200</version>
+    <defaultcat>Advanced</defaultcat>
+    <desc>Detailed website analytics with Matomo: visitors, pages, referrers, search terms, devices and more, from the server logs or from tracking code on your pages.</desc>
+    <authorname>Sentora for Ubuntu 26.04 (Matomo 5, matomo.org)</authorname>
+    <authoremail></authoremail>
+    <authorurl>https://matomo.org/</authorurl>
+    <updateurl></updateurl>
+</module>

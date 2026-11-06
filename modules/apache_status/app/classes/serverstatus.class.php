@@ -1,0 +1,700 @@
+<?php
+
+/*
+ * PIMPED APACHE-STATUS
+ * Serverstatus class
+ *
+ * @package pimped_apache_status
+ * @author Axel Hahn
+ */
+
+class ServerStatus {
+
+    /**
+     * Array of all server status data
+     * @var array
+     */
+    private array $a = [];
+
+    /**
+     * Array of server settings
+     * - key is servername
+     * - value is an array with curl config data for a status-server request
+     * 
+     * @var array
+     */
+    private array $aServer = [];
+
+    /**
+     * Response time of http request for server-status
+     * @var float
+     */
+    private float $_fResponsetime = 0;
+
+    /**
+     * Array of curl default options
+     * @var array
+     */
+    private static array $curl_opts = [
+        CURLOPT_HEADER => true,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => 5,
+        CURLOPT_FAILONERROR => 1,
+        CURLOPT_SSL_VERIFYHOST => 0,
+        CURLOPT_SSL_VERIFYPEER => 0,
+        CURLOPT_USERAGENT => 'pimped apache status',
+        // CURLMOPT_MAXCONNECTS => 10
+    ];
+
+    // --------------------------------------------------------------------
+
+    /**
+     * constructor (it does nothing)
+     */
+    public function __construct() {
+    }
+    
+    /**
+     * add a log messsage
+     * @global object $oLog
+     * @param  string $sMessage  messeage text
+     * @param  string $sLevel    warnlevel of the given message
+     * @return bool
+     */
+    private function log(string $sMessage, string $sLevel = "info"): bool {
+        global $oLog;
+        if (!$oLog ||! is_object($oLog) || !method_exists($oLog, "add")){
+            return false;
+        }
+        return $oLog->add("class " . __CLASS__ . " - " . $sMessage, $sLevel);
+    }
+
+    /**
+     * helper function transform byte/ kB/ MB into an integer
+     * 
+     * @param string $value  value i.e. "1.32 kB"
+     * @return bool|float
+     */
+    private function _getCountervalue(string $value): bool|float{
+        $iReturn=false;
+        $aTmp=explode(' ', $value);
+        if($aTmp[0]??false){
+            if (preg_replace('/[0-9\.]/', '', $aTmp[0]) > ''){
+                return false;
+            }
+            $iReturn=trim($aTmp[0]);
+            if($iReturn===''){
+                return false;
+            }
+            // $iReturn=($iReturn[0]==='.' ? '0'.$iReturn : $iReturn);
+            // echo "DEBUG: __METHOD__($value) value: $iReturn .. unit ".$aTmp[1]."<br>";
+            
+            if ($aTmp[1]??false){
+                switch ($aTmp[1]) {
+                    case "B":
+                    case "ms/request":
+                        // byte ... no multiplicator
+                        break;
+                    case "kB":
+                        $iReturn*=1024;
+                        break;
+                    case "MB":
+                        $iReturn=$iReturn*1024*1024;
+                        break;
+
+                    default:
+                        $iReturn=false;
+                        break;
+                }
+            }
+        }
+        return $iReturn;
+    }
+    /**
+     * parse response of original apachestatus and put it to an array
+     * @param string $sStatus    response from serverstatus request (html code)
+     * @param string $sHostname  host is used as key for the result array
+     * @return array|bool
+     */
+    private function _getServerData(string $sStatus, string $sHostname = ''): array|bool {
+        $this->log('start '. __FUNCTION__ ."([sStatus], $sHostname)");
+        if (!$sStatus || !$sHostname || strpos($sStatus, "Apache Server Status for")<0){
+            return false;
+        }
+
+        $sStatusNobr = str_replace("\n", "", $sStatus);
+        $aReturn = [];
+
+        // regex to fetch server infos
+        $sRegexStatus = '/\<dt\>(.*)\<\/dt\>/U'; // status data are in dt tags
+        $sRegexStatus2 = '/(.*)\:\ (.*)/U'; // status data are in dt tags
+        // regex to fetch the current requests
+        // isolate the table with requests
+        $sRegexGetRequestsTable = '#(<table border="0">.*</table>)#';
+        $sRegFields = '/\<th\>(.*)\<\/th\>/Um'; // to fetch column names in th
+        $sRegexRequests = '/\<tr\>\<td\>\<b\>(.*\n)*.*\<\/td\>\<\/tr\>/U';
+        $sRegexRequests2 = '/<td[\ nowrap]*\>(.*)\<\/td\>/mU';
+        $sRegexScoreboard = '/<pre>(.*)\<\/pre\>/U';
+
+        
+        // ----- get status infos
+        if (preg_match_all($sRegexStatus, $sStatusNobr, $aStatusinfos)) {
+            if ($aStatusinfos[1]) {
+                foreach ($aStatusinfos[1] as $sStatusInfo) {
+
+                    // devide infos from line [varianble]: [value]
+                    $aStatusinfos2 = explode(" - ", $sStatusInfo);
+                    foreach ($aStatusinfos2 as $sStatusinfo2) {
+                        $aStatusinfos3 = explode(": ", $sStatusinfo2);
+                        // found a key value pair
+                        if (count($aStatusinfos3) == 2) {
+                            $aReturn[$sHostname]['status'][$aStatusinfos3[0]] = $aStatusinfos3[1];
+                            $iCounter=$this->_getCountervalue($aStatusinfos3[1]);
+                            if($iCounter!==false){
+                                $aReturn[$sHostname]['counter'][$aStatusinfos3[0]] = $iCounter;
+                            }
+                        } else {
+                            $sLine = strip_tags($aStatusinfos3[0]);
+                            if (strpos($sLine, " CPU load") > 0) {
+                                $aReturn[$sHostname]['status']['CPU load'] = str_replace(" CPU load", "", $sLine);
+                            }
+                            if (strpos($sLine, " requests/sec") > 0) {
+                                $value=str_replace(" requests/sec", "", $sLine);
+                                $aReturn[$sHostname]['status']['requests/sec'] = $value;
+                                $aReturn[$sHostname]['counter']['requests/sec'] = $this->_getCountervalue($value);
+                            }
+                            if (strpos($sLine, "/second") > 0) {
+                                $value=str_replace("/second", "", $sLine);
+                                $aReturn[$sHostname]['status']['size/sec'] = $value;
+                                $aReturn[$sHostname]['counter']['size/sec'] = $this->_getCountervalue($value);
+                            }
+                            if (strpos($sLine, "ms/request") > 0) {
+                                $value=str_replace("/second", "", $sLine);
+                                $aReturn[$sHostname]['status']['ms/request'] = $value;
+                                $aReturn[$sHostname]['counter']['ms/request'] = $this->_getCountervalue($value);
+                            }
+                            // TODO: this line is left - what are u, s, cu, cs?
+                            // CPU Usage: u1548.32 s194.7 cu.15 cs0 - 3.9% CPU load
+                            // CPU Usage: u380.625 s1014.43 cu0 cs0 - 2.67% CPU load
+                        }
+                        // echo '<pre>'.print_r($aStatusinfos3,1).'</pre>';
+                    }
+                }
+                // echo '<hr><pre>'.print_r($aReturn[$sHostname],1).'</pre>';
+            }
+        }
+
+        // print_r($aReturn); die();
+        // echo "<hr>"; print_r($aStatusinfos); die();
+        // ----- get list of requests:
+        $sRequestTable = false;
+        $dummy = preg_match_all($sRegexGetRequestsTable, $sStatusNobr, $aTmpTable);
+        if ($dummy) {
+            $sRequestTable = $aTmpTable[0][0];
+        }
+
+        if ($sRequestTable) {
+            $formatOk = preg_match_all($sRegFields, $sRequestTable, $aFieldnames);
+            $aStatusfields = $aFieldnames[1];
+
+            $formatOk = preg_match_all($sRegexRequests, $sRequestTable, $matches);
+            if ($formatOk) {
+                foreach ($matches[0] as $sRequestData) {
+                    $formatOk = preg_match_all($sRegexRequests2, str_replace("\n", "", $sRequestData), $matches2);
+
+                    $aTmp = [];
+                    $aTmp['Webserver'] = $sHostname;
+                    foreach ($matches2[0] as $iKey => $aEntry) {
+                        $aTmp[strip_tags($aStatusfields[$iKey])] = strip_tags($aEntry);
+                    }
+
+                    // START extract Method from column "Request"
+                    $sR = '';
+                    if ($aTmp['Request']??false) {
+                        $sR = preg_replace('/([A-Z]*)\ .*/', "$1", $aTmp['Request']);
+                    }
+                    $aTmp['Method'] = $sR;
+                    // END extract Method from column "Request"
+
+                    $aReturn[$sHostname]['requests'][] = $aTmp;
+                }
+            }
+        }
+        // ----- scoreboard
+        $aScoreKeys=[
+            "S"=>['label'=>'Starting up', 'count'=>0],
+            "R"=>['label'=>'Reading Request', 'count'=>0],
+            "W"=>['label'=>'Sending Reply', 'count'=>0],
+            "K"=>['label'=>'Keepalive (read)', 'count'=>0],
+            "D"=>['label'=>'DNS Lookup', 'count'=>0],
+            "C"=>['label'=>'Closing connection', 'count'=>0],
+            "L"=>['label'=>'Logging', 'count'=>0],
+            "G"=>['label'=>'Gracefully finishing', 'count'=>0],
+            "I"=>['label'=>'Idle cleanup of worker', 'count'=>0],
+            // at the end: inactive slots
+            "."=>['label'=>'Open slot with no current process', 'count'=>0],
+            "_"=>['label'=>'Waiting for Connection', 'count'=>0],
+        ];
+        $aScore=[];
+
+        $dummy = preg_match_all($sRegexScoreboard, $sStatusNobr, $aTmpTable);
+        if ($dummy) {
+            $sScoreString=$aTmpTable[1][0];
+            $iActive=0;
+
+            foreach(count_chars($sScoreString,1) as $iChar=>$iCharcount){
+                $sChar=chr($iChar);
+                $aScore['keys'][$sChar]=[
+                    'label'=> $aScoreKeys[$sChar]['label'] ?? "char $sChar (unknown)", 
+                    'count'=>$iCharcount
+                ];
+            }
+            
+            $iSlotsWaiting=$aScore['keys']['_']['count'] ?? 0;
+            $iSlotsFree= $aScore['keys']['.']['count']?? 0;
+
+            $aScore['value']=$sScoreString;
+
+            $aScore['slots_total']=strlen($sScoreString);
+
+            $aScore['slots_busy']=$aScore['slots_total'] - $iSlotsWaiting - $iSlotsFree;
+            // Slots with letters                          count of "_"     count of "."
+
+            $aScore['slots_waiting']=$iSlotsWaiting; // count of "_"
+            $aScore['slots_free']=$iSlotsFree;       // count of "."
+            
+            $aReturn[$sHostname]['counter']['slots_total']=$aScore['slots_total'];
+            // $aReturn[$sHostname]['counter']['slots_busy']=$aScore['slots_busy'];
+            $aReturn[$sHostname]['counter']['slots_unused']=$aScore['slots_total'] - $aScore['slots_busy'] - $aScore['slots_waiting'];
+            $aReturn[$sHostname]['counter']['requests_active']=$aScore['slots_busy'];
+            $aReturn[$sHostname]['counter']['requests_waiting']=$aScore['slots_waiting'];
+        }
+        // die('<pre>'.print_r($aReturn[$sHostname]['counter'], 1));
+        $aReturn[$sHostname]['counter']['scoreboard'] = $aScore;
+        
+        // ----- get status infos
+        
+        $aReturn[$sHostname]['orig'] = $sStatus;
+
+        return $aReturn;
+    }
+
+    // --- helpers for dataFilterCheckRow(): compare functions
+
+    /**
+     * filter lt - returns bool $a lower than $b
+     * @param mixed $a
+     * @param mixed $b
+     * @return boolean
+     */
+    private function _filter_lt(mixed $a, mixed $b) {
+        return $a < $b;
+    }
+
+    /**
+     * filter le - returns bool $a lower equal $b
+     * @param mixed $a
+     * @param mixed $b
+     * @return boolean
+     */
+    private function _filter_le(mixed $a, mixed $b) {
+        return $a <= $b;
+    }
+
+    /**
+     * filter eq - returns bool $a equal $b
+     * @param mixed $a
+     * @param mixed $b
+     * @return boolean
+     */
+    private function _filter_eq(mixed $a, mixed $b) {
+        return $a == $b;
+    }
+
+    /**
+     * filter ne - returns bool $a not equal $b
+     * @param mixed $a
+     * @param mixed $b
+     * @return boolean
+     */
+    private function _filter_ne(mixed $a, mixed $b) {
+        return $a != $b;
+    }
+
+    /**
+     * filter ge - returns bool $a greater or equal $b
+     * @param mixed $a
+     * @param mixed $b
+     * @return boolean
+     */
+    private function _filter_ge(mixed $a, mixed $b) {
+        return $a >= $b;
+    }
+
+    /**
+     * filter gt - returns bool $a greater than $b
+     * @param mixed $a
+     * @param mixed $b
+     * @return boolean
+     */
+    private function _filter_gt(mixed $a, mixed $b) {
+        return $a > $b;
+    }
+
+    /**
+     * filter regex - returns bool regex $b matches $a
+     * @param string $a
+     * @param string $b
+     * @return boolean
+     */
+    private function _filter_regex(string $a, string $b) {
+        return preg_match($b, $a);
+    }
+
+    /**
+     * check a line in tabledata and apply the filter rules to a table
+     * this function is a helper function for dataFilter()
+     * @param array $aSingleRow
+     * @param array $aFilter array    rules to reduce visible data
+     *     array( add/ remove , columnname , operator , value to compare )
+     */
+    private function _dataFilterCheckRow(array $aSingleRow, array $aFilter = []) {
+        if (!count($aFilter)) {
+            return $aSingleRow;
+        }
+        $bAdd = false;
+        $bRemove = false;
+        foreach ($aSingleRow as $sDataKey => $value) {
+
+            foreach ($aFilter as $aFilterRule) {
+                list($cmd, $col, $op, $val) = $aFilterRule;
+                if ($cmd == "add") {
+                    if ($sDataKey == $col) {
+                        // echo "rule ADD filter_$op, $value, $val<br>";
+                        $bAdd = $bAdd || $this->{'_filter_' . $op}($value, $val);
+                    }
+                }
+                if ($cmd == "add_and") {
+                    if ($sDataKey == $col) {
+                        // echo "rule ADD filter_$op, $value, $val<br>";
+                        $bAdd = $bAdd && $this->{'_filter_' . $op}($value, $val);
+                    }
+                }
+                if ($cmd == "remove") {
+                    if ($sDataKey == $col) {
+                        // echo "rule REMOVE filter_$op, $value, $val<br>";
+                        $bRemove = $bRemove || $this->{'_filter_' . $op}($value, $val);
+                    }
+                }
+            }
+        }
+
+        // debugging stuff
+        /*
+          echo "DATA: " . print_r($aSingleRow, true);
+          echo "FILTER: " . print_r($aFilter, true);
+          echo "add: $bAdd - remove: $bRemove - "; if ($bRemove || !$bAdd) echo " SKIP"; else echo " OK "; echo "<hr>";
+         */
+        if ($bRemove || !$bAdd) {
+            return false;
+        }
+        return $aSingleRow;
+    }
+
+    /**
+     * filterfunction to extract, filter and sort status data
+     * @param array  $a
+     * @param array  $aFilter Filter
+     *      $aFilter ... Array
+     *         'sServer'      string   name of server to fetch the data from; default: all servers
+     *         'sType'        string   one of "status" | "requests"
+     *         'aRows'        array    keys to display as rows 
+     *         'sSortkey'     string   sort a specific row 
+     *         'sortorder'    const    SORT_ASC, SORT_DESC, SORT_REGULAR, SORT_NUMERIC, SORT_STRING
+     *         'aRules'       array    rules to reduce visible data
+     *              array( action , columnname , operator , value )
+     *                  action:   one of add|add_or|remove
+     *                  column:   a name of a column in status or requests section
+     *                  operator: one of lt|le|eq|ne|ge|gt|regex
+     *                  value:    value to compare
+     *         'bGroup'       boolean  sort a specific row 
+     *         'iLimit'       integer  max count of returned rows
+     * @return array
+     */
+    function dataFilter(array $a = [], array $aFilter = []) {
+        // $this->log(__FUNCTION__ . "([data], <pre>".print_r($aFilter,1).")</pre> - start");
+
+        global $aLangTxt;
+        $aReturn = [];
+        if (!$a) {
+            $a = $this->a;
+        }
+
+        // ------------------------------------------------------------
+        // check parameters
+        // ------------------------------------------------------------
+
+
+        if (!($aFilter['sType']??false)) {
+            die("ERROR: " . __FUNCTION__ . " requires sType.");
+        }
+        if (!($aFilter['aRows']??false)) {
+            die("ERROR: " . __FUNCTION__ . " requires aRows.");
+        }
+
+        if ($aFilter['sType'] != "status" && $aFilter['sType'] != "requests") {
+            die("ERROR: function " . __FUNCTION__ . " does not support value in sType=>" . $aFilter['sType'] . ".");
+        }
+        if ($aFilter['sortorder']??false) {
+            if (
+                    $aFilter['sortorder'] != SORT_ASC && $aFilter['sortorder'] != SORT_DESC && $aFilter['sortorder'] != SORT_REGULAR && $aFilter['sortorder'] != SORT_NUMERIC && $aFilter['sortorder'] != SORT_STRING
+            )
+                die("ERROR: function " . __FUNCTION__ . " does not support value in sortorder=>" . $aFilter['sortorder'] . ".");
+        }
+
+        // ------------------------------------------------------------
+        // flatten data
+        // ------------------------------------------------------------
+        foreach ($a as $sHost => $aData) {
+            if (
+                    ($aFilter['sServer']??false == $sHost) 
+                    || (!array_key_exists('sServer', $aFilter))
+            ) {
+                if ($aFilter['sType'] == "status") {
+                    $aSingleRow = ['Webserver' => $sHost ];
+                    foreach ($aFilter['aRows'] as $key) {
+                        $aSingleRow[$key] = $aData[$aFilter['sType']][$key]??false;
+                    }
+                    $aFilteredRow = $this->_dataFilterCheckRow($aSingleRow, $aFilter['aRules']??[]);
+                    if ($aFilteredRow) {
+                        $aReturn[] = $aFilteredRow;
+                    }
+                }
+                if ($aFilter['sType'] == "requests" && array_key_exists("requests", $aData)
+                ) {
+                    foreach ($aData[$aFilter['sType']] as $aRequest) {
+                        $aSingleRow = ['Webserver' => $sHost ];
+                        $aSingleRow['Webserver'] = $sHost;
+                        foreach ($aFilter['aRows'] as $key) {
+                            $aSingleRow[$key] = $aRequest[$key]??'';
+                        }
+                        $aFilteredRow = $this->_dataFilterCheckRow($aSingleRow, $aFilter['aRules']??[]);
+                        if ($aFilteredRow) {
+                            $aReturn[] = $aFilteredRow;
+                        }
+                    }
+                }
+            }
+        }
+
+
+        // ------------------------------------------------------------
+        // sort array by a given key
+        // http://php.net/manual/en/function.array-multisort.php
+        // ------------------------------------------------------------
+        $aSortCol = [];
+        if ($aFilter['sSortkey']??false) {
+            foreach ($aReturn as $key => $row) {
+                $aSortCol[$key] = $row[$aFilter['sSortkey']];
+            }
+            $sortorder = SORT_ASC;
+            if ($aFilter['sortorder']??false) {
+                $sortorder = $aFilter['sortorder'];
+            }
+            if ($aSortCol && count($aSortCol)) {
+                array_multisort($aSortCol, $sortorder, $aReturn);
+            }
+        }
+
+        // ------------------------------------------------------------
+        // group a column
+        // ------------------------------------------------------------
+        if ($aFilter['bGroup']??false) {
+            $aGroup = [];
+            foreach ($aReturn as $key => $row) {
+                // $aGroup[$row[$aFilter['sSortkey']]]++;
+                if ($aGroup[$row[$aFilter['sSortkey']]]??false) {
+                    $aGroup[$row[$aFilter['sSortkey']]] ++;
+                } else {
+                    $aGroup[$row[$aFilter['sSortkey']]] = 1;
+                }
+            }
+            arsort($aGroup);
+
+
+            // create a new return array: count and grouped column
+            // $aReturn=array("count"=>true, $aFilter['sSortkey']=>true);
+            $aReturn = [];
+            foreach ($aGroup as $key => $value) {
+                $aReturn[] = [
+                    $aLangTxt['thCount'] => $value,
+                    $aFilter['sSortkey'] => $key,
+                ];
+            }
+        }
+
+        // ------------------------------------------------------------
+        // limit
+        // ------------------------------------------------------------
+        if ($aFilter['iLimit']??false) {
+            while (count($aReturn) > $aFilter['iLimit']) {
+                array_pop($aReturn);
+            }
+        }
+
+        return $aReturn;
+    }
+
+    // ----------------------------------------------------------------------
+    // GETTER
+    // ----------------------------------------------------------------------
+    /**
+     * get response time to fetch all statuspages of all webservers
+     * @see $this->getStatus()
+     * @return float
+     */
+    public function getResponseTime(): float {
+        return $this->_fResponsetime;
+    }
+
+    // ----------------------------------------------------------------------
+    // SETTER
+    // ----------------------------------------------------------------------
+
+    /**
+     * add a webserver
+     * The parameter is the servername and array containing server config
+     *     'webserver-01', array('status-url' => 'http://webserver-01:8888/server-status')
+     * 
+     * @param string $servername
+     * @param array $serveropts
+     * @return void
+     */
+    public function addServer(string $servername, array $serveropts = []): void {
+        if ($serveropts === null) {
+            $serveropts = [];
+        }
+        if (!($serveropts['status-url']??false)) {
+            $serveropts['status-url'] = "http://$servername/server-status";
+        }
+        $this->aServer[$servername] = $serveropts;
+    }
+
+    /**
+     * helper function for multi_curl_exec
+     * hint from kempo19b
+     * http://php.net/manual/en/function.curl-multi-select.php
+     * 
+     * @param CurlMultiHandle  $mh             multicurl master handle
+     * @param boolean          $still_running  flag: is curl is still running
+     * @return int
+     */
+    private function full_curl_multi_exec(CurlMultiHandle $mh,bool &$still_running): int {
+        do {
+            $rv = curl_multi_exec($mh, $still_running);
+        } while ($rv == CURLM_CALL_MULTI_PERFORM);
+        return $rv;
+    }
+
+    // ----------------------------------------------------------------------
+    // ACTIONS
+    // ----------------------------------------------------------------------
+    /**
+     * make simultaneous requests to all server status pages 
+     * parse them and and merge all data of all servers to a single array
+     * @return array with keys "data" (results) and "error" (error messages)
+     */
+    public function getStatus(): array 
+    {
+
+        $this->a = [];
+        $aErrors = [];
+        $running = false;
+
+        $this->_fResponsetime = 0;
+        $iStart = microtime(true);
+
+        // prepare curl object
+        $master = curl_multi_init();
+
+        // requires php>=5.5:
+        if (function_exists('curl_multi_setopt')) {
+            // force parallel requests
+            curl_multi_setopt($master, CURLMOPT_PIPELINING, 0);
+            // curl_multi_setopt($master, CURLMOPT_MAXCONNECTS, 50);
+        }
+
+        $curl_arr = [];
+        $i = 0;
+        foreach ($this->aServer as $sServer => $aData) {
+            $sUrl = $aData['status-url'];
+            $curl_arr[$i] = curl_init($sUrl);
+            curl_setopt_array($curl_arr[$i], self::$curl_opts);
+            if ($aData['userpwd']??false) {
+                curl_setopt($curl_arr[$i], CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
+                curl_setopt($curl_arr[$i], CURLOPT_USERPWD, $aData['userpwd']);
+            }
+            curl_multi_add_handle($master, $curl_arr[$i]);
+            $i++;
+        }
+
+        // make all requests
+        self::full_curl_multi_exec($master, $running);
+        do {
+            curl_multi_select($master);
+            self::full_curl_multi_exec($master, $running);
+            while ($info = curl_multi_info_read($master)) {
+                
+            }
+        } while ($running);
+
+        // get results
+        $i = 0;
+        foreach ($this->aServer as $sServer => $aData) {
+            $sUrl = $aData['status-url'];
+
+            // $s = curl_multi_getcontent($curl_arr[$i]);
+            $aTmp=explode("\r\n\r\n", curl_multi_getcontent($curl_arr[$i]), 2);
+            
+            // TODO: save http reponse header
+            $sResponseHeader=$aTmp[0];
+            $sResponseBody=count($aTmp)>1 ? $aTmp[1] : false;
+            if (!$sResponseBody) {
+                if (curl_error($curl_arr[$i])) {
+                    $aErrors[] = 'failed to fetch ' . $sUrl . ' - ' . curl_error($curl_arr[$i]) . ' - Maybe you need to check your server config.';
+                } else {
+                    $aErrors[] = 'failed to fetch ' . $sUrl . ' - Maybe you need to check your server config.';
+                }
+            } else {
+                $aServerdata = $this->_getServerData($sResponseBody, $sServer);
+                // echo '<pre>'.print_r($aServerdata, 1).'</pre>';
+                // if (isset($aServerdata[$sServer]['requests']) &&$aServerdata[$sServer]['requests']) {
+                if ($aServerdata[$sServer]['counter']??false) {
+                    $aServerdata[$sServer]['header']=$sResponseHeader;
+                    // echo "<pre>" . print_r($aServerdata[$sServer], 1).'</pre>';
+                    if ($aServerdata[$sServer]['requests']??false) {
+                        $this->a = array_merge($this->a, $aServerdata);
+                    } else {
+                        $this->a = array_merge($this->a, $aServerdata);
+                        $aErrors[] = "Url $sUrl was found and is a server-status page - but you need to enable 'Extended Status On'.";
+                    }
+                } else {
+                    $aErrors[] = 'Url ' . $sUrl . ' was found but this is not a server-status page.';
+                }
+            }
+            curl_multi_remove_handle($master, $curl_arr[$i]);
+            $i++;
+        }
+        curl_multi_close($master);
+        $this->_fResponsetime = microtime(true) - $iStart;
+        return [
+            'data' => $this->a,
+            'errors' => $aErrors,
+            'meta' => [
+                'servers' => $i,
+                'responsetime' => $this->_fResponsetime,
+            ]
+        ];
+    }
+
+}

@@ -1,0 +1,437 @@
+{% extends 'layout.twig' %}
+
+{% set title %}Matomo UI demo{% endset %}
+
+{% block head %}
+    {{ parent() }}
+
+    <style>
+        .grid-demo .row {
+            font-size: 13px;
+            margin-bottom: 15px;
+        }
+        .grid-demo [class^=col-] {
+            padding-top: 10px;
+            padding-bottom: 10px;
+            background-color: var(--theme-color-background-lowContrast);
+            border: 1px solid var(--theme-color-border);
+        }
+        .demo {
+            margin: 0 0 15px 0;
+            background-color: var(--theme-color-background-contrast);
+            border: solid 1px var(--theme-color-border);
+            border-radius: 4px 4px 0 0;
+            padding: 25px;
+        }
+        .demo-code {
+            padding: 9px 14px;
+            background-color: var(--theme-color-background-tinyContrast);
+            border: 1px solid var(--theme-color-border);
+            margin: -16px 0 15px;
+            border-bottom-right-radius: 4px;
+            border-bottom-left-radius: 4px;
+        }
+        .demo-code pre {
+            color: inherit;
+            font-size: 14px;
+            padding: 0;
+            background-color: transparent;
+            margin: 0;
+        }
+        .demo .div-block {
+            max-width: 400px;
+            margin-right: auto;
+            margin-left: auto;
+            min-height: 20px;
+            padding: 19px;
+            background-color: var(--theme-color-background-tinyContrast);
+            border: 1px solid var(--theme-color-border);
+            border-radius: 4px;
+        }
+        .demo .form-group > h3 {
+            margin-top: 0;
+        }
+        .demo-code + .demo {
+            margin: -16px 0;
+        }
+        .icons h4 {
+            padding-top: 15px;
+            padding-bottom: 10px;
+        }
+        .icons .icon {
+            font-family: monospace, monospace;
+            padding-top: 5px;
+            padding-bottom: 5px;
+        }
+        .button-grid {
+            display: grid;
+            gap: 12px;
+        }
+        .button-grid-header,
+        .button-grid-row {
+            display: grid;
+            grid-template-columns: 120px repeat(3, minmax(0, 1fr));
+            gap: 12px;
+            align-items: center;
+        }
+        .button-grid-header {
+            font-weight: bold;
+        }
+        .button-grid-label {
+            font-weight: bold;
+        }
+        .button-grid-cell {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .button-grid-cell.block-cell {
+            display: block;
+        }
+        .button-grid-cell.block-cell > * + * {
+            margin-top: 8px;
+        }
+    </style>
+{% endblock %}
+
+{% block root %}
+
+<div class="container">
+
+    <h1>Matomo UI demo</h1>
+    <p>
+        This page is intended to show all the UI components and styles available to use in Matomo.
+    </p>
+
+    <h2>Grid system</h2>
+    <p>
+        Materialize's grid system allows to organize the content in columns, all the while staying
+        responsive for smaller screens.
+    </p>
+    <div class="grid-demo">
+        <div class="row">
+            <div class="col m1">.col m1</div>
+            <div class="col m1">.col m1</div>
+            <div class="col m1">.col m1</div>
+            <div class="col m1">.col m1</div>
+            <div class="col m1">.col m1</div>
+            <div class="col m1">.col m1</div>
+            <div class="col m1">.col m1</div>
+            <div class="col m1">.col m1</div>
+            <div class="col m1">.col m1</div>
+            <div class="col m1">.col m1</div>
+            <div class="col m1">.col m1</div>
+            <div class="col m1">.col m1</div>
+        </div>
+        <div class="row">
+            <div class="col s8">.col m8</div>
+            <div class="col m4">.col m4</div>
+        </div>
+        <div class="row">
+            <div class="col m4">.col m4</div>
+            <div class="col m4">.col m4</div>
+            <div class="col m4">.col m4</div>
+        </div>
+        <div class="row">
+            <div class="col m6">.col m6</div>
+            <div class="col m6">.col m6</div>
+        </div>
+    </div>
+    <p>
+        Read more about <a href="http://materializecss.com/grid.html">Materialize's grid system</a>.
+    </p>
+
+    <h2>Typography</h2>
+
+    <div class="demo">
+        <h1>h1. heading</h1>
+        <h2>h2. heading</h2>
+        <h3>h3. heading</h3>
+        <h4>h4. heading</h4>
+        <h5>h5. heading</h5>
+        <h6>h6. heading</h6>
+        <p>
+            This is a paragraph, and <a href="#">this is a link</a>.
+        </p>
+        <p>
+            Another paragraph, lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do
+            eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam,
+            quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+        </p>
+    </div>
+
+    <h3>Alignment classes</h3>
+
+    <div class="demo">
+        <p class="left">Left aligned block.</p>
+        <p class="center">Center aligned block.</p>
+        <p class="right">Right aligned block.</p>
+    </div>
+    <div class="demo-code">
+        <pre>&lt;p class=&quot;left&quot;&gt;Left aligned block.&lt;/p&gt;
+&lt;p class=&quot;center&quot;&gt;Center aligned block.&lt;/p&gt;
+&lt;p class=&quot;right&quot;&gt;Right aligned block.&lt;/p&gt;</pre>
+    </div>
+
+    <div class="demo">
+        <p class="left-align">Left aligned text.</p>
+        <p class="center-align">Center aligned text.</p>
+        <p class="right-align">Right aligned text.</p>
+    </div>
+    <div class="demo-code">
+        <pre>&lt;p class=&quot;left-align&quot;&gt;Left aligned text.&lt;/p&gt;
+&lt;p class=&quot;center-align&quot;&gt;Center aligned text.&lt;/p&gt;
+&lt;p class=&quot;right-align&quot;&gt;Right aligned text.&lt;/p&gt;</pre>
+    </div>
+
+    <h3>Lists</h3>
+
+    <div class="demo">
+        <ul>
+            <li>First item</li>
+            <li>Second item</li>
+        </ul>
+    </div>
+    <div class="demo-code">
+        <pre>&lt;ul&gt;
+  &lt;li&gt;...&lt;/li&gt;
+&lt;/ul&gt;</pre>
+    </div>
+
+    <h2>Buttons</h2>
+
+    <h3>Button styles</h3>
+
+    <h4>Standard buttons</h4>
+
+    <div class="demo">
+        <a class="btn" href="#">Link</a>
+        <a class="btn" href="#"><span class="icon-add">&nbsp;</span>Link with an icon</a>
+        <a class="btn" href="#"><span class="icon-add">&nbsp;</span></a>
+        <input type="button" class="btn" value="Input">
+        <input type="submit" class="btn" value="Submit">
+    </div>
+    <div class="demo-code">
+        <pre>&lt;a class=&quot;btn&quot; href=&quot;#&quot;&gt;Link&lt;/a&gt;
+&lt;a class=&quot;btn&quot; href=&quot;#&quot;&gt;&lt;span class=&quot;icon-add&quot;&gt;&nbsp;&lt;/span&gt;Link with an icon&lt;/a&gt;
+&lt;a class=&quot;btn&quot; href=&quot;#&quot;&gt;&lt;span class=&quot;icon-add&quot;&gt;&nbsp;&lt;/span&gt;&lt;/a&gt;
+&lt;input type=&quot;button&quot; class=&quot;btn&quot; value=&quot;Input&quot;&gt;
+&lt;input type=&quot;submit&quot; class=&quot;btn&quot; value=&quot;Submit&quot;&gt;</pre>
+    </div>
+
+    <h4>Outline buttons</h4>
+
+    <div class="demo">
+        <a class="btn btn-outline" href="#">Outline link button</a>
+        <a class="btn btn-outline" href="#"><span class="icon-add">&nbsp;</span>Outline link with an icon</a>
+        <a class="btn btn-outline" href="#"><span class="icon-add">&nbsp;</span></a>
+    </div>
+    <div class="demo-code">
+        <pre>&lt;a class=&quot;btn btn-outline&quot; href=&quot;#&quot;&gt;Outline link button&lt;/a&gt;
+&lt;a class=&quot;btn btn-outline&quot; href=&quot;#&quot;&gt;&lt;span class=&quot;icon-add&quot;&gt;&nbsp;&lt;/span&gt;Outline link with an icon&lt;/a&gt;
+&lt;a class=&quot;btn btn-outline&quot; href=&quot;#&quot;&gt;&lt;span class=&quot;icon-add&quot;&gt;&nbsp;&lt;/span&gt;&lt;/a&gt;</pre>
+    </div>
+
+    <h4>Flat buttons</h4>
+
+    <div class="demo">
+        <a class="btn-flat" href="#">Flat button</a>
+        <a class="btn-flat" href="#"><span class="icon-add">&nbsp;</span>Flat button with an icon</a>
+        <a class="btn-flat" href="#"><span class="icon-add"></span></a>
+    </div>
+    <div class="demo-code">
+        <pre>&lt;a class=&quot;btn-flat&quot; href=&quot;#&quot;&gt;Flat button&lt;/a&gt;
+&lt;a class=&quot;btn-flat&quot; href=&quot;#&quot;&gt;&lt;span class=&quot;icon-add&quot;&gt;&nbsp;&lt;/span&gt;Flat button with an icon&lt;/a&gt;
+&lt;a class=&quot;btn-flat&quot; href=&quot;#&quot;&gt;&lt;span class=&quot;icon-add&quot;&gt;&lt;/span&gt;&lt;/a&gt;</pre>
+    </div>
+
+    <h3>Button sizes</h3>
+
+    <h4>Large buttons</h4>
+
+    <div class="demo">
+        <div class="button-grid">
+            <div class="button-grid-header">
+                <div></div>
+                <div>Text</div>
+                <div>Icon + text</div>
+                <div>Icon only</div>
+            </div>
+            <div class="button-grid-row">
+                <div class="button-grid-label">Standard</div>
+                <div class="button-grid-cell"><button class="btn btn-large">Large</button></div>
+                <div class="button-grid-cell"><button class="btn btn-large"><span class="icon-add">&nbsp;</span>Large</button></div>
+                <div class="button-grid-cell"><button class="btn btn-large"><span class="icon-add">&nbsp;</span></button></div>
+            </div>
+            <div class="button-grid-row">
+                <div class="button-grid-label">Outline</div>
+                <div class="button-grid-cell"><a class="btn btn-outline btn-large" href="#">Large</a></div>
+                <div class="button-grid-cell"><a class="btn btn-outline btn-large" href="#"><span class="icon-add">&nbsp;</span>Large</a></div>
+                <div class="button-grid-cell"><a class="btn btn-outline btn-large" href="#"><span class="icon-add">&nbsp;</span></a></div>
+            </div>
+            <div class="button-grid-row">
+                <div class="button-grid-label">Flat</div>
+                <div class="button-grid-cell"><a class="btn-flat btn-large" href="#">Large</a></div>
+                <div class="button-grid-cell"><a class="btn-flat btn-large" href="#"><span class="icon-add">&nbsp;</span>Large</a></div>
+                <div class="button-grid-cell"><a class="btn-flat btn-large" href="#"><span class="icon-add">&nbsp;</span></a></div>
+            </div>
+        </div>
+    </div>
+    <div class="demo-code">
+        <pre>Standard: &lt;button class=&quot;btn btn-large&quot;&gt;Large&lt;/button&gt;
+Standard with icon: &lt;button class=&quot;btn btn-large&quot;&gt;&lt;span class=&quot;icon-add&quot;&gt;&nbsp;&lt;/span&gt;Large&lt;/button&gt;
+Standard icon only: &lt;button class=&quot;btn btn-large&quot;&gt;&lt;span class=&quot;icon-add&quot;&gt;&nbsp;&lt;/span&gt;&lt;/button&gt;
+
+Outline: &lt;a class=&quot;btn btn-outline btn-large&quot; href=&quot;#&quot;&gt;Large&lt;/a&gt;
+Outline with icon: &lt;a class=&quot;btn btn-outline btn-large&quot; href=&quot;#&quot;&gt;&lt;span class=&quot;icon-add&quot;&gt;&nbsp;&lt;/span&gt;Large&lt;/a&gt;
+Outline icon only: &lt;a class=&quot;btn btn-outline btn-large&quot; href=&quot;#&quot;&gt;&lt;span class=&quot;icon-add&quot;&gt;&nbsp;&lt;/span&gt;&lt;/a&gt;
+
+Flat: &lt;a class=&quot;btn-flat btn-large&quot; href=&quot;#&quot;&gt;Large&lt;/a&gt;
+Flat with icon: &lt;a class=&quot;btn-flat btn-large&quot; href=&quot;#&quot;&gt;&lt;span class=&quot;icon-add&quot;&gt;&nbsp;&lt;/span&gt;Large&lt;/a&gt;
+Flat icon only: &lt;a class=&quot;btn-flat btn-large&quot; href=&quot;#&quot;&gt;&lt;span class=&quot;icon-add&quot;&gt;&nbsp;&lt;/span&gt;&lt;/a&gt;</pre>
+    </div>
+
+    <h4>Small buttons</h4>
+
+    <div class="demo">
+        <div class="button-grid">
+            <div class="button-grid-header">
+                <div></div>
+                <div>Text</div>
+                <div>Icon + text</div>
+                <div>Icon only</div>
+            </div>
+            <div class="button-grid-row">
+                <div class="button-grid-label">Standard</div>
+                <div class="button-grid-cell"><button class="btn btn-small">Small</button></div>
+                <div class="button-grid-cell"><button class="btn btn-small"><span class="icon-add">&nbsp;</span>Small</button></div>
+                <div class="button-grid-cell"><button class="btn btn-small"><span class="icon-add">&nbsp;</span></button></div>
+            </div>
+            <div class="button-grid-row">
+                <div class="button-grid-label">Outline</div>
+                <div class="button-grid-cell"><a class="btn btn-outline btn-small" href="#">Small</a></div>
+                <div class="button-grid-cell"><a class="btn btn-outline btn-small" href="#"><span class="icon-add">&nbsp;</span>Small</a></div>
+                <div class="button-grid-cell"><a class="btn btn-outline btn-small" href="#"><span class="icon-add">&nbsp;</span></a></div>
+            </div>
+            <div class="button-grid-row">
+                <div class="button-grid-label">Flat</div>
+                <div class="button-grid-cell"><a class="btn-flat btn-small" href="#">Small</a></div>
+                <div class="button-grid-cell"><a class="btn-flat btn-small" href="#"><span class="icon-add">&nbsp;</span>Small</a></div>
+                <div class="button-grid-cell"><a class="btn-flat btn-small" href="#"><span class="icon-add">&nbsp;</span></a></div>
+            </div>
+        </div>
+    </div>
+    <div class="demo-code">
+        <pre>Standard: &lt;button class=&quot;btn btn-small&quot;&gt;Small&lt;/button&gt;
+Standard with icon: &lt;button class=&quot;btn btn-small&quot;&gt;&lt;span class=&quot;icon-add&quot;&gt;&nbsp;&lt;/span&gt;Small&lt;/button&gt;
+Standard icon only: &lt;button class=&quot;btn btn-small&quot;&gt;&lt;span class=&quot;icon-add&quot;&gt;&nbsp;&lt;/span&gt;&lt;/button&gt;
+
+Outline: &lt;a class=&quot;btn btn-outline btn-small&quot; href=&quot;#&quot;&gt;Small&lt;/a&gt;
+Outline with icon: &lt;a class=&quot;btn btn-outline btn-small&quot; href=&quot;#&quot;&gt;&lt;span class=&quot;icon-add&quot;&gt;&nbsp;&lt;/span&gt;Small&lt;/a&gt;
+Outline icon only: &lt;a class=&quot;btn btn-outline btn-small&quot; href=&quot;#&quot;&gt;&lt;span class=&quot;icon-add&quot;&gt;&nbsp;&lt;/span&gt;&lt;/a&gt;
+
+Flat: &lt;a class=&quot;btn-flat btn-small&quot; href=&quot;#&quot;&gt;Small&lt;/a&gt;
+Flat with icon: &lt;a class=&quot;btn-flat btn-small&quot; href=&quot;#&quot;&gt;&lt;span class=&quot;icon-add&quot;&gt;&nbsp;&lt;/span&gt;Small&lt;/a&gt;
+Flat icon only: &lt;a class=&quot;btn-flat btn-small&quot; href=&quot;#&quot;&gt;&lt;span class=&quot;icon-add&quot;&gt;&nbsp;&lt;/span&gt;&lt;/a&gt;</pre>
+    </div>
+
+    <h4>Block buttons</h4>
+
+    <div class="demo">
+        <div class="button-grid">
+            <div class="button-grid-header">
+                <div></div>
+                <div>Text</div>
+                <div>Icon + text</div>
+                <div>Icon only</div>
+            </div>
+            <div class="button-grid-row">
+                <div class="button-grid-label">Standard</div>
+                <div class="button-grid-cell block-cell"><a class="btn btn-block" href="#">Block</a></div>
+                <div class="button-grid-cell block-cell"><a class="btn btn-block" href="#"><span class="icon-add">&nbsp;</span>Block</a></div>
+                <div class="button-grid-cell block-cell"><a class="btn btn-block" href="#"><span class="icon-add">&nbsp;</span></a></div>
+            </div>
+            <div class="button-grid-row">
+                <div class="button-grid-label">Outline</div>
+                <div class="button-grid-cell block-cell"><a class="btn btn-outline btn-block" href="#">Block</a></div>
+                <div class="button-grid-cell block-cell"><a class="btn btn-outline btn-block" href="#"><span class="icon-add">&nbsp;</span>Block</a></div>
+                <div class="button-grid-cell block-cell"><a class="btn btn-outline btn-block" href="#"><span class="icon-add">&nbsp;</span></a></div>
+            </div>
+            <div class="button-grid-row">
+                <div class="button-grid-label">Flat</div>
+                <div class="button-grid-cell block-cell"><a class="btn-flat btn-block" href="#">Block</a></div>
+                <div class="button-grid-cell block-cell"><a class="btn-flat btn-block" href="#"><span class="icon-add">&nbsp;</span>Block</a></div>
+                <div class="button-grid-cell block-cell"><a class="btn-flat btn-block" href="#"><span class="icon-add">&nbsp;</span></a></div>
+            </div>
+        </div>
+    </div>
+    <div class="demo-code">
+        <pre>Standard: &lt;a class=&quot;btn btn-block&quot; href=&quot;#&quot;&gt;Block&lt;/a&gt;
+Standard with icon: &lt;a class=&quot;btn btn-block&quot; href=&quot;#&quot;&gt;&lt;span class=&quot;icon-add&quot;&gt;&nbsp;&lt;/span&gt;Block&lt;/a&gt;
+Standard icon only: &lt;a class=&quot;btn btn-block&quot; href=&quot;#&quot;&gt;&lt;span class=&quot;icon-add&quot;&gt;&nbsp;&lt;/span&gt;&lt;/a&gt;
+
+Outline: &lt;a class=&quot;btn btn-outline btn-block&quot; href=&quot;#&quot;&gt;Block&lt;/a&gt;
+Outline with icon: &lt;a class=&quot;btn btn-outline btn-block&quot; href=&quot;#&quot;&gt;&lt;span class=&quot;icon-add&quot;&gt;&nbsp;&lt;/span&gt;Block&lt;/a&gt;
+Outline icon only: &lt;a class=&quot;btn btn-outline btn-block&quot; href=&quot;#&quot;&gt;&lt;span class=&quot;icon-add&quot;&gt;&nbsp;&lt;/span&gt;&lt;/a&gt;
+
+Flat: &lt;a class=&quot;btn-flat btn-block&quot; href=&quot;#&quot;&gt;Block&lt;/a&gt;
+Flat with icon: &lt;a class=&quot;btn-flat btn-block&quot; href=&quot;#&quot;&gt;&lt;span class=&quot;icon-add&quot;&gt;&nbsp;&lt;/span&gt;Block&lt;/a&gt;
+Flat icon only: &lt;a class=&quot;btn-flat btn-block&quot; href=&quot;#&quot;&gt;&lt;span class=&quot;icon-add&quot;&gt;&nbsp;&lt;/span&gt;&lt;/a&gt;</pre>
+    </div>
+
+    <h4>Disabled buttons</h4>
+
+    <div class="demo">
+        <div class="button-grid">
+            <div class="button-grid-header">
+                <div></div>
+                <div>Text</div>
+                <div>Icon + text</div>
+                <div>Icon only</div>
+            </div>
+            <div class="button-grid-row">
+                <div class="button-grid-label">Standard</div>
+                <div class="button-grid-cell"><button class="btn disabled">Disabled</button></div>
+                <div class="button-grid-cell"><button class="btn disabled"><span class="icon-add">&nbsp;</span>Disabled</button></div>
+                <div class="button-grid-cell"><button class="btn disabled"><span class="icon-add">&nbsp;</span></button></div>
+            </div>
+            <div class="button-grid-row">
+                <div class="button-grid-label">Outline</div>
+                <div class="button-grid-cell"><button class="btn btn-outline" disabled>Disabled</button></div>
+                <div class="button-grid-cell"><button class="btn btn-outline" disabled><span class="icon-add">&nbsp;</span>Disabled</button></div>
+                <div class="button-grid-cell"><button class="btn btn-outline" disabled><span class="icon-add">&nbsp;</span></button></div>
+            </div>
+            <div class="button-grid-row">
+                <div class="button-grid-label">Flat</div>
+                <div class="button-grid-cell"><button class="btn-flat" disabled>Disabled</button></div>
+                <div class="button-grid-cell"><button class="btn-flat" disabled><span class="icon-add">&nbsp;</span>Disabled</button></div>
+                <div class="button-grid-cell"><button class="btn-flat" disabled><span class="icon-add">&nbsp;</span></button></div>
+            </div>
+        </div>
+    </div>
+    <div class="demo-code">
+        <pre>Standard: &lt;button class=&quot;btn disabled&quot;&gt;Disabled&lt;/button&gt;
+Standard with icon: &lt;button class=&quot;btn disabled&quot;&gt;&lt;span class=&quot;icon-add&quot;&gt;&nbsp;&lt;/span&gt;Disabled&lt;/button&gt;
+Standard icon only: &lt;button class=&quot;btn disabled&quot;&gt;&lt;span class=&quot;icon-add&quot;&gt;&nbsp;&lt;/span&gt;&lt;/button&gt;
+
+Outline: &lt;button class=&quot;btn btn-outline&quot; disabled&gt;Disabled&lt;/button&gt;
+Outline with icon: &lt;button class=&quot;btn btn-outline&quot; disabled&gt;&lt;span class=&quot;icon-add&quot;&gt;&nbsp;&lt;/span&gt;Disabled&lt;/button&gt;
+Outline icon only: &lt;button class=&quot;btn btn-outline&quot; disabled&gt;&lt;span class=&quot;icon-add&quot;&gt;&nbsp;&lt;/span&gt;&lt;/button&gt;
+
+Flat: &lt;button class=&quot;btn-flat&quot; disabled&gt;Disabled&lt;/button&gt;
+Flat with icon: &lt;button class=&quot;btn-flat&quot; disabled&gt;&lt;span class=&quot;icon-add&quot;&gt;&nbsp;&lt;/span&gt;Disabled&lt;/button&gt;
+Flat icon only: &lt;button class=&quot;btn-flat&quot; disabled&gt;&lt;span class=&quot;icon-add&quot;&gt;&nbsp;&lt;/span&gt;&lt;/button&gt;</pre>
+    </div>
+
+    <h2>Vue Components</h2>
+    <p>The following are components you can use within your own Vue components. Note: they
+        will not work directly in HTML; they MUST be used within a Vue component.</p>
+
+    <div
+        vue-entry="Morpheus.Demo"
+        demo-snippets="{{ snippets|json_encode }}"
+        icons="{{ icons|json_encode }}"
+    ></div>
+</div>
+{% endblock %}

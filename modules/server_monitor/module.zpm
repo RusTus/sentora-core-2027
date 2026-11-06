@@ -1,0 +1,38 @@
+<div class="zmodule_content panel" id="zmodule_header_<@ ModuleName @>">
+    <div class="panel-heading">
+        <img src="<@ ModuleIcon @>" width="35" height="35" border="0" alt="<@ ModuleName @>">
+        <div class="zmodule_title"><@ ModuleName @></div>
+        <div class="zmodule_desc" id="zmodule_desc_<@ ModuleName @>"><@ ModuleDesc @></div>
+    </div>
+    <link rel="stylesheet" href="<@ Assets @>monitor.css">
+    <div class="sm" id="sm" data-url="modules/server_monitor/code/stats.php">
+        <div class="sm-error" id="sm-error"></div>
+        <div class="sm-head">
+            <div><div class="sm-host" id="sm-hostname">&nbsp;</div><div class="sm-sub" id="sm-sysinfo">&nbsp;</div><div class="sm-sub" id="sm-uptime">&nbsp;</div></div>
+            <div class="sm-controls">
+                <span><span class="sm-dot" id="sm-live"></span><: Live :> · <span id="sm-updated">…</span></span>
+                <label><: Every :> <select id="sm-interval"><option value="1000">1 s</option><option value="2000" selected>2 s</option><option value="5000">5 s</option><option value="10000">10 s</option></select></label>
+                <button type="button" id="sm-pause"><: Pause :></button>
+            </div>
+        </div>
+        <div class="sm-cards">
+            <div class="sm-card" style="--c:#447fb3"><div class="sm-card-label"><: CPU :></div><div class="sm-card-value" id="sm-cpu">…</div><div class="sm-card-detail" id="sm-cpu-d"></div><div id="sm-cpu-s"></div></div>
+            <div class="sm-card" style="--c:#8e6bd8"><div class="sm-card-label"><: Load :></div><div class="sm-card-value" id="sm-load">…</div><div class="sm-card-detail" id="sm-load-d"></div><div id="sm-load-s"></div></div>
+            <div class="sm-card" style="--c:#2db87d"><div class="sm-card-label"><: Memory :></div><div class="sm-card-value" id="sm-mem">…</div><div class="sm-card-detail" id="sm-mem-d"></div><div id="sm-mem-s"></div></div>
+            <div class="sm-card" style="--c:#f5a623"><div class="sm-card-label"><: Swap :></div><div class="sm-card-value" id="sm-swap">…</div><div class="sm-card-detail" id="sm-swap-d"></div><div id="sm-swap-s"></div></div>
+            <div class="sm-card" style="--c:#1fa2b5"><div class="sm-card-label"><: Network :></div><div class="sm-card-value" id="sm-net">…</div><div class="sm-card-detail" id="sm-net-d"></div><div id="sm-net-s"></div></div>
+            <div class="sm-card" style="--c:#ff6854"><div class="sm-card-label"><: Disk I/O :></div><div class="sm-card-value" id="sm-io">…</div><div class="sm-card-detail" id="sm-io-d"></div><div id="sm-io-s"></div></div>
+        </div>
+        <div class="sm-grid">
+            <div class="sm-panel"><h4><: CPU usage :></h4><div class="sm-sub"><: All cores together, last 10 minutes :></div><div class="sm-legend" id="sm-cpu-l"></div><div class="sm-chart" id="sm-cpu-c"></div><div class="sm-cores" id="sm-cores"></div></div>
+            <div class="sm-panel"><h4><: Memory :></h4><div class="sm-sub"><: Used by programs, and cache the system can free :></div><div class="sm-legend" id="sm-mem-l"></div><div class="sm-chart" id="sm-mem-c"></div></div>
+            <div class="sm-panel"><h4><: Network :></h4><div class="sm-sub"><: All interfaces, bytes per second :></div><div class="sm-legend" id="sm-net-l"></div><div class="sm-chart" id="sm-net-c"></div></div>
+            <div class="sm-panel"><h4><: Disk I/O :></h4><div class="sm-sub"><: All disks, bytes per second :></div><div class="sm-legend" id="sm-io-l"></div><div class="sm-chart" id="sm-io-c"></div></div>
+            <div class="sm-panel"><h4><: Load average :></h4><div class="sm-sub"><: Processes waiting for a CPU; above the number of cores means the server is busy :></div><div class="sm-legend" id="sm-load-l"></div><div class="sm-chart" id="sm-load-c"></div></div>
+            <div class="sm-panel"><h4><: Disk space :></h4><div class="sm-sub"><: Per file system :></div><div id="sm-fs"></div><h4 style="margin-top:14px"><: Services :></h4><div class="sm-services" id="sm-svc"></div></div>
+            <div class="sm-panel sm-wide"><h4><: Busiest processes :></h4><div class="sm-sub"><: Click a column to sort; CPU is per core, as in top :></div>
+                <table class="sm-table"><thead><tr><th><: Process :></th><th><: User :></th><th class="num"><: PID :></th><th class="num on" data-sort="cpu"><: CPU :></th><th class="num" data-sort="mem"><: Memory :></th></tr></thead><tbody id="sm-procs"></tbody></table></div>
+        </div>
+    </div>
+    <script src="<@ Assets @>monitor.js"></script>
+</div>

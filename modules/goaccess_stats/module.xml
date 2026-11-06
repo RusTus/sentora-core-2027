@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<module>
+    <name>GoAccess</name>
+    <version>200</version>
+    <defaultcat>Advanced</defaultcat>
+    <desc>Web traffic reports from GoAccess for your websites: visitors, pages, referrers, browsers, status codes and more, updated every hour.</desc>
+    <authorname>Sentora for Ubuntu 26.04 (GoAccess 1.12, goaccess.io)</authorname>
+    <authoremail></authoremail>
+    <authorurl>https://goaccess.io/</authorurl>
+    <updateurl></updateurl>
+</module>

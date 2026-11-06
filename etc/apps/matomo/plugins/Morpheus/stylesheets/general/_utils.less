@@ -1,0 +1,38 @@
+/* br clear="all" deprecated */
+br.clearAll {
+  clear: both;
+  height: 0;
+  line-height: 0;
+  font-size: 0; /* for IE */
+}
+
+br.clear,
+div.clear {
+  clear: both;
+  height: 0;
+  overflow: hidden;
+}
+
+.centerLargeDiv {
+  width: 850px;
+  margin: auto;
+}
+
+.center {
+  margin: auto;
+  text-align: center;
+  padding-bottom: 10px;
+}
+
+// Hides an element visually while keeping it available to assistive tech (screen readers).
+.u-visuallyHidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0 0 0 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}

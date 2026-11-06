@@ -1,0 +1,14 @@
+<div class="zmodule_content panel" id="zmodule_header_<@ ModuleName @>">
+    <div class="panel-heading">
+        <img src="<@ ModuleIcon @>" width="35" height="35" border="0" alt="<@ ModuleName @>">
+        <div class="zmodule_title">
+            <@ ModuleName @>
+        </div>
+        <div class="zmodule_desc" id="zmodule_desc_<@ ModuleName @>"><@ ModuleDesc @></div>
+    </div>
+    <div class="zgrid_wrapper">
+        <p><: Your hosting folder :>: <strong><@ HostingFolder @></strong>
+            &nbsp; <a href="modules/file_manager/app/index.php" target="_blank" rel="noopener"><: Open in a new window :></a></p>
+        <iframe src="modules/file_manager/app/index.php" title="<: File Manager :>" style="width: 100%; height: 720px; border: 1px solid #ddd;"></iframe>
+    </div>
+</div>

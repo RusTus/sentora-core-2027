@@ -1,0 +1,67 @@
+{% extends '@Morpheus/layout.twig' %}
+
+{% block meta %}
+    <meta name="robots" content="noindex,nofollow">
+{% endblock %}
+
+{% block head %}
+    {% set deferjs = true %}
+    {{ parent() }}
+{% endblock %}
+
+{% set title %}{{ pageTitle|default('Login_LogIn'|translate) }}{% endset %}
+
+{% block pageDescription %}{{ 'General_OpenSourceWebAnalytics'|translate }}{% endblock %}
+
+{% set bodyId = 'loginPage' %}
+{# Appended rather than assigned: this runs after the extending template's own sets, so a
+   plain assignment would silently drop a body class the child asked for. #}
+{% set bodyClass = ('app-loginLayout ' ~ bodyClass|default(''))|trim %}
+
+{% block body %}
+
+    {{ postEvent("Template.beforeTopBar", "login") }}
+    {{ postEvent("Template.beforeContent", "login") }}
+
+    {% include "_iframeBuster.twig" %}
+
+    <div id="notificationContainer">
+    </div>
+
+    <div class="loginLayout">
+        <div class="loginLayout__primary">
+            <div class="loginLayout__logo">
+                {% include "@CoreHome/_logo.twig" with { 'logoLink': 'https://matomo.org', 'centeredLogo': false, 'useLargeLogo': false } %}
+            </div>
+
+            <div class="loginLayout__content loginSection">
+                {# untrusted host warning #}
+                {% if (isValidHost is defined and invalidHostMessage is defined and isValidHost == false) %}
+                    {% include '@CoreHome/_warningInvalidHost.twig' %}
+                {% else %}
+                    {% block loginContent %}
+                    {% endblock %}
+                {% endif %}
+            </div>
+
+            {# The shared page footer sits outside this layout, so render its links under the form.
+               The parent's footer block is emptied below, so the event is still posted only once. #}
+            {% set footerLinks %}{{ postEvent('Template.pageFooter') }}{% endset %}
+
+            {% if footerLinks|trim is not empty %}
+                <div class="loginLayout__footerLinks">{{ footerLinks }}</div>
+            {% endif %}
+        </div>
+
+        {# The secondary column is dropped entirely when there is nothing to show in it. #}
+        {% if whatsNewChanges is defined and whatsNewChanges is not empty %}
+            <div class="loginLayout__secondary">
+                {% include '@Login/_whatsNewPanel.twig' with { 'changes': whatsNewChanges } %}
+            </div>
+        {% endif %}
+    </div>
+
+{% endblock %}
+
+{# Emptied because the layout above already renders the footer links. #}
+{% block pageFooter %}{% endblock %}

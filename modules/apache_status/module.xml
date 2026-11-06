@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<module>
+    <name>Apache Status</name>
+    <version>200</version>
+    <defaultcat>Server Admin</defaultcat>
+    <desc>See what Apache is doing right now: load, traffic, workers and every request in progress, sortable and searchable (Pimped Apache Status 2.04).</desc>
+    <authorname>Sentora for Ubuntu 26.04 (from the ZPanel module by RusTus)</authorname>
+    <authoremail></authoremail>
+    <authorurl>https://www.axel-hahn.de/docs/apachestatus/</authorurl>
+    <updateurl></updateurl>
+</module>

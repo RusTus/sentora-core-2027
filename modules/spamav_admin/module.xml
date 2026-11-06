@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<module>
+    <name>SpamAV Admin</name>
+    <version>200</version>
+    <desc>Virus scanning (ClamAV) and spam filtering (SpamAssassin) for all mail on this server: settings, status and updates.</desc>
+    <authors>
+        <author email="">Sentora</author>
+    </authors>
+    <updateurl></updateurl>
+    <type>user</type>
+    <defaultcat>Server Admin</defaultcat>
+</module>

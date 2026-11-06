@@ -1,0 +1,9 @@
+{
+    "name": "SentoraSync",
+    "description": "Keeps Matomo's sites, users and access in step with the Sentora control panel (sentora:sync, run by the Sentora daemon).",
+    "version": "1.0.0",
+    "theme": false,
+    "require": { "matomo": ">=5.0.0,<6.0.0-b1" },
+    "authors": [ { "name": "Sentora for Ubuntu 26.04" } ],
+    "license": "GPL v3+"
+}
