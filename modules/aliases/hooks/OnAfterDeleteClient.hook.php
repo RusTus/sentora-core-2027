@@ -16,7 +16,9 @@ DeleteAliasForDeletedClient();
 /**
  * Mark the aliases of deleted accounts deleted and remove them from the mail server.
  *
- * Includes modules/aliases/hooks/<mailserver_php>, which uses $deletedclients.
+ * Includes modules/aliases/hooks/<mailserver_php>, which removes them from the mail
+ * database for $deletedclients; they are marked deleted only when that could run
+ * (not when the mail database was unreachable: $mailCleanupFailed), so it is retried.
  * @global db_driver $zdbh The panel's database connection.
  * @return void
  */
@@ -39,14 +41,17 @@ function DeleteAliasForDeletedClient() {
         include("modules/aliases/hooks/" . ctrl_options::GetSystemOption('mailserver_php') . "");
     }
 
-    foreach ($deletedclients as $deletedclient) {
+    // Marked deleted only once the mail server was updated (the mail server file sets
+    // $mailCleanupFailed when it could not reach it), so a failure is retried next time
+    foreach ((empty($mailCleanupFailed) ? $deletedclients : array()) as $deletedclient) {
         $bindArray = array(':deletedclient' => $deletedclient);
         $sqlStatment = $zdbh->bindQuery("SELECT * FROM x_aliases WHERE al_acc_fk=:deletedclient AND al_deleted_ts IS NULL", $bindArray);
         $result = $zdbh->returnRow();
 
         if ($result) {
             $sql = $zdbh->prepare("UPDATE x_aliases SET al_deleted_ts=:time WHERE al_acc_fk=:deletedclient");
-            $sql->bindParam(':time', time());
+            $time = time();
+            $sql->bindParam(':time', $time);
             $sql->bindParam(':deletedclient', $deletedclient);
             $sql->execute();
         }

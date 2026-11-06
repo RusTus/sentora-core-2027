@@ -36,27 +36,22 @@ try {
     
 }
 
-foreach ($deletedclients as $deletedclient) {
-    $sql = "SELECT * FROM x_aliases WHERE al_acc_fk=:acc AND al_deleted_ts IS NULL";
-    $numrows = $zdbh->prepare($sql);
+// The deleted clients' aliases are removed from the mail server, like deleting an alias in
+// the panel (code/postfix.php). This used to prepare the query a second time without
+// binding :acc and look the alias up on the panel's database instead of the mail database
+// ($mail_db), so it failed and the aliases stayed live.
+if (!isset($mail_db)) {
+    $mailCleanupFailed = true; // read by OnAfterDeleteClient.hook.php: nothing is marked deleted
+    echo "Aliases of deleted clients: the mail server database could not be reached; tried again next time" . fs_filehandler::NewLine();
+}
+foreach ((isset($mail_db) ? $deletedclients : array()) as $deletedclient) {
+    $numrows = $zdbh->prepare("SELECT al_address_vc FROM x_aliases WHERE al_acc_fk=:acc AND al_deleted_ts IS NULL");
     $numrows->bindParam(':acc', $deletedclient);
     $numrows->execute();
-
-    if ($numrows->fetchColumn() <> 0) {
-        $sql = $zdbh->prepare($sql);
-        $sql->execute();
-        while ($rowmailbox = $sql->fetch()) {
-            $bindArray = array(':address' => $rowmailbox['al_address_vc']);
-            $sqlStatment = $zdbh->bindQuery("SELECT address FROM alias WHERE address=:address", $bindArray);
-            $result = $zdbh->returnRow();
-
-            if ($result) {
-                $msql = "DELETE FROM alias WHERE address=:address";
-                $msql = $mail_db->prepare($msql);
-                $msql->bindParam(':address', $rowmailbox['al_address_vc']);
-                $msql->execute();
-            }
-        }
+    foreach ($numrows->fetchAll() as $rowalias) {
+        $msql = $mail_db->prepare("DELETE FROM alias WHERE address=:address");
+        $msql->bindParam(':address', $rowalias['al_address_vc']);
+        $msql->execute();
     }
 }
 ?>

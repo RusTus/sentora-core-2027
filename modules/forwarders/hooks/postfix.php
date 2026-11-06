@@ -36,29 +36,24 @@ try {
     
 }
 
-foreach ($deletedclients as $deletedclient) {
-    $sql = "SELECT * FROM x_forwarders WHERE fw_acc_fk=:deletedclient AND fw_deleted_ts IS NULL";
-//  $numrows = $zdbh->query($sql);
-    $numrows = $zdbh->prepare($sql);
+// The deleted clients' forwarders stop forwarding: like deleting a forwarder in the panel
+// (code/postfix.php), the mailbox's alias goes back to delivering to itself. The
+// mailboxes hook removes the mailbox and its alias row. This used to look the alias up on
+// the panel's database instead of the mail database ($mail_db), run "DELETE * FROM" and
+// overwrite its own statement in the loop, so it failed and the forwarders stayed live.
+if (!isset($mail_db)) {
+    $mailCleanupFailed = true; // read by OnAfterDeleteClient.hook.php: nothing is marked deleted
+    echo "Forwarders of deleted clients: the mail server database could not be reached; tried again next time" . fs_filehandler::NewLine();
+}
+foreach ((isset($mail_db) ? $deletedclients : array()) as $deletedclient) {
+    $numrows = $zdbh->prepare("SELECT fw_address_vc FROM x_forwarders WHERE fw_acc_fk=:deletedclient AND fw_deleted_ts IS NULL");
     $numrows->bindParam(':deletedclient', $deletedclient);
     $numrows->execute();
-    if ($numrows->fetchColumn() <> 0) {
-        $sql = $zdbh->prepare($sql);
-        $sql->bindParam(':deletedclient', $deletedclient);
-        $sql->execute();
-        while ($rowforwarder = $sql->fetch()) {
-            //$result = $mail_db->query("SELECT address FROM alias WHERE address='" . $rowforwarder['fw_address_vc'] . "'")->Fetch();
-            $numrows = $zdbh->prepare("SELECT address FROM alias WHERE address=:fw_address_vc");
-            $numrows->bindParam(':fw_address_vc', $rowforwarder['fw_address_vc']);
-            $numrows->execute();
-            $result = $numrows->fetch();
-            if ($result) {
-                $sql = "DELETE * FROM alias WHERE address=:fw_address_vc";
-                $sql = $mail_db->prepare($sql);
-                $sql->bindParam(':fw_address_vc', $rowforwarder['fw_address_vc']);
-                $sql->execute();
-            }
-        }
+    foreach ($numrows->fetchAll() as $rowforwarder) {
+        $msql = $mail_db->prepare("UPDATE alias SET goto=:address, modified=NOW() WHERE address=:address2");
+        $msql->bindParam(':address', $rowforwarder['fw_address_vc']);
+        $msql->bindParam(':address2', $rowforwarder['fw_address_vc']);
+        $msql->execute();
     }
 }
 ?>

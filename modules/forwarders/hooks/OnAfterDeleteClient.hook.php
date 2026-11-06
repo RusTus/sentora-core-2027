@@ -15,8 +15,10 @@ DeleteForwardersForDeletedClient();
 /**
  * Mark the forwarders of every deleted client as deleted.
  *
- * Includes the mail server's hook file (e.g. postfix.php), which removes the
- * forwarders' aliases from the mail database, then sets fw_deleted_ts on x_forwarders.
+ * Includes the mail server's hook file (e.g. postfix.php), which stops the forwarding
+ * in the mail database (the mailbox's alias delivers to itself again), then sets
+ * fw_deleted_ts on x_forwarders; not when the mail database could not be reached
+ * ($mailCleanupFailed), so that is tried again next run.
  *
  * @global db_driver $zdbh The panel's database connection.
  * @return void
@@ -40,7 +42,9 @@ function DeleteForwardersForDeletedClient() {
         include("modules/forwarders/hooks/" . ctrl_options::GetSystemOption('mailserver_php') . "");
     }
 
-    foreach ($deletedclients as $deletedclient) {
+    // Marked deleted only once the mail server was updated (the mail server file sets
+    // $mailCleanupFailed when it could not reach it), so a failure is retried next time
+    foreach ((empty($mailCleanupFailed) ? $deletedclients : array()) as $deletedclient) {
         //$result = $zdbh->query("SELECT * FROM x_forwarders WHERE fw_acc_fk=:deletedclient AND fw_deleted_ts IS NULL")->Fetch();       
         $numrows = $zdbh->prepare("SELECT * FROM x_forwarders WHERE fw_acc_fk=:deletedclient AND fw_deleted_ts IS NULL");
         $numrows->bindParam(':deletedclient', $deletedclient);
