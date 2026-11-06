@@ -156,6 +156,13 @@ html.ml-light { --ml-bg: #f4f6f9; --ml-card: #ffffff; --ml-ink: #1f2933; --ml-mu
     --ml-input: #ffffff; --ml-input-line: #cfd6de; --ml-blue: #447fb3; --ml-blue-dark: #3a6d9a; --ml-link: #447fb3; --ml-foot: #f8f9fb; }
 html.ml-dark { color-scheme: dark; --ml-bg: #12171d; --ml-card: #1b222b; --ml-ink: #e6e9ee; --ml-muted: #9aa5b1; --ml-line: #2c3540;
     --ml-input: #12171d; --ml-input-line: #3a4552; --ml-blue: #5b97cc; --ml-blue-dark: #447fb3; --ml-link: #79aedb; --ml-foot: #171d24; }
+/* Auto: the light colours, or the dark ones when the computer is set to dark */
+html.ml-auto { --ml-bg: #f4f6f9; --ml-card: #ffffff; --ml-ink: #1f2933; --ml-muted: #6b7785; --ml-line: #e6e9ee;
+    --ml-input: #ffffff; --ml-input-line: #cfd6de; --ml-blue: #447fb3; --ml-blue-dark: #3a6d9a; --ml-link: #447fb3; --ml-foot: #f8f9fb; }
+@media (prefers-color-scheme: dark) {
+    html.ml-auto { color-scheme: dark; --ml-bg: #12171d; --ml-card: #1b222b; --ml-ink: #e6e9ee; --ml-muted: #9aa5b1; --ml-line: #2c3540;
+        --ml-input: #12171d; --ml-input-line: #3a4552; --ml-blue: #5b97cc; --ml-blue-dark: #447fb3; --ml-link: #79aedb; --ml-foot: #171d24; }
+}
 html, body { background-color: var(--ml-bg); color: var(--ml-ink); }
 a:link, a:visited, a:hover, a:active { color: var(--ml-link); }
 .loginwrapper { background: transparent; }

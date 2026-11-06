@@ -77,9 +77,10 @@ class ui_template {
             }
             closedir($handle);
         }
-        // "default" (or else "light") first, the others by name
+        // "default" (or else "light"), then "dark", the others by name, "auto" last
         usort($allstyles, function ($a, $b) {
-            $rank = function ($n) { return $n === 'default' ? 0 : ($n === 'light' ? 1 : 2); };
+            $order = array('default' => 0, 'light' => 1, 'dark' => 2, 'auto' => 9);
+            $rank = function ($n) use ($order) { return isset($order[$n]) ? $order[$n] : 5; };
             return ($rank($a['name']) - $rank($b['name'])) ?: strcmp($a['name'], $b['name']);
         });
         return $allstyles;
@@ -94,6 +95,67 @@ class ui_template {
     static function DefaultCSS($template) {
         $list = self::ListAvaliableCSS($template);
         return $list ? $list[0]['name'] : 'default';
+    }
+
+    /**
+     * The variation the user chose for themselves in My Account ('' = the theme's
+     * default, as their reseller set it in Theme Manager). Kept in its own small table,
+     * made on first use, so Theme Manager (which sets every client's variation) never
+     * overwrites a person's own choice.
+     * @param int $uid
+     * @return string
+     */
+    static function GetStylePref($uid) {
+        global $zdbh;
+        static $cache = array();
+        $uid = (int) $uid;
+        if ($uid <= 0 || !isset($zdbh)) {
+            return '';
+        }
+        if (!array_key_exists($uid, $cache)) {
+            try {
+                self::EnsureStylePrefs();
+                $q = $zdbh->prepare("SELECT us_style_vc FROM x_user_styles WHERE us_acc_fk = :u");
+                $q->execute(array(':u' => $uid));
+                $v = (string) $q->fetchColumn();
+                $cache[$uid] = preg_match('/^[A-Za-z0-9_-]{1,64}$/', $v) ? $v : '';
+            } catch (Exception $e) {
+                $cache[$uid] = '';
+            }
+        }
+        return $cache[$uid];
+    }
+
+    /**
+     * Saves the user's own variation ('' to follow the theme's default again).
+     * @param int $uid
+     * @param string $style
+     * @return bool
+     */
+    static function SetStylePref($uid, $style) {
+        global $zdbh;
+        $uid = (int) $uid;
+        $style = (string) $style;
+        if ($uid <= 0 || ($style !== '' && !preg_match('/^[A-Za-z0-9_-]{1,64}$/', $style))) {
+            return false;
+        }
+        self::EnsureStylePrefs();
+        if ($style === '') {
+            $zdbh->prepare("DELETE FROM x_user_styles WHERE us_acc_fk = :u")->execute(array(':u' => $uid));
+        } else {
+            $zdbh->prepare("INSERT INTO x_user_styles (us_acc_fk, us_style_vc) VALUES (:u, :s) ON DUPLICATE KEY UPDATE us_style_vc = :s2")
+                ->execute(array(':u' => $uid, ':s' => $style, ':s2' => $style));
+        }
+        return true;
+    }
+
+    private static function EnsureStylePrefs() {
+        global $zdbh;
+        static $done = false;
+        if (!$done) {
+            $zdbh->exec("CREATE TABLE IF NOT EXISTS x_user_styles (us_acc_fk INT NOT NULL PRIMARY KEY, us_style_vc VARCHAR(64) NOT NULL) ENGINE=InnoDB");
+            $done = true;
+        }
     }
 
     /**

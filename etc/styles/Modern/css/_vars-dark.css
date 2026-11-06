@@ -1,0 +1,22 @@
+/* Modern: the Dark palette and the few rules only Dark needs (used by dark.css, and by
+   auto.css when the computer is set to dark) */
+:root {
+    color-scheme: dark;
+    --ml-blue: #5b97cc; --ml-blue-dark: #447fb3; --ml-red: #ff7a68; --ml-green: #3cc98d;
+    --ml-amber: #f7b545; --ml-purple: #a184e6; --ml-teal: #2fb6c9;
+    --ml-ink: #e6e9ee; --ml-muted: #9aa5b1; --ml-line: #2c3540; --ml-bg: #12171d;
+    --ml-card: #1b222b; --ml-chrome: #171d24; --ml-hover: #232c36; --ml-stripe: #1f2730;
+    --ml-input: #12171d; --ml-input-line: #3a4552;
+    --ml-link: #79aedb; --ml-link-hover: #a3c8e8;
+    --ml-ok-ink: #3cc98d; --ml-warn-ink: #f7b545; --ml-bad-ink: #ff8a7a; --ml-info-ink: #79aedb;
+    --ml-tint: 18%;
+    --ml-alert-ink: var(--ml-ink);
+    --ml-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+    --ml-logo-ink: none; --ml-logo-white: inline;
+}
+/* Bootstrap and old module styles that set light colours directly */
+.module-box-body img, .sortable.grid li ul li img { filter: none; }
+.zgrid_wrapper, .zform_wrapper { color: var(--ml-ink); }
+table, .table { color: var(--ml-ink); }
+.label-default { background-color: var(--ml-hover); }
+.sm-error { background: #3a1f1c; color: #ffb4a8; }

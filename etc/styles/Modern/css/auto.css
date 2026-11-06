@@ -1,0 +1,5 @@
+/* Modern, Auto: Light or Dark, following the computer's own light/dark setting */
+@import url("_layout.css");
+@import url("_modern.css");
+@import url("_vars-light.css");
+@import url("_vars-dark.css") (prefers-color-scheme: dark);

@@ -30,7 +30,7 @@ class ctrl_auth
                 return true;
             }
             runtime_hook::Execute('OnRequireUserLogin');
-            $sqlQuery = "SELECT ac_usertheme_vc, ac_usercss_vc FROM
+            $sqlQuery = "SELECT ac_id_pk, ac_usertheme_vc, ac_usercss_vc FROM
                          x_accounts WHERE
                          ac_user_vc = :zadmin";
             $bindArray = array(':zadmin' => 'zadmin');
@@ -40,6 +40,11 @@ class ctrl_auth
             // The administrator's variation of that theme (for example light or dark), for
             // login pages that offer more than one; only a plain name ever reaches the page
             $loginCss = preg_match('/^[A-Za-z0-9_-]{1,64}$/', (string) $themeRow['ac_usercss_vc']) ? (string) $themeRow['ac_usercss_vc'] : '';
+            // or the administrator's own choice in My Account (Light, Dark, Auto)
+            $adminPref = ui_template::GetStylePref((int) $themeRow['ac_id_pk']);
+            if ($adminPref !== '') {
+                $loginCss = $adminPref;
+            }
             include 'etc/styles/' . ($loginTheme !== '' ? $loginTheme : 'Modern') . '/login.ztml';
             exit;
         }

@@ -18,7 +18,11 @@ class ui_tpl_csspath {
     public static function Template() {
         $user = ctrl_users::GetUserDetail();
         $template = ui_template::GetUserTemplate();
-        $css = (string) $user['usercss'];
+        // The person's own choice (My Account) first, then their reseller's (Theme Manager)
+        $css = ui_template::GetStylePref($user['userid']);
+        if ($css === '' || !is_file("etc/styles/" . $template . "/css/" . $css . ".css")) {
+            $css = (string) $user['usercss'];
+        }
         // No variation chosen, or one this template does not have (it was chosen for
         // another template): the template's own first variation
         if ($css === '' || !is_file("etc/styles/" . $template . "/css/" . $css . ".css")) {

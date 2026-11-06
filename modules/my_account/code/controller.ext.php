@@ -288,8 +288,61 @@ class module_controller extends ctrl_module
         return true;
     }
 
+    /** the current theme's variations, when it has more than one (Modern: Light, Dark, Auto) */
+    private static function AppearanceStyles()
+    {
+        return ui_template::ListAvaliableCSS(ctrl_users::SafeTheme(ui_template::GetUserTemplate()));
+    }
+
+    static function getAppearanceAvailable()
+    {
+        return count(self::AppearanceStyles()) > 1;
+    }
+
+    static function getAppearanceList()
+    {
+        $currentuser = ctrl_users::GetUserDetail();
+        $mine = ui_template::GetStylePref($currentuser['userid']);
+        $styles = self::AppearanceStyles();
+        $names = array_map(function ($s) { return $s['name']; }, $styles);
+        if (!in_array($mine, $names, true)) {
+            $mine = '';
+        }
+        // "Theme default" names the variation the reseller chose (or the theme's first)
+        $default = (string) $currentuser['usercss'];
+        if (!in_array($default, $names, true)) {
+            $default = ui_template::DefaultCSS(ctrl_users::SafeTheme(ui_template::GetUserTemplate()));
+        }
+        $res = array(array('value' => '', 'label' => htmlspecialchars(ui_language::translate('Theme default') . ' (' . ui_template::CSSLabel($default) . ')', ENT_QUOTES),
+            'selected' => $mine === '' ? 'selected' : ''));
+        foreach ($names as $n) {
+            $res[] = array('value' => htmlspecialchars($n, ENT_QUOTES), 'label' => htmlspecialchars(ui_language::translate(ui_template::CSSLabel($n)), ENT_QUOTES),
+                'selected' => $mine === $n ? 'selected' : '');
+        }
+        return $res;
+    }
+
+    static function doSetAppearance()
+    {
+        global $controller;
+        runtime_csfr::Protect();
+        $currentuser = ctrl_users::GetUserDetail();
+        $want = (string) $controller->GetControllerRequest('FORM', 'inAppearance');
+        $names = array_map(function ($s) { return $s['name']; }, self::AppearanceStyles());
+        if ($want !== '' && !in_array($want, $names, true)) {
+            return false;
+        }
+        ui_template::SetStylePref($currentuser['userid'], $want);
+        // a full reload, so the new stylesheet is used on this very page
+        header('location: ./?module=my_account&appearance=saved');
+        exit;
+    }
+
     static function getResult()
     {
+        if (isset($_GET['appearance']) && $_GET['appearance'] === 'saved') {
+            return ui_sysmessage::shout(ui_language::translate('Your appearance has been saved.'), 'zannounceok');
+        }
         if (!fs_director::CheckForEmptyValue(self::$blank)) {
             return ui_sysmessage::shout(ui_language::translate("You must fill out all fields!"), "zannounceerror");
         }

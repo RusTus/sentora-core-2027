@@ -61,6 +61,31 @@
         </form>
     </div>
 
+    <% if AppearanceAvailable %>
+    <div class="zform_wrapper">
+        <h2><: Appearance :></h2>
+        <form action="./?module=my_account&action=SetAppearance" method="post" class="form-inline">
+            <table class="table table-striped">
+                <tr>
+                    <th><: Theme variation :>:</th>
+                    <td>
+                        <select name="inAppearance" id="inAppearance">
+                            <% loop AppearanceList %>
+                            <option value="<& value &>" <& selected &>><& label &></option>
+                            <% endloop %>
+                        </select>
+                        <span class="help-block"><: Auto follows your computer's light or dark setting. Only you see this choice. :></span>
+                    </td>
+                </tr>
+                <tr>
+                    <th>&nbsp;</th>
+                    <td align="right"><@ CSFR_Tag @><button class="button-loader btn btn-primary" type="submit"><: Save :></button></td>
+                </tr>
+            </table>
+        </form>
+    </div>
+    <% endif %>
+
     <% if TwoFactorAvailable %>
     <div class="zform_wrapper">
         <h2><: Two-factor login :></h2>

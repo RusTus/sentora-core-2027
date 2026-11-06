@@ -14,8 +14,10 @@ default; **Kerf** is optional. A folder whose name starts with `_` is not a them
 | `img/icons/<module>.svg` | no | The theme's own module icons (dashboard, menus, module page header). A module without one shows its `assets/icon.png`. |
 | `img/modules/<module>/assets/icon.png` | no | Older way to replace one module's PNG icon |
 
-A variation saved for an account that the theme does not have (after switching
-theme) falls back to the theme's first variation.
+Which variation a person sees: their own choice in **My Account > Appearance** (kept in
+`x_user_styles`), else the one their reseller set in **Theme Manager**, else the theme's
+first. A choice the current theme does not have is skipped. Name a variation `auto` when it
+follows the computer's light/dark setting (it is listed last).
 
 ## Colours modules use: `--sn-*`
 

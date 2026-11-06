@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<?php $mlVariant = (isset($loginCss) && $loginCss === 'dark') ? 'dark' : 'light'; ?>
+<?php $mlVariant = (isset($loginCss) && in_array($loginCss, array('dark', 'auto'), true)) ? $loginCss : 'light'; ?>
 <html class="ml-<?php echo $mlVariant; ?>">
     <head>
         <meta charset="utf-8">
@@ -48,7 +48,7 @@
         <div class="loginwrapper">
             <div class="panel login-panel">
                 <div class="panel-heading login-head">
-                    <img src="/etc/styles/Modern/img/logos/<?php echo $mlVariant === 'dark' ? 'sentora_logo_light.png' : 'sentora_logo.png'; ?>" alt="Sentora Logo" width="334" height="93">
+                    <picture><?php if ($mlVariant === 'auto') { ?><source srcset="/etc/styles/Modern/img/logos/sentora_logo_light.png" media="(prefers-color-scheme: dark)"><?php } ?><img src="/etc/styles/Modern/img/logos/<?php echo $mlVariant === 'dark' ? 'sentora_logo_light.png' : 'sentora_logo.png'; ?>" alt="Sentora Logo" width="334" height="93"></picture>
                 </div>
                 <div class="panel-content form-horizontal">
                 <?php
