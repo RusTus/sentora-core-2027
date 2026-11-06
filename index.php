@@ -12,17 +12,8 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  */
-// Session cookie: never readable by scripts, not sent with cross-site posts,
-// only over HTTPS when the panel is on HTTPS; ids the server did not make are refused
-ini_set('session.cookie_httponly', '1');
-ini_set('session.cookie_samesite', 'Lax');
-ini_set('session.use_strict_mode', '1');
-ini_set('session.use_only_cookies', '1');
-if ((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['SERVER_PORT']) && (int) $_SERVER['SERVER_PORT'] === 443)) {
-    ini_set('session.cookie_secure', '1');
-    // Browsers that have seen the panel on HTTPS keep using HTTPS for it
-    header('Strict-Transport-Security: max-age=31536000');
-}
+// Session cookie settings (shared with the dryden/ajax handlers)
+require_once 'inc/session.inc.php';
 // Browser-side backstops for the panel's own pages: scripts, styles, fonts and
 // images only from the panel itself, no framing by other sites, no plugins.
 // (Inline scripts stay allowed because the panel's pages use them.)
@@ -33,9 +24,10 @@ header('X-Frame-Options: SAMEORIGIN');
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: same-origin');
 session_start();
-// Every form that posts gets this session's CSRF token, added to the page as it is sent
+// Every form that posts gets this session's CSRF token, added to the page as it is sent;
+// the page head also carries it for the panel's own AJAX calls
 ob_start(function ($html) {
-    return class_exists('runtime_csfr') ? runtime_csfr::AddToForms($html) : $html;
+    return class_exists('runtime_csfr') ? runtime_csfr::AddToHead(runtime_csfr::AddToForms($html)) : $html;
 });
 require_once 'dryden/loader.inc.php';
 require_once 'cnf/db.php';

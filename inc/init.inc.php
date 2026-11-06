@@ -24,6 +24,12 @@ if ($zlo->hasInfo()) {
 }
 
 if (isset($_GET['logout'])) {
+    // Only the panel's own logout link (it carries the session's secret) logs out;
+    // a bare ./?logout loaded by another site just goes back to the panel
+    if (!ctrl_auth::ValidLogoutToken($_GET['logout'])) {
+        header("location: ./");
+        exit;
+    }
     runtime_hook::Execute('OnLogout');
     ctrl_auth::KillSession();
     ctrl_auth::KillCookies();
@@ -55,11 +61,15 @@ if (isset($_POST['inForgotPassword'])) {
     runtime_csfr::Protect();
     $randomkey = runtime_randomstring::randomHash();
     $forgotPass = runtime_xss::xssClean($_POST['inForgotPassword']);
+    // At most 3 reset emails per address and 10 requests per IP in 15 minutes; past
+    // that the request is quietly dropped (the page looks the same either way)
+    $resetAllowed = ctrl_loginguard::ResetAllowed($forgotPass);
+    ctrl_loginguard::ResetRequested($forgotPass);
     $sth = $zdbh->prepare("SELECT ac_id_pk, ac_user_vc, ac_email_vc FROM x_accounts WHERE ac_email_vc = :forgotPass AND ac_deleted_ts IS NULL");
     $sth->bindParam(':forgotPass', $forgotPass);
     $sth->execute();
     $rows = $sth->fetchAll();
-    if ($rows) {
+    if ($resetAllowed && $rows) {
         $result = $rows['0'];
         // The key is stored with the time it was made; it works for one hour and once
         $stored = $randomkey . '.' . time();
@@ -251,7 +261,7 @@ if (isset($_SESSION['zp2fa']) && empty($_SESSION['zpuid'])) {
 <p class="text-muted" style="font-size:13px;margin-top:8px">Lost your phone? <a href="#" onclick="var c=document.getElementById('tfCode');c.setAttribute('inputmode','text');c.placeholder='XXXXX-XXXXX';c.value='';c.focus();this.parentNode.textContent='Enter one of your recovery codes (each works once).';return false;">Use a recovery code</a> instead. No codes left? Ask your administrator.</p>
 <?php echo runtime_csfr::Token(); ?>
 <p style="margin-top:16px"><button class="btn btn-primary btn-block" type="submit">Log in</button></p>
-<p class="text-muted" style="margin:0"><a href="./?logout">Cancel</a></p>
+<p class="text-muted" style="margin:0"><a href="<?php echo htmlspecialchars(ctrl_auth::LogoutUrl(), ENT_QUOTES, 'UTF-8'); ?>">Cancel</a></p>
 </form></div></body></html>
 <?php
     exit();
@@ -332,7 +342,7 @@ if (isset($_SESSION['zp2fa_setup']) && empty($_SESSION['zpuid'])) {
 <input class="form-control code" name="inTwoFactorCode" inputmode="numeric" pattern="[0-9 ]{6,7}" maxlength="7" required autofocus>
 <?php echo runtime_csfr::Token(); ?>
 <p style="margin-top:16px"><button class="btn btn-primary btn-block" type="submit">Turn on and log in</button></p>
-<p class="text-muted" style="margin:0"><a href="./?logout">Cancel</a></p>
+<p class="text-muted" style="margin:0"><a href="<?php echo htmlspecialchars(ctrl_auth::LogoutUrl(), ENT_QUOTES, 'UTF-8'); ?>">Cancel</a></p>
 </form></div></body></html>
 <?php
     exit();

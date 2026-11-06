@@ -13,24 +13,28 @@
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  */
 
-session_start();
-
 /* Include Library files*/
 $rawPath = str_replace("\\", "/", dirname(__FILE__));
 $rootPath = str_replace("/dryden/ajax", "/", $rawPath);
 chdir($rootPath);
 
+// Same session cookie settings as the panel itself (index.php)
+require_once 'inc/session.inc.php';
+session_start();
+
 require_once 'dryden/loader.inc.php';
 require_once 'cnf/db.php';
 require_once 'inc/dbc.inc.php';
 
-
-debug_phperrors::SetMode('dev');
-//ChromePhp::log($_POST);
+// The panel's own error setting (production: errors go to the log, not the page)
+debug_phperrors::SetMode(ctrl_options::GetSystemOption('debug_mode'));
 
 
 if (isset($_SESSION['zpuid'])) {
-    if (isAjax()){
+    if (!runtime_csfr::Valid()) {
+        // The page's CSRF token (from <meta name="csfr-token">) must come with the request
+        $return = array('sucess' => false, 'status' => 'Invalid token');
+    } elseif (isAjax()){
 
         // Prep $_POST['moduleorder'] to insert into DB
         if(isset($_POST['moduleorder'])){

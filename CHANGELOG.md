@@ -66,6 +66,9 @@ In the original, the panel and every hosted site ran PHP as the same user (`www-
 - Optional two-factor login (6-digit authenticator codes), switched on in Sentora Config and set up per account in My Account.
 - Session cookies are `HttpOnly`, `SameSite=Lax` and `Secure` on HTTPS; session ids are refused unless the server made them, and renewed at login.
 - Password-reset keys, CSRF tokens and salts come from a cryptographic random generator; reset keys work once, for one hour.
+- Forgot password sends at most 3 reset emails per address, and takes at most 10 requests per IP, within 15 minutes; past that a request is quietly dropped (the page looks the same).
+- Logout ends the whole session (new session id, nothing carried over) and needs the panel's own logout link, which carries a per-session secret; another site loading `./?logout` no longer logs a user out.
+- The dashboard's module-order AJAX handler uses the panel's session cookie settings and error setting, and needs the page's CSRF token (now also in a `<meta name="csfr-token">` in each panel page).
 - A content security policy, frame protection and `nosniff` on every panel page.
 
 **Server-wide**

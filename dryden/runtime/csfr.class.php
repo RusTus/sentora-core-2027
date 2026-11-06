@@ -67,6 +67,21 @@ class runtime_csfr {
         return preg_replace('/(<form\b[^>]*\bmethod\s*=\s*["\']?post["\']?[^>]*>)/i', '$1' . $field, $html);
     }
 
+    /**
+     * Sentora: puts the token in a <meta name="csfr-token"> in the page head, so the
+     * panel's own AJAX calls (which have no form) can send it.
+     */
+    static function AddToHead($html) {
+        if (stripos($html, '<head') === false || session_status() !== PHP_SESSION_ACTIVE) {
+            return $html;
+        }
+        if (!isset($_SESSION['zpcsfr'])) {
+            self::Tokeniser();
+        }
+        $meta = '<meta name="csfr-token" content="' . htmlspecialchars((string) $_SESSION['zpcsfr'], ENT_QUOTES) . '">';
+        return preg_replace('/(<head\b[^>]*>)/i', '$1' . $meta, $html, 1);
+    }
+
     static function Protect() {
         if (isset($_POST['csfr_token'], $_SESSION['zpcsfr']) && is_string($_POST['csfr_token']) && hash_equals((string) $_SESSION['zpcsfr'], $_POST['csfr_token'])) {
             self::Tokeniser();

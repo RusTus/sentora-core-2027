@@ -149,13 +149,48 @@ class ctrl_auth
     static function KillSession()
     {
         runtime_hook::Execute('OnUserLogout');
-        $_SESSION['zpuid'] = null;
-        unset($_SESSION['zp2fa']);
-        if (isset($_SESSION['ruid'])) {
-            unset($_SESSION['ruid']);
+        // Nothing from the old session (shadowing, pending login steps, tokens) carries
+        // into the next login on this browser, and the old session id stops working
+        $_SESSION = array();
+        if (session_status() === PHP_SESSION_ACTIVE && !headers_sent()) {
+            session_regenerate_id(true);
         }
         unset($_COOKIE['zUserSaltCookie']);
         return true;
+    }
+
+    /**
+     * The secret that must be on a logout link, so another site can not log a user
+     * out just by loading ./?logout. It lasts for the session (unlike the form token,
+     * which changes after each form), so a logout link in an older tab still works.
+     * @return string
+     */
+    static function LogoutToken()
+    {
+        if (empty($_SESSION['zplogout']) || !is_string($_SESSION['zplogout'])) {
+            $_SESSION['zplogout'] = bin2hex(random_bytes(16));
+        }
+        return $_SESSION['zplogout'];
+    }
+
+    /**
+     * The panel's logout link.
+     * @return string
+     */
+    static function LogoutUrl()
+    {
+        return './?logout=' . self::LogoutToken();
+    }
+
+    /**
+     * Is this the session's logout secret?
+     * @param mixed $token
+     * @return bool
+     */
+    static function ValidLogoutToken($token)
+    {
+        return is_string($token) && $token !== '' && !empty($_SESSION['zplogout'])
+            && is_string($_SESSION['zplogout']) && hash_equals($_SESSION['zplogout'], $token);
     }
 
     /**

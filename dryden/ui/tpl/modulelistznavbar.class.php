@@ -91,7 +91,7 @@ class ui_tpl_modulelistznavbar
                 }
 // If Account tab, show Logout Menu Item
                 if ($shortName == '<: Account :>') {
-                    $line .= '<li><a href="?logout"><i class="icon-phpinfo"></i> Logout</a></li>';
+                    $line .= '<li><a href="' . htmlspecialchars(ctrl_auth::LogoutUrl(), ENT_QUOTES, 'UTF-8') . '"><i class="icon-phpinfo"></i> Logout</a></li>';
                 }
 
                 $line .= '</ul></li>';

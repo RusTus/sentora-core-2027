@@ -15,6 +15,9 @@ class ctrl_loginguard
     const ADDRESS_LIMIT = 20;     // ... or per address ...
     const WINDOW = 900;           // ... within 15 minutes locks for 15 minutes
     const REMEMBER_DAYS = 30;
+    const RESET_EMAIL_LIMIT = 3;    // password reset emails per address ...
+    const RESET_ADDRESS_LIMIT = 10; // ... or requests per IP, within WINDOW
+    const RESET_PREFIX = 'reset:';  // reset requests share x_login_failures under this prefix
     const AUTH_LOG = '/var/lib/sentora/sentora-auth.log';
 
     static function Ensure()
@@ -48,7 +51,7 @@ class ctrl_loginguard
         $since = time() - self::WINDOW;
         $sql = $zdbh->prepare("SELECT
             (SELECT COUNT(*) FROM x_login_failures WHERE lf_user_vc = :u AND lf_time_in > :t1) AS byuser,
-            (SELECT COUNT(*) FROM x_login_failures WHERE lf_ip_vc = :ip AND lf_time_in > :t2) AS byip");
+            (SELECT COUNT(*) FROM x_login_failures WHERE lf_ip_vc = :ip AND lf_time_in > :t2 AND lf_user_vc NOT LIKE 'reset:%') AS byip");
         $username = strtolower((string) $username);
         $ip = self::Address();
         $sql->bindParam(':u', $username);
@@ -86,6 +89,47 @@ class ctrl_loginguard
         self::Ensure();
         $username = strtolower((string) $username);
         $zdbh->prepare("DELETE FROM x_login_failures WHERE lf_user_vc = :u")->execute(array(':u' => $username));
+    }
+
+    /**
+     * Forgot password: may another reset email be sent for this address, from this IP?
+     * Counts every request (known address or not), so the form can neither flood an
+     * inbox nor be used to find out which addresses have accounts.
+     */
+    static function ResetAllowed($email)
+    {
+        global $zdbh;
+        self::Ensure();
+        $since = time() - self::WINDOW;
+        $key = substr(self::RESET_PREFIX . strtolower(trim((string) $email)), 0, 100);
+        $ip = self::Address();
+        $sql = $zdbh->prepare("SELECT
+            (SELECT COUNT(*) FROM x_login_failures WHERE lf_user_vc = :k AND lf_time_in > :t1) AS byemail,
+            (SELECT COUNT(*) FROM x_login_failures WHERE lf_ip_vc = :ip AND lf_time_in > :t2 AND lf_user_vc LIKE 'reset:%') AS byip");
+        $sql->bindParam(':k', $key);
+        $sql->bindParam(':ip', $ip);
+        $sql->bindParam(':t1', $since);
+        $sql->bindParam(':t2', $since);
+        $sql->execute();
+        $row = $sql->fetch();
+        return ((int) $row['byemail'] < self::RESET_EMAIL_LIMIT) && ((int) $row['byip'] < self::RESET_ADDRESS_LIMIT);
+    }
+
+    /** records one forgot-password request (no fail2ban line: it is not a wrong password) */
+    static function ResetRequested($email)
+    {
+        global $zdbh;
+        self::Ensure();
+        $key = substr(self::RESET_PREFIX . strtolower(trim((string) $email)), 0, 100);
+        $ip = self::Address();
+        $now = time();
+        $sql = $zdbh->prepare("INSERT INTO x_login_failures (lf_user_vc, lf_ip_vc, lf_time_in) VALUES (:u, :ip, :t)");
+        $sql->bindParam(':u', $key);
+        $sql->bindParam(':ip', $ip);
+        $sql->bindParam(':t', $now);
+        $sql->execute();
+        $old = $now - 86400;
+        $zdbh->prepare("DELETE FROM x_login_failures WHERE lf_time_in < :old")->execute(array(':old' => $old));
     }
 
     static function IsHttps()

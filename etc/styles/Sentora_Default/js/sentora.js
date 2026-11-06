@@ -406,7 +406,7 @@ var Sentora = {
                     contentType: "application/x-www-form-urlencoded",
                     data: {
                         'moduleorder': sortorder,
-                        //'csrfmiddlewaretoken': ''
+                        'csfr_token': $('meta[name="csfr-token"]').attr('content') || $('input[name="csfr_token"]').first().val() || ''
                     },
 
                     success: function(data) {
