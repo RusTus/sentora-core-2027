@@ -1,0 +1,147 @@
+/* Modern template: the Sentora_Default layout (_layout.css) in the Server Monitor
+   palette. Shared by light.css and dark.css, which only set the --ml-* colours.
+   Files whose names start with "_" are parts, not variations: Theme Manager does
+   not offer them. */
+
+body { background: var(--ml-bg); color: var(--ml-ink); }
+a { color: var(--ml-link); }
+a:hover, a:focus { color: var(--ml-link-hover); }
+hr { border-top-color: var(--ml-line); }
+.text-muted, .help-block { color: var(--ml-muted); }
+
+/* ---- Top bar ---- */
+.navbar-inverse { background: var(--ml-chrome); border: 0; border-bottom: 1px solid var(--ml-line); box-shadow: var(--ml-shadow); }
+.navbar-inverse .nav > li > a { color: var(--ml-muted); }
+.navbar-inverse .nav > li > a:hover, .navbar-inverse .nav > li > a:focus { color: var(--ml-ink); background: transparent; }
+.navbar-inverse .nav > .open > a, .navbar-inverse .nav > .open > a:hover, .navbar-inverse .nav > .open > a:focus,
+.navbar-inverse .nav > .active > a, .navbar-inverse .nav > .active > a:hover, .navbar-inverse .nav > .active > a:focus { color: var(--ml-ink); background: var(--ml-bg); }
+.navbar-inverse .nav li.dropdown > a .caret, .navbar-inverse .nav li.dropdown.open > a .caret { border-top-color: var(--ml-muted); border-bottom-color: var(--ml-muted); }
+.navbar-inverse .navbar-toggle { border-color: var(--ml-line); }
+.navbar-inverse .navbar-toggle .icon-bar { background-color: var(--ml-muted); }
+.navbar-inverse .nav > li > a.nav-stat-button { color: var(--ml-blue); }
+.navbar-brand .logo-ink { display: var(--ml-logo-ink, inline); }
+.navbar-brand .logo-white { display: var(--ml-logo-white, none); }
+
+/* Drop-down menus */
+.dropdown-menu { background: var(--ml-card); border-color: var(--ml-line); box-shadow: 0 6px 16px rgba(20, 30, 40, 0.14); }
+.dropdown-menu > li > a { color: var(--ml-ink); }
+.dropdown-menu > li > a:hover, .dropdown-menu > li > a:focus { color: var(--ml-blue); background: var(--ml-hover); }
+.dropdown-menu > .active > a, .dropdown-menu > .active > a:hover, .dropdown-menu > .active > a:focus { color: #fff; background: var(--ml-blue); }
+.dropdown-menu .divider { background-color: var(--ml-line); }
+
+/* ---- Sidebar ---- */
+#menu-sidebar, #sidebar-bg { background: var(--ml-chrome); }
+#sidebar-bg { border-right: 1px solid var(--ml-line); }
+#menu-sidebar .heading { color: var(--ml-ink); }
+#menu-sidebar .open { color: var(--ml-muted); }
+#menu-sidebar ul li a { color: var(--ml-muted); border-top: 1px solid var(--ml-chrome); }
+#menu-sidebar ul li a:hover { color: var(--ml-blue); background: var(--ml-hover); border-top-color: var(--ml-hover); box-shadow: inset 3px 0 0 var(--ml-blue); }
+
+/* Account Info button */
+.stats-but, .stats-but:hover, .stats-but:focus, .stats-but:active {
+    background: var(--ml-blue); background-image: none; filter: none; border: 1px solid var(--ml-blue-dark);
+    border-radius: 4px; box-shadow: var(--ml-shadow); color: #fff !important; text-shadow: none;
+}
+.stats-but:hover, .stats-but:focus { background: var(--ml-blue-dark); }
+
+/* Search */
+#module-search { background: var(--ml-input); color: var(--ml-ink); border: 1px solid var(--ml-input-line); border-radius: 4px; }
+.tt-dropdown-menu { background: var(--ml-card); border-color: var(--ml-line); }
+.tt-suggestion { color: var(--ml-ink); }
+.tt-suggestion.tt-is-under-cursor { background: var(--ml-blue); background-image: none; filter: none; }
+.tt-dataset-modules > h3 { border-bottom-color: var(--ml-line); }
+
+/* ---- Dashboard: white cards with a coloured top edge, colours in turn ---- */
+.module-box { background: var(--ml-card); border-radius: 6px; box-shadow: var(--ml-shadow); }
+.module-box-title { background: var(--ml-card); border-top: 4px solid var(--c, var(--ml-blue)); border-bottom: 1px solid var(--ml-line); border-radius: 6px 6px 0 0; height: 45px; }
+.module-box-title h4 { color: var(--ml-ink); font-weight: 700; font-size: 14px; text-transform: uppercase; letter-spacing: 0.4px; }
+.module-box-title .tools .expand, .module-box-title .tools .collapse { color: var(--ml-muted); }
+.module-box-body { background: var(--ml-card); border: 0; border-radius: 0 0 6px 6px; }
+.module-box-body a { color: var(--ml-muted); }
+.module-box-body a:hover { color: var(--ml-blue); }
+.sortable.grid > li:nth-child(6n+1) { --c: var(--ml-blue); }
+.sortable.grid > li:nth-child(6n+2) { --c: var(--ml-green); }
+.sortable.grid > li:nth-child(6n+3) { --c: var(--ml-amber); }
+.sortable.grid > li:nth-child(6n+4) { --c: var(--ml-purple); }
+.sortable.grid > li:nth-child(6n+5) { --c: var(--ml-teal); }
+.sortable.grid > li:nth-child(6n+6) { --c: var(--ml-red); }
+.sortable.grid li ul li { max-width: 72px; margin: 0 8px 6px 8px; }
+li.sortable-placeholder { background: var(--ml-hover); border-color: var(--ml-input-line); }
+.module-box:target > .module-box-title, .active-cat > .module-box-title { background: var(--ml-card); }
+
+/* Module icons (img/icons/<module>.svg, drawn as a mask in the box's colour) */
+.theme-icon { display: inline-flex; align-items: center; justify-content: center; width: 46px; height: 46px; border-radius: 12px;
+    background: color-mix(in srgb, var(--c, var(--ml-blue)) var(--ml-tint), var(--ml-card)); margin-bottom: 6px;
+    transition: transform .15s ease, background-color .15s ease; }
+.theme-icon > span { display: block; width: 26px; height: 26px; background-color: var(--c, var(--ml-blue));
+    -webkit-mask: no-repeat center / contain; mask: no-repeat center / contain; transition: background-color .15s ease; }
+.theme-icon > img { width: 28px; height: 28px; margin: 0; filter: none !important; -webkit-filter: none !important; }
+.module-box-body li a:hover .theme-icon { background-color: var(--c, var(--ml-blue)); transform: translateY(-2px); }
+.module-box-body li a:hover .theme-icon > span { background-color: #fff; }
+/* Small icons in the sidebar and the top-bar menus: the link's own colour */
+i.theme-icon-sm { display: inline-block; width: 16px; height: 16px; margin: 0 6px -3px 0; background-color: currentColor;
+    -webkit-mask: no-repeat center / contain; mask: no-repeat center / contain; }
+/* Module page header icon: the SVG on a tinted tile */
+.zmodule_content > .panel-heading img[src$=".svg"] { width: 44px; height: 44px; padding: 8px; border-radius: 10px;
+    background: color-mix(in srgb, var(--ml-blue) var(--ml-tint), var(--ml-card)); margin: -4px 12px 0 0; }
+
+/* ---- Module pages (Bootstrap 3 parts the modules use) ---- */
+.panel { background: var(--ml-card); border-color: var(--ml-line); box-shadow: var(--ml-shadow); color: var(--ml-ink); }
+.panel-heading, .panel-default > .panel-heading { background: var(--ml-card); border-color: var(--ml-line); color: var(--ml-ink); }
+.panel-footer { background: var(--ml-hover); border-color: var(--ml-line); }
+.zmodule_header { background-color: var(--ml-card); color: var(--ml-ink); border-bottom: 1px solid var(--ml-line); }
+.breadcrumb { background: var(--ml-card); box-shadow: var(--ml-shadow); }
+.breadcrumb > .active { color: var(--ml-muted); }
+.breadcrumb > li, .navbar-inverse .nav > li > a, .module-box-title h4 { text-shadow: none; }
+.well { background: var(--ml-hover); border-color: var(--ml-line); box-shadow: none; }
+.table > thead > tr > th, .table > tbody > tr > th, .table > tfoot > tr > th,
+.table > thead > tr > td, .table > tbody > tr > td, .table > tfoot > tr > td { border-color: var(--ml-line); }
+.table > thead > tr > th { border-bottom-color: var(--ml-line); color: var(--ml-muted); }
+.table-striped > tbody > tr:nth-child(odd) > td, .table-striped > tbody > tr:nth-child(odd) > th { background: var(--ml-stripe); }
+.table-hover > tbody > tr:hover > td, .table-hover > tbody > tr:hover > th { background: var(--ml-hover); }
+.table-bordered, .table-bordered > thead > tr > th, .table-bordered > tbody > tr > td { border-color: var(--ml-line); }
+.form-control, input[type="text"], input[type="password"], input[type="email"], input[type="number"], input[type="search"],
+input[type="url"], input[type="tel"], input[type="date"], select, textarea {
+    background-color: var(--ml-input); color: var(--ml-ink); border: 1px solid var(--ml-input-line); border-radius: 4px; }
+.form-control:focus, input:focus, select:focus, textarea:focus { border-color: var(--ml-blue); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ml-blue) 22%, transparent); outline: 0; }
+input[disabled], select[disabled], textarea[disabled], .form-control[disabled], .form-control[readonly] { background: var(--ml-hover); color: var(--ml-muted); }
+::placeholder { color: var(--ml-muted); opacity: 1; }
+.btn-default { background: var(--ml-card); color: var(--ml-ink); border-color: var(--ml-input-line); }
+.btn-default:hover, .btn-default:focus, .btn-default:active { background: var(--ml-hover); color: var(--ml-ink); border-color: var(--ml-input-line); }
+.btn-primary { background-color: var(--ml-blue); border-color: var(--ml-blue-dark); color: #fff; }
+.btn-primary:hover, .btn-primary:focus, .btn-primary:active, .btn-primary.active { background-color: var(--ml-blue-dark); border-color: var(--ml-blue-dark); color: #fff; }
+.btn-danger { background-color: var(--ml-red); border-color: color-mix(in srgb, var(--ml-red) 80%, #000); }
+.btn-danger:hover, .btn-danger:focus, .btn-danger:active { background-color: color-mix(in srgb, var(--ml-red) 85%, #000); border-color: color-mix(in srgb, var(--ml-red) 75%, #000); }
+.btn-success { background-color: var(--ml-green); border-color: color-mix(in srgb, var(--ml-green) 80%, #000); }
+.btn-warning { background-color: var(--ml-amber); border-color: color-mix(in srgb, var(--ml-amber) 80%, #000); }
+.btn-info { background-color: var(--ml-teal); border-color: color-mix(in srgb, var(--ml-teal) 80%, #000); }
+.nav-tabs { border-bottom-color: var(--ml-line); }
+.nav-tabs > li > a { color: var(--ml-muted); }
+.nav-tabs > li > a:hover { background: var(--ml-hover); border-color: var(--ml-line) var(--ml-line) transparent; }
+.nav-tabs > li.active > a, .nav-tabs > li.active > a:hover, .nav-tabs > li.active > a:focus { background: var(--ml-card); color: var(--ml-ink); border-color: var(--ml-line) var(--ml-line) transparent; }
+.pagination > li > a, .pagination > li > span { background: var(--ml-card); border-color: var(--ml-line); color: var(--ml-link); }
+.pagination > .active > a, .pagination > .active > span { background: var(--ml-blue); border-color: var(--ml-blue); }
+.list-group-item { background: var(--ml-card); border-color: var(--ml-line); }
+.modal-content { background: var(--ml-card); border-color: var(--ml-line); color: var(--ml-ink); }
+.modal-header, .modal-footer { border-color: var(--ml-line); }
+.close { color: var(--ml-ink); text-shadow: none; }
+.progress { background: var(--ml-line); box-shadow: none; }
+.progress-bar { background-color: var(--ml-blue); }
+.alert-success { background: color-mix(in srgb, var(--ml-green) var(--ml-tint), var(--ml-card)); border-color: color-mix(in srgb, var(--ml-green) 35%, var(--ml-card)); color: var(--ml-alert-ink, #1d6b49); }
+.alert-danger, .alert-error { background: color-mix(in srgb, var(--ml-red) var(--ml-tint), var(--ml-card)); border-color: color-mix(in srgb, var(--ml-red) 35%, var(--ml-card)); color: var(--ml-alert-ink, #a8321f); }
+.alert-warning { background: color-mix(in srgb, var(--ml-amber) var(--ml-tint), var(--ml-card)); border-color: color-mix(in srgb, var(--ml-amber) 40%, var(--ml-card)); color: var(--ml-alert-ink, #7a5200); }
+.alert-info { background: color-mix(in srgb, var(--ml-teal) var(--ml-tint), var(--ml-card)); border-color: color-mix(in srgb, var(--ml-teal) 35%, var(--ml-card)); color: var(--ml-alert-ink, #145f6a); }
+code { background: var(--ml-hover); color: var(--ml-red); }
+pre { background: var(--ml-hover); border-color: var(--ml-line); color: var(--ml-ink); }
+legend { color: var(--ml-ink); border-bottom-color: var(--ml-line); }
+.ui-state-default { background: var(--ml-card); border-color: var(--ml-line); color: var(--ml-ink); }
+
+/* Account Info drop-down */
+.stats-row { background: var(--ml-card); color: var(--ml-ink); border-top-color: var(--ml-line); }
+.stats-row:nth-child(even) { background-color: var(--ml-stripe); }
+
+/* Server Monitor follows the template's colours */
+.sm { --sm-ink: var(--ml-ink); --sm-muted: var(--ml-muted); --sm-line: var(--ml-line); --sm-card: var(--ml-card); --sm-bg: var(--ml-bg); }
+.sm-controls select, .sm-controls button { background: var(--ml-input); color: var(--ml-ink); border-color: var(--ml-input-line); }
+
+#footer { color: var(--ml-muted); }

@@ -37,6 +37,9 @@ class ctrl_auth
             $zdbh->bindQuery($sqlQuery, $bindArray);
             $themeRow = $zdbh->returnRow();
             $loginTheme = ctrl_users::SafeTheme($themeRow['ac_usertheme_vc']);
+            // The administrator's variation of that theme (for example light or dark), for
+            // login pages that offer more than one; only a plain name ever reaches the page
+            $loginCss = preg_match('/^[A-Za-z0-9_-]{1,64}$/', (string) $themeRow['ac_usercss_vc']) ? (string) $themeRow['ac_usercss_vc'] : '';
             include 'etc/styles/' . ($loginTheme !== '' ? $loginTheme : 'Sentora_Default') . '/login.ztml';
             exit;
         }

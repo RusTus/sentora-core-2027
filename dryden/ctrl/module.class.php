@@ -46,6 +46,11 @@ class ctrl_module
     {
         global $controller;
         $mod_dir = $controller->GetControllerRequest('URL', 'module');
+        // A template's own module icon (img/icons/<module>.svg, as Modern has)
+        $themeIcon = ui_template::ThemeIcon($mod_dir);
+        if ($themeIcon) {
+            return './' . $themeIcon;
+        }
         // Check if the current userland theme has a module icon override
         if (file_exists('etc/styles/' . ui_template::GetUserTemplate() . '/img/modules/' . $mod_dir . '/assets/icon.png'))
             return './etc/styles/' . ui_template::GetUserTemplate() . '/img/modules/' . $mod_dir . '/assets/icon.png';

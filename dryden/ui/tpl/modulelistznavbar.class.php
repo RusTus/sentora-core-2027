@@ -77,7 +77,10 @@ class ui_tpl_modulelistznavbar
                     } else {
                         $line .= '<li>';
                     }
-                    if ($mod['mo_installed_ts'] != 0) {
+                    $themeIcon = ui_template::MenuIcon($mod['mo_folder_vc']);
+                    if ($themeIcon) {
+                        $line .= '<a href="?module=' . $mod['mo_folder_vc'] . '">' . $themeIcon . ' <: ' . $mod['mo_name_vc'] . ' :></a></li>';
+                    } elseif ($mod['mo_installed_ts'] != 0) {
 						if (file_exists('etc/styles/' . ui_template::GetUserTemplate() . '/img/modules/'.$mod['mo_folder_vc'].'/assets/icon.png')) {
                             $line .= '<a href="?module=' . $mod['mo_folder_vc'] . '"><i class="icon-' . $class_name . ' greyscale"><img src="etc/styles/' . ui_template::GetUserTemplate() . '/img/modules/'.$mod['mo_folder_vc'].'/assets/icon.png" height="16px" width="16px"></i> <: ' . $mod['mo_name_vc'] . ' :></a></li>';
 						} else {

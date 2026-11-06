@@ -36,8 +36,8 @@ class module_controller extends ctrl_module
     {
         global $zdbh;
 
-        /* Set CSS back to default */
-        self::ExecuteUpdateCSS($uid, 'default');
+        /* Set CSS back to the new theme's first variation (not every theme has default.css) */
+        self::ExecuteUpdateCSS($uid, ui_template::DefaultCSS(ctrl_users::SafeTheme($theme)));
 
         /* Set new theme */
         $sql = $zdbh->prepare("
@@ -136,10 +136,11 @@ class module_controller extends ctrl_module
     {
         $html = "";
         foreach (self::ExecuteCSSList() as $css) {
+            $label = htmlspecialchars(ui_template::CSSLabel($css['name']), ENT_QUOTES);
             if ($css['name'] != self::getCurrentCSS()) {
-                $html .="<option value = \"" . $css['name'] . "\">" . $css['name'] . "</option>\n";
+                $html .="<option value = \"" . $css['name'] . "\">" . $label . "</option>\n";
             } else {
-                $html .="<option value = \"" . $css['name'] . "\" selected=\"selected\">" . $css['name'] . "</option>\n";
+                $html .="<option value = \"" . $css['name'] . "\" selected=\"selected\">" . $label . "</option>\n";
             }
         }
         return $html;
@@ -148,10 +149,9 @@ class module_controller extends ctrl_module
     static function getIsSelectCSS()
     {
         global $controller;
-        $getvars = $controller->GetAllControllerRequests('URL');
-        if (isset($getvars['selectcss']))
-            return true;
-        return false;
+        // Whenever the current theme has more than one variation (for example Modern:
+        // Light and Dark), so it can be switched without choosing the theme again
+        return count(self::ExecuteCSSList()) > 1;
     }
 
     static function doSaveTheme()

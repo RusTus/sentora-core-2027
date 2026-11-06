@@ -17,12 +17,14 @@ class ui_tpl_csspath {
 
     public static function Template() {
         $user = ctrl_users::GetUserDetail();
-        if (!fs_director::CheckForEmptyValue(fs_director::CheckForEmptyValue($user['usercss']))) {
-            $retval = "etc/styles/" . ui_template::GetUserTemplate() . "/css/default.css";
-        } else {
-            $retval = "etc/styles/" . ui_template::GetUserTemplate() . "/css/" . $user['usercss'] . ".css";
+        $template = ui_template::GetUserTemplate();
+        $css = (string) $user['usercss'];
+        // No variation chosen, or one this template does not have (it was chosen for
+        // another template): the template's own first variation
+        if ($css === '' || !is_file("etc/styles/" . $template . "/css/" . $css . ".css")) {
+            $css = ui_template::DefaultCSS($template);
         }
-        return $retval;
+        return "etc/styles/" . $template . "/css/" . $css . ".css";
     }
 
 }

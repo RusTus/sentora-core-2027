@@ -53,7 +53,7 @@ class ui_tpl_modulelist2column {
 
                         $line .= '              <li>';
                         $line .= '                      <a href="?module=' . $mod['mo_folder_vc'] . '" title="<: ' . $mod['mo_desc_tx'] . ' :>">';
-                        $line .= '<img src="' .$icon. '" border="0">';
+                        $line .= ui_template::DashboardIcon($mod['mo_folder_vc'], $icon);
                         $line .= '                      </a>';
                         $line .= '                      <br />';
                         $line .= '                      <a href="?module=' . $mod['mo_folder_vc'] . '"><: ' . $cleanname . ' :></a>';
