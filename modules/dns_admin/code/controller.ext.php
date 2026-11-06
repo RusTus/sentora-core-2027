@@ -201,10 +201,7 @@ class module_controller extends ctrl_module
         $line .= "<form action=\"./?module=dns_admin&action=Updatelogs\" method=\"post\">";
         $line .= "<table class=\"table table-striped\">";
         $line .= "<tr>";
-        $line .= "<th style=\"width:350px;\">" . self::CheckLogReadable(ctrl_options::GetSystemOption('bind_log')) . " " . self::CheckLogWritable(ctrl_options::GetSystemOption('bind_log')) . "</th>";
-        $line .= "<td><button class=\"button-loader btn btn-primary\" type=\"submit\" id=\"button\" name=\"inSetPerms\" value=\"1\">" . ui_language::translate("Set Permissions") . "</button></td>";
-        $line .= "<tr>";
-        $line .= "<th>" . ui_language::translate("Clear errors") . "</th>";
+        $line .= "<th style=\"width:350px;\">" . ui_language::translate("Clear errors") . "</th>";
         $line .= "<td><button class=\"delete btn btn-danger\" type=\"submit\" id=\"button\" name=\"inClearErrors\" value=\"1\">" . ui_language::translate("Clear") . "</button></td>";
         $line .= "</tr>";
         $line .= "<tr>";
@@ -345,9 +342,6 @@ class module_controller extends ctrl_module
     {
         global $zdbh;
         global $controller;
-        if (!fs_director::CheckForEmptyValue($controller->GetControllerRequest('FORM', 'inSetPerms'))) {
-            self::SetPerms();
-        }
         if (!fs_director::CheckForEmptyValue($controller->GetControllerRequest('FORM', 'inClearErrors'))) {
             self::ClearErrors();
         }
@@ -566,15 +560,6 @@ class module_controller extends ctrl_module
                 }
                 self::$deleted = $numrecords;
             }
-        }
-    }
-
-    static function SetPerms()
-    {
-        $bindlog = ctrl_options::GetSystemOption('bind_log');
-        if (sys_versions::ShowOSPlatformVersion() <> "Windows") {
-            //exec(ctrl_options::GetOption('zsudo') . " chgrp " . ctrl_options::GetOption('zsudo') . " " . $bindlog);
-            exec(ctrl_options::GetSystemOption('zsudo') . " chmod 0777 " . $bindlog);
         }
     }
 

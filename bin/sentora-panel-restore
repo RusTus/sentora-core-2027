@@ -155,6 +155,13 @@ restore_files() { # username exact(yes|no)
     rm -rf "$STAGE/files-$u"
 }
 
+# Trust note: a full/account restore rebuilds a server from the off-server snapshot,
+# including its MySQL users (restore_users), so it is privileged by nature and trusts
+# the backup machine. The database dumps here are made by root mysqldump of the live
+# server (not written by any account), so they are loaded with the panel login. The
+# account self-service tool (sentora-restore) instead loads an account-supplied backup,
+# so it loads each dump as a user limited to that one database. Keep the backup machine
+# as trusted as this server.
 # --- one database: dropped and loaded from its dump
 restore_database() { # name
     local db="$1"

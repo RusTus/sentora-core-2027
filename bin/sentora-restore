@@ -30,7 +30,9 @@ done
 # the panel's database login, in an option file (never on a command line)
 val() { grep -o "\$$1 = '[^']*'" "$PANEL/cnf/db.php" | head -1 | cut -d"'" -f2; }
 MYCNF=$(mktemp); chmod 600 "$MYCNF"
-TMP=$(mktemp -d); trap 'rm -rf "$TMP" "$MYCNF"' EXIT
+TMP=$(mktemp -d); RCNF=""; RUSER=""
+cleanup() { [ -n "$RUSER" ] && mysql --defaults-extra-file="$MYCNF" -e "DROP USER IF EXISTS '$RUSER'@'localhost'" 2>/dev/null; rm -rf "$TMP" "$MYCNF" ${RCNF:+"$RCNF"}; }
+trap cleanup EXIT
 H=$(val host); printf '[client]\nuser=%s\npassword=%s\n' "$(val user)" "$(val pass)" > "$MYCNF"
 case "$H" in *:*) printf 'host=%s\nport=%s\n' "${H%%:*}" "${H##*:}" >> "$MYCNF" ;; localhost|"") ;; *) echo "host=$H" >> "$MYCNF" ;; esac
 q() { mysql --defaults-extra-file="$MYCNF" -N -B -e "$1" sentora_core 2> /dev/null; }
@@ -85,15 +87,33 @@ unzip -q "$ZIPF" -d "$TMP/x" || die "could not unpack $ZIPF"
 if [ $FILES -eq 1 ] && [ -d "$TMP/x/public_html" ]; then
     say "Restoring the web files"
     DEL=""; [ $EXACT -eq 1 ] && DEL="--delete"
-    # -a keeps symbolic links as links (never followed), and nothing outside public_html
-    rsync -a $DEL "$TMP/x/public_html/" "$HOME_DIR/public_html/" || die "the file restore did not complete"
-    chown -hR "$WEBU" "$HOME_DIR/public_html"
+    # Copy AS the account's own user (web<id>), so a symlink the account put in its
+    # own folder can not redirect a root write outside it. -rlt keeps links as links.
+    chown -R "$WEBU:$WEBU" "$TMP/x/public_html"; chmod 711 "$TMP" "$TMP/x"
+    setpriv --reuid="$WEBU" --regid="$WEBU" --init-groups rsync -rlt $DEL "$TMP/x/public_html/" "$HOME_DIR/public_html/" || die "the file restore did not complete"
 fi
-if [ $DBS -eq 1 ]; then
+if [ $DBS -eq 1 ] && [ -n "$DUMPS" ]; then
+    # Load each dump as a MySQL user limited to just that database, with DEFINER
+    # clauses stripped. The panel's MySQL login is all-powerful, and a backup zip
+    # lives in the account's own folder, so a tampered dump loaded with the panel
+    # login could GRANT itself rights, CREATE USER, use FILE/OUTFILE, or define a
+    # routine that runs as another user. A per-database user can do none of that.
+    RUSER="sentora_rst_$$"
+    RPASS=$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 24)
+    # --defaults-file (not --defaults-extra-file): read ONLY this file, so a stray
+    # ~/.my.cnf (e.g. /root/.my.cnf) can not override it back to the panel login.
+    RCNF=$(mktemp); chmod 600 "$RCNF"
+    printf '[client]\nuser=%s\npassword=%s\n' "$RUSER" "$RPASS" > "$RCNF"
+    case "$H" in *:*) printf 'host=%s\nport=%s\n' "${H%%:*}" "${H##*:}" >> "$RCNF" ;; localhost|"") ;; *) echo "host=$H" >> "$RCNF" ;; esac
+    mysql --defaults-extra-file="$MYCNF" -e "CREATE USER '$RUSER'@'localhost' IDENTIFIED BY '$RPASS'" \
+        || die "could not create the restore user (the backup of the state before is $NOW)"
     for d in $DUMPS; do
         db=$(echo "$d" | sed -E 's/_[0-9]{6}_[0-9]{3,4}\.sql$//')
         say "Restoring the database $db"
-        mysql --defaults-extra-file="$MYCNF" "$db" < "$TMP/x/$d" || die "the restore of $db failed (the backup of the state before is $NOW)"
+        mysql --defaults-extra-file="$MYCNF" -e "GRANT ALL PRIVILEGES ON \`$db\`.* TO '$RUSER'@'localhost'" \
+            || die "could not grant on $db (the backup of the state before is $NOW)"
+        sed -E 's/DEFINER=`[^`]*`@`[^`]*`//g' "$TMP/x/$d" | mysql --defaults-file="$RCNF" "$db" \
+            || die "the restore of $db failed (the backup of the state before is $NOW)"
     done
 fi
 say "Restored $ACC from $ZIPF. To undo: sentora-restore $ACC $NOW"
