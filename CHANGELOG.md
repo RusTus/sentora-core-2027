@@ -68,6 +68,7 @@ In the original, the panel and every hosted site ran PHP as the same user (`www-
 - Password-reset keys, CSRF tokens and salts come from a cryptographic random generator; reset keys work once, for one hour.
 - Forgot password sends at most 3 reset emails per address, and takes at most 10 requests per IP, within 15 minutes; past that a request is quietly dropped (the page looks the same).
 - Logout ends the whole session (new session id, nothing carried over) and needs the panel's own logout link, which carries a per-session secret; another site loading `./?logout` no longer logs a user out.
+- Page cache: each compiled page is stored under a name made from its own content and written in one step. It used to be one file per theme and module, rewritten on every request, so two users opening the same page together could be shown each other's account details, or a page could load half-written.
 - "Enable Session Security" at login works: the session is bound to the browser and IP address it logged in from (the box was read under a misspelled name, and the setting was then overwritten, so it was always off).
 - The dashboard's module-order AJAX handler uses the panel's session cookie settings and error setting, and needs the page's CSRF token (now also in a `<meta name="csfr-token">` in each panel page).
 - A content security policy, frame protection and `nosniff` on every panel page.

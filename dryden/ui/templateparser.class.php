@@ -265,49 +265,45 @@ class ui_templateparser
      */
     static function CheckFileCache($phpCode)
     {
-        $currentCode = $phpCode;
-
         //Get the users current theme
         $userDetails = ctrl_users::GetUserDetail();
-        $userTheme = $userDetails['usertheme'];
-
-        //The location of the cached php
-        if (isset($_GET['module'])) {
-            $location = ui_templateparser::$storageLocation . $userTheme . '/' . md5(fs_protector::SanitiseFolderName($_GET['module'])) . '.cache';
-        } else {
-            $location = ui_templateparser::$storageLocation . $userTheme . '/' . md5('index') . '.cache';
+        $userTheme = ctrl_users::SafeTheme($userDetails['usertheme']);
+        if ($userTheme === '') {
+            $userTheme = 'Modern';
         }
 
-        //check folder exists (First load of 10.1.0 and on new theme)
+        // The compiled page holds this user's own details (name, email, menus, domains),
+        // so one file per page per user would still be shared with nobody else only by
+        // luck. The file is named after its own content instead: two requests share a
+        // file only when their pages are byte for byte the same, and a file is written
+        // to a temporary name and then renamed, so no request ever reads half a file.
+        // (The old file per theme and module was rewritten by every request, so two
+        // users loading the same page together could be shown each other's details.)
+        $location = ui_templateparser::$storageLocation . $userTheme . '/' . hash('sha256', $phpCode) . '.cache';
+
         $dirname = dirname($location);
         if (!is_dir($dirname)) {
-            mkdir($dirname, 0755, true);
+            @mkdir($dirname, 0755, true);
         }
 
-        //check file exsists if not make, insert code else just get current code
-        if (file_exists($location)) {
-            $content = file_get_contents($location);
-        } else {
-            $handle = fopen($location, 'w');
-            file_put_contents($location, $phpCode, LOCK_EX);
-            $content = $phpCode;
+        if (!is_file($location)) {
+            $tmp = $location . '.' . bin2hex(random_bytes(6)) . '.tmp';
+            if (file_put_contents($tmp, $phpCode) === strlen($phpCode) && rename($tmp, $location)) {
+                return $location;
+            }
+            @unlink($tmp);
+            return false;
         }
-
-        //check the file content is the same as the generated content then return file location
-        if ($currentCode == $content) {
-            return $location;
-        } else {
-            file_put_contents($location, $phpCode, LOCK_EX);
-            return $location;
-        }
+        return $location;
     }
 
     /**
      * Check the cache for very old files and clear them
-     * @var deathAfter the number of seconds old a cache file can be deafult 7 days
+     * @var deathAfter the number of seconds old a cache file can be (default 2 days: files are
+     *      per page content, so per user; a file still in use is simply written again)
      * @author Sam Mottley (smottley@zpanelcp.com)
      */
-    static function clearOldCache($deathAfter = '604800')
+    static function clearOldCache($deathAfter = '172800')
     {
         //dont check every time!
         $rollDice = rand(1, ui_templateparser::$deleteCacheChance);
@@ -359,7 +355,11 @@ class ui_templateparser
         //selected eval or file cache
         if ($evalOrCache == 1) {
             $fileLocation = ui_templateparser::CheckFileCache($template_code);
-            return include($fileLocation);
+            if ($fileLocation !== false) {
+                return include($fileLocation);
+            }
+            // The cache folder could not be written (disk full, permissions): run it directly
+            return eval('?>' . $template_code);
         } else {
             return eval('?>' . $template_code);
         }
