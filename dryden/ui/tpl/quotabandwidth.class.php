@@ -13,8 +13,16 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  */
+/**
+ * Template tag <# ui_tpl_quotabandwidth #>: the bandwidth quota.
+ */
 class ui_tpl_quotabandwidth {
 
+    /**
+     * Returns the user's monthly bandwidth quota in human-readable form.
+     *
+     * @return string E.g. '10 GB', or '<: Unlimited :>' when the quota is 0.
+     */
     public static function Template() {
         $currentuser = ctrl_users::GetUserDetail();
         if ($currentuser['bandwidthquota'] == 0)

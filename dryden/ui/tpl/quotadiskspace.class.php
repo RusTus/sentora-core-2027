@@ -13,8 +13,16 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  */
+/**
+ * Template tag <# ui_tpl_quotadiskspace #>: the disk space quota.
+ */
 class ui_tpl_quotadiskspace {
 
+    /**
+     * Returns the user's disk space quota in human-readable form.
+     *
+     * @return string E.g. '500 MB', or '<: Unlimited :>' when the quota is 0.
+     */
     public static function Template() {
         $currentuser = ctrl_users::GetUserDetail();
         if ($currentuser['diskquota'] == 0)

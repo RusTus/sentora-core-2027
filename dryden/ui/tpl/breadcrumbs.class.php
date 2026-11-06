@@ -13,8 +13,18 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  */
+/**
+ * Template tag <# ui_tpl_breadcrumbs #>: the breadcrumb trail.
+ */
 class ui_tpl_breadcrumbs {
 
+    /**
+     * Builds the Home > category > module breadcrumb for the current module page.
+     *
+     * @global db_driver $zdbh The panel's database connection (declared, not used).
+     * @global runtime_controller $controller The request controller (reads the module URL parameter).
+     * @return string A <ul class="breadcrumb"> list, or an empty string on the dashboard or when the module is unknown.
+     */
     public static function Template() {
         global $zdbh, $controller;
         $line = '';

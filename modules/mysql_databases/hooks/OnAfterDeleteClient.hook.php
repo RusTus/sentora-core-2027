@@ -1,7 +1,24 @@
 <?php
 
+/**
+ * MySQL Databases module hook (OnAfterDeleteClient): drops the databases of deleted clients.
+ *
+ * @package Sentora
+ * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
+ */
+
 DeleteClientDatabases();
 
+/**
+ * Drops the MySQL databases of every deleted client and marks them deleted.
+ *
+ * For each account with ac_deleted_ts set, drops its first remaining database, marks all
+ * of the account's x_mysql_databases rows deleted and removes that database's user
+ * mappings (x_mysql_dbmap). Database errors are ignored.
+ *
+ * @global db_driver $zdbh The panel's database connection.
+ * @return void
+ */
 function DeleteClientDatabases() {
     global $zdbh;
     $sql = "SELECT * FROM x_accounts WHERE ac_deleted_ts IS NOT NULL";

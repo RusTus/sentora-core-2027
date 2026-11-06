@@ -13,8 +13,16 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  */
+/**
+ * Template tag <# ui_tpl_usedemail #>: the number of mailboxes in use.
+ */
 class ui_tpl_usedemail {
 
+    /**
+     * Returns how many mailboxes the current user has, counted by ctrl_users::GetQuotaUsages().
+     *
+     * @return int|string The count (a numeric string or int, as the database driver returns it).
+     */
     public static function Template() {
         $currentuser = ctrl_users::GetUserDetail();
         return ctrl_users::GetQuotaUsages('mailboxes', $currentuser['userid']);

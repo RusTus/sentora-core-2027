@@ -13,8 +13,16 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  */
+/**
+ * Template tag <# ui_tpl_modulelistul #>: the module categories as nested lists.
+ */
 class ui_tpl_modulelistul {
 
+    /**
+     * Builds one <div><ul> list of module links per module category.
+     *
+     * @return string The HTML.
+     */
     public static function Template() {
         $line = "";
         $show = 0;

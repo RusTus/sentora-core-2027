@@ -13,8 +13,16 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  */
+/**
+ * Template tag <# ui_tpl_date #>: today's date.
+ */
 class ui_tpl_date {
 
+    /**
+     * Returns today's date written out in full.
+     *
+     * @return string The date, e.g. 'Friday November 6th, 2026'.
+     */
     public static function Template() {
         return date('l F jS\, Y');
     }

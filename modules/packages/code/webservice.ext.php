@@ -26,13 +26,19 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
  */
+/**
+ * Package Manager web service (XMWS API): package lists and IDs for other systems.
+ */
 class webservice extends ws_xmws
 {
 
     /**
      * Return a full list of packages configured for a specific user (reseller) account.
-     * @global type $zdbh
-     * @return array
+     *
+     * Request content: <uid> (the reseller; the zadmin account, 1, when missing).
+     * Response content: one <packages> section per package with <id> and <pakage> (name).
+     *
+     * @return array<string, string> The response data object ('response' and 'content').
      */
     public function GetAllPackages()
     {
@@ -60,7 +66,11 @@ class webservice extends ws_xmws
 
     /**
      * Get and return package details for a specific package.
-     * @return array
+     *
+     * Looks up the zadmin account's (1) package named in <pakagename> and returns its ID
+     * in <pakageid> (0 when not found).
+     *
+     * @return array<string, string> The response data object ('response' and 'content').
      */
     public function GetPackageId()
     {

@@ -13,8 +13,16 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  */
+/**
+ * Template tag <# ui_tpl_email #>: the current user's email address.
+ */
 class ui_tpl_email {
 
+    /**
+     * Returns the email address of the logged-in user.
+     *
+     * @return string The email address (not HTML-escaped).
+     */
     public static function Template() {
         $user_array = ctrl_users::GetUserDetail();
         return $user_array['email'];

@@ -26,11 +26,22 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
  */
+/**
+ * FTP Admin module: edits this module's settings in x_settings.
+ */
 class module_controller extends ctrl_module
 {
 
+    /** @var bool|null True after doUpdateConfig() saved the settings (shown by getResult()). */
     static $ok;
 
+    /**
+     * Returns the module's user-editable settings for the form (<%% loop Config %%>).
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return array<int, array<string, mixed>>|false One row per setting: 'cleanname', 'name',
+     *         'description' (translated), 'value' and 'fieldhtml' (the input field), or false when there are none.
+     */
     static function getConfig()
     {
         global $zdbh;
@@ -64,6 +75,16 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Saves the settings form (POST action=UpdateConfig).
+     *
+     * Checks the CSRF token, then writes each non-empty field to its x_settings row
+     * and sets $ok.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller.
+     * @return void
+     */
     static function doUpdateConfig()
     {
         global $zdbh;
@@ -92,6 +113,11 @@ class module_controller extends ctrl_module
         self::$ok = true;
     }
 
+    /**
+     * Returns the "settings saved" message after a save (<@ Result @>).
+     *
+     * @return string|null The alert HTML, or null when nothing was saved.
+     */
     static function getResult()
     {
         if (!fs_director::CheckForEmptyValue(self::$ok)) {

@@ -13,8 +13,16 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  */
+/**
+ * Template tag <# ui_tpl_apacheversion #>: the Apache version.
+ */
 class ui_tpl_apacheversion {
 
+    /**
+     * Returns the web server (Apache) version string.
+     *
+     * @return string The Apache version, from sys_versions::ShowApacheVersion().
+     */
     public static function Template() {
         return sys_versions::ShowApacheVersion();
     }

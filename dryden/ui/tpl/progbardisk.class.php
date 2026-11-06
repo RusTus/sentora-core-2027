@@ -13,8 +13,18 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  */
+/**
+ * Template tag <# ui_tpl_progbardisk #>: the disk space usage bar.
+ */
 class ui_tpl_progbardisk {
 
+    /**
+     * Builds a progress bar showing the disk space used against the quota.
+     *
+     * The bar turns red at 75%; the percentage is written in it from 10%.
+     *
+     * @return string The Bootstrap progress bar HTML (empty bar when the quota is unlimited).
+     */
     public static function Template() {
         $currentuser = ctrl_users::GetUserDetail();
         $diskquota = $currentuser['diskquota'];

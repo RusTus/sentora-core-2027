@@ -1,5 +1,12 @@
 <?php
 
+/**
+ * MySQL Databases module hook (OnEndDaemonRun): adds database sizes to the accounts' disk usage.
+ *
+ * @package Sentora
+ * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
+ */
+
 AddCurrentDatabaseSize();
 
 
@@ -7,6 +14,14 @@ AddCurrentDatabaseSize();
  * Add the current MySQL database sizes to the user's current disk space amount.
  */
 
+/**
+ * Adds each account's total database size to its disk usage for this month (x_bandwidth.bd_diskamount_bi).
+ *
+ * Uses the sizes stored by CalculateAllDatabaseSize() (OnDaemonRun hook).
+ *
+ * @global db_driver $zdbh The panel's database connection.
+ * @return void
+ */
 function AddCurrentDatabaseSize() {
     global $zdbh;
     include('cnf/db.php');

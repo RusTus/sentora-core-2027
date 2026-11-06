@@ -14,8 +14,16 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  */
+/**
+ * Template tag <# ui_tpl_shadowbar #>: the "end shadowing" bar.
+ */
 class ui_tpl_shadowbar {
 
+    /**
+     * Returns the bar with the button to end shadowing, when an admin or reseller is shadowing a user.
+     *
+     * @return string|false The bar HTML, or false when the session is not a shadow session.
+     */
     public static function Template() {
 		$shadoweduser = ctrl_users::GetUserDetail();
 		$shadowedusername = $shadoweduser['username'];

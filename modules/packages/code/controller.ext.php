@@ -26,31 +26,47 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
  */
+/**
+ * Package Manager module: a reseller's hosting packages (name, PHP switch and quotas).
+ */
 class module_controller extends ctrl_module
 {
 
+    /** @var bool|null True when a quota field was not a number (shown by getResult()). */
     static $error;
+    /** @var bool|null True when the package name is already used by this reseller (shown by getResult()). */
     static $alreadyexists;
+    /** @var bool|null True when the package name is not valid (shown by getResult()). */
     static $badname;
+    /** @var bool|null True when no package name was given (shown by getResult()). */
     static $blank;
+    /** @var bool|null True after a package was created, updated or deleted (shown by getResult()). */
     static $ok;
+    /** @var mixed Not used (never set). */
     static $edit;
+    /** @var bool|null True when a package's clients were to be moved to the package being deleted (shown by getResult()). */
     static $samepackage;
 
     /**
      * The 'worker' methods.
      */
-	# get package quotas - tgates
+	// get package quotas - tgates
+	/**
+	 * Formats a package's quotas as readable HTML lines ("Domains = 5<br>...").
+	 *
+	 * @param array<int,array<string,mixed>>|false $pkg_quotas The rows from ListCurrentPackage().
+	 * @return string|null The text for the last row; null when there are no rows.
+	 */
 	static function GetQuotas($pkg_quotas)
 	{
 		foreach($pkg_quotas as $pkg_quota) {
-			# remove unused keys
+			// remove unused keys
 			unset($pkg_quota['packageid']);
 			unset($pkg_quota['PHPChecked']);
 			unset($pkg_quota['packagename']);
-			# make the array managable
+			// make the array managable
 			$pkg_quota = json_encode($pkg_quota);
-			# make values translatable and readable
+			// make values translatable and readable
 			$pkg_quota = str_replace('enablePHP', ui_language::translate('PHP Enabled'), $pkg_quota);
 			$pkg_quota = str_replace('domains', ui_language::translate('Domains'), $pkg_quota);
 			$pkg_quota = str_replace('subDomains', ui_language::translate('Sub Domains'), $pkg_quota);
@@ -62,7 +78,7 @@ class module_controller extends ctrl_module
 			$pkg_quota = str_replace('diskquota', ui_language::translate('Disc Quota'), $pkg_quota);
 			$pkg_quota = str_replace('bandquota', ui_language::translate('Bandwidth Quota'), $pkg_quota);
 			$pkg_quota = str_replace('mailboxes', ui_language::translate('Mailboxes'), $pkg_quota);
-			# clean up the string
+			// clean up the string
 			$pkg_quota = str_replace('{', '', $pkg_quota);
 			$pkg_quota = str_replace('}', '', $pkg_quota);
 			$pkg_quota = str_replace('"', '', $pkg_quota);
@@ -73,6 +89,15 @@ class module_controller extends ctrl_module
 		return $pkg_quota;
 	}
 
+    /**
+     * Lists a reseller's packages.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $uid The reseller's account ID.
+     * @return array<int, array<int|string, mixed>>|false One row per package: 'packageid', 'created' (date),
+     *         'clients' (number of accounts), 'packagename' (translated), 'pkg_quota' (from GetQuotas()),
+     *         plus the ListCurrentPackage() result under key 0; false when there are none.
+     */
     static function ListPackages($uid)
     {
         global $zdbh;
@@ -98,7 +123,7 @@ class module_controller extends ctrl_module
                     // fetchColumn() returns the count itself, [0] on it always gave null
                     'clients' => $Column,
                     'packagename' => ui_language::translate($rowpackages['pk_name_vc']),
-					# get package quotas - tgates
+					// get package quotas - tgates
 					$pkg_quotas = self::ListCurrentPackage($rowpackages['pk_id_pk']),
 					'pkg_quota' => self::GetQuotas($pkg_quotas)
 					));
@@ -109,6 +134,15 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Returns one of the logged-in reseller's packages with its quotas.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $id The package ID (x_packages.pk_id_pk).
+     * @return array<int, array<string, mixed>>|false A list with the package row: 'packageid', 'enablePHP',
+     *         'PHPChecked' ('CHECKED' or ''), the quotas ('domains', 'subdomains', ..., 'diskquota' and
+     *         'bandquota' in MB) and 'packagename'; false when it is not the reseller's or does not exist.
+     */
     static function ListCurrentPackage($id)
     {
         // Only this account's own records (the id comes from ?other= or the form)
@@ -154,6 +188,17 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Deletes a package, moving its clients to another package.
+     *
+     * Runs the OnBeforeDeletePackage / OnAfterDeletePackage hooks and sets $ok; sets
+     * $samepackage when both IDs are the same.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $pk_id_pk The package to delete.
+     * @param int|string|null $mpk_id_pk The package its clients move to.
+     * @return bool True when deleted.
+     */
     static function ExecuteDeletePackage($pk_id_pk, $mpk_id_pk)
     {
         global $zdbh;
@@ -196,6 +241,28 @@ class module_controller extends ctrl_module
         return true;
     }
 
+    /**
+     * Creates a package and its quotas.
+     *
+     * Runs the OnBeforeCreatePackage / OnAfterCreatePackage hooks and sets $ok; the error
+     * flags are set by CheckNumeric() and CheckCreateForErrors().
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $uid The reseller's account ID.
+     * @param string $packagename The package name (spaces are removed).
+     * @param int|string $EnablePHP 1 or 0 (checkbox value).
+     * @param int|string $Domains Domain quota (-1 = unlimited).
+     * @param int|string $SubDomains Sub-domain quota.
+     * @param int|string $ParkedDomains Parked domain quota.
+     * @param int|string $Mailboxes Mailbox quota.
+     * @param int|string $Fowarders Mail forwarder quota.
+     * @param int|string $DistLists Distribution list quota.
+     * @param int|string $FTPAccounts FTP account quota.
+     * @param int|string $MySQL MySQL database quota.
+     * @param int|string $DiskQuota Disk quota in MB (stored as MB * 1024000 bytes).
+     * @param int|string $BandQuota Monthly bandwidth quota in MB (stored as MB * 1024000 bytes).
+     * @return bool True when created.
+     */
     static function ExecuteCreatePackage($uid, $packagename, $EnablePHP, $Domains, $SubDomains, $ParkedDomains, $Mailboxes, $Fowarders, $DistLists, $FTPAccounts, $MySQL, $DiskQuota, $BandQuota)
     {
         global $zdbh;
@@ -208,7 +275,7 @@ class module_controller extends ctrl_module
             return false;
         }
         runtime_hook::Execute('OnBeforeCreatePackage');
-        # If the user submitted a 'new' request then we will simply add the package to the database...
+        // If the user submitted a 'new' request then we will simply add the package to the database...
         $sql = $zdbh->prepare("INSERT INTO x_packages (pk_reseller_fk,
 										pk_name_vc,
 										pk_enablephp_in,
@@ -225,7 +292,7 @@ class module_controller extends ctrl_module
         $pack = addslashes($packagename);
         $sql->bindParam(':packagename', $pack);
         $sql->execute();
-        # Now lets pull back the package ID so we can use it in the other tables we are about to manipulate.
+        // Now lets pull back the package ID so we can use it in the other tables we are about to manipulate.
         //$package = $zdbh->query("SELECT * FROM x_packages WHERE pk_reseller_fk=" . $uid . " AND pk_name_vc='" . $packagename . "' AND pk_deleted_ts IS NULL")->Fetch();
         $numrows = $zdbh->prepare("SELECT * FROM x_packages WHERE pk_reseller_fk=:uid AND pk_name_vc=:packagename AND pk_deleted_ts IS NULL");
         $numrows->bindParam(':uid', $uid);
@@ -275,6 +342,28 @@ class module_controller extends ctrl_module
         return true;
     }
 
+    /**
+     * Updates a package's name, PHP switch and quotas.
+     *
+     * Runs the OnBeforeUpdatePackage / OnAfterUpdatePackage hooks and sets $ok.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $uid The reseller's account ID.
+     * @param int|string $pid The package ID.
+     * @param string $packagename The package name (spaces are removed).
+     * @param int|string $EnablePHP 1 or 0 (checkbox value).
+     * @param int|string $Domains Domain quota (-1 = unlimited).
+     * @param int|string $SubDomains Sub-domain quota.
+     * @param int|string $ParkedDomains Parked domain quota.
+     * @param int|string $Mailboxes Mailbox quota.
+     * @param int|string $Fowarders Mail forwarder quota.
+     * @param int|string $DistLists Distribution list quota.
+     * @param int|string $FTPAccounts FTP account quota.
+     * @param int|string $MySQL MySQL database quota.
+     * @param int|string $DiskQuota Disk quota in MB (stored as MB * 1024000 bytes).
+     * @param int|string $BandQuota Monthly bandwidth quota in MB (stored as MB * 1024000 bytes).
+     * @return bool True when updated.
+     */
     static function ExecuteUpdatePackage($uid, $pid, $packagename, $EnablePHP, $Domains, $SubDomains, $ParkedDomains, $Mailboxes, $Fowarders, $DistLists, $FTPAccounts, $MySQL, $DiskQuota, $BandQuota)
     {
         global $zdbh;
@@ -326,11 +415,20 @@ class module_controller extends ctrl_module
         return true;
     }
 
+    /**
+     * Checks a package name, setting $blank, $alreadyexists or $badname on a problem.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param string $packagename The package name.
+     * @param int|string $uid The reseller's account ID.
+     * @param int|string $pid Optional. The package being edited (left out of the duplicate check). Default 0.
+     * @return bool True when the name can be used.
+     */
     static function CheckCreateForErrors($packagename, $uid, $pid = 0)
     {
         global $zdbh;
         $packagename = str_replace(' ', '', $packagename);
-        # Check to make sure the packagename is not blank or exists for reseller before we go any further...
+        // Check to make sure the packagename is not blank or exists for reseller before we go any further...
         if (!fs_director::CheckForEmptyValue($packagename)) {
             $sql = "SELECT COUNT(*) FROM x_packages WHERE UPPER(pk_name_vc)=:packageNameSlashes AND pk_reseller_fk=:uid AND pk_id_pk !=:pid AND pk_deleted_ts IS NULL";
             $packageNameSlashes = addslashes(strtoupper($packagename));
@@ -358,6 +456,12 @@ class module_controller extends ctrl_module
         return true;
     }
 
+    /**
+     * Checks a package name.
+     *
+     * @param string $packagename Letters, digits and dashes, up to 63, not starting or ending with a dash.
+     * @return bool True when valid.
+     */
     static function IsValidPackageName($packagename)
     {
         if (!preg_match('/^[a-z\d][a-z\d-]{0,62}$/i', $packagename) || preg_match('/-$/', $packagename)) {
@@ -366,6 +470,22 @@ class module_controller extends ctrl_module
         return true;
     }
 
+    /**
+     * Checks that every quota value is numeric, setting $error when one is not.
+     *
+     * @param int|string $EnablePHP 1 or 0 (checkbox value).
+     * @param int|string $Domains Domain quota (-1 = unlimited).
+     * @param int|string $SubDomains Sub-domain quota.
+     * @param int|string $ParkedDomains Parked domain quota.
+     * @param int|string $Mailboxes Mailbox quota.
+     * @param int|string $Fowarders Mail forwarder quota.
+     * @param int|string $DistLists Distribution list quota.
+     * @param int|string $FTPAccounts FTP account quota.
+     * @param int|string $MySQL MySQL database quota.
+     * @param int|string $DiskQuota Disk quota in MB (stored as MB * 1024000 bytes).
+     * @param int|string $BandQuota Monthly bandwidth quota in MB (stored as MB * 1024000 bytes).
+     * @return bool True when all are numeric.
+     */
     static function CheckNumeric($EnablePHP, $Domains, $SubDomains, $ParkedDomains, $Mailboxes, $Fowarders, $DistLists, $FTPAccounts, $MySQL, $DiskQuota, $BandQuota)
     {
         if (!is_numeric($EnablePHP) ||
@@ -386,6 +506,13 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Sets a creation time on the reseller's packages that have none (pk_created_ts empty).
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $uid The reseller's account ID.
+     * @return void
+     */
     static function AddDefaultPackageTime($uid)
     {
         global $zdbh;
@@ -418,6 +545,13 @@ class module_controller extends ctrl_module
     /**
      * Webinterface sudo methods.
      */
+
+    /**
+     * Creates a package from the form (POST action=CreatePackage).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return bool True when created.
+     */
     static function doCreatePackage()
     {
         global $controller;
@@ -434,6 +568,12 @@ class module_controller extends ctrl_module
         return false;
     }
 
+    /**
+     * Saves the edit form (POST action=UpdatePackage) for one of the reseller's packages.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return bool True when updated; false when not the reseller's package or on an error.
+     */
     static function doUpdatePackage()
     {
         global $controller;
@@ -454,6 +594,15 @@ class module_controller extends ctrl_module
         return false;
     }
 
+    /**
+     * Handles the Edit / Delete buttons in the package list (POST action=EditPackage).
+     *
+     * Redirects to ?show=Edit or ?show=Delete with &other=<id> and exits when a button
+     * for one of the reseller's packages was pressed.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return void
+     */
     static function doEditPackage()
     {
         global $controller;
@@ -473,6 +622,15 @@ class module_controller extends ctrl_module
         return;
     }
 
+    /**
+     * Deletes a package from the confirmation form (POST action=DeletePackage).
+     *
+     * Fields inPackageID (the package) and inMovePackage (where its clients go); both
+     * must be the reseller's own.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return bool True when deleted.
+     */
     static function doDeletePackage()
     {
         global $controller;
@@ -488,6 +646,11 @@ class module_controller extends ctrl_module
         return false;
     }
 
+    /**
+     * Returns the reseller's packages (<% loop PackageList %>, <% if PackageList %>).
+     *
+     * @return array<int, array<int|string, mixed>>|false See ListPackages().
+     */
     static function getPackageList()
     {
         $currentuser = ctrl_users::GetUserDetail();
@@ -497,6 +660,11 @@ class module_controller extends ctrl_module
         return false;
     }
 
+    /**
+     * Returns the packages clients can be moved to: all but the one in ?other= (<% loop PackageListDropdown %>).
+     *
+     * @return array<int, array<int|string, mixed>>|false See ListPackages(); false when there are none.
+     */
     static function getPackageListDropdown()
     {
         $currentuser = ctrl_users::GetUserDetail();
@@ -510,6 +678,12 @@ class module_controller extends ctrl_module
         return false;
     }
 
+    /**
+     * Tells whether to show the create form (<% if isCreatePackage %>): when no ?show= is given.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return bool
+     */
     static function getisCreatePackage()
     {
         global $controller;
@@ -519,6 +693,12 @@ class module_controller extends ctrl_module
         return false;
     }
 
+    /**
+     * Tells whether to show the delete confirmation (<% if isDeletePackage %>): ?show=Delete.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return bool
+     */
     static function getisDeletePackage()
     {
         global $controller;
@@ -528,6 +708,12 @@ class module_controller extends ctrl_module
         return false;
     }
 
+    /**
+     * Tells whether to show the edit form (<% if isEditPackage %>): ?show=Edit.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return bool
+     */
     static function getisEditPackage()
     {
         global $controller;
@@ -539,6 +725,12 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Returns the 'packagename' field of the package in ?other= (<@ EditCurrentPackageName @>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return string|null The package name ('packagename'); '' when no ?other= is given, null when the package is not found.
+     */
     static function getEditCurrentPackageName()
     {
         global $controller;
@@ -550,6 +742,12 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Returns the 'packageid' field of the package in ?other= (<@ EditCurrentPackageID @>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return int|string|null The package ID ('packageid'); '' when no ?other= is given, null when the package is not found.
+     */
     static function getEditCurrentPackageID()
     {
         global $controller;
@@ -561,6 +759,12 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Returns the 'domains' field of the package in ?other= (<@ EditCurrentDomains @>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return int|string|null The domain quota ('domains'); '' when no ?other= is given, null when the package is not found.
+     */
     static function getEditCurrentDomains()
     {
         global $controller;
@@ -572,6 +776,12 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Returns the 'subdomains' field of the package in ?other= (<@ EditCurrentSubDomains @>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return int|string|null The sub-domain quota ('subdomains'); '' when no ?other= is given, null when the package is not found.
+     */
     static function getEditCurrentSubDomains()
     {
         global $controller;
@@ -583,6 +793,12 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Returns the 'parkeddomains' field of the package in ?other= (<@ EditCurrentParkedDomains @>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return int|string|null The parked domain quota ('parkeddomains'); '' when no ?other= is given, null when the package is not found.
+     */
     static function getEditCurrentParkedDomains()
     {
         global $controller;
@@ -594,6 +810,12 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Returns the 'mailboxes' field of the package in ?other= (<@ EditCurrentMailboxes @>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return int|string|null The mailbox quota ('mailboxes'); '' when no ?other= is given, null when the package is not found.
+     */
     static function getEditCurrentMailboxes()
     {
         global $controller;
@@ -605,6 +827,12 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Returns the 'fowarders' field of the package in ?other= (<@ EditCurrentForwarders @>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return int|string|null The mail forwarder quota ('fowarders'); '' when no ?other= is given, null when the package is not found.
+     */
     static function getEditCurrentForwarders()
     {
         global $controller;
@@ -616,6 +844,12 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Returns the 'distlists' field of the package in ?other= (<@ EditCurrentDistLists @>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return int|string|null The distribution list quota ('distlists'); '' when no ?other= is given, null when the package is not found.
+     */
     static function getEditCurrentDistLists()
     {
         global $controller;
@@ -627,6 +861,12 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Returns the 'ftpaccounts' field of the package in ?other= (<@ EditCurrentFTP @>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return int|string|null The FTP account quota ('ftpaccounts'); '' when no ?other= is given, null when the package is not found.
+     */
     static function getEditCurrentFTP()
     {
         global $controller;
@@ -638,6 +878,12 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Returns the 'mysql' field of the package in ?other= (<@ EditCurrentMySQL @>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return int|string|null The MySQL database quota ('mysql'); '' when no ?other= is given, null when the package is not found.
+     */
     static function getEditCurrentMySQL()
     {
         global $controller;
@@ -649,6 +895,12 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Returns the 'diskquota' field of the package in ?other= (<@ EditCurrentDisk @>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return int|float|string|null The disk quota in MB ('diskquota'); '' when no ?other= is given, null when the package is not found.
+     */
     static function getEditCurrentDisk()
     {
         global $controller;
@@ -660,6 +912,12 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Returns the 'bandquota' field of the package in ?other= (<@ EditCurrentBandWidth @>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return int|float|string|null The bandwidth quota in MB ('bandquota'); '' when no ?other= is given, null when the package is not found.
+     */
     static function getEditCurrentBandWidth()
     {
         global $controller;
@@ -671,12 +929,23 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Fills in missing creation times of the reseller's packages (<@ AddDefaultPackageTime @>, prints nothing).
+     *
+     * @return void
+     */
     static function getAddDefaultPackageTime()
     {
         $currentuser = ctrl_users::GetUserDetail();
         self::AddDefaultPackageTime($currentuser['userid']);
     }
 
+    /**
+     * Returns 'CHECKED' when PHP is enabled in the package in ?other= (<@ PHPChecked @>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return string|null 'CHECKED' or ''; null when the package is not found.
+     */
     static function getPHPChecked()
     {
         global $controller;
@@ -688,6 +957,11 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Returns the message for the last action (<@ Result @>): the first error flag set, else success.
+     *
+     * @return string|null The alert HTML, or null when there is nothing to show.
+     */
     static function getResult()
     {
         if (!fs_director::CheckForEmptyValue(self::$blank)) {

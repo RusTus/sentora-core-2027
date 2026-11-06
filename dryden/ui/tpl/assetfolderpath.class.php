@@ -13,8 +13,16 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  */
+/**
+ * Template tag <# ui_tpl_assetfolderpath #>: the current theme folder.
+ */
 class ui_tpl_assetfolderpath {
 
+    /**
+     * Returns the path of the user's theme folder.
+     *
+     * @return string Relative path such as 'etc/styles/Sentora_Default/' (with a trailing slash).
+     */
     public static function Template() {
         return 'etc/styles/' . ui_template::GetUserTemplate() . '/';
     }

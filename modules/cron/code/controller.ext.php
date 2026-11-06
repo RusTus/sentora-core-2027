@@ -42,25 +42,53 @@ require_once dirname(__FILE__) . '/cronsafe.php';
  */
 class module_controller extends ctrl_module
 {
+    /** Most tasks one account can have. */
     const MAX_JOBS = 50;
+
+    /**
+     * @var array<int, array<int, string>> Messages for getResult(): array('ok'|'error', English text).
+     */
     static $msg = array();
 
+    /**
+     * Escapes text for HTML.
+     *
+     * @param mixed $s The value (cast to string).
+     * @return string The escaped text.
+     */
     static function h($s)
     {
         return htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
     }
 
+    /**
+     * Translates text into the user's language.
+     *
+     * @param string $s The English text.
+     * @return string The translated text.
+     */
     static function t($s)
     {
         return ui_language::translate($s);
     }
 
+    /**
+     * Returns the logged-in user's details.
+     *
+     * @return array<string, mixed> From ctrl_users::GetUserDetail() ('userid', 'username', ...).
+     */
     static function Me()
     {
         return ctrl_users::GetUserDetail();
     }
 
-    /** the path shown for a job: relative to public_html, from what was stored */
+    /**
+     * Returns the path shown for a job: relative to public_html, from what was stored.
+     *
+     * @param array<string,mixed> $row The x_cronjobs row (uses 'ct_fullpath_vc' and 'ct_script_vc').
+     * @param string $username The account's user name.
+     * @return string The path, starting with 'public_html/'.
+     */
     static function ShownPath($row, $username)
     {
         $root = pd_safe::PublicRoot($username) . '/';
@@ -69,7 +97,15 @@ class module_controller extends ctrl_module
         return 'public_html/' . $rel;
     }
 
-    /** which PHP runs a job: the version of the domain its script is in, else the system PHP */
+    /**
+     * Returns which PHP runs a job: the version of the domain its script is in, else the system PHP.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $accountId The account ID.
+     * @param string $username The account's user name.
+     * @param string $full The script's full server path.
+     * @return string For example 'PHP 8.3'.
+     */
     static function PhpFor($accountId, $username, $full)
     {
         global $zdbh;
@@ -92,6 +128,14 @@ class module_controller extends ctrl_module
         return 'PHP ' . $default;
     }
 
+    /**
+     * Builds the table of the account's tasks (<@ Crons @>), with each task's last run.
+     *
+     * Also includes the output of the task given by ?log=<id> (see Output()).
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return string The HTML.
+     */
     static function getCrons()
     {
         global $zdbh;
@@ -133,7 +177,14 @@ class module_controller extends ctrl_module
         return $out . self::Output($rows, $me);
     }
 
-    /** the last run's output of one of the account's tasks (?log=<id>) */
+    /**
+     * Returns the last run's output of one of the account's tasks (?log=<id>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @param array<int,array<string,mixed>> $rows The account's x_cronjobs rows.
+     * @param array<string,mixed> $me The user's details (uses 'username' and 'userid').
+     * @return string The output box HTML, or '' when no (or another account's) task is asked for.
+     */
     static function Output($rows, $me)
     {
         global $controller;
@@ -153,6 +204,11 @@ class module_controller extends ctrl_module
         return '';
     }
 
+    /**
+     * Builds the form to schedule a script (<@ CreateCron @>), with the file browser.
+     *
+     * @return string The HTML.
+     */
     static function getCreateCron()
     {
         $opts = '';
@@ -176,13 +232,28 @@ class module_controller extends ctrl_module
             . '</table></form><script src="modules/cron/assets/files.js"></script>';
     }
 
-    /** the timings offered, without those more often than the server allows */
+    /**
+     * Returns the timings offered, without those more often than the server allows.
+     *
+     * @return array<string, string> Crontab timing => English label.
+     */
     static function Allowed()
     {
         $min = sys_accountphp::CronSettings()['cron_min_interval'];
         return array_filter(cron_safe::Timings(), function ($t) use ($min) { return sys_accountphp::CronEvery($t) >= $min; }, ARRAY_FILTER_USE_KEY);
     }
 
+    /**
+     * Saves a new task from the form (POST action=CreateCron).
+     *
+     * Checks the CSRF token (runtime_csfr::Protect()), the script path (cron_safe::ResolveFile()),
+     * the timing, the task limit and duplicates, then inserts the x_cronjobs row. The result
+     * is added to $msg.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller.
+     * @return void
+     */
     static function doCreateCron()
     {
         global $zdbh, $controller;
@@ -222,6 +293,15 @@ class module_controller extends ctrl_module
         self::$msg[] = array('ok', 'Scheduled: public_html/' . $rel . ', ' . strtolower(self::t(cron_safe::Timings()[$timing])) . '. It starts within 5 minutes.');
     }
 
+    /**
+     * Deletes one of the account's tasks (POST action=DeleteCron, field inJob).
+     *
+     * Marks the row deleted (ct_deleted_ts); the result is added to $msg.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller.
+     * @return void
+     */
     static function doDeleteCron()
     {
         global $zdbh, $controller;
@@ -234,6 +314,11 @@ class module_controller extends ctrl_module
         self::$msg[] = ($q->rowCount() === 1) ? array('ok', 'Task deleted. It stops within 5 minutes.') : array('error', 'That task was not found.');
     }
 
+    /**
+     * Returns the messages of this request as alert boxes (<@ Result @>).
+     *
+     * @return string The HTML ('' when there are none).
+     */
     static function getResult()
     {
         $out = '';

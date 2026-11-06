@@ -13,8 +13,16 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  */
+/**
+ * Template tag <# ui_tpl_phpversion #>: the PHP version.
+ */
 class ui_tpl_phpversion {
 
+    /**
+     * Returns the version of PHP running the panel.
+     *
+     * @return string The version, from phpversion().
+     */
     public static function Template() {
         return sys_versions::ShowPHPVersion();
     }

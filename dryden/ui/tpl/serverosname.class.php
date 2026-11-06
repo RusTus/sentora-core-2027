@@ -13,8 +13,16 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  */
+/**
+ * Template tag <# ui_tpl_serverosname #>: the operating system name.
+ */
 class ui_tpl_serverosname {
 
+    /**
+     * Returns the name of the server's operating system / distribution.
+     *
+     * @return string The OS name, or 'Unknown'.
+     */
     public static function Template() {
         return sys_versions::ShowOSName();
     }

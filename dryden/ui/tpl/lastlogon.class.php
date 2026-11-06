@@ -13,8 +13,16 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  */
+/**
+ * Template tag <# ui_tpl_lastlogon #>: the user's previous log-on time.
+ */
 class ui_tpl_lastlogon {
 
+    /**
+     * Returns the date and time the current user last logged on.
+     *
+     * @return string The date in the 'sentora_df' format, or '<: Never :>' when the user has never logged on.
+     */
     public static function Template() {
         $currentuser = ctrl_users::GetUserDetail(ctrl_auth::CurrentUserID());
         if ($currentuser['lastlogon']) {

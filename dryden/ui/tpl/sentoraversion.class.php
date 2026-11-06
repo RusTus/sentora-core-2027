@@ -13,8 +13,16 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  */
+/**
+ * Template tag <# ui_tpl_sentoraversion #>: the panel's release name.
+ */
 class ui_tpl_sentoraversion {
 
+    /**
+     * Returns the panel name with its version.
+     *
+     * @return string E.g. 'Sentora-2027', from sys_versions::ShowSentoraName().
+     */
     public static function Template() {
         return sys_versions::ShowSentoraName();
     }

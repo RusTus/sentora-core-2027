@@ -26,6 +26,9 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
  */
+/**
+ * phpMyAdmin module: only a link page (module.zpm), so the controller has no methods of its own.
+ */
 class module_controller extends ctrl_module
 {
 

@@ -13,8 +13,16 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  */
+/**
+ * Template tag <# ui_tpl_usedmysql #>: the number of MySQL databases in use.
+ */
 class ui_tpl_usedmysql {
 
+    /**
+     * Returns how many MySQL databases the current user has, counted by ctrl_users::GetQuotaUsages().
+     *
+     * @return int|string The count (a numeric string or int, as the database driver returns it).
+     */
     public static function Template() {
         $currentuser = ctrl_users::GetUserDetail();
         return ctrl_users::GetQuotaUsages('mysql', $currentuser['userid']);

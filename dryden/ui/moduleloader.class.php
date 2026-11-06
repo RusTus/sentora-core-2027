@@ -13,6 +13,9 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  */
+/**
+ * Lists the module categories and modules the current user may see (menus, dashboard).
+ */
 class ui_moduleloader {
 
     /**
@@ -20,6 +23,8 @@ class ui_moduleloader {
      * @author Bobby Allen (ballen@bobbyallen.me)
      * @global db_driver $zdbh The ZPX database handle.
      * @param string $catname The name of the module category to get the list of modules from.
+     *        Ignored when the user has a saved category order ('catorder').
+     * @return array<int, array<string, mixed>>|false One row per category with 'mc_id_pk' and 'mc_name_vc', or false when there are no categories.
      */
     static function GetModuleCats($catname = "") {
         global $zdbh;
@@ -74,8 +79,9 @@ class ui_moduleloader {
      * Gets the module list as an array from a given category ID.
      * @author Bobby Allen (ballen@bobbyallen.me)
      * @global db_driver $zdbh The ZPX database handle.
-     * @param int $catid The name of the module category to get the list of modules from.
-     * @return array Array containing the list of modules for the category ID supplied.
+     * @param int|string $catid The ID of the module category to get the list of modules from; '' (default) for all modules.
+     * @return array<int, array<string, mixed>>|false Array containing the list of modules for the category ID supplied
+     *         (x_modules columns mo_id_pk ... mo_updateurl_tx), or false when there are none.
      */
     static function GetModuleList($catid = "") {
         global $zdbh;

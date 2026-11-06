@@ -13,8 +13,18 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  */
+/**
+ * Template tag <# ui_tpl_serveripaddress #>: the server's IP address.
+ */
 class ui_tpl_serveripaddress {
 
+    /**
+     * Returns the server's IP address.
+     *
+     * Uses the 'server_ip' setting when it is set, else the address the request came in on.
+     *
+     * @return string The IP address.
+     */
     public static function Template() {
         if (!fs_director::CheckForEmptyValue(ctrl_options::GetSystemOption('server_ip'))) {
             return ctrl_options::GetSystemOption('server_ip');

@@ -13,12 +13,20 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  */
+/**
+ * Compiles the theme's master.ztml (and module templates) into PHP and runs it.
+ *
+ * Tags: <# class #> (template tag classes), <@ X @> (echo module_controller::getX()),
+ * <% loop X %> ... <% endloop %>, <& key &>, <% if X %> ... <% else %> ... <% endif %>,
+ * and <: text :> (translated text).
+ */
 class ui_templateparser
 {
 
     /**
      * Array of all the functions allowed by Sentora template system with the pattern to identify them
      * @author Sam Mottley (smottley@zpanelcp.com)
+     * @var array<string, string> Tag name (the Compile<Name> method to call) => regular expression.
      */
     static public $Functions = array(
         'PHPTags' => "/(<\?php)|(<\?)|(\?>)/is",
@@ -36,25 +44,33 @@ class ui_templateparser
     /**
      * Location of the cached files relative to root
      * @author Sam Mottley (smottley@zpanelcp.com)
+     * @var string Made absolute (prefixed with sentora_root) by setLocation().
      */
     static public $storageLocation = 'etc/tmp/storage/';
 
     /**
      * 1 in X change on page load to check for old cached files for deletetion
      * @author Sam Mottley (smottley@zpanelcp.com)
+     * @var int The X.
      */
     static public $deleteCacheChance = 40;
 
     /**
      * use eval or file cache for the template loading
      * @author Sam Mottley (smottley@zpanelcp.com)
-     * @var 1=file cache 0=eval
+     * @var int 1 = file cache, 0 = eval.
      */
     static public $evalOrCache = 1;
 
     /**
-     * Runs though the functions array and loads the relivent function compiler
+     * Runs though the functions array and loads the relivent function compiler.
+     *
+     * Runs the OnBeforeTemplateProcessor / OnAfterTemplateProcessor hooks. Called again
+     * for the output of each <# class #> tag.
+     *
      * @author Sam Mottley (smottley@zpanelcp.com)
+     * @param string|int|false|null $data The template code (master.ztml, or what a tag's Template() returned).
+     * @return string|int|false|null The compiled PHP/HTML code (normally a string; a non-string input with no tags comes back unchanged).
      */
     static function CompileFunctions($data)
     {
@@ -69,8 +85,14 @@ class ui_templateparser
     }
 
     /**
-     * Removes any php tags
+     * Removes any php tags.
+     *
+     * Replaces "<?php" / "<?" with an error text and "?>" with "]".
+     *
      * @author Sam Mottley (smottley@zpanelcp.com)
+     * @param string $value The regular expression for the tag (from $Functions).
+     * @param string|int|false|null $data The template code (or what a tag's Template() returned).
+     * @return string|int|false|null The template code with the tags replaced.
      */
     static private function CompilePHPTags($value, $data)
     {
@@ -91,8 +113,14 @@ class ui_templateparser
     }
 
     /**
-     * Compiles Sentora loop template tags into valid PHP
+     * Compiles Sentora loop template tags into valid PHP.
+     *
+     * <% loop X %> becomes a foreach over module_controller::getX().
+     *
      * @author Sam Mottley (smottley@zpanelcp.com)
+     * @param string $value The regular expression for the tag (from $Functions).
+     * @param string|int|false|null $data The template code (or what a tag's Template() returned).
+     * @return string|int|false|null The template code with the tags replaced.
      */
     static private function CompileLoop($value, $data)
     {
@@ -109,8 +137,14 @@ class ui_templateparser
     }
 
     /**
-     * Compiles Sentora echo loop template tags into valid PHP
+     * Compiles Sentora echo loop template tags into valid PHP.
+     *
+     * <& key &> echoes $value['key'] of the current loop row.
+     *
      * @author Sam Mottley (smottley@zpanelcp.com)
+     * @param string $value The regular expression for the tag (from $Functions).
+     * @param string|int|false|null $data The template code (or what a tag's Template() returned).
+     * @return string|int|false|null The template code with the tags replaced.
      */
     static private function CompileEchoLoop($value, $data)
     {
@@ -127,8 +161,14 @@ class ui_templateparser
     }
 
     /**
-     * Compiles Sentora end loop template tags into valid PHP
+     * Compiles Sentora end loop template tags into valid PHP.
+     *
+     * <% endloop %> closes the foreach.
+     *
      * @author Sam Mottley (smottley@zpanelcp.com)
+     * @param string $value The regular expression for the tag (from $Functions).
+     * @param string|int|false|null $data The template code (or what a tag's Template() returned).
+     * @return string|int|false|null The template code with the tags replaced.
      */
     static private function CompileEndLoop($value, $data)
     {
@@ -145,8 +185,14 @@ class ui_templateparser
     }
 
     /**
-     * Compiles Sentora if template tags into valid PHP
+     * Compiles Sentora if template tags into valid PHP.
+     *
+     * <% if X %> tests module_controller::getX().
+     *
      * @author Sam Mottley (smottley@zpanelcp.com)
+     * @param string $value The regular expression for the tag (from $Functions).
+     * @param string|int|false|null $data The template code (or what a tag's Template() returned).
+     * @return string|int|false|null The template code with the tags replaced.
      */
     static private function CompileIf($value, $data)
     {
@@ -163,8 +209,14 @@ class ui_templateparser
     }
 
     /**
-     * Compiles Sentora end if template tags into valid PHP
+     * Compiles Sentora end if template tags into valid PHP.
+     *
+     * <% endif %> closes the if.
+     *
      * @author Sam Mottley (smottley@zpanelcp.com)
+     * @param string $value The regular expression for the tag (from $Functions).
+     * @param string|int|false|null $data The template code (or what a tag's Template() returned).
+     * @return string|int|false|null The template code with the tags replaced.
      */
     static private function CompileEndIf($value, $data)
     {
@@ -181,8 +233,14 @@ class ui_templateparser
     }
 
     /**
-     * Compiles Sentora lanuage template tags into valid PHP
+     * Compiles Sentora lanuage template tags into valid PHP.
+     *
+     * <: text :> becomes a call to ui_language::translate() (also called once now, which adds unknown text to x_translations).
+     *
      * @author Sam Mottley (smottley@zpanelcp.com)
+     * @param string $value The regular expression for the tag (from $Functions).
+     * @param string|int|false|null $data The template code (or what a tag's Template() returned).
+     * @return string|int|false|null The template code with the tags replaced.
      */
     static private function CompileLanuage($value, $data)
     {
@@ -200,8 +258,14 @@ class ui_templateparser
     }
 
     /**
-     * Compiles Sentora function each template tags into valid PHP
+     * Compiles Sentora function each template tags into valid PHP.
+     *
+     * <@ X @> echoes module_controller::getX(). Note: getX() is also called once here, while compiling.
+     *
      * @author Sam Mottley (smottley@zpanelcp.com)
+     * @param string $value The regular expression for the tag (from $Functions).
+     * @param string|int|false|null $data The template code (or what a tag's Template() returned).
+     * @return string|int|false|null The template code with the tags replaced.
      */
     static private function CompileFunctionEcho($value, $data)
     {
@@ -220,8 +284,14 @@ class ui_templateparser
     }
 
     /**
-     * Compiles Sentora end if template tags into valid PHP
+     * Compiles Sentora else template tags into valid PHP.
+     *
+     * <% else %> becomes "}else{".
+     *
      * @author Sam Mottley (smottley@zpanelcp.com)
+     * @param string $value The regular expression for the tag (from $Functions).
+     * @param string|int|false|null $data The template code (or what a tag's Template() returned).
+     * @return string|int|false|null The template code with the tags replaced.
      */
     static private function CompileElse($value, $data)
     {
@@ -238,8 +308,14 @@ class ui_templateparser
     }
 
     /**
-     * Compiles Sentora template class tag into valid PHP
+     * Compiles Sentora template class tag into valid PHP.
+     *
+     * Each <# class #> is replaced by the compiled output of class::Template() (unknown classes are left as they are).
+     *
      * @author Sam Mottley (smottley@zpanelcp.com)
+     * @param string $value The regular expression for the tag (from $Functions).
+     * @param string|int|false|null $data The template code (or what a tag's Template() returned).
+     * @return string|int|false|null The template code with the tags replaced.
      */
     static private function CompileTemplateClass($value, $data)
     {
@@ -261,7 +337,13 @@ class ui_templateparser
 
     /**
      * Check the cache file for presents and valid/upto date Data
+     *
+     * The file is named after a hash of the code, under the user's theme folder in
+     * $storageLocation; it is written (via a temporary file and rename) when missing.
+     *
      * @author Sam Mottley (smottley@zpanelcp.com)
+     * @param string $phpCode The compiled template code.
+     * @return string|false Path of the cache file, or false when it could not be written.
      */
     static function CheckFileCache($phpCode)
     {
@@ -299,9 +381,13 @@ class ui_templateparser
 
     /**
      * Check the cache for very old files and clear them
-     * @var deathAfter the number of seconds old a cache file can be (default 2 days: files are
+     *
+     * Only runs on 1 in $deleteCacheChance calls.
+     *
+     * @param int|string $deathAfter the number of seconds old a cache file can be (default 2 days: files are
      *      per page content, so per user; a file still in use is simply written again)
      * @author Sam Mottley (smottley@zpanelcp.com)
+     * @return void
      */
     static function clearOldCache($deathAfter = '172800')
     {
@@ -335,7 +421,11 @@ class ui_templateparser
 
     /**
      * Set the root of the temp path location
+     *
+     * Prefixes $storageLocation with the sentora_root setting (each call prefixes again).
+     *
      * @author Sam Mottley (smottley@zpanelcp.com)
+     * @return void
      */
     static public function setLocation()
     {
@@ -344,8 +434,12 @@ class ui_templateparser
 
     /**
      * Run the php code and return it
-     * @var code the php code
+     *
+     * The page is echoed by the code itself; only include/eval's result is returned.
+     *
+     * @param string $template_code the php code
      * @author Sam Mottley (smottley@zpanelcp.com)
+     * @return int|false|null 1 from include (or false if it failed), null from eval.
      */
     static function runPHP($template_code)
     {
@@ -367,7 +461,12 @@ class ui_templateparser
 
     /**
      * All br tags to be used using the Sentora br tag loader
+     *
+     * Replaces each "ZP(br)" with "<br/>".
+     *
      * @author Sam Mottley (smottley@zpanelcp.com)
+     * @param string $templateCode The compiled template code.
+     * @return string The code with the line breaks.
      */
     static function allowBr($templateCode)
     {
@@ -378,7 +477,9 @@ class ui_templateparser
      * Loads in the template content and parses it to compute the place holder content.
      * @author Bobby Allen (ballen@bobbyallen.me)
      * @param string $template_path The full path to the system template (or user template).
-     * @return sting The processed template HTML.
+     * The page HTML is echoed (sent to the browser), not returned.
+     *
+     * @return int|false|null What runPHP() returns (1, false or null).
      */
     static function Generate($template_path)
     {

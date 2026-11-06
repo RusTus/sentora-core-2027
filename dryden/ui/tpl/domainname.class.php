@@ -13,8 +13,16 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  */
+/**
+ * Template tag <# ui_tpl_domainname #>: the panel's host name.
+ */
 class ui_tpl_domainname {
 
+    /**
+     * Returns the host name the panel was opened on, without "www.".
+     *
+     * @return string The HTTP Host header with any "www." removed.
+     */
     public static function Template() {
         $domain = str_replace('www.', '', $_SERVER['HTTP_HOST']);
         return $domain;

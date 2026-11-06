@@ -32,7 +32,7 @@ class xml_reader {
     /**
      * The XML parser
      *
-     * @var resource
+     * @var XMLParser|resource|null An XMLParser object on PHP 8 (a resource before); unset after Parse().
      */
     private $parser;
 
@@ -46,14 +46,14 @@ class xml_reader {
     /**
      * Document tag
      *
-     * @var object
+     * @var XMLTag|null The root tag, set by Parse(); null before.
      */
     public $document;
 
     /**
      * Current object depth
      *
-     * @var array
+     * @var array<int, XMLTag> The open tags, root first.
      */
     private $stack;
 
@@ -68,8 +68,8 @@ class xml_reader {
     /**
      * Constructor. Loads XML document.
      *
-     * @param string $xml The string of the XML document
-     * @return xml_reader
+     * @param string|false $xml The string of the XML document (callers pass fs_filehandler::ReadFileContents(), which can be false)
+     * @param bool $cleanTagNames Optional. Replace dashes and colons in tag names with underscores. Default true.
      */
     function __construct($xml = '', $cleanTagNames = true) {
         //Load XML document
@@ -84,6 +84,10 @@ class xml_reader {
 
     /**
      * Initiates and runs PHP's XML parser
+     *
+     * Fills $this->document. A parse error raises a PHP notice (trigger_error), not an exception.
+     *
+     * @return void
      */
     public function Parse() {
         //Create the parser resource
@@ -108,6 +112,7 @@ class xml_reader {
      * @param int $code XML Error Code
      * @param int $line Line on which the error happened
      * @param int $col Column on which the error happened
+     * @return void
      */
     private function HandleError($code, $line, $col) {
         trigger_error('XML Parsing Error at ' . $line . ':' . $col . '. Error ' . $code . ': ' . xml_error_string($code));
@@ -125,7 +130,7 @@ class xml_reader {
     /**
      * Gets the reference to the current direct parent
      *
-     * @return object
+     * @return XMLTag|false The innermost open tag, or false when none is open.
      */
     private function GetStackLocation() {
         //Returns the reference to the current direct parent
@@ -135,9 +140,10 @@ class xml_reader {
     /**
      * Handler function for the start of a tag
      *
-     * @param resource $parser
-     * @param string $name
-     * @param array $attrs
+     * @param XMLParser|resource $parser The parser calling the handler.
+     * @param string $name The tag name.
+     * @param array<string,string> $attrs The tag's attributes.
+     * @return void
      */
     private function StartElement($parser, $name, $attrs = array()) {
         //Make the name of the tag lower case
@@ -170,8 +176,9 @@ class xml_reader {
     /**
      * Handler function for the end of a tag
      *
-     * @param resource $parser
-     * @param string $name
+     * @param XMLParser|resource $parser The parser calling the handler.
+     * @param string $name The tag name.
+     * @return void
      */
     private function EndElement($parser, $name) {
         //Update stack by removing the end value from it as the parent
@@ -181,8 +188,9 @@ class xml_reader {
     /**
      * Handler function for the character data within a tag
      *
-     * @param resource $parser
-     * @param string $data
+     * @param XMLParser|resource $parser The parser calling the handler.
+     * @param string $data The text (trimmed and appended to the current tag's tagData).
+     * @return void
      */
     private function CharacterData($parser, $data) {
         //Get the reference to the current parent object
@@ -194,6 +202,8 @@ class xml_reader {
 
 }
 
+#[\AllowDynamicProperties]
+// Tags store their child elements as dynamic properties (deprecated without this attribute since PHP 8.2)
 /**
  * XML Tag Object (php5)
  * 
@@ -211,14 +221,12 @@ class xml_reader {
  *
  * @version 1.3.0
  */
-// Tags store their child elements as dynamic properties (deprecated without this attribute since PHP 8.2)
-#[\AllowDynamicProperties]
 class XMLTag {
 
     /**
      * Array with the attributes of this XML tag
      *
-     * @var array
+     * @var array<string, string> Attribute name (lower case) => value.
      */
     public $tagAttrs;
 
@@ -234,14 +242,14 @@ class XMLTag {
      * 
      * So, if the tag doesn't contain child tags, and just contains a string, it would go here
      *
-     * @var stat
+     * @var string
      */
     public $tagData;
 
     /**
      * Array of references to the objects of all direct children of this XML object
      *
-     * @var array
+     * @var array<int, XMLTag|null>
      */
     public $tagChildren;
 
@@ -257,10 +265,9 @@ class XMLTag {
     /**
      * Constructor, sets up all the default values
      *
-     * @param string $name
-     * @param array $attrs
-     * @param int $parents
-     * @return XMLTag
+     * @param string $name The tag name (stored in lower case).
+     * @param array<string,string> $attrs The tag's attributes.
+     * @param int $parents The tag's depth (number of parents).
      */
     function __construct($name, $attrs = array(), $parents = 0) {
         //Make the keys of the attr array lower case, and store the value
@@ -280,10 +287,13 @@ class XMLTag {
     /**
      * Adds a direct child to this object
      *
-     * @param string $name
-     * @param array $attrs
-     * @param int $parents
-     * @param bool $cleanTagName
+     * The child is added to $tagChildren and to a dynamic property named after the tag.
+     *
+     * @param string $name The child's tag name.
+     * @param array<string,string> $attrs The child's attributes.
+     * @param int $parents The child's depth.
+     * @param bool $cleanTagName Optional. Replace colons and dashes in the name with underscores. Default true.
+     * @return XMLTag|null This tag, or null when $name is a reserved name (a notice is raised).
      */
     public function AddChild($name, $attrs, $parents, $cleanTagName = true) {
         //If the tag is a reserved name, output an error
@@ -375,8 +385,9 @@ class XMLTag {
      * Deletes this tag's child with a name of $childName and an index
      * of $childIndex
      *
-     * @param string $childName
-     * @param int $childIndex
+     * @param string $childName The child tag name.
+     * @param int $childIndex Optional. Which child of that name. Default 0.
+     * @return void
      */
     public function Delete($childName, $childIndex = 0) {
         //Delete all of the children of that child
@@ -398,6 +409,8 @@ class XMLTag {
 
     /**
      * Removes all of the children of this tag in both name and value
+     *
+     * @return void
      */
     private function DeleteChildren() {
         //Loop through all child tags

@@ -13,8 +13,16 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  */
+/**
+ * Template tag <# ui_tpl_perlversion #>: the Perl version.
+ */
 class ui_tpl_perlversion {
 
+    /**
+     * Returns the version of Perl installed on the server.
+     *
+     * @return string The version, from sys_versions::ShowPerlVersion().
+     */
     public static function Template() {
         return sys_versions::ShowPerlVersion();
     }

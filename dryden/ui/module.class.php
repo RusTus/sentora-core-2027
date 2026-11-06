@@ -13,8 +13,14 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  */
+/**
+ * Loads modules and reads their details (module.zpm, module.xml, x_modules table).
+ */
 class ui_module {
 
+    /**
+     * Creates the object (does nothing; the class is used statically).
+     */
     function __construct() {
 
     }
@@ -23,7 +29,7 @@ class ui_module {
      * Checks that the module exists.
      * @author Bobby Allen (ballen@bobbyallen.me)
      * @param string $name Name of the module to check that exists.
-     * @return boolean
+     * @return bool True when modules/<name>/module.zpm exists and the user's group may use the current module.
      */
     static function CheckModuleExists($name) {
         $user = ctrl_users::GetUserDetail();
@@ -37,7 +43,7 @@ class ui_module {
      * Returns the module template code.
      * @author Bobby Allen (ballen@bobbyallen.me)
      * @param string $name Name of the module.
-     * @return string
+     * @return string|false|null The module.zpm contents (false when unreadable), or null when the module does not exist or is not allowed.
      */
     static function GetModuleContent($name) {
         if (self::CheckModuleExists($name)) {
@@ -49,7 +55,7 @@ class ui_module {
      * Handles the GetModule control, if unable to load the module will handle the error too!
      * @author Bobby Allen (ballen@bobbyallen.me)
      * @param string $module The name of the module to load.
-     * @return string
+     * @return string|false|null The module template, the text "Unable to find requested module!", or false/null as from GetModuleContent().
      */
     static function GetModule($module) {
         if (self::CheckModuleExists($module)) {
@@ -64,8 +70,10 @@ class ui_module {
     /**
      * Gathers module infomation from the modules XML file and adds the details to the DB.
      * @author Bobby Allen (ballen@bobbyallen.me)
+     * @global db_driver $zdbh The panel's database connection.
+     * @global debug_logger $zlo The logger (declared, not used).
      * @param string $module The name of the module (folder) of which to import the module infomation in for.
-     * @return boolean
+     * @return bool True when the row was inserted, false when module.xml could not be parsed or the insert threw.
      */
     static function ModuleInfoToDB($module) {
         global $zdbh;
@@ -115,8 +123,8 @@ class ui_module {
      * This class scans the module directory and will return an array of new modules that are not yet in the database.
      * @author Bobby Allen (ballen@bobbyallen.me)
      * @global db_driver $zdbh The ZPX database handle.
-     * @param boolean $init Upon finding modules that don't exist in the database, add them!
-     * @return array List of all new modules.
+     * @param bool $init Upon finding modules that don't exist in the database, add them!
+     * @return array<int, string> List of all new modules (folder names).
      */
     static function ScanForNewModules($init = false) {
         global $zdbh;
@@ -155,7 +163,7 @@ class ui_module {
      * @author Bobby Allen (ballen@bobbyallen.me)
      * @global db_driver $zdbh The ZPX database handle.
      * @param string $modulename The name of the module of which to check.
-     * @return boolean
+     * @return bool
      */
     static function CheckModuleEnabled($modulename) {
         global $zdbh;
@@ -176,9 +184,9 @@ class ui_module {
     /**
      * Returns the name of the current module.
      * @author Bobby Allen (ballen@bobbyallen.me)
-     * @global obj $controller The controller object.
+     * @global runtime_controller $controller The request controller.
      * @global db_driver $zdbh The ZPX database handle.
-     * @return string The name of the currently loaded (active) module.
+     * @return string|null The name of the currently loaded (active) module, or null when it is not in x_modules.
      */
     public static function GetModuleName() {
         global $controller;
@@ -194,9 +202,9 @@ class ui_module {
     /**
      * This class returns the database ID of the currently loaded (active) module.
      * @author Bobby Allen (ballen@bobbyallen.me)
-     * @global obj $controller The controller object.
+     * @global runtime_controller $controller The request controller.
      * @global db_driver $zdbh The ZPX database handle.
-     * @return int The module ID of the currently loaded (active) module.
+     * @return int|string|null The module ID of the currently loaded (active) module (as the database driver returns it), or null when not found.
      */
     static function GetModuleID() {
         global $controller;
@@ -212,9 +220,9 @@ class ui_module {
     /**
      * This class returns the folder name of the current module.
      * @author Bobby Allen (ballen@bobbyallen.me)
-     * @global obj $controller The controller object.
+     * @global runtime_controller $controller The request controller.
      * @global db_driver $zdbh The ZPX database handle.
-     * @return string The modules folder name as it appears in panel/modules/.
+     * @return string|null The modules folder name as it appears in panel/modules/, or null when not found.
      */
     static function GetModuleFolderName() {
         global $controller;
@@ -230,9 +238,9 @@ class ui_module {
     /**
      * This class returns the description of the current module.
      * @author Bobby Allen (ballen@bobbyallen.me)
-     * @global obj $controller The controller object.
+     * @global runtime_controller $controller The request controller.
      * @global db_driver $zdbh The ZPX database handle.
-     * @return string The module description from the database (originally improted from the module.xml file).
+     * @return string|null The module description from the database (originally improted from the module.xml file), or null when not found.
      */
     static function GetModuleDescription() {
         global $controller;
@@ -249,9 +257,9 @@ class ui_module {
      * Returns the current module's Name and Category Name.
      * @since 10.1.0
      * @author Jason Davis (jason.davis.fl@gmail.com)
-     * @global obj $controller The controller object.
+     * @global runtime_controller $controller The request controller.
      * @global db_driver $zdbh The ZPX database handle.
-     * @return array Module name and category name.
+     * @return array<string, mixed>|false Row with 'mo_category_fk', 'mo_name_vc' and 'mc_name_vc', or false when the module is not found.
      */
     public static function GetModuleCategoryName() {
         global $controller;
@@ -277,7 +285,7 @@ class ui_module {
      * @author Bobby Allen (ballen@bobbyallen.me)
      * @global db_driver $zdbh The ZPX database handle.
      * @param string $modulefolder The module folder of which to check updates for.
-     * @return mixed If updates are avaliable will return an array with the new version and download URL otherwise will return 'false'.
+     * @return array<int, string>|false If updates are avaliable will return an array with the new version and download URL otherwise will return 'false'.
      */
     static function GetModuleHasUpdates($modulefolder) {
         global $zdbh;
@@ -299,9 +307,9 @@ class ui_module {
     /**
      * Returns an array of the XML tags from the module.xml file.
      * @author Bobby Allen (ballen@bobbyallen.me)
-     * @global obj $zlo The Generic ZPX logging object.
+     * @global debug_logger $zlo The Generic ZPX logging object (declared, not used).
      * @param string $modulefolder The module folder name of which to import the XML data from.
-     * @return mixed Will an array of the module XML data if the parsing of the document is successful otherwise will return 'false'.
+     * @return array<string, string>|false Will an array of the module XML data if the parsing of the document is successful otherwise will return 'false'.
      */
     static function GetModuleXMLTags($modulefolder) {
         global $zlo;

@@ -13,17 +13,22 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  */
+/**
+ * Works out the user's theme (template) and CSS variation, and theme files and icons.
+ */
 class ui_template {
 
     /**
      * Returns the name (folder name) of the template that should be used for the current user.
      * @author Bobby Allen (ballen@bobbyallen.me)
+     * Falls back to the reseller's theme when the user has none set.
+     *
      * @return string The template name.
      */
     static function GetUserTemplate() {
         $user = ctrl_users::GetUserDetail();
         if (fs_director::CheckForEmptyValue($user['usertheme'])) {
-            # Lets use the reseller's theme they have setup!
+            // Lets use the reseller's theme they have setup!
             $reseller = ctrl_users::GetUserDetail($user['resellerid']);
             return $reseller['usertheme'];
         } else {
@@ -33,8 +38,11 @@ class ui_template {
 
     /**
      * Lists all avaliable templates in the 'etc/styles/' folder.
+     *
+     * Only folders that have a master.ztml and do not start with "_".
+     *
      * @author Bobby Allen (ballen@bobbyallen.me)
-     * @return array 
+     * @return array<int, array<string, string>> One entry per template: array('name' => folder name).
      */
     static function ListAvaliableTemplates() {
         $allstyles = array();
@@ -56,10 +64,14 @@ class ui_template {
     }
 
     /**
-     * Returns a list of all avaliable CSS styles for a given theme. If only a single CSS style then it will return false.
+     * Returns a list of all avaliable CSS styles for a given theme.
+     *
+     * Sorted "default", "light", "dark", the others by name, "auto" last; files starting
+     * with "_" are left out. Empty when the theme has no css folder.
+     *
      * @author Bobby Allen (ballen@bobbyallen.me)
      * @param string $template The template name (folder name) of which to check for extra CSS stlyes.
-     * @return array List of avaliable CSS styles for this theme.
+     * @return array<int, array<string, string>> List of avaliable CSS styles for this theme: array('name' => file name without .css).
      */
     static function ListAvaliableCSS($template) {
         $allstyles = array();
@@ -103,8 +115,12 @@ class ui_template {
      * default, as their reseller set it in Theme Manager). Kept in its own small table,
      * made on first use, so Theme Manager (which sets every client's variation) never
      * overwrites a person's own choice.
-     * @param int $uid
-     * @return string
+     *
+     * Cached per request; creates the x_user_styles table on first use.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int $uid The user's account ID.
+     * @return string The variation name, or '' when none is set (or on any error).
      */
     static function GetStylePref($uid) {
         global $zdbh;
@@ -129,9 +145,10 @@ class ui_template {
 
     /**
      * Saves the user's own variation ('' to follow the theme's default again).
-     * @param int $uid
-     * @param string $style
-     * @return bool
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int $uid The user's account ID.
+     * @param string $style The variation name (letters, digits, "_" and "-", up to 64), or ''.
+     * @return bool False when the user ID or the name is not valid, else true.
      */
     static function SetStylePref($uid, $style) {
         global $zdbh;
@@ -150,6 +167,12 @@ class ui_template {
         return true;
     }
 
+    /**
+     * Creates the x_user_styles table if it does not exist (once per request).
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return void
+     */
     private static function EnsureStylePrefs() {
         global $zdbh;
         static $done = false;
@@ -162,8 +185,8 @@ class ui_template {
     /**
      * Path of a theme file, for example 'img/misc/unlimited.png': the current theme's own
      * copy when it has one, otherwise the copy every theme shares (etc/styles/_shared/).
-     * @param string $file Path inside the theme folder.
-     * @return string
+     * @param string $file Path inside the theme folder ("..", and a leading "/", are removed).
+     * @return string The relative path to use.
      */
     static function AssetPath($file) {
         $file = ltrim(str_replace('..', '', (string) $file), '/');
@@ -173,8 +196,8 @@ class ui_template {
 
     /**
      * A variation's name as people read it: "dark" -> "Dark", "high_contrast" -> "High contrast".
-     * @param string $name
-     * @return string
+     * @param string $name The variation name (CSS file name without .css).
+     * @return string The readable label.
      */
     static function CSSLabel($name) {
         return ucfirst(str_replace(array('_', '-'), ' ', (string) $name));
@@ -184,7 +207,7 @@ class ui_template {
      * A template can draw module icons of its own: img/icons/<module>.svg (Modern does).
      * Returns that file's path for the current user's template, or false.
      * @param string $module The module folder name.
-     * @return string|false
+     * @return string|false The SVG path, or false when there is none or the name is not valid.
      */
     static function ThemeIcon($module) {
         static $cache = array();
@@ -200,7 +223,7 @@ class ui_template {
 
     /**
      * Does the current user's template have module icons of its own (img/icons/)?
-     * @return bool
+     * @return bool True when the img/icons folder exists.
      */
     static function HasThemeIcons() {
         static $has = null;
@@ -216,7 +239,7 @@ class ui_template {
      * but not for this module, otherwise the plain PNG as before.
      * @param string $module The module folder name.
      * @param string $png The module's PNG icon path.
-     * @return string
+     * @return string The icon HTML.
      */
     static function DashboardIcon($module, $png) {
         $svg = self::ThemeIcon($module);
@@ -234,7 +257,7 @@ class ui_template {
      * Small icon for menus (sidebar, top bar): the template's own icon in the link's
      * colour, or false when the template has none for this module.
      * @param string $module The module folder name.
-     * @return string|false
+     * @return string|false The <i> icon HTML, or false.
      */
     static function MenuIcon($module) {
         $svg = self::ThemeIcon($module);
@@ -245,7 +268,11 @@ class ui_template {
         return '<i class="theme-icon-sm" style="-webkit-mask-image:url(' . $url . ');mask-image:url(' . $url . ')"></i>';
     }
 
-    /** the current user's template, looked up once per page */
+    /**
+     * Returns the current user's template, looked up once per page.
+     *
+     * @return string The template folder name ('Modern' when the user's one is not valid).
+     */
     private static function CurrentTemplateCached() {
         static $tpl = null;
         if ($tpl === null) {

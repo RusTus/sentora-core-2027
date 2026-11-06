@@ -13,13 +13,16 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  */
+/**
+ * Template tag <# ui_controllerdebug #>: the controller debug panel (shown when 'debug' is in the URL).
+ */
 class ui_controllerdebug extends runtime_controller {
 
     /**
      * Template placeholder to display controller debug infomation.
      * @author Bobby Allen (ballen@bobbyallen.me)
-     * @global obj $controller The controller object.
-     * @return string HTML output to display the controller debug infomation in a pretty way
+     * @global runtime_controller $controller The request controller.
+     * @return string|null HTML output to display the controller debug infomation in a pretty way, or null when debugging is off.
      */
     static function Template() {
         global $controller;

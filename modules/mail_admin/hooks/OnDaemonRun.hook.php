@@ -18,6 +18,11 @@ echo "END SOGo settings." . fs_filehandler::NewLine();
  * passwords are now {SHA512-CRYPT} hashes, which keep their prefix in the view (SOGo
  * reads the scheme from it); old {PLAIN-MD5} ones lose it, as before (checked with
  * userPasswordAlgorithm = md5). Views made by older installers strip every prefix.
+ *
+ * Recreates the view (and says so) when it has no CASE yet; does nothing when there is no view.
+ *
+ * @global db_driver $zdbh The panel's database connection.
+ * @return void
  */
 function SentoraSOGoPasswordView()
 {
@@ -36,30 +41,70 @@ function SentoraSOGoPasswordView()
     echo "SOGo mailbox view updated for SHA-512 crypt passwords." . fs_filehandler::NewLine();
 }
 
+/**
+ * Reads a SOGo setting from x_settings, trimmed.
+ *
+ * @param string $name The setting name (so_name_vc).
+ * @param string $default Used when the setting is missing or empty.
+ * @return string The value.
+ */
 function SentoraSOGoOpt($name, $default)
 {
     $v = ctrl_options::GetSystemOption($name);
     return ($v === false || $v === null || $v === '') ? $default : trim((string) $v);
 }
 
+/**
+ * Reads a yes/no SOGo setting ('true' / 'false').
+ *
+ * @param string $name The setting name.
+ * @param bool $default Used when the setting is missing or not 'true'/'false'.
+ * @return string 'YES' or 'NO', as sogo.conf writes it.
+ */
 function SentoraSOGoBool($name, $default)
 {
     $v = strtolower(SentoraSOGoOpt($name, $default ? 'true' : 'false'));
     return $v === 'true' ? 'YES' : ($v === 'false' ? 'NO' : ($default ? 'YES' : 'NO'));
 }
 
+/**
+ * Reads a whole-number SOGo setting within a range.
+ *
+ * @param string $name The setting name.
+ * @param int $default Used when the setting is missing, not a number or out of range.
+ * @param int $min Lowest allowed value.
+ * @param int $max Highest allowed value.
+ * @return int The value.
+ */
 function SentoraSOGoInt($name, $default, $min, $max)
 {
     $v = SentoraSOGoOpt($name, (string) $default);
     return (ctype_digit($v) && (int) $v >= $min && (int) $v <= $max) ? (int) $v : $default;
 }
 
+/**
+ * Reads a SOGo setting that must be one of a list.
+ *
+ * @param string $name The setting name.
+ * @param string $default Used when the setting is missing or not in the list.
+ * @param string[] $allowed The allowed values.
+ * @return string The value.
+ */
 function SentoraSOGoList($name, $default, $allowed)
 {
     $v = SentoraSOGoOpt($name, $default);
     return in_array($v, $allowed, true) ? $v : $default;
 }
 
+/**
+ * Writes the SOGo settings to sogo.conf, the ActiveSync switch and SOGo's cron jobs.
+ *
+ * Rewrites only the Sentora area of /etc/sogo/sogo.conf, /etc/sentora/configs/sogo/
+ * activesync-access.conf (reloads Apache) and /etc/cron.d/sentora-sogo when they
+ * changed, restarts SOGo when sogo.conf changed, and echoes what it did.
+ *
+ * @return void
+ */
 function SentoraApplySOGoSettings()
 {
     $conf = '/etc/sogo/sogo.conf';

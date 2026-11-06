@@ -1,5 +1,12 @@
 <?php
 
+/**
+ * MySQL Databases module hook (OnDaemonRun): records the size of every database.
+ *
+ * @package Sentora
+ * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
+ */
+
 echo fs_filehandler::NewLine() . "START MySQL Databases hook" . fs_filehandler::NewLine();
 echo "Calculating the total size of all MySQL databases...." . fs_filehandler::NewLine();
 CalculateAllDatabaseSize();
@@ -9,6 +16,15 @@ echo "END MySQL Databases hook" . fs_filehandler::NewLine();
  * Calculate the total size of all MySQL database.
  */
 
+/**
+ * Calculates the size of each database and stores it in x_mysql_databases.my_usedspace_bi.
+ *
+ * Connects to each database with the panel's credentials (cnf/db.php) and adds up
+ * Data_length + Index_length of its tables.
+ *
+ * @global db_driver $zdbh The panel's database connection.
+ * @return void
+ */
 function CalculateAllDatabaseSize() {
     global $zdbh;
     include('cnf/db.php');

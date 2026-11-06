@@ -13,8 +13,16 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  */
+/**
+ * Template tag <# ui_tpl_useddomains #>: the number of domains in use.
+ */
 class ui_tpl_useddomains {
 
+    /**
+     * Returns how many domains the current user has, counted by ctrl_users::GetQuotaUsages().
+     *
+     * @return int|string The count (a numeric string or int, as the database driver returns it).
+     */
     public static function Template() {
         $currentuser = ctrl_users::GetUserDetail();
         return ctrl_users::GetQuotaUsages('domains', $currentuser['userid']);

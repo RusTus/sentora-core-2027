@@ -13,8 +13,16 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  */
+/**
+ * Template tag <# ui_tpl_usagediskspace #>: the disk space used.
+ */
 class ui_tpl_usagediskspace {
 
+    /**
+     * Returns the disk space used by the current user in human-readable form.
+     *
+     * @return string E.g. '250 MB'.
+     */
     public static function Template() {
         $currentuser = ctrl_users::GetUserDetail();
         return fs_director::ShowHumanFileSize(ctrl_users::GetQuotaUsages('diskspace', $currentuser['userid']));

@@ -13,8 +13,17 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  */
+/**
+ * Template tag <# ui_tpl_modulelist2column #>: the dashboard module boxes.
+ */
 class ui_tpl_modulelist2column {
 
+    /**
+     * Builds the sortable list of module category boxes, each with its module icons, for the dashboard.
+     *
+     * @global runtime_controller $controller The request controller (reads the module URL parameter).
+     * @return string|null The HTML (<ul id="sortable-with-handles">), or null when a module page (not the dashboard) is shown.
+     */
     public static function Template() {
         global $controller;
         if (!$controller->GetControllerRequest('URL', 'module')) {

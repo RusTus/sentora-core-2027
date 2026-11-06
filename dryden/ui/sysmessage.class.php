@@ -13,15 +13,22 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  */
+/**
+ * Builds Bootstrap alert boxes for messages to the user.
+ */
 class ui_sysmessage {
 
     /**
      * Show HTML Alert Messages
      * Jason Davis (jason.davis.fl@gmail.com)
-     * @param string $message The message to output to the screen.
+     *
+     * Maps the old Sentora class names (zannounce, zannounceerror, ...) to Bootstrap
+     * alert classes and runs the OnBeforeSysMessageShout / OnAfterSysMessageShout hooks.
+     *
+     * @param string $message The message to output to the screen (HTML, not escaped).
      * @param string $class The CSS class name to use on the DIV.
      * @param string $title An Optional Heading/Title Message
-     * @param string $closeBtn Optional TRUE or FALSE to show a Close button or not
+     * @param bool $closeBtn Optional TRUE or FALSE to show a Close button or not
      *
      * @return string The generated HTML source code.
      */

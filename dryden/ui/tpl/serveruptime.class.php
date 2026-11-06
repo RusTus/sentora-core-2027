@@ -13,8 +13,16 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  */
+/**
+ * Template tag <# ui_tpl_serveruptime #>: the server uptime.
+ */
 class ui_tpl_serveruptime {
 
+    /**
+     * Returns how long the server has been running.
+     *
+     * @return string Human-readable uptime, from sys_monitoring::ServerUptime().
+     */
     public static function Template() {
         return sys_monitoring::ServerUptime();
     }

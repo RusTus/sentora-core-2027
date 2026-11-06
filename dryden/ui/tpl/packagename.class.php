@@ -13,8 +13,16 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  */
+/**
+ * Template tag <# ui_tpl_packagename #>: the current user's hosting package.
+ */
 class ui_tpl_packagename {
 
+    /**
+     * Returns the name of the hosting package of the logged-in user.
+     *
+     * @return string The package name, cleaned with runtime_xss::xssClean().
+     */
     public static function Template() {
         $user_array = ctrl_users::GetUserDetail();
         return runtime_xss::xssClean($user_array['packagename']);

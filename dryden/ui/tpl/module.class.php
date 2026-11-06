@@ -13,8 +13,17 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  */
+/**
+ * Template tag <# ui_tpl_module #>: the current module's page.
+ */
 class ui_tpl_module {
 
+    /**
+     * Returns the template code (module.zpm) of the module named in the URL.
+     *
+     * @global runtime_controller $controller The request controller (reads the module URL parameter).
+     * @return string|null The module template, an error text when it cannot be loaded, or null when no module is requested (dashboard).
+     */
     public static function Template() {
         global $controller;
         if ($controller->GetControllerRequest('URL', 'module')) {

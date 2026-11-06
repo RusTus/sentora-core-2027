@@ -13,16 +13,27 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  */
+/**
+ * Translates interface text into the logged-in user's language (x_translations table).
+ */
 class ui_language {
 
+    /**
+     * @var string|null Name of the translation column for the user's language
+     *      (e.g. 'tr_de_tx'); worked out once per request by translate().
+     */
     static $LangCol;
 
     /**
      * Used to translate a text string into the language preference of the user.
      * @author Pascal Peyremorte (ppeyremorte@sentora.org)
      * @global db_driver $zdbh The ZPX database handle.
-     * @param $message The string to translate.
-     * @return string The transalated string.
+     *
+     * English text is returned as is. Text not yet in x_translations is added to the
+     * table (with empty translations) and returned untranslated.
+     *
+     * @param string $message The English string to translate.
+     * @return string The translated string, or $message when there is no translation.
      */
     static function translate($message) {
         global $zdbh;
@@ -63,8 +74,9 @@ class ui_language {
     /**
      * Return array of column names for a table.
      * @author Russell Skinner (rskinner@zpanelcp.com)
+     * @global db_driver $zdbh The panel's database connection.
      * @param string $table The table name to return that column names from.
-     * @return array List of column names.
+     * @return array<int, string>|null List of column names; null when the query throws.
      */
     static function GetColumnNames($table) {
         global $zdbh;

@@ -13,8 +13,18 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  */
+/**
+ * Template tag <# ui_tpl_progbarbandwidth #>: the bandwidth usage bar.
+ */
 class ui_tpl_progbarbandwidth {
 
+    /**
+     * Builds a progress bar showing this month's bandwidth use against the quota.
+     *
+     * The bar turns red at 75%; the percentage is written in it from 10%.
+     *
+     * @return string The Bootstrap progress bar HTML (empty bar when the quota is unlimited).
+     */
     public static function Template() {
         $currentuser = ctrl_users::GetUserDetail();
         $bandwidthquota = $currentuser['bandwidthquota'];

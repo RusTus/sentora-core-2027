@@ -13,8 +13,16 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  */
+/**
+ * Template tag <# ui_tpl_modulelistzsidebar #>: the side bar module menu.
+ */
 class ui_tpl_modulelistzsidebar {
 
+    /**
+     * Builds the side bar: one heading and list of module links per module category.
+     *
+     * @return string The <li> items of the side bar.
+     */
     public static function Template() {
         $line = '';
         $modcats = ui_moduleloader::GetModuleCats();

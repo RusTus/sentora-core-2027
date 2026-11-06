@@ -13,9 +13,19 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  */
+/**
+ * Template tag <# ui_tpl_modulelistznavbar #>: the top navigation bar menus.
+ */
 class ui_tpl_modulelistznavbar
 {
 
+    /**
+     * Builds the navigation bar: a Home link and one drop-down menu per module category.
+     *
+     * The Account menu gets a person icon and a Logout item.
+     *
+     * @return string The <li> items of the navigation bar.
+     */
     public static function Template()
     {
 
@@ -107,13 +117,15 @@ class ui_tpl_modulelistznavbar
     /**
      * Get either a Gravatar URL or complete image tag for a specified email address.
      *
+     * Not used by Template() any more (it shows a local icon instead).
+     *
      * @param string $email The email address
-     * @param string $s Size in pixels, defaults to 80px [ 1 - 2048 ]
+     * @param int|string $s Size in pixels, defaults to 80px [ 1 - 2048 ]
      * @param string $d Default imageset to use [ 404 | mm | identicon | monsterid | wavatar ]
      * @param string $r Maximum rating (inclusive) [ g | pg | r | x ]
-     * @param boole $img True to return a complete IMG tag False for just the URL
-     * @param array $atts Optional, additional key/value attributes to include in the IMG tag
-     * @return String containing either just a URL or a complete image tag
+     * @param bool $img True to return a complete IMG tag False for just the URL
+     * @param array<string,string> $atts Optional, additional key/value attributes to include in the IMG tag
+     * @return string Either just a URL or a complete image tag
      * @source http://gravatar.com/site/implement/images/php/
      */
     public static function get_gravatar($email, $s = 80, $d = 'mm', $r = 'g', $img = false, $atts = array())

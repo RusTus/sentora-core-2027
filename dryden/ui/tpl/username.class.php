@@ -13,8 +13,16 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  */
+/**
+ * Template tag <# ui_tpl_username #>: the current user's user name.
+ */
 class ui_tpl_username {
 
+    /**
+     * Returns the user name of the logged-in user.
+     *
+     * @return string The user name.
+     */
     public static function Template() {
         $user_array = ctrl_users::GetUserDetail();
         return $user_array['username'];

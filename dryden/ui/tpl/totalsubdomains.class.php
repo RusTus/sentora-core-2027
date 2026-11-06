@@ -13,8 +13,16 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  */
+/**
+ * Template tag <# ui_tpl_totalsubdomains #>: the sub-domain quota.
+ */
 class ui_tpl_totalsubdomains {
 
+    /**
+     * Returns the account's sub-domain quota from the user's package, or '&#8734;' (the infinity sign) when it is unlimited (negative).
+     *
+     * @return int|string The quota number, or the infinity HTML entity.
+     */
     public static function Template() {
         $currentuser = ctrl_users::GetUserDetail();
         $subdomainsquota = $currentuser['subdomainquota'];

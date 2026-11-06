@@ -13,8 +13,16 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  */
+/**
+ * Template tag <# ui_tpl_subdomains #>: the number of sub-domains.
+ */
 class ui_tpl_subdomains {
 
+    /**
+     * Returns the number of sub-domains of the current user.
+     *
+     * @return int The count, from ctrl_users::GetUserDomains().
+     */
     public static function Template() {
         $currentuser = ctrl_users::GetUserDetail();
         return ctrl_users::GetUserDomains($currentuser['userid'], 2);

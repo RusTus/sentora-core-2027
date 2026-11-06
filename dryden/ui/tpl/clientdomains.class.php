@@ -13,8 +13,19 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  */
+/**
+ * Template tag <# ui_tpl_clientdomains #>: the user's domains overview.
+ */
 class ui_tpl_clientdomains {
 
+    /**
+     * Builds the dashboard overview of the user's first domains, sub-domains and parked domains.
+     *
+     * Shows up to 4 of each kind with their status.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return string The HTML stats rows.
+     */
     public static function Template() {
         global $zdbh;
         $currentuser = ctrl_users::GetUserDetail();
@@ -35,12 +46,16 @@ class ui_tpl_clientdomains {
 
 
     /**
-     * getDomains Retuns Domains a user owns
-     * @param  string  $type         domains, subdomain, or parkeddomain
-     * @param  integer $domain_limit Number of Domains to list.  Default is 4
-     * @param  object  $user         User Object
-     * @param  object  $db           Database Object
-     * @return string                Returns all domains as a string
+     * Builds the overview rows for one kind of domain a user owns.
+     *
+     * Lists up to $domain_limit domains with their status (Active / Pending / Disabled),
+     * or a "No ... Found" row with an "Add New" link when there are none.
+     *
+     * @param  string  $type         'domain', 'subdomain' or 'parkeddomain'.
+     * @param  int     $domain_limit Number of domains to list (Template() passes 4).
+     * @param  array<string,mixed> $user The user's details from ctrl_users::GetUserDetail() (uses 'userid').
+     * @param  db_driver $db         The panel's database connection.
+     * @return string                The HTML stats rows.
      */
     public static function getDomains($type, $domain_limit, $user, $db){
 

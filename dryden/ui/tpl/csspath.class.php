@@ -13,8 +13,19 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  */
+/**
+ * Template tag <# ui_tpl_csspath #>: the stylesheet of the chosen theme variation.
+ */
 class ui_tpl_csspath {
 
+    /**
+     * Returns the path of the CSS file to load for the current user.
+     *
+     * Uses the user's own choice first, then the reseller's (Theme Manager), then the
+     * template's first variation when the chosen file does not exist.
+     *
+     * @return string Relative path such as 'etc/styles/<template>/css/<variation>.css'.
+     */
     public static function Template() {
         $user = ctrl_users::GetUserDetail();
         $template = ui_template::GetUserTemplate();

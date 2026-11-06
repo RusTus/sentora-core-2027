@@ -13,8 +13,17 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  */
+/**
+ * Template tag <# ui_tpl_modulelistjson #>: the enabled user modules as JSON.
+ */
 class ui_tpl_modulelistjson {
 
+    /**
+     * Returns the enabled user modules as a JSON list of {name, url} objects.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return string The JSON text (names HTML-escaped; url is the module folder).
+     */
     public static function Template() {
         global $zdbh;
 

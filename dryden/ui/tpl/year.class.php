@@ -13,8 +13,16 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  */
+/**
+ * Template tag <# ui_tpl_year #>: the current year.
+ */
 class ui_tpl_year {
 
+    /**
+     * Returns the current year.
+     *
+     * @return string Four digits, e.g. '2026'.
+     */
     public static function Template() {
         return date('Y');
     }

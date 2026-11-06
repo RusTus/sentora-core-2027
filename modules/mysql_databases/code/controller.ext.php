@@ -26,18 +26,34 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
  */
+/**
+ * MySQL Databases module: lists, creates and deletes the account's MySQL databases.
+ */
 class module_controller extends ctrl_module
 {
 
+    /** @var bool|null True when the database name is already taken (shown by getResult()). */
     static $alreadyexists;
+    /** @var bool|null True when no database name was given (shown by getResult()). */
     static $blank;
+    /** @var bool|null True when the database name is not valid (shown by getResult()). */
     static $badname;
+    /** @var bool|null True after a database was created or deleted (shown by getResult()). */
     static $ok;
 
     /**
      * The 'worker' methods.
      */
-	# tg - Set user name input max characters minus prefix
+	// tg - Set user name input max characters minus prefix
+    /**
+     * Returns how many characters the database name may have (<@ MaxCharAllowed @>).
+     *
+     * MySQL names are at most 32 characters, including the "<username>_" prefix.
+     *
+     * @global db_driver $zdbh The panel's database connection (declared, not used).
+     * @global runtime_controller $controller The request controller (declared, not used).
+     * @return int|false The number of characters left, or false when the prefix alone is longer than 32.
+     */
     static function getMaxCharAllowed()
     {
         global $zdbh;
@@ -58,6 +74,14 @@ class module_controller extends ctrl_module
         }
     }
 	
+    /**
+     * Lists an account's databases.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $uid The account ID.
+     * @return array<int, array<string, mixed>>|false One row per database: 'mysqlid', 'totaldb' (number of
+     *         users mapped to it), 'mysqlname', 'mysqlsize' (bytes) and 'mysqlfriendlysize'; false when there are none.
+     */
     static function ListDatabases($uid)
     {
         global $zdbh;
@@ -84,6 +108,14 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Returns one database by its ID (any account's: the caller checks ownership).
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $mysqlid The database ID (x_mysql_databases.my_id_pk).
+     * @return array<int, array<string, mixed>>|false A list with the one row: 'mysqlid', 'mysqlname',
+     *         'mysqlsize' and 'mysqlfriendlysize'; false when it does not exist or was deleted.
+     */
     static function ListCurrentDatabases($mysqlid)
     {
         global $zdbh;
@@ -108,6 +140,18 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Creates a database "<username>_<name>" for an account and records it.
+     *
+     * Runs the OnBeforeCreateDatabase / OnAfterCreateDatabase hooks and sets $ok; the
+     * error flags are set by CheckCreateForErrors().
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller (declared, not used).
+     * @param int|string $uid The account ID.
+     * @param string $databasename The name without the prefix (spaces are removed, lower-cased).
+     * @return bool True when created, false on a validation or database error.
+     */
     static function ExecuteCreateDatabase($uid, $databasename)
     {
         global $zdbh;
@@ -146,10 +190,18 @@ class module_controller extends ctrl_module
         return true;
     }
 
+    /**
+     * Checks a new database name, setting $blank, $badname or $alreadyexists on a problem.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param string $username The account's user name (the prefix).
+     * @param string $databasename The name without the prefix.
+     * @return bool True when the name can be used.
+     */
     static function CheckCreateForErrors($username, $databasename)
     {
         global $zdbh;
-        # Check to make sure the database name is not blank before we go any further...
+        // Check to make sure the database name is not blank before we go any further...
         if ($databasename == '') {
             self::$blank = true;
             return false;
@@ -159,7 +211,7 @@ class module_controller extends ctrl_module
             self::$badname = true;
             return false;
         }
-        # Check to make sure the database is not a duplicate...
+        // Check to make sure the database is not a duplicate...
         $sql = "SELECT COUNT(*) FROM x_mysql_databases WHERE my_name_vc=:dbName AND my_deleted_ts IS NULL";
         $dbName = $username . "_" . $databasename;
         $numrows = $zdbh->prepare($sql);
@@ -175,6 +227,16 @@ class module_controller extends ctrl_module
         return true;
     }
 
+    /**
+     * Drops a database and marks its record deleted (removes its user mappings too).
+     *
+     * Runs the OnBeforeDeleteDatabase / OnAfterDeleteDatabase hooks and sets $ok. Does
+     * not check ownership: doConfirmDeleteDatabase() does.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $my_id_pk The database ID.
+     * @return bool True when deleted, false on a database error.
+     */
     static function ExecuteDeleteDatabase($my_id_pk)
     {
         global $zdbh;
@@ -208,6 +270,12 @@ class module_controller extends ctrl_module
         return true;
     }
 
+    /**
+     * Checks a database name (without the prefix).
+     *
+     * @param string $username The name: letters, digits and dashes, up to 63, not starting or ending with a dash.
+     * @return bool True when valid.
+     */
     static function IsValidUserName($username)
     {
         if (!preg_match('/^[a-z\d][a-z\d-]{0,62}$/i', $username) || preg_match('/-$/', $username)) {
@@ -223,6 +291,13 @@ class module_controller extends ctrl_module
     /**
      * Webinterface sudo methods.
      */
+
+    /**
+     * Creates a database from the form (POST action=CreateDatabase, field inDatabase).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return bool What ExecuteCreateDatabase() returns.
+     */
     static function doCreateDatabase()
     {
         global $controller;
@@ -232,6 +307,15 @@ class module_controller extends ctrl_module
         return self::ExecuteCreateDatabase($currentuser['userid'], $formvars['inDatabase']);
     }
 
+    /**
+     * Handles a Delete button in the database list (POST action=DeleteDatabase).
+     *
+     * Redirects to the confirmation page (&show=Delete&other=<id>) and exits when one
+     * of the account's databases was chosen.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return bool True when no Delete button was pressed (otherwise it does not return).
+     */
     static function doDeleteDatabase()
     {
         global $controller;
@@ -247,6 +331,12 @@ class module_controller extends ctrl_module
         return true;
     }
 
+    /**
+     * Deletes the database confirmed on the delete page (POST action=ConfirmDeleteDatabase, field inDelete).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return bool False when the database is not the account's own, else what ExecuteDeleteDatabase() returns.
+     */
     static function doConfirmDeleteDatabase()
     {
         global $controller;
@@ -259,12 +349,25 @@ class module_controller extends ctrl_module
         return self::ExecuteDeleteDatabase($formvars['inDelete']);
     }
 
+    /**
+     * Returns the logged-in account's databases (<% loop DatabaseList %>, <% if DatabaseList %>).
+     *
+     * @return array<int, array<string, mixed>>|false See ListDatabases().
+     */
     static function getDatabaseList()
     {
         $currentuser = ctrl_users::GetUserDetail();
         return self::ListDatabases($currentuser['userid']);
     }
 
+    /**
+     * Tells whether to show the delete confirmation (<% if isDeleteDatabase %>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string|null $uid Optional. The account ID; default null = the logged-in user.
+     * @return bool|null True when ?show=Delete and the database in ?other= is the account's; null when it is not theirs.
+     */
     static function getisDeleteDatabase($uid = null)
     {
         global $controller;
@@ -290,6 +393,12 @@ class module_controller extends ctrl_module
         return (isset($urlvars['show'])) && ($urlvars['show'] == "Delete");
     }
 
+    /**
+     * Tells whether to show the create form (<% if isCreateDatabase %>): when no ?show= is given.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return bool
+     */
     static function getisCreateDatabase()
     {
         global $controller;
@@ -297,12 +406,23 @@ class module_controller extends ctrl_module
         return !isset($urlvars['show']);
     }
 
+    /**
+     * Returns the logged-in user's name, the database name prefix (<@ CurrentUserName @>).
+     *
+     * @return string The user name.
+     */
     static function getCurrentUserName()
     {
         $currentuser = ctrl_users::GetUserDetail();
         return $currentuser['username'];
     }
 
+    /**
+     * Returns the name of the database in ?other= (<@ EditCurrentDatabaseName @>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return string|null The name, '' when no ?other= is given, null when the database does not exist.
+     */
     static function getEditCurrentDatabaseName()
     {
         global $controller;
@@ -314,6 +434,12 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Returns the ID of the database in ?other= (<@ EditCurrentDatabaseID @>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return int|string|null The ID, '' when no ?other= is given, null when the database does not exist.
+     */
     static function getEditCurrentDatabaseID()
     {
         global $controller;
@@ -325,6 +451,11 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Tells whether the account may create another database (<% if QuotaLimit %>).
+     *
+     * @return bool True when the quota is unlimited (negative) or not used up.
+     */
     static function getQuotaLimit()
     {
         $currentuser = ctrl_users::GetUserDetail();
@@ -332,6 +463,12 @@ class module_controller extends ctrl_module
                 ($currentuser['mysqlquota'] > ctrl_users::GetQuotaUsages('mysql', $currentuser['userid']));
     }
 
+    /**
+     * Returns the database usage pie chart image (<@ MysqlUsagepChart @>).
+     *
+     * @global runtime_controller $controller The request controller (declared, not used).
+     * @return string An <img> tag: the pChart pie of free/used, or the "unlimited" picture.
+     */
     static function getMysqlUsagepChart()
     {
         global $controller;
@@ -349,6 +486,11 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Returns the message for the last action (<@ Result @>): the first error flag set, else success.
+     *
+     * @return string|null The alert HTML, or null when there is nothing to show.
+     */
     static function getResult()
     {
         if (!fs_director::CheckForEmptyValue(self::$blank)) {

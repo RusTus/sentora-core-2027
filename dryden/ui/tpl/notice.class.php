@@ -13,8 +13,17 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  */
+/**
+ * Template tag <# ui_tpl_notice #>: the reseller's notice to their clients.
+ */
 class ui_tpl_notice {
 
+    /**
+     * Returns the notice the user's reseller set (Client Notice Manager) as an alert box.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return string|false The alert HTML from ui_sysmessage::shout(), or false when the reseller has no notice.
+     */
     public static function Template() {
         $user_array = ctrl_users::GetUserDetail();
         global $zdbh;

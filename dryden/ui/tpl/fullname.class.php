@@ -13,8 +13,16 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  */
+/**
+ * Template tag <# ui_tpl_fullname #>: the current user's full name.
+ */
 class ui_tpl_fullname {
 
+    /**
+     * Returns the full name of the logged-in user.
+     *
+     * @return string The full name, cleaned with runtime_xss::xssClean().
+     */
     public static function Template() {
         $user_array = ctrl_users::GetUserDetail();
         return runtime_xss::xssClean($user_array['fullname']);

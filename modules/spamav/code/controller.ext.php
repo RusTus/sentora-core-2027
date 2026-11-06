@@ -5,26 +5,54 @@
  * and each mailbox's spam settings (when the administrator allows it). Only the
  * account's own mailboxes and the mail sent to them (or by them) are shown.
  */
+/**
+ * SpamAV module: spam/virus totals, per-mailbox spam settings and the activity log.
+ */
 class module_controller extends ctrl_module
 {
+    /**
+     * @var array<int, array<int, string>> Messages for getResult(): array('ok'|'error', English text).
+     */
     static $msg = array();
 
+    /**
+     * Escapes text for HTML.
+     *
+     * @param mixed $s The value (cast to string).
+     * @return string The escaped text.
+     */
     static function h($s)
     {
         return htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
     }
 
+    /**
+     * Translates text into the user's language.
+     *
+     * @param string $s The English text.
+     * @return string The translated text.
+     */
     static function t($s)
     {
         return ui_language::translate($s);
     }
 
+    /**
+     * Returns the logged-in user's details.
+     *
+     * @return array<string, mixed> From ctrl_users::GetUserDetail() ('userid', 'username', ...).
+     */
     static function Me()
     {
         return ctrl_users::GetUserDetail();
     }
 
-    /** this account's mailboxes */
+    /**
+     * Returns this account's mailboxes.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return array<int, string> The addresses, lower case, sorted.
+     */
     static function Mailboxes()
     {
         global $zdbh;
@@ -33,11 +61,28 @@ class module_controller extends ctrl_module
         return $q->fetchAll(PDO::FETCH_COLUMN);
     }
 
+    /**
+     * Tells whether an address is one of this account's mailboxes.
+     *
+     * @param string $mailbox The address (any case).
+     * @return bool
+     */
     static function Mine($mailbox)
     {
         return in_array(strtolower((string) $mailbox), self::Mailboxes(), true);
     }
 
+    /**
+     * Saves a mailbox's spam settings (POST action=SavePrefs).
+     *
+     * Checks the CSRF token, that the mailbox is the account's own, that the administrator
+     * allows user settings (sa_user_settings) and every field, then writes the
+     * x_spamav_prefs row. The result is added to $msg.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller.
+     * @return void
+     */
     static function doSavePrefs()
     {
         global $zdbh, $controller;
@@ -86,6 +131,12 @@ class module_controller extends ctrl_module
         self::$msg[] = array('ok', 'Spam settings for ' . $box . ' saved. They apply within 5 minutes.');
     }
 
+    /**
+     * Builds the totals cards: checked, spam, viruses and refused in the last 7 days, plus today and 30 days.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return string The HTML.
+     */
     static function Totals()
     {
         global $zdbh;
@@ -107,6 +158,15 @@ class module_controller extends ctrl_module
                 . self::t('Last 30 days') . ': ' . $m[1] . ' ' . self::t('spam') . ', ' . $m[2] . ' ' . self::t((int) $m[2] === 1 ? 'virus' : 'viruses') . '.') . '</p>';
     }
 
+    /**
+     * Builds the table of the account's mailboxes with their spam settings and 7-day counts.
+     *
+     * Adds the settings form (Form()) for the mailbox in ?edit= when it is the account's own.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller.
+     * @return string The HTML.
+     */
     static function MailboxTable()
     {
         global $zdbh, $controller;
@@ -136,6 +196,13 @@ class module_controller extends ctrl_module
         return $out;
     }
 
+    /**
+     * Builds the spam settings form for one mailbox.
+     *
+     * @param string $box The mailbox address (already checked to be the account's own).
+     * @param bool $can True when the user may change the settings (otherwise the fields are disabled).
+     * @return string The HTML.
+     */
     static function Form($box, $can)
     {
         $p = sys_spamav::Prefs($box);
@@ -165,6 +232,15 @@ class module_controller extends ctrl_module
             . '<a class="btn btn-default" href="./?module=spamav">' . self::t('Close') . '</a></form></div>';
     }
 
+    /**
+     * Builds the activity log: what was caught for the account, 25 per page, newest first.
+     *
+     * Filtered by ?box= (one of the account's mailboxes) and ?kind= (spam or virus); page in ?page=.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller.
+     * @return string The HTML (filter form, page links and table).
+     */
     static function Activity()
     {
         global $zdbh, $controller;
@@ -225,6 +301,11 @@ class module_controller extends ctrl_module
         return $out . '</tbody></table></div>' . ($pages > 1 ? $nav : '');
     }
 
+    /**
+     * Builds the whole module page (<@ Page @>): styles, totals, mailboxes and activity.
+     *
+     * @return string The HTML.
+     */
     static function getPage()
     {
         sys_spamav::Ensure();
@@ -240,6 +321,11 @@ class module_controller extends ctrl_module
             . '<h2>' . self::t('Recent activity') . '</h2>' . self::Activity();
     }
 
+    /**
+     * Returns the messages of this request as alert boxes (<@ Result @>).
+     *
+     * @return string The HTML ('' when there are none).
+     */
     static function getResult()
     {
         $out = '';

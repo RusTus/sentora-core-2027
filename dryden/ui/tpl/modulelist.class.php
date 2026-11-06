@@ -13,8 +13,17 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  */
+/**
+ * Template tag <# ui_tpl_modulelist #>: the dashboard module icons as tables (old layout).
+ */
 class ui_tpl_modulelist {
 
+    /**
+     * Builds one table of module icons per module category for the dashboard.
+     *
+     * @global runtime_controller $controller The request controller (reads the module URL parameter).
+     * @return string|null The HTML, or null when a module page (not the dashboard) is shown.
+     */
     public static function Template() {
         global $controller;
         if (!$controller->GetControllerRequest('URL', 'module')) {

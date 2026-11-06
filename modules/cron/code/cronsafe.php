@@ -8,9 +8,17 @@
  */
 require_once dirname(__FILE__) . '/../../protected_directories/code/pdsafe.php';
 
+/**
+ * Checks for the Cron Manager: script paths, task logs and the timings offered.
+ */
 class cron_safe
 {
-    /** the path relative to public_html can be written on a cron line as it is */
+    /**
+     * Checks that the path relative to public_html can be written on a cron line as it is.
+     *
+     * @param string $rel The path relative to public_html.
+     * @return bool True for a .php path of letters, digits, dots, dashes and underscores (at most 250 characters, no "..").
+     */
     static function ValidRel($rel)
     {
         $rel = (string) $rel;
@@ -18,7 +26,13 @@ class cron_safe
             && strpos($rel, '..') === false;
     }
 
-    /** a script given relative to public_html: its full path, or false */
+    /**
+     * Resolves a script given relative to public_html to its full path.
+     *
+     * @param string $username The account's user name.
+     * @param string $rel The path relative to public_html.
+     * @return string|false The full path, or false when it is not valid, missing, a link or not a plain file.
+     */
     static function ResolveFile($username, $rel)
     {
         $rel = trim(str_replace('\\', '/', (string) $rel), '/');
@@ -44,6 +58,12 @@ class cron_safe
      * written by the job as the account's user): array(text, modified time) or false.
      * Never through a link (a link there could show the panel any file it can read):
      * a plain file owned by the account's user, and the file opened is the one checked.
+     *
+     * @param string $username The account's user name.
+     * @param int|string $accountId The account ID.
+     * @param int $jobId The task ID (x_cronjobs.ct_id_pk).
+     * @param int $maxBytes Optional. Read at most the last this many bytes. Default 65536.
+     * @return array{0: string, 1: int}|false array(text, modified time), or false when there is no usable log.
      */
     static function ReadLog($username, $accountId, $jobId, $maxBytes = 65536)
     {
@@ -79,7 +99,12 @@ class cron_safe
         return array(($fs['size'] > $maxBytes ? "[... the start is cut: only the last " . round($maxBytes / 1024) . " KB are shown]\n" : '') . $text, $fs['mtime']);
     }
 
-    /** the result of a run from its log: array(state ok|error|timeout|running, short text) */
+    /**
+     * Works out the result of a run from its log.
+     *
+     * @param string $text The log text (from ReadLog()).
+     * @return array{0: string, 1: string} array(state ok|error|timeout|running, short English text).
+     */
     static function LogResult($text)
     {
         if (preg_match('/Finished (\S+), exit code (\d+)\s*$/', $text, $m)) {
@@ -95,7 +120,11 @@ class cron_safe
         return preg_match('/^Started /', ltrim(preg_replace('/^\[\.\.\..*\n/', '', $text))) ? array('running', 'running now, or stopped without finishing') : array('error', 'no result');
     }
 
-    /** the timings offered: crontab value => label */
+    /**
+     * Returns the timings offered.
+     *
+     * @return array<string, string> Crontab value => English label.
+     */
     static function Timings()
     {
         return array(
@@ -114,7 +143,12 @@ class cron_safe
         );
     }
 
-    /** a label for a timing, also for the ones the old module wrote */
+    /**
+     * Returns a label for a timing, also for the ones the old module wrote.
+     *
+     * @param string $timing The crontab timing.
+     * @return string The English label, or the timing itself when it is not known.
+     */
     static function TimingLabel($timing)
     {
         $t = self::Timings();

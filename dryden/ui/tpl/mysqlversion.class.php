@@ -13,8 +13,16 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  */
+/**
+ * Template tag <# ui_tpl_mysqlversion #>: the MySQL server version.
+ */
 class ui_tpl_mysqlversion {
 
+    /**
+     * Returns the version of the MySQL/MariaDB server.
+     *
+     * @return string The version, from sys_versions::ShowMySQLVersion().
+     */
     public static function Template() {
         return sys_versions::ShowMySQLVersion();
     }

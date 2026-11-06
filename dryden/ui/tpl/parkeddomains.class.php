@@ -13,8 +13,17 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  */
+/**
+ * Template tag <# ui_tpl_parkeddomains #>: the number of parked domains.
+ */
 class ui_tpl_parkeddomains {
 
+    /**
+     * Returns the number of parked domains of the current user.
+     *
+     * @global runtime_controller $controller The request controller (declared, not used).
+     * @return string The count as text ('0' when there are none).
+     */
     public static function Template() {
         global $controller;
         $currentuser = ctrl_users::GetUserDetail();

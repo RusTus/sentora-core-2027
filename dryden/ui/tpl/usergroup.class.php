@@ -13,8 +13,16 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  */
+/**
+ * Template tag <# ui_tpl_usergroup #>: the current user's group.
+ */
 class ui_tpl_usergroup {
 
+    /**
+     * Returns the name of the user group of the logged-in user.
+     *
+     * @return string The group name, e.g. 'Administrators'.
+     */
     public static function Template() {
         $user_array = ctrl_users::GetUserDetail();
         return $user_array['usergroup'];
