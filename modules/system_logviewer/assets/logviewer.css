@@ -32,6 +32,16 @@
     background: currentColor; -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3'%3E%3Crect x='4' y='11' width='16' height='10' rx='2'/%3E%3Cpath d='M8 11V7a4 4 0 0 1 8 0v4'/%3E%3C/svg%3E") center / contain no-repeat;
     mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3'%3E%3Crect x='4' y='11' width='16' height='10' rx='2'/%3E%3Cpath d='M8 11V7a4 4 0 0 1 8 0v4'/%3E%3C/svg%3E") center / contain no-repeat; }
 .lv-item.locked .lv-item-name { color: var(--lv-muted); }
+/* View Site Logs: a domain's logs, each with a download button */
+.lv-group-name.lv-domain { text-transform: none; letter-spacing: 0; font-size: 13px; color: var(--lv-ink); padding-top: 12px; overflow-wrap: anywhere; }
+.lv-row { display: flex; align-items: center; }
+.lv-row .lv-item { flex: 1; min-width: 0; padding-left: 23px; }
+.lv-item.missing .lv-item-name { color: var(--lv-muted); font-weight: normal; }
+.lv-dl { margin: 0 10px 0 4px; }
+.lv-dl button { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; border-radius: 4px; cursor: pointer;
+    border: 1px solid var(--lv-field-line); background: var(--lv-card); color: var(--lv-muted); }
+.lv-dl button:hover { color: var(--lv-ink); border-color: var(--lv-muted); }
+.lv-dl .lv-ico { width: 15px; height: 15px; }
 
 /* the viewer */
 .lv-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--lv-card); border-radius: 6px; box-shadow: 0 1px 3px rgba(20,30,40,0.08); overflow: hidden; }

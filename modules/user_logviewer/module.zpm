@@ -1,91 +1,45 @@
-<style type="text/css">
-	.logContainer{
-		border: 0;
-		overflow: auto;
-		height: 350px;
-		color: #BBB;
-		font-family: consolas,monaco,Courier New,Courier New,monospace;
-		font-size: 12px;
-		background-color: #000;
-	}
-</style>
-<% if isPreviewLog %>
 <div class="zmodule_content panel" id="zmodule_header_<@ ModuleName @>">
-	<div class="panel-heading">
-		<img src="<@ ModuleIcon @>" width="35" height="35" border="0" alt="<@ ModuleName @>">
-		<div class="zmodule_title">
-			<@ ModuleName @>
-		</div>
-		<div class="zmodule_desc">Preview of <@ CurrentLogFile @></div>
-	</div>
-	<div class="panel-body">
-		<pre class="logContainer"><@ PreviewBuffer @></pre>
-	</div>
-</div>
-<% endif %>
-<div class="zmodule_content panel" id="zmodule_header_<@ ModuleName @>">
-	<div class="panel-heading">
-		<img src="<@ ModuleIcon @>" width="35" height="35" border="0" alt="<@ ModuleName @>">
-		<div class="zmodule_title">
-			<@ ModuleName @>
-		</div>
-		<div class="zmodule_desc" id="zmodule_desc_<@ ModuleName @>"><@ ModuleDesc @></div>
-	</div>
-	<@ Result @>
-	<div class="zgrid_wrapper">
-		<h2><: Domains Error Log :></h2>
-		<% if LogErrorList %>
-		<form action="./?module=user_logviewer&action=ErrorLogActions" method="post">
-			<table class="table table-striped">
-				<tr>
-					<th><: Domain name :></th>
-					<th><: File :></th>
-					<th><: Size :></th>
-					<th></th>
-					<th></th>
-				</tr>
-				<% loop LogErrorList %>
-				<tr>
-					<td><a href="http://<& name &>/" target="_blank"><& name &></a></td>
-					<td><& filepath &></td>
-					<td><& fsize &></td>
-					<td><button class="btn btn-default" type="submit" id="button" name="inPreview" id="inPreview" value="<& id &>"><: Preview :></button></td>
-					<td><button class="btn btn-primary" type="submit" id="button" name="inDownload" id="inDownload" value="<& id &>"><: Download :></button></td>
-				</tr>
-				<% endloop %>
-			</table>
-			<@ CSFR_Tag @>
-		</form>
-		<% else %>
-		<: You currently do not have any domains configured. :>
-		<% endif %>
-	</div>
-	<div class="zgrid_wrapper">
-		<h2><: Domains Access Log :></h2>
-		<% if LogAccessList %>
-		<form action="./?module=user_logviewer&action=AccessLogActions" method="post">
-			<table class="table table-striped">
-				<tr>
-					<th><: Domain name :></th>
-					<th><: File :></th>
-					<th><: Size :></th>
-					<th></th>
-					<th></th>
-				</tr>
-				<% loop LogAccessList %>
-				<tr>
-					<td><a href="http://<& name &>/" target="_blank"><& name &></a></td>
-					<td><& filepath &></td>
-					<td><& fsize &></td>
-					<td><button class="btn btn-default" type="submit" id="button" name="inPreview" id="inPreview" value="<& id &>"><: Preview :></button></td>
-					<td><button class="btn btn-primary" type="submit" id="button" name="inDownload" id="inDownload" value="<& id &>"><: Download :></button></td>
-				</tr>
-				<% endloop %>
-			</table>
-			<@ CSFR_Tag @>
-		</form>
-		<% else %>
-		<: You currently do not have any domains configured. :>
-		<% endif %>
-	</div>
+    <div class="panel-heading">
+        <img src="<@ ModuleIcon @>" width="35" height="35" border="0" alt="<@ ModuleName @>">
+        <div class="zmodule_title"><@ ModuleName @></div>
+        <div class="zmodule_desc" id="zmodule_desc_<@ ModuleName @>"><@ ModuleDesc @></div>
+    </div>
+    <@ Result @>
+    <link rel="stylesheet" href="modules/system_logviewer/assets/logviewer.css">
+    <% if HasDomains %>
+    <div class="lv lv-panel lv-sites" id="lv" data-read="modules/user_logviewer/code/read.php"
+         data-locked="<: This log does not exist yet. The web server starts it with the site's first visit, or its first error. :>" data-no-cmd="1"
+         data-pick="<: Pick a log on the left to follow it. New lines appear every two seconds. :>"
+         data-rotated="<: The log was rotated or truncated; showing its end. :>"
+         data-ago="<: ago :>" data-lines="<: lines :>" data-shown="<: shown :>">
+        <aside class="lv-side">
+            <label class="lv-find"><svg class="lv-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                <input type="search" class="form-control lv-find-input" placeholder="<: Find a domain :>" aria-label="<: Find a domain :>"></label>
+            <div class="lv-list"><@ LogMenu @></div>
+        </aside>
+        <section class="lv-main">
+            <div class="lv-head">
+                <div class="lv-title">
+                    <svg class="lv-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h6"/></svg>
+                    <div><b class="lv-path"><: No log open :></b><span class="lv-meta"></span></div>
+                </div>
+                <div class="lv-tools">
+                    <span class="lv-live"><i></i><span class="lv-live-text"><: Live :></span></span>
+                    <label class="lv-filter"><svg class="lv-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></svg>
+                        <input type="search" class="form-control lv-filter-input" placeholder="<: Show lines with... :>" aria-label="<: Show only lines with this text :>"></label>
+                    <label class="lv-check"><input type="checkbox" class="lv-follow" checked> <: Follow :></label>
+                    <label class="lv-check"><input type="checkbox" class="lv-wrap"> <: Wrap :></label>
+                    <button type="button" class="btn btn-default btn-sm lv-pause" data-resume="<: Resume :>"><: Pause :></button>
+                    <button type="button" class="btn btn-default btn-sm lv-clear" title="<: Clear the screen (the log itself is not changed) :>"><: Clear :></button>
+                </div>
+            </div>
+            <div class="lv-out" tabindex="0"></div>
+            <div class="lv-foot"><span class="lv-count"></span><span class="lv-legend"><i class="bad"></i><: errors :> <i class="warn"></i><: warnings and visits that failed (4xx, 5xx) :></span></div>
+        </section>
+    </div>
+    <p class="lv-note"><: The error log has PHP errors and what the web server refused; the access log has every visit. Use the download button beside a log to keep a copy. :></p>
+    <script src="modules/system_logviewer/assets/logviewer.js"></script>
+    <% else %>
+    <div class="lv lv-empty"><p><: You have no domains yet. Their logs appear here once a domain is added. :></p></div>
+    <% endif %>
 </div>

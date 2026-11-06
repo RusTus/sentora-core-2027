@@ -1,13 +1,18 @@
 <?php
 /**
-*
-* @package user_logviewer
-* @version 100
-* @author Simon Mora - samt2497
-*
-*/
+ * View Site Logs: an account's own error and access logs, followed live.
+ *
+ * The page uses the System Log Viewer's viewer (modules/system_logviewer/assets) and
+ * reads new lines from code/read.php, which opens only the account's own logs.
+ *
+ * @package user_logviewer
+ * @version 100
+ * @author Simon Mora - samt2497
+ */
 
-//--
+/**
+ * View Site Logs controller.
+ */
 class module_controller extends ctrl_module
 {
 	/** @var bool|null True when the requested domain is not the account's own. */
@@ -15,27 +20,51 @@ class module_controller extends ctrl_module
 	/** @var bool|null True when the requested log file does not exist. */
 	static $notfile;
 
-	/** @var string|null File name of the log being previewed. */
-	static $CurrentLogFile;
-	/** @var string|false|null The last lines of the log being previewed (false when it could not be read). */
-	static $PreviewBuffer;
+	/**
+	 * Escape text for HTML.
+	 *
+	 * @param mixed $s The text.
+	 * @return string
+	 */
+	static function h($s)
+	{
+		return htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
+	}
 
-	/** @var bool|null True when a log preview is shown. */
-	static $preview;
-	/** @var mixed Not used in this module. */
-	static $pbuffer;
-	/** @var int How many lines of a log the preview shows. */
-	static $preview_lines = 50;
-	// The 'worker' methods.
+	/**
+	 * Translated and HTML-escaped text.
+	 *
+	 * @param string $s The English text.
+	 * @return string
+	 */
+	static function t($s)
+	{
+		return self::h(ui_language::translate($s));
+	}
+
+	/**
+	 * The path of one of an account's site logs.
+	 *
+	 * @param string $username The account's username.
+	 * @param string $domain The domain name.
+	 * @param string $kind 'error' or 'access'.
+	 * @return string
+	 */
+	static function LogPath($username, $domain, $kind)
+	{
+		return '/var/sentora/logs/domains/' . $username . '/' . $domain . '-' . ($kind === 'access' ? 'access' : 'error') . '.log';
+	}
+
 	/**
 	 * Send a file as a download and exit.
 	 *
 	 * @param string $filepath The full path of the file.
 	 * @return void Never returns (ends with die()).
 	 */
-	static function downloadFile($filepath){
+	static function downloadFile($filepath)
+	{
 		header('Content-Type: application/octet-stream');
-		header('Content-Disposition: attachment; filename='.basename($filepath));
+		header('Content-Disposition: attachment; filename="' . basename($filepath) . '"');
 		header('Expires: 0');
 		header('Cache-Control: must-revalidate');
 		header('Pragma: public');
@@ -43,240 +72,137 @@ class module_controller extends ctrl_module
 		readfile($filepath);
 		die();
 	}
+
 	/**
-	 * List vhosts: all domains when $uid is 0, else all of the account's vhosts.
+	 * The logged-in account's domains, subdomains and parked domains.
 	 *
 	 * @global db_driver $zdbh The panel's database connection.
-	 * @param int $uid Optional. The account ID, or 0 for every account's domains. Default 0.
-	 * @return array<int, array<string, mixed>>|false One row per vhost: 'uid', 'name', 'directory', 'active', 'id'; false when there are none.
+	 * @return array<int, array{id: int, name: string}>
 	 */
-	static function ListVhosts($uid = 0)
+	static function Domains()
 	{
 		global $zdbh;
-		if ($uid == 0) {
-		$sql = "SELECT * FROM x_vhosts WHERE vh_deleted_ts IS NULL AND vh_type_in=1 ORDER BY vh_name_vc ASC";
-		$numrows = $zdbh->prepare($sql);
-		} else {
-		$sql = "SELECT * FROM x_vhosts WHERE vh_acc_fk=:uid AND vh_deleted_ts IS NULL ORDER BY vh_name_vc ASC";
-		$numrows = $zdbh->prepare($sql);
-		$numrows->bindParam(':uid', $uid);
-		}
-		//$numrows = $zdbh->query($sql);
-		$numrows->execute();
-		if ($numrows->fetchColumn() <> 0) {
-		if ($uid == 0) {
-		$sql = $zdbh->prepare($sql);
-		} else {
-		$sql = $zdbh->prepare($sql);
-		$sql->bindParam(':uid', $uid);
-		}
-		$res = array();
+		$currentuser = ctrl_users::GetUserDetail();
+		$sql = $zdbh->prepare("SELECT vh_id_pk, vh_name_vc FROM x_vhosts WHERE vh_acc_fk = :uid AND vh_deleted_ts IS NULL ORDER BY vh_name_vc ASC");
+		$sql->bindParam(':uid', $currentuser['userid']);
 		$sql->execute();
-		while ($rowdomains = $sql->fetch()) {
-		array_push($res, array(
-		'uid' => $rowdomains['vh_acc_fk'],
-		'name' => $rowdomains['vh_name_vc'],
-		'directory' => $rowdomains['vh_directory_vc'],
-		'active' => $rowdomains['vh_active_in'],
-		'id' => $rowdomains['vh_id_pk'],
-		));
+		$out = array();
+		while ($r = $sql->fetch()) {
+			$out[] = array('id' => (int) $r['vh_id_pk'], 'name' => (string) $r['vh_name_vc']);
 		}
-			return $res;
-		} else {
-			return false;
-		}
+		return $out;
 	}
-	// End 'worker' methods.
-	// Webinterface sudo methods.
 
-	//-- Some Tail-like function from lorenzos
 	/**
-	 * Read the last lines of a file, like tail.
-	 *
-	 * @param string $filepath The full path of the file.
-	 * @param int $lines Optional. How many lines to return. Default 1.
-	 * @param bool $adaptive Optional. Pick the read buffer size from the number of lines. Default true.
-	 * @return string|false The lines (trimmed), or false when the file cannot be opened.
-	 */
-	static function tailCustom($filepath, $lines = 1, $adaptive = true) {
-		$f = @fopen($filepath, "rb");
-		if ($f === false) return false;
-		if (!$adaptive) $buffer = 4096;
-		else $buffer = ($lines < 2 ? 64 : ($lines < 10 ? 512 : 4096));
-		fseek($f, -1, SEEK_END);
-		if (fread($f, 1) != "\n") $lines -= 1;
-		$output = '';
-		$chunk = '';
-		while (ftell($f) > 0 && $lines >= 0) {
-		$seek = min(ftell($f), $buffer);
-		fseek($f, -$seek, SEEK_CUR);
-		$output = ($chunk = fread($f, $seek)) . $output;
-		fseek($f, -mb_strlen($chunk, '8bit'), SEEK_CUR);
-		$lines -= substr_count($chunk, "\n");
-		}
-		while ($lines++ < 0) {
-		$output = (substr($output, strpos($output, "\n") + 1));
-		}
-		fclose($f);
-		return trim($output);
-	} 
-	/**
-	 * Template loop: the logged-in account's domains with their access log.
-	 *
-	 * @return array<int, array<string, mixed>>|false One row per vhost: 'name', 'directory', 'active', 'filepath' (file name), 'fsize', 'id'; false when there are none.
-	 */
-	static function getLogAccessList()
-	{
-		$currentuser = ctrl_users::GetUserDetail();
-		$res = array();
-		$domains = self::ListVhosts($currentuser['userid']);
-		if (!fs_director::CheckForEmptyValue($domains)) {
-		foreach ($domains as $row) {
-		$filepath = ('/var/sentora/logs/domains/'.$currentuser['username'].'/'.$row['name'].'-access.log');
-		if(file_exists($filepath)){
-		//fs_director::ShowHumanFileSize($used)
-			$fsize = fs_director::ShowHumanFileSize(filesize($filepath));
-		}else{
-			$fsize = 'Not Found';
-		}
-		$res[] = array(
-			'name' => $row['name'],
-			'directory' => $row['directory'],
-			'active' => $row['active'],
-			'filepath' => basename($filepath),
-			'fsize' => $fsize,
-			'id' => $row['id']
-		);
-		}
-		return $res;
-		} else {
-		return false;
-		}
-	}
-	/**
-	 * Template loop: the logged-in account's domains with their error log.
-	 *
-	 * @return array<int, array<string, mixed>>|false One row per vhost: 'name', 'directory', 'active', 'filepath' (file name), 'fsize', 'id'; false when there are none.
-	 */
-	static function getLogErrorList()
-	{
-		$currentuser = ctrl_users::GetUserDetail();
-		$res = array();
-		$domains = self::ListVhosts($currentuser['userid']);
-		if (!fs_director::CheckForEmptyValue($domains)) {
-		foreach ($domains as $row) {
-		$filepath = ('/var/sentora/logs/domains/'.$currentuser['username'].'/'.$row['name'].'-error.log');
-		if(file_exists($filepath)){
-		//fs_director::ShowHumanFileSize($used)
-			$fsize = fs_director::ShowHumanFileSize(filesize($filepath));
-		}else{
-			$fsize = 'Not Found';
-		}
-		$res[] = array(
-			'name' => $row['name'],
-			'directory' => $row['directory'],
-			'active' => $row['active'],
-			'filepath' => basename($filepath),
-			'fsize' => $fsize,
-			'id' => $row['id']
-		);
-		}
-		return $res;
-		} else {
-		return false;
-		}
-	}
-	/**
-	 * Template flag: a log preview is shown.
+	 * Template flag: the account has any domain (template: <% if HasDomains %>).
 	 *
 	 * @return bool
 	 */
-	static function getisPreviewLog(){
-		return !fs_director::CheckForEmptyValue(self::$preview);
+	static function getHasDomains()
+	{
+		return count(self::Domains()) > 0;
 	}
+
 	/**
-	 * Template value: the file name of the log being previewed.
+	 * Format a size in bytes.
 	 *
-	 * @return string|null
+	 * @param int|float $bytes The size.
+	 * @return string For example "12.3 MB".
 	 */
-	static function getCurrentLogFile(){
-		return self::$CurrentLogFile;
+	static function HumanSize($bytes)
+	{
+		$units = array('bytes', 'KB', 'MB', 'GB');
+		$i = 0;
+		$n = (float) $bytes;
+		while ($n >= 1024 && $i < 3) {
+			$n /= 1024;
+			$i++;
+		}
+		return ($i ? number_format($n, 1) : (int) $n) . ' ' . $units[$i];
 	}
+
 	/**
-	 * Template value: the previewed log lines, HTML-escaped.
+	 * Template HTML: each domain with its error and access log, to pick from, and a download button for each log.
 	 *
-	 * @return string
+	 * @return string HTML.
 	 */
-	static function getPreviewBuffer(){
-		// Log lines contain whatever visitors sent (URLs, user agents): shown as text
-		return htmlspecialchars((string) self::$PreviewBuffer, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+	static function getLogMenu()
+	{
+		$currentuser = ctrl_users::GetUserDetail();
+		$out = '';
+		foreach (self::Domains() as $d) {
+			$out .= '<div class="lv-group" data-s="' . self::h(strtolower($d['name'])) . '"><div class="lv-group-name lv-domain">' . self::h($d['name']) . '</div>';
+			foreach (array('error' => array('Errors', 'ErrorLogActions'), 'access' => array('Visits (access log)', 'AccessLogActions')) as $kind => $k) {
+				$path = self::LogPath($currentuser['username'], $d['name'], $kind);
+				$exists = is_file($path) && !is_link($path);
+				$label = ui_language::translate($k[0]);
+				$out .= '<div class="lv-row"><button type="button" class="lv-item' . ($exists ? '' : ' missing') . '" data-id="' . $d['id'] . '-' . $kind . '" data-path="' . self::h(basename($path)) . '"'
+					. ' data-group="' . self::h($d['name'] . ' · ' . $label) . '" data-readable="' . ($exists ? '1' : '0') . '" data-s="' . self::h(strtolower($d['name'] . ' ' . $label)) . '">'
+					. '<span class="lv-item-name">' . self::h($label) . '</span>'
+					. '<span class="lv-item-meta">' . ($exists ? self::h(self::HumanSize((int) @filesize($path))) . ' · <span class="lv-ago" data-mtime="' . (int) @filemtime($path) . '"></span>' : self::t('no log yet')) . '</span></button>';
+				if ($exists) {
+					$out .= '<form class="lv-dl" action="./?module=user_logviewer&amp;action=' . $k[1] . '" method="post"><input type="hidden" name="inDownload" value="' . $d['id'] . '">' . runtime_csfr::Token()
+						. '<button type="submit" title="' . self::t('Download') . ' ' . self::h(basename($path)) . '" aria-label="' . self::t('Download') . '"><svg class="lv-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 15v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-4"/><path d="m8 11 4 4 4-4"/><path d="M12 15V4"/></svg></button></form>';
+				}
+				$out .= '</div>';
+			}
+			$out .= '</div>';
+		}
+		return $out;
 	}
+
 	/**
-	 * Preview or download an access or error log of one of the account's vhosts.
+	 * Download an access or error log of one of the account's domains (the vhost ID comes from the inDownload field).
 	 *
-	 * The vhost ID comes from the inPreview or inDownload form field. A download sends the file and exits.
+	 * Sends the file and exits; sets $notmine or $notfile otherwise.
 	 *
 	 * @global runtime_controller $controller The request controller.
 	 * @global db_driver $zdbh The panel's database connection.
 	 * @param string $mode 'access' for the access log; anything else for the error log.
 	 * @return void
 	 */
-	static function ActionProcess($mode){
-		$currentuser = ctrl_users::GetUserDetail();
+	static function ActionProcess($mode)
+	{
 		global $controller;
-		global $zdbh;	
-		$download = false;
-		$id = $controller->GetControllerRequest('FORM', 'inPreview');
-		if($id <= 0){
-			$id = $controller->GetControllerRequest('FORM', 'inDownload');
-			$download = true;
-		}
-		$uid = $currentuser['userid'];
-		$sql = "SELECT * FROM x_vhosts WHERE vh_acc_fk=:uid AND vh_id_pk=:id AND vh_deleted_ts IS NULL";
-		$query = $zdbh->prepare($sql);
-		$query->bindParam(':uid', $uid);
-		$query->bindParam(':id', $id);
-		$query->execute();
-		if ($data = $query->fetch()) {
-			switch($mode){
-				case 'access':
-					$filepath = ('/var/sentora/logs/domains/'.$currentuser['username'].'/'.$data['vh_name_vc'].'-access.log');			
-					break;
-				default:
-					$filepath = ('/var/sentora/logs/domains/'.$currentuser['username'].'/'.$data['vh_name_vc'].'-error.log');
-					break;
-			}
-			self::$preview = true;
-			if(file_exists($filepath)){
-				if($download){
-					self::downloadFile($filepath);
-				}else{
-					self::$CurrentLogFile = basename($filepath);
-					self::$PreviewBuffer = self::tailCustom($filepath,self::$preview_lines);
-				}
-			}else{		
-				self::$notfile = true;	
-			}
-		}else{// No domains? well something is wrong for sure
+		global $zdbh;
+		$currentuser = ctrl_users::GetUserDetail();
+		$id = $controller->GetControllerRequest('FORM', 'inDownload');
+		$sql = $zdbh->prepare("SELECT vh_name_vc FROM x_vhosts WHERE vh_acc_fk = :uid AND vh_id_pk = :id AND vh_deleted_ts IS NULL");
+		$sql->bindParam(':uid', $currentuser['userid']);
+		$sql->bindParam(':id', $id);
+		$sql->execute();
+		$domain = $sql->fetchColumn();
+		if (!$domain) {
 			self::$notmine = true;
+			return;
 		}
+		$filepath = self::LogPath($currentuser['username'], $domain, $mode);
+		if (is_file($filepath) && !is_link($filepath)) {
+			self::downloadFile($filepath);
+		}
+		self::$notfile = true;
 	}
+
 	/**
-	 * Handle the error log form POST (preview or download).
+	 * Handle the error log download POST.
 	 *
 	 * @return void
 	 */
-	static function doErrorLogActions(){
+	static function doErrorLogActions()
+	{
 		self::ActionProcess('error');
 	}
+
 	/**
-	 * Handle the access log form POST (preview or download).
+	 * Handle the access log download POST.
 	 *
 	 * @return void
 	 */
-	static function doAccessLogActions(){
+	static function doAccessLogActions()
+	{
 		self::ActionProcess('access');
 	}
+
 	/**
 	 * Template HTML: the error message of the last action.
 	 *
@@ -285,12 +211,11 @@ class module_controller extends ctrl_module
 	static function getResult()
 	{
 		if (!fs_director::CheckForEmptyValue(self::$notmine)) {
-			return ui_sysmessage::shout(ui_language::translate("Unable to get log preview, this domain does not belong to you."), "zannounceerror");
+			return ui_sysmessage::shout(ui_language::translate("That domain does not belong to your account."), "zannounceerror");
 		}
 		if (!fs_director::CheckForEmptyValue(self::$notfile)) {
-			return ui_sysmessage::shout(ui_language::translate("The log does not exit yet."), "zannounceerror");
+			return ui_sysmessage::shout(ui_language::translate("That log does not exist yet."), "zannounceerror");
 		}
 		return;
 	}
-	// Webinterface sudo methods.
 }

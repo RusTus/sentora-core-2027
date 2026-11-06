@@ -1,7 +1,7 @@
 /* System Log Viewer: follows one log, asking read.php for new text every two seconds.
    Lines are added as text (never HTML), coloured by what they report, and can be
    filtered. Used by the module page (a list of logs beside the viewer) and by
-   view.php (one log in its own window). */
+   view.php (one log in its own window); View Site Logs uses it for an account's own logs. */
 (function () {
     'use strict';
     var root = document.getElementById('lv');
@@ -105,13 +105,13 @@
             pop.hidden = false;
         }
         if (current.readable !== '1') {
-            notice(root.getAttribute('data-locked') + ' sudo tail -f ' + current.path, 'locked');
+            notice(root.getAttribute('data-locked') + (root.hasAttribute('data-no-cmd') ? '' : ' sudo tail -f ' + current.path), 'locked');
             count.textContent = '';
             live.classList.add('off');
             return;
         }
         live.classList.toggle('off', paused);
-        try { sessionStorage.setItem('lv-log', current.id); } catch (e) { /* private window */ }
+        try { sessionStorage.setItem('lv-log:' + READ, current.id); } catch (e) { /* private window */ }
         poll();
     }
 
@@ -147,7 +147,11 @@
     if (find) {
         find.addEventListener('input', function () {
             var q = find.value.trim().toLowerCase();
-            Array.prototype.forEach.call(items, function (b) { b.hidden = q !== '' && b.getAttribute('data-s').indexOf(q) < 0; });
+            Array.prototype.forEach.call(items, function (b) {
+                b.hidden = q !== '' && b.getAttribute('data-s').indexOf(q) < 0;
+                var row = b.closest('.lv-row');   // an entry with its download button (View Site Logs)
+                if (row) { row.hidden = b.hidden; }
+            });
             Array.prototype.forEach.call(root.querySelectorAll('.lv-group'), function (g) { g.hidden = !g.querySelector('.lv-item:not([hidden])'); });
         });
     }
@@ -156,8 +160,9 @@
         open(root);
     } else {
         var last = null;
-        try { last = sessionStorage.getItem('lv-log'); } catch (e) { /* private window */ }
-        var first = last && /^[0-9a-f]{16}$/.test(last) ? root.querySelector('.lv-item[data-id="' + last + '"]') : null;
+        try { last = sessionStorage.getItem('lv-log:' + READ); } catch (e) { /* private window */ }
+        var first = null;
+        Array.prototype.forEach.call(items, function (b) { if (b.getAttribute('data-id') === last) { first = b; } });
         if (first) { open(first); first.scrollIntoView({ block: 'nearest' }); } else { notice(root.getAttribute('data-pick')); }
     }
     setInterval(poll, 2000);
