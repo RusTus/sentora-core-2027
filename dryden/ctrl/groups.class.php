@@ -47,7 +47,7 @@ class ctrl_groups {
      * @global db_driver $zdbh The ZPX database handle.
      * @param int $groupid The usergroup ID.
      * @param int $moduleid The module ID.
-     * @return bool
+     * @return bool|null True/false from the INSERT, null when the permission already existed.
      */
     static function AddGroupModulePermissions($groupid, $moduleid) {
         global $zdbh;

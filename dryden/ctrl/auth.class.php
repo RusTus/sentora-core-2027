@@ -19,8 +19,12 @@ class ctrl_auth
     /**
      * Checks that the server has a valid session for the user if not it will redirect to the login screen.
      * @author Bobby Allen (ballen@bobbyallen.me)
+     *
+     * When there is no session it first tries the "remember me" cookie; failing that it
+     * runs the OnRequireUserLogin hook, includes the login page of the administrator's
+     * theme and ends the request with exit.
      * @global db_driver $zdbh The ZPX database handle.
-     * return bool
+     * @return bool True when a user is logged in (otherwise the request exits).
      */
     static function RequireUser()
     {
@@ -54,8 +58,9 @@ class ctrl_auth
     /**
      * Sets a user session ID.
      * @author Bobby Allen (ballen@bobbyallen.me)
-     * @param int $zpuid The Sentora user account ID to set the session as.
-     * @return bool
+     * @param int|string $zpuid The Sentora user account ID to set the session as.
+     * @param bool $sessionSecuirty Optional. Turn on the IP and browser check for the session. Default true.
+     * @return bool Always true ($zpuid is never null here).
      */
     static function SetUserSession($zpuid = 0, $sessionSecuirty = true)
     {
@@ -94,8 +99,8 @@ class ctrl_auth
      * Sets the value of a given named session variable, if does not exist will create the session variable too.
      * @author Bobby Allen (ballen@bobbyallen.me)
      * @param string $name The name of the session variable to set.
-     * @param string $value The value of the session variable to set.
-     * @return boolean
+     * @param mixed $value The value of the session variable to set.
+     * @return bool False only when $name is null.
      */
     static function SetSession($name, $value = "")
     {
@@ -107,15 +112,16 @@ class ctrl_auth
         }
     }
 
-     /**
+    /**
      * The main authentication mechanism, checks username and password against the database and logs the user in on a successful authenitcation request.
      * @author Bobby Allen (ballen@bobbyallen.me)
      * @global db_driver $zdbh The ZPX database handle.
      * @param string $username The username to use to authenticate with.
      * @param string $password The password to use to authenticate with.
      * @param bool $rememberMe Remember the password for 30 days? (true/false)
-     * @param bool $checkingcookie The authentication request has come from a set cookie.
-     * @return mixed Returns 'false' if the authentication fails otherwise will return the user ID.
+     * @param bool $isCookie The authentication request has come from a set cookie (not used).
+     * @param bool $sessionSecurity Optional. Turn on the IP and browser check for the session. Default false.
+     * @return int|string|false Returns false if the authentication fails, otherwise the user ID (ac_id_pk).
      */
     static function Authenticate($username, $password, $rememberMe = false, $isCookie = false, $sessionSecurity = false)
     {
@@ -156,7 +162,7 @@ class ctrl_auth
     /**
      * Destroys a session and ends a user's Sentora session.
      * @author Bobby Allen (ballen@bobbyallen.me)
-     * @return bool
+     * @return bool Always true.
      */
     static function KillSession()
     {
@@ -172,10 +178,12 @@ class ctrl_auth
     }
 
     /**
-     * The secret that must be on a logout link, so another site can not log a user
-     * out just by loading ./?logout. It lasts for the session (unlike the form token,
-     * which changes after each form), so a logout link in an older tab still works.
-     * @return string
+     * Return the secret that must be on a logout link.
+     *
+     * The secret means another site can not log a user out just by loading ./?logout.
+     * It lasts for the session (unlike the form token, which changes after each form),
+     * so a logout link in an older tab still works.
+     * @return string 32 hex characters, created on first use.
      */
     static function LogoutToken()
     {
@@ -186,8 +194,8 @@ class ctrl_auth
     }
 
     /**
-     * The panel's logout link.
-     * @return string
+     * Return the panel's logout link.
+     * @return string Relative URL including the logout token.
      */
     static function LogoutUrl()
     {
@@ -196,7 +204,7 @@ class ctrl_auth
 
     /**
      * Is this the session's logout secret?
-     * @param mixed $token
+     * @param mixed $token The token from the logout link (normally a string).
      * @return bool
      */
     static function ValidLogoutToken($token)
@@ -208,7 +216,7 @@ class ctrl_auth
     /**
      * Deletes the authentication 'rememberme' cookies.
      * @author Bobby Allen (ballen@bobbyallen.me)
-     * @return bool
+     * @return bool Always true.
      */
     static function KillCookies()
     {
@@ -224,8 +232,8 @@ class ctrl_auth
     /**
      * Returns the UID (User ID) of the current logged in user.
      * @author Bobby Allen (ballen@bobbyallen.me)
-     * @global obj $controller The Sentora controller object.
-     * @return int The current user's session ID.
+     * @global runtime_controller $controller The Sentora controller object.
+     * @return int|string|false The current user's account ID, or false when nobody is logged in.
      */
     static function CurrentUserID()
     {
