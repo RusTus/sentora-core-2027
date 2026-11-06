@@ -261,6 +261,12 @@ if [ -d "$PANEL/etc/styles/Modern" ] && [ -d "$PANEL/etc/styles/Sentora_Default"
         warn "could not move accounts to Modern (Sentora_Default left in place)"
     fi
 fi
+# Theme and module files are revalidated by the browser after each update (the panel's
+# vhost sends Cache-Control: no-cache for them; that needs mod_headers): rewrite the vhost
+if [ ! -e /etc/apache2/mods-enabled/headers.load ]; then
+    a2enmod -q headers > /dev/null 2>&1 && say "Enabled Apache's headers module"
+fi
+"$PANEL/bin/setso" --set apache_changed true > /dev/null 2>&1
 fix_permissions
 # the release this server now runs (shown in the panel as Sentora-<version>)
 if [ -f "$SRC/VERSION" ]; then

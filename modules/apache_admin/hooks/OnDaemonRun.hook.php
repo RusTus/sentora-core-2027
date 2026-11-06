@@ -365,6 +365,14 @@ function WriteVhostConfigFile() {
 	
 		$line .= "</Directory>" . fs_filehandler::NewLine();
 		$line .= fs_filehandler::NewLine();
+		// Theme and module styles, scripts and images: the browser keeps its copy but asks
+		// before each use (a quick "not modified" when unchanged), so after an update every
+		// page gets the new files, including the files a stylesheet @imports
+		$line .= "<IfModule mod_headers.c>" . fs_filehandler::NewLine();
+		$line .= '    <LocationMatch "^/(etc/styles|modules/[^/]+/assets)/">' . fs_filehandler::NewLine();
+		$line .= '        Header set Cache-Control "no-cache"' . fs_filehandler::NewLine();
+		$line .= "    </LocationMatch>" . fs_filehandler::NewLine();
+		$line .= "</IfModule>" . fs_filehandler::NewLine();
 		$line .= "# Custom settings (if any exist)" . fs_filehandler::NewLine();
 	
 		// Global custom Sentora entry
@@ -451,6 +459,12 @@ function WriteVhostConfigFile() {
 		$line .= ctrl_options::GetSystemOption('panel_ssl_tx') . fs_filehandler::NewLine();
 		$line .= fs_filehandler::NewLine();
 
+		// Theme and module assets: revalidated on each use (see the plain-HTTP block above)
+		$line .= "<IfModule mod_headers.c>" . fs_filehandler::NewLine();
+		$line .= '    <LocationMatch "^/(etc/styles|modules/[^/]+/assets)/">' . fs_filehandler::NewLine();
+		$line .= '        Header set Cache-Control "no-cache"' . fs_filehandler::NewLine();
+		$line .= "    </LocationMatch>" . fs_filehandler::NewLine();
+		$line .= "</IfModule>" . fs_filehandler::NewLine();
 		$line .= "# Custom settings are loaded below this line (if any exist)" . fs_filehandler::NewLine();
 		// Global custom Sentora entry
 		$line .= ctrl_options::GetSystemOption('global_zpcustom') . fs_filehandler::NewLine();
