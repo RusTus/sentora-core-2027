@@ -167,14 +167,14 @@ class ctrl_users {
             $sql->bindParam(':acc_key', $acc_key);
             $sql->execute();
             $retval = $sql->fetch();
-            $retval = $retval['bd_diskamount_bi'];
+            $retval = $retval ? $retval['bd_diskamount_bi'] : 0; // no row yet this month (the daemon adds it)
         }
         if ($resource == 'bandwidth') {
             $sql = $zdbh->prepare("SELECT bd_transamount_bi FROM x_bandwidth WHERE bd_acc_fk= :acc_key AND bd_month_in=" . date("Ym", time()) . "");
             $sql->bindParam(':acc_key', $acc_key);
             $sql->execute();
             $retval = $sql->fetch();
-            $retval = $retval['bd_transamount_bi'];
+            $retval = $retval ? $retval['bd_transamount_bi'] : 0; // no row yet this month (the daemon adds it)
         }
         return $retval;
     }

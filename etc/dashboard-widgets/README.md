@@ -16,6 +16,20 @@ A `.zip` file containing exactly these files, at the top level (no folders):
 
 At most 512 KB in all.
 
+### Looking like the panel (Light, Dark, Auto)
+
+The widget is drawn inside a card on the dashboard, which already has the panel's look.
+Use the dashboard's classes where they fit, and only the theme's colour variables in
+`widget.css` (each with a fallback), so the widget also reads well in the Dark theme:
+
+- `dw-usage` (a two-column table of names and values), `dw-list`, `dw-bar` with a
+  `<span style="width: 40%">` inside (`is-mid`, `is-high` for amber and red);
+- `label label-success | label-warning | label-danger | label-info` for small status pills,
+  `text-muted` for secondary text, `btn btn-default btn-sm` for links to modules;
+- colours: `var(--sn-ink)`, `--sn-muted`, `--sn-line`, `--sn-card`, `--sn-soft`, `--sn-accent`,
+  and `--sn-ok`, `--sn-warn`, `--sn-bad`, `--sn-info` with their `-soft` and `-line` tints
+  (the full list is in etc/styles/THEMES.md). Never a fixed light background or dark text.
+
 ### widget.xml
 
 ```xml

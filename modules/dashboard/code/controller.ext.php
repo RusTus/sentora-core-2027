@@ -174,7 +174,46 @@ class module_controller extends ctrl_module
     }
 
     /**
-     * Return the account's widgets with their move/remove buttons (template: <@ Widgets @>).
+     * An inline SVG icon (stroked, in the text colour).
+     *
+     * @param string $name The icon: flag, gauge, globe, shield, archive, server, filter, puzzle, up, down, x, plus, reset.
+     * @return string SVG markup, or '' for an unknown name.
+     */
+    static function Icon($name)
+    {
+        $p = array(
+            'flag' => '<path d="M5 21V4"/><path d="M5 4h11l-2 4 2 4H5"/>',
+            'gauge' => '<path d="M4 18a8 8 0 1 1 16 0"/><path d="m12 18 4-6"/><path d="M12 18h.01"/>',
+            'globe' => '<circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18"/>',
+            'shield' => '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/>',
+            'archive' => '<rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9"/><path d="M10 13h4"/>',
+            'server' => '<rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/>',
+            'filter' => '<path d="M3 5h18l-7 8v6l-4 2v-8z"/>',
+            'puzzle' => '<path d="M10 4a2 2 0 1 1 4 0v2h4a1 1 0 0 1 1 1v4h-2a2 2 0 1 0 0 4h2v4a1 1 0 0 1-1 1h-4v-2a2 2 0 1 0-4 0v2H6a1 1 0 0 1-1-1v-4h2a2 2 0 1 0 0-4H5V7a1 1 0 0 1 1-1h4z"/>',
+            'up' => '<path d="m6 15 6-6 6 6"/>',
+            'down' => '<path d="m6 9 6 6 6-6"/>',
+            'x' => '<path d="M6 6l12 12M18 6 6 18"/>',
+            'plus' => '<path d="M12 5v14M5 12h14"/>',
+            'reset' => '<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/>',
+        );
+        return isset($p[$name]) ? '<svg class="dw-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' . $p[$name] . '</svg>' : '';
+    }
+
+    /**
+     * A widget's icon and accent colour (uploaded widgets get the puzzle piece).
+     *
+     * @param string $id The widget ID.
+     * @return array{0: string, 1: string} Icon name and CSS colour.
+     */
+    static function Look($id)
+    {
+        $look = array('getting_started' => array('flag', '#2db87d'), 'usage' => array('gauge', '#447fb3'), 'domains' => array('globe', '#1fa2b5'),
+            'security' => array('shield', '#8e6bd8'), 'backups' => array('archive', '#f5a623'), 'server' => array('server', '#ff6854'), 'spamav' => array('filter', '#5b6cc4'));
+        return isset($look[$id]) ? $look[$id] : array('puzzle', '#9aa5b1');
+    }
+
+    /**
+     * Template HTML: the account's widgets, each in a card with move up / down and remove.
      *
      * @return string HTML.
      */
@@ -183,28 +222,30 @@ class module_controller extends ctrl_module
         $me = self::Me();
         $all = dashboard_widgets::All();
         $layout = self::Layout();
-        $form = function ($action, $id, $label, $extra = '', $cls = 'btn-link') {
-            return '<form method="post" action="./?module=dashboard&amp;action=' . $action . '" style="display:inline">'
+        $form = function ($action, $id, $label, $icon, $extra = '', $cls = '') {
+            return '<form method="post" action="./?module=dashboard&amp;action=' . $action . '">'
                 . '<input type="hidden" name="inWidget" value="' . dashboard_widgets::h($id) . '">' . $extra . runtime_csfr::Token()
-                . '<button class="btn ' . $cls . ' btn-xs" type="submit" title="' . dashboard_widgets::h($label) . '" aria-label="' . dashboard_widgets::h($label) . '">' . $label . '</button></form>';
+                . '<button class="dw-tool' . $cls . '" type="submit" title="' . dashboard_widgets::h($label) . '" aria-label="' . dashboard_widgets::h($label) . '">' . self::Icon($icon) . '</button></form>';
         };
         if (!$layout) {
-            return '<p class="text-muted">' . ui_language::translate('Your dashboard is empty: add a widget below.') . '</p>';
+            return '<p class="dw-empty">' . dashboard_widgets::h(ui_language::translate('Your dashboard is empty: add a widget below.')) . '</p>';
         }
         $out = dashboard_widgets::Styles($layout) . '<div class="dw-grid">';
         $n = count($layout);
         foreach ($layout as $i => $id) {
-            $tools = ($i > 0 ? $form('MoveWidget', $id, '&uarr;', '<input type="hidden" name="inDir" value="up">') : '')
-                . ($i < $n - 1 ? $form('MoveWidget', $id, '&darr;', '<input type="hidden" name="inDir" value="down">') : '')
-                . $form('RemoveWidget', $id, '&times;');
-            $out .= '<section class="dw-card" id="w-' . dashboard_widgets::h($id) . '"><header><h4>' . dashboard_widgets::h(ui_language::translate($all[$id][0])) . '</h4><span class="dw-tools">' . $tools . '</span></header>'
+            $look = self::Look($id);
+            $tools = ($i > 0 ? $form('MoveWidget', $id, ui_language::translate('Move up'), 'up', '<input type="hidden" name="inDir" value="up">') : '')
+                . ($i < $n - 1 ? $form('MoveWidget', $id, ui_language::translate('Move down'), 'down', '<input type="hidden" name="inDir" value="down">') : '')
+                . $form('RemoveWidget', $id, ui_language::translate('Remove from my dashboard'), 'x', '', ' dw-remove');
+            $out .= '<section class="dw-card" id="w-' . dashboard_widgets::h($id) . '" style="--c:' . $look[1] . '"><header><h4>' . self::Icon($look[0]) . dashboard_widgets::h(ui_language::translate($all[$id][0])) . '</h4>'
+                . '<span class="dw-tools">' . $tools . '</span></header>'
                 . '<div class="dw-body">' . dashboard_widgets::Render($id, $me) . '</div></section>';
         }
         return $out . '</div>';
     }
 
     /**
-     * Return the Add widget form and the reset button (template: <@ WidgetPicker @>).
+     * Template HTML: the widgets the account can still add, each with an Add button, and the reset button.
      *
      * @return string HTML.
      */
@@ -212,18 +253,20 @@ class module_controller extends ctrl_module
     {
         $me = self::Me();
         $layout = self::Layout();
-        $opts = '';
+        $cards = '';
         foreach (dashboard_widgets::Available($me) as $id => $w) {
             if (!in_array($id, $layout, true)) {
-                $opts .= '<option value="' . dashboard_widgets::h($id) . '">' . dashboard_widgets::h(ui_language::translate($w[0])) . ' &mdash; ' . dashboard_widgets::h(ui_language::translate($w[1])) . '</option>';
+                $look = self::Look($id);
+                $cards .= '<form class="dw-add" method="post" action="./?module=dashboard&amp;action=AddWidget" style="--c:' . $look[1] . '">'
+                    . '<input type="hidden" name="inWidget" value="' . dashboard_widgets::h($id) . '">' . runtime_csfr::Token() . self::Icon($look[0])
+                    . '<div><b>' . dashboard_widgets::h(ui_language::translate($w[0])) . '</b><span>' . dashboard_widgets::h(ui_language::translate($w[1])) . '</span></div>'
+                    . '<button class="btn btn-default btn-sm dw-btn" type="submit">' . self::Icon('plus') . '<span>' . dashboard_widgets::h(ui_language::translate('Add')) . '</span></button></form>';
             }
         }
-        $add = ($opts === '') ? '<span class="text-muted">' . ui_language::translate('Every widget is on your dashboard.') . '</span>'
-            : '<form method="post" action="./?module=dashboard&amp;action=AddWidget" class="form-inline" style="display:inline">'
-              . '<select name="inWidget" class="form-control" style="max-width: 560px;">' . $opts . '</select> '
-              . runtime_csfr::Token() . '<button class="btn btn-primary" type="submit">' . ui_language::translate('Add widget') . '</button></form>';
-        return $add . ' <form method="post" action="./?module=dashboard&amp;action=ResetWidgets" style="display:inline; margin-left: 10px;">' . runtime_csfr::Token()
-            . '<button class="btn btn-default" type="submit">' . ui_language::translate('Back to the default widgets') . '</button></form>';
+        return '<div class="dw-picker-head"><h4>' . dashboard_widgets::h(ui_language::translate('Add widgets')) . '</h4>'
+            . '<form method="post" action="./?module=dashboard&amp;action=ResetWidgets">' . runtime_csfr::Token()
+            . '<button class="btn btn-default btn-sm dw-btn" type="submit">' . self::Icon('reset') . '<span>' . dashboard_widgets::h(ui_language::translate('Back to the default widgets')) . '</span></button></form></div>'
+            . ($cards === '' ? '<p class="dw-all-on">' . dashboard_widgets::h(ui_language::translate('Every widget is on your dashboard.')) . '</p>' : '<div class="dw-addable">' . $cards . '</div>');
     }
 
     /**

@@ -1,0 +1,28 @@
+/* Widget Admin: what it adds to the dashboard's and the Backup page's styles. */
+.wa-table th.wa-c, .wa-table td.wa-c { text-align: center; width: 1%; white-space: nowrap; }
+.wa-table td { vertical-align: middle; }
+.wa-name { display: flex; gap: 10px; align-items: flex-start; }
+.wa-name > .dw-ico { width: 22px; height: 22px; color: var(--c); margin-top: 1px; }
+.wa-name b { font-size: 14px; }
+.wa-name span:last-child { display: block; color: var(--dw-muted); font-size: 12px; margin-top: 2px; }
+.wa-table tr.wa-off .wa-name { opacity: 0.5; }
+.wa-switch { display: inline-flex; padding: 0; border: 0; background: none; margin: 0; }
+.wa-order { width: 64px; text-align: center; display: inline-block; }
+.wa-table input[type=checkbox] { width: 16px; height: 16px; margin: 0; cursor: pointer; }
+.wa-foot { padding-top: 12px; margin-top: 4px; border-top: 1px solid var(--dw-line); }
+.wa-defaults { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 14px 0 0; padding: 12px 14px; border-radius: 6px;
+    background: var(--dw-warn-soft); border: 1px solid var(--dw-warn-line); }
+.wa-defaults b { display: block; color: var(--dw-warn); }
+.wa-defaults span { display: block; font-size: 12px; color: var(--dw-muted); }
+.wa-defaults .btn { flex: none; }
+.wa-upload { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin: 0; }
+.wa-drop { flex: 1 1 420px; position: relative; display: flex; align-items: center; gap: 12px; margin: 0; padding: 14px 16px; font-weight: normal; cursor: pointer;
+    border: 2px dashed var(--dw-field-line); border-radius: 6px; background: var(--dw-bg); }
+.wa-drop:hover { border-color: var(--dw-accent); }
+.wa-drop > .dw-ico { width: 26px; height: 26px; color: var(--dw-accent); }
+.wa-drop b { display: block; }
+.wa-drop small { display: block; color: var(--dw-muted); font-size: 12px; line-height: 1.4; }
+.wa-drop input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.wa-results { margin-top: 14px; }
+.wa-results h5 { margin: 0 0 4px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--dw-muted); }
+.wa-results .bk-state { align-items: center; }

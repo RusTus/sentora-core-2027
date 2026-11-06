@@ -8,8 +8,8 @@
         </div>
         <a class="btn btn-primary btn-lg dw-continue" href="./"><: Continue to your panel administration :> &rarr;</a>
     </div>
-    <div class="zgrid_wrapper">
-        <@ Result @>
+    <@ Result @>
+    <div class="dw" id="dw">
         <@ Widgets @>
         <div class="dw-picker">
             <@ WidgetPicker @>

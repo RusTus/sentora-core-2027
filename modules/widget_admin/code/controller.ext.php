@@ -9,6 +9,25 @@
 require_once dirname(__FILE__) . '/../../dashboard/code/widgets.php';
 
 /**
+ * A widget's look on the dashboard: icon name, colour and the icon's SVG (the dashboard's own table).
+ *
+ * @param string $id The widget ID.
+ * @return array{0: string, 1: string, 2: string}
+ */
+function module_controller_dashboard_look($id)
+{
+    $look = array('getting_started' => array('flag', '#2db87d', '<path d="M5 21V4"/><path d="M5 4h11l-2 4 2 4H5"/>'), 'usage' => array('gauge', '#447fb3', '<path d="M4 18a8 8 0 1 1 16 0"/><path d="m12 18 4-6"/>'),
+        'domains' => array('globe', '#1fa2b5', '<circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18"/>'),
+        'security' => array('shield', '#8e6bd8', '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/>'),
+        'backups' => array('archive', '#f5a623', '<rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9"/>'),
+        'server' => array('server', '#ff6854', '<rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/>'),
+        'spamav' => array('filter', '#5b6cc4', '<path d="M3 5h18l-7 8v6l-4 2v-8z"/>'));
+    $l = isset($look[$id]) ? $look[$id] : array('puzzle', '#9aa5b1', '<path d="M10 4a2 2 0 1 1 4 0v2h4a1 1 0 0 1 1 1v4h-2a2 2 0 1 0 0 4h2v4a1 1 0 0 1-1 1h-4v-2a2 2 0 1 0-4 0v2H6a1 1 0 0 1-1-1v-4h2a2 2 0 1 0 0-4H5V7a1 1 0 0 1 1-1h4z"/>');
+    $l[2] = '<svg class="dw-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' . $l[2] . '</svg>';
+    return $l;
+}
+
+/**
  * Widget Admin module: controller.
  *
  * Saves the widget settings (x_dashboard_widgets), resets every dashboard, and queues
@@ -204,45 +223,49 @@ class module_controller extends ctrl_module
     static function getWidgetTable()
     {
         if (!self::IsAdmin()) {
-            return '<p>' . ui_language::translate('Only administrators can manage the dashboard widgets.') . '</p>';
+            return '<p>' . self::h(ui_language::translate('Only administrators can manage the dashboard widgets.')) . '</p>';
         }
-        $h = 'self::h';
+        $t = function ($s) { return self::h(ui_language::translate($s)); };
         $groups = self::Groups();
-        $set = dashboard_widgets::Settings();
+        $set = dashboard_widgets::Settings(true);   // as saved, also right after a save
         $all = dashboard_widgets::All();
         uksort($all, function ($a, $b) use ($set) { return $set[$a]['order'] - $set[$b]['order']; });
-        $head = '<tr><th>' . ui_language::translate('Widget') . '</th><th>' . ui_language::translate('On/Off') . '</th><th style="text-align:center">' . ui_language::translate('Default') . '</th><th>' . ui_language::translate('Order') . '</th>';
+        $head = '<tr><th>' . $t('Widget') . '</th><th class="wa-c">' . $t('On') . '</th><th class="wa-c">' . $t('Default') . '</th><th class="wa-c">' . $t('Order') . '</th>';
         foreach ($groups as $gid => $gname) {
-            $head .= '<th style="text-align:center">' . self::h(ui_language::translate($gname)) . '</th>';
+            $head .= '<th class="wa-c">' . self::h(ui_language::translate($gname)) . '</th>';
         }
         $head .= '<th></th></tr>';
         $rows = '';
         foreach ($all as $id => $w) {
             $s = $set[$id];
-            $src = ($w[4] === 'uploaded') ? '<span class="label label-info">' . ui_language::translate('uploaded') . ($w[5] !== '' ? ' ' . self::h($w[5]) : '') . '</span>' : '<span class="label label-default">' . ui_language::translate('built-in') . '</span>';
-            $rows .= '<tr><td><strong>' . self::h(ui_language::translate($w[0])) . '</strong> ' . $src . '<br><span class="text-muted">' . self::h(ui_language::translate($w[1])) . '</span></td>'
-                . '<td><select class="form-control" style="min-width: 118px;" name="inEnabled_' . self::h($id) . '"><option value="1"' . ($s['enabled'] ? ' selected' : '') . '>' . ui_language::translate('Enabled') . '</option><option value="0"' . (!$s['enabled'] ? ' selected' : '') . '>' . ui_language::translate('Disabled') . '</option></select></td>'
-                . '<td style="text-align:center"><input type="checkbox" name="inDefault_' . self::h($id) . '" value="1"' . ($s['default'] ? ' checked' : '') . '></td>'
-                . '<td><input class="form-control" name="inOrder_' . self::h($id) . '" value="' . (int) $s['order'] . '" inputmode="numeric" maxlength="3" style="width: 70px;"></td>';
+            $look = module_controller_dashboard_look($id);
+            $src = ($w[4] === 'uploaded') ? '<span class="label label-info">' . $t('uploaded') . ($w[5] !== '' ? ' ' . self::h($w[5]) : '') . '</span>' : '<span class="label label-default">' . $t('built-in') . '</span>';
+            $rows .= '<tr' . ($s['enabled'] ? '' : ' class="wa-off"') . '><td><div class="wa-name" style="--c:' . $look[1] . '">' . $look[2] . '<div><b>' . self::h(ui_language::translate($w[0])) . '</b> ' . $src
+                . ($w[2] ? ' <span class="label label-warning">' . $t('administrators only') . '</span>' : '') . '<span>' . self::h(ui_language::translate($w[1])) . '</span></div></div></td>'
+                // on/off: a switch that sends 0 when off (doSaveWidgets() reads "0" as off)
+                . '<td class="wa-c"><label class="bk-switch wa-switch" title="' . $t('Enabled') . '"><input type="hidden" name="inEnabled_' . self::h($id) . '" value="0"><input type="checkbox" name="inEnabled_' . self::h($id) . '" value="1"' . ($s['enabled'] ? ' checked' : '') . '><span class="bk-toggle" aria-hidden="true"></span></label></td>'
+                . '<td class="wa-c"><input type="checkbox" name="inDefault_' . self::h($id) . '" value="1"' . ($s['default'] ? ' checked' : '') . ' title="' . $t('On a new dashboard') . '"></td>'
+                . '<td class="wa-c"><input class="form-control wa-order" type="text" name="inOrder_' . self::h($id) . '" value="' . (int) $s['order'] . '" inputmode="numeric" maxlength="3" aria-label="' . $t('Order') . '"></td>';
             foreach ($groups as $gid => $gname) {
                 $locked = $w[2] && (int) $gid !== 1;
-                $rows .= '<td style="text-align:center"><input type="checkbox" name="inGroup_' . self::h($id) . '_' . (int) $gid . '" value="1"'
-                    . (in_array((int) $gid, $s['groups'], true) ? ' checked' : '') . ($locked ? ' disabled title="' . self::h(ui_language::translate('Administrators only')) . '"' : '') . '></td>';
+                $rows .= '<td class="wa-c"><input type="checkbox" name="inGroup_' . self::h($id) . '_' . (int) $gid . '" value="1"'
+                    . (in_array((int) $gid, $s['groups'], true) ? ' checked' : '') . ($locked ? ' disabled title="' . $t('Administrators only') . '"' : '') . '></td>';
             }
-            $rows .= '<td>' . ($w[4] === 'uploaded' ? '<button class="btn btn-danger btn-xs" type="submit" form="wa-remove-' . self::h($id) . '">' . ui_language::translate('Remove') . '</button>' : '') . '</td></tr>';
+            $rows .= '<td class="wa-c">' . ($w[4] === 'uploaded' ? '<button class="dw-tool dw-remove" type="submit" form="wa-remove-' . self::h($id) . '" title="' . $t('Remove this widget from the server') . '" aria-label="' . $t('Remove') . '">'
+                . '<svg class="dw-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="m6 7 1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13"/></svg></button>' : '') . '</td></tr>';
         }
         $removeForms = '';
         foreach ($all as $id => $w) {
             if ($w[4] === 'uploaded') {
-                $removeForms .= '<form id="wa-remove-' . self::h($id) . '" method="post" action="./?module=widget_admin&amp;action=RemoveWidget" onsubmit="return confirm(\'' . self::h(ui_language::translate('Remove this widget from the server')) . '\');">'
+                $removeForms .= '<form id="wa-remove-' . self::h($id) . '" method="post" action="./?module=widget_admin&amp;action=RemoveWidget" data-confirm="' . $t('Remove this widget from the server?') . '">'
                     . '<input type="hidden" name="inWidget" value="' . self::h($id) . '">' . runtime_csfr::Token() . '</form>';
             }
         }
-        return '<form method="post" action="./?module=widget_admin&amp;action=SaveWidgets"><table class="table table-striped">' . $head . $rows . '</table>'
-            . runtime_csfr::Token() . '<button class="btn btn-primary" type="submit">' . ui_language::translate('Save Changes') . '</button></form>' . $removeForms
-            . '<form method="post" action="./?module=widget_admin&amp;action=ApplyDefaults" style="margin-top: 10px;" onsubmit="return confirm(\'' . self::h(ui_language::translate('Replace every dashboard with the default widgets? Accounts lose the layouts they arranged.')) . '\');">'
-            . runtime_csfr::Token() . '<button class="btn btn-default" type="submit">' . ui_language::translate('Apply the defaults to every account now') . '</button>'
-            . ' <span class="text-muted">' . ui_language::translate('Every dashboard then shows the default widgets above, in that order.') . '</span></form>';
+        return '<form method="post" action="./?module=widget_admin&amp;action=SaveWidgets"><div class="bk-scroll"><table class="bk-table wa-table"><thead>' . $head . '</thead><tbody>' . $rows . '</tbody></table></div>'
+            . runtime_csfr::Token() . '<div class="wa-foot"><button class="btn btn-primary" type="submit">' . $t('Save changes') . '</button></div></form>' . $removeForms
+            . '<form class="wa-defaults" method="post" action="./?module=widget_admin&amp;action=ApplyDefaults" data-confirm="' . $t('Replace every dashboard with the default widgets? Accounts lose the layouts they arranged.') . '">'
+            . runtime_csfr::Token() . '<div><b>' . $t('Apply the defaults to every account now') . '</b><span>' . $t('Every dashboard then shows the default widgets above, in that order. Accounts lose the layouts they arranged.') . '</span></div>'
+            . '<button class="btn btn-default" type="submit">' . $t('Apply to every account') . '</button></form>';
     }
 
     /**
@@ -255,23 +278,25 @@ class module_controller extends ctrl_module
         if (!self::IsAdmin()) {
             return '';
         }
-        $out = '<form method="post" action="./?module=widget_admin&amp;action=UploadWidget" enctype="multipart/form-data" class="form-inline">'
-            . '<input type="file" name="inWidgetFile" accept=".zip" class="form-control" required> ' . runtime_csfr::Token()
-            . '<button class="btn btn-primary" type="submit">' . ui_language::translate('Upload widget') . '</button></form>'
-            . '<p class="text-muted" style="margin-top: 6px;">' . ui_language::translate('A .zip with widget.xml and widget.php (and widget.css if it needs styles), at most 512 KB. The format is described in etc/dashboard-widgets/README.md. A new version of a widget replaces the old one and keeps its settings.') . '</p>';
+        $t = function ($s) { return self::h(ui_language::translate($s)); };
+        $out = '<form class="wa-upload" method="post" action="./?module=widget_admin&amp;action=UploadWidget" enctype="multipart/form-data">'
+            . '<label class="wa-drop"><svg class="dw-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 15v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-4"/><path d="m16 8-4-4-4 4"/><path d="M12 4v11"/></svg>'
+            . '<span><b>' . $t('Choose a widget package (.zip)') . '</b><small>' . $t('A .zip with widget.xml and widget.php (and widget.css if it needs styles), at most 512 KB. The format is described in etc/dashboard-widgets/README.md. A new version of a widget replaces the old one and keeps its settings.') . '</small></span>'
+            . '<input type="file" name="inWidgetFile" accept=".zip" required></label>' . runtime_csfr::Token()
+            . '<button class="btn btn-primary" type="submit">' . $t('Upload widget') . '</button></form>';
         $pending = self::Pending();
         $res = json_decode((string) @file_get_contents(self::RESULTS), true);
         if ($pending || is_array($res)) {
-            $out .= '<table class="table table-condensed" style="max-width: 900px;">';
+            $out .= '<div class="wa-results"><h5>' . $t('Recent uploads') . '</h5>';
             foreach ($pending as $p) {
-                $out .= '<tr><td><span class="label label-warning">' . ui_language::translate('queued') . '</span></td><td>' . self::h(($p['action'] === 'remove' ? 'Remove ' : 'Install ') . $p['name'])
-                    . '</td><td class="text-muted">' . self::h(date('Y-m-d H:i', (int) $p['time']) . ', ' . $p['by']) . '</td></tr>';
+                $out .= '<div class="bk-state info"><span class="label label-warning">' . $t('queued') . '</span><div><b>' . self::h(($p['action'] === 'remove' ? 'Remove ' : 'Install ') . $p['name']) . '</b><span class="bk-sub">'
+                    . self::h(date('Y-m-d H:i', (int) $p['time']) . ', ' . $p['by']) . ' · ' . $t('the daemon does it within 5 minutes') . '</span></div></div>';
             }
             foreach (array_slice(is_array($res) ? array_reverse($res) : array(), 0, 8) as $r) {
-                $out .= '<tr><td>' . ($r['ok'] ? '<span class="label label-success">OK</span>' : '<span class="label label-danger">' . ui_language::translate('FAILED') . '</span>') . '</td><td>'
-                    . self::h($r['text']) . '</td><td class="text-muted">' . self::h(date('Y-m-d H:i', (int) $r['time']) . ', ' . $r['by']) . '</td></tr>';
+                $out .= '<div class="bk-state">' . ($r['ok'] ? '<span class="label label-success">OK</span>' : '<span class="label label-danger">' . $t('FAILED') . '</span>') . '<div><b>'
+                    . self::h($r['text']) . '</b><span class="bk-sub">' . self::h(date('Y-m-d H:i', (int) $r['time']) . ', ' . $r['by']) . '</span></div></div>';
             }
-            $out .= '</table>';
+            $out .= '</div>';
         }
         return $out;
     }

@@ -116,13 +116,14 @@ class dashboard_widgets
      *
      * Creates the table if it is missing and stores settings for new widgets. Cached per request.
      * @global db_driver $zdbh The panel's database connection.
+     * @param bool $fresh Optional. Read them again (after a save in the same request). Default false.
      * @return array<string, array{enabled: bool, default: bool, order: int, groups: int[]}>
      */
-    static function Settings()
+    static function Settings($fresh = false)
     {
         global $zdbh;
         static $set = null;
-        if ($set !== null) {
+        if ($set !== null && !$fresh) {
             return $set;
         }
         $zdbh->exec("CREATE TABLE IF NOT EXISTS x_dashboard_widgets (dwc_id_vc VARCHAR(40) NOT NULL PRIMARY KEY, dwc_enabled_in TINYINT NOT NULL DEFAULT 1,
