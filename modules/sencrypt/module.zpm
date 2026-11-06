@@ -1,387 +1,187 @@
 <@ Init @>
-
 <div class="zmodule_content panel" id="zmodule_header_<@ ModuleName @>">
     <div class="panel-heading">
         <img src="<@ ModuleIcon @>" width="35" height="35" border="0" alt="<@ ModuleName @>">
-
-        <div class="zmodule_title">
-            <@ ModuleName @>
-        </div>
-
+        <div class="zmodule_title"><@ ModuleName @></div>
         <div class="zmodule_desc" id="zmodule_desc_<@ ModuleName @>"><@ ModuleDesc @></div>
-		
     </div>
 
-	<% if Admin %>
-		<!--<div class="alert alert-danger" role="alert">-->
-			<!--<@ CheckPortReq @>-->
-		<!--</div>-->
-	<% endif %>
+    <@ CheckModReq @>
+    <@ Result @>
 
-	<@ CheckModReq @>
-	
-	<@ Result @>
+    <div class="sc" id="sc">
+        <nav class="sc-tabs" role="tablist"><@ Tabs @></nav>
 
-<div class="tab">
-	<button class="tablinks <@ ShowViewCerts @>" onclick="openTABS(event, 'ViewCerts')"><b><u>View Your Certificates</u></b></button>
-	<button class="tablinks <@ ShowCreateCerts @>" onclick="openTABS(event, 'CreateCerts')"><b><u>Create or Manage Certificates</u></b></button>
-</div>
+        <!-- Your certificates -->
+        <section class="sc-pane<@ TabCerts @>" data-pane="certs">
+            <div class="sc-stats"><@ CertSummary @></div>
+            <% if Admin %>
+            <div class="sc-card">
+                <div class="sc-card-head">
+                    <h4><: Control panel :></h4>
+                    <p><: The certificate of the panel's own address, so you and your clients log in over https. :></p>
+                </div>
+                <div class="sc-scroll">
+                    <table class="sc-table">
+                        <thead><tr><th><: Domain :></th><th><: Type :></th><th><: Status :></th><th><: Expires :></th><th class="sc-actions"><: Actions :></th></tr></thead>
+                        <tbody><@ PanelCertRows @></tbody>
+                    </table>
+                </div>
+            </div>
+            <% endif %>
+            <div class="sc-card">
+                <div class="sc-card-head">
+                    <h4><: Your domains :></h4>
+                    <p><: Certificates for your domains and subdomains. Changes reach the web server within about 5 minutes. :></p>
+                </div>
+                <div class="sc-scroll">
+                    <table class="sc-table">
+                        <thead><tr><th><: Domain :></th><th><: Type :></th><th><: Status :></th><th><: Expires :></th><th class="sc-actions"><: Actions :></th></tr></thead>
+                        <tbody><@ CertRows @></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
 
-<div style="display: <@ ShowViewCerts @>;" id="ViewCerts" class="tabcontent">
-  	<% if Admin %>
-		<div class="zgrid_wrapper" >
-			<table class="table">
-				<h3><: Your Control Panel Certificate :></h3>
-				
-				<tr>
-					<th><: Domain :></th>
-					<th><: Provider :></th>
-					<th><: Expiry :></th>	
-					<th><: Actions :></th>
-				</tr>
-				
-				<% loop List_of_Active_Panel_SSL %>
-					<tr>
-						<td>
-							<& Active_Panel_Domain &>
-						</td>
-						<td>
-							<& Active_Panel_Provider &>
-						</td>
-						<td>
-							<& Active_Panel_Days &>
-						</td> 
-						<td>
-							<& Active_Panel_Button &>
-						</td>
-						<td>
-							<& Active_Panel_Revoke &>
-						</td>
-					</tr>
-					
-					<@ CSFR_Tag @> 
+        <!-- Let's Encrypt -->
+        <section class="sc-pane<@ TabLetsEncrypt @>" data-pane="letsencrypt">
+            <div class="sc-note">
+                <@ IconInfo @>
+                <div>
+                    <b><: Free certificates that renew by themselves :></b>
+                    <: Let's Encrypt checks that the domain is yours by reaching it over the internet, so its DNS must point to this server and the site must answer on port 80. Each certificate lasts 90 days and is renewed 30 days before it ends. :>
+                    <a href="https://letsencrypt.org/" target="_blank" rel="noopener noreferrer"><: About Let's Encrypt :></a>
+                </div>
+            </div>
+            <div class="sc-card">
+                <div class="sc-card-head">
+                    <h4><: Get a certificate :></h4>
+                    <p><: Domains without a certificate. Getting one takes up to a minute. :></p>
+                </div>
+                <div class="sc-scroll">
+                    <table class="sc-table">
+                        <thead><tr><th><: Domain :></th><th class="sc-actions"><: Actions :></th></tr></thead>
+                        <tbody><@ LetsEncryptRows @></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
 
-				<% endloop %>
-			</table>
-		</div>	
-	<% endif %>	
+        <!-- Your own certificate -->
+        <section class="sc-pane<@ TabThirdParty @>" data-pane="third-party">
+            <div class="sc-choices"><@ Choices @></div>
 
-	<div class="zgrid_wrapper" >
-		<table class="table">
-			<h3><: Your Domain Certificates :></h3>
-	
-				<tr>
-					<th><: Domain :></th>
-					<th><: Provider :></th>
-					<th><: Expiry :></th>	
-					<th><: Actions :></th>
-				</tr>
-	
-				<% loop List_of_active_domains_ssl %>
-					<tr>
-						<td>
-							<& Domain_AC &>
-						</td>
-						<td>
-							<& Vendor_AC &>
-						</td>
-						<td>
-							<& Days_AC &>
-						</td>
-						<td>
-							<& Button_AC &>
-						</td>
-						<td>
-							<& Download_AC &>
-							<& Revoke_AC &>
-						</td
-					</tr>
-				<% endloop %>
-				
-		</table>
-		
-	</div>
-</div>
-<div style="display: <@ ShowCreateCerts @>;" id="CreateCerts" class="tabcontent">
-	<h3><: Create a new domain SSL certificate :></h3>
-	
-	<p>(<: Select a tab that best suits your needs below to get started :>)</p>
+            <% if isShowSelf %>
+            <div class="sc-card">
+                <div class="sc-card-head">
+                    <h4><: Make a self-signed certificate :></h4>
+                    <p><: Valid for a year. Browsers show a warning for it, because no authority vouches for it. :></p>
+                </div>
+                <form class="sc-form sc-act" action="./?module=sencrypt&amp;ShowPanel=third-party&amp;action=Makenew" method="post">
+                    <label><span><: Domain :></span>
+                        <select class="form-control" name="inDomain" required>
+                            <option value="">-- <: Select a domain :> --</option>
+                            <% loop DomainList %><option value="<& domain &>"><& domain &></option><% endloop %>
+                        </select></label>
+                    <label><span><: Organization :></span><input class="form-control" type="text" name="inCompany" required></label>
+                    <label><span><: Email address :></span><input class="form-control" type="email" name="inAddress" required></label>
+                    <label><span><: City :></span><input class="form-control" type="text" name="inCity" required></label>
+                    <label><span><: State or province :></span><input class="form-control" type="text" name="inName" required></label>
+                    <label><span><: Country :></span>
+                        <select class="form-control" name="inCountry" required>
+                            <option value="">-- <: Select country :> --</option>
+                            <@ ListCountry @>
+                        </select></label>
+                    <div class="sc-form-foot">
+                        <button type="submit" class="btn btn-primary" name="inSave"><: Make certificate :></button>
+                        <a class="btn btn-default" href="./?module=sencrypt&amp;ShowPanel=third-party"><: Cancel :></a>
+                    </div>
+                    <@ CSFR_Tag @>
+                </form>
+            </div>
+            <% endif %>
 
-	<div class="tab">
-		<button class="tablinks <@ ShowLetsencryptActive @>" onclick="openTABS(event, 'Letsencrypt')"><img src="modules/sencrypt/assets/icon.png">Let's Encrypt<br>Free with Auto-renew</button>
-		<button class="tablinks <@ ShowThird_partyActive @>" onclick="openTABS(event, 'Third-party')"><img src="modules/sencrypt/assets/third_party.png">Third-Party<br>Self-signed or purchased certificates</button>
-		<!--<button style="display:block;float:right;" class="tablinks" onclick="openTABS(event, 'Settings')"><img src="modules/sencrypt/assets/settings.png">Settings</button>-->
-	</div>
-</div>
-	<div style="display: <@ ShowLetsencryptTab @>;" id="Letsencrypt" class="tabcontent">
-	
-		<h3><: Create a :> Let's Encrypt <: FREE certificate: :></h3>
-		<div>
-			(<: Learn more about :> Let's Encrypt <b><a target='blank' href='https://letsencrypt.org/'><: HERE :></a></b>)
+            <% if isShowCSR %>
+            <div class="sc-card">
+                <div class="sc-card-head">
+                    <h4><: Make a Certificate Signing Request :></h4>
+                    <p><: The request and its private key are emailed to the address below; no copy stays on the server, so keep that email. Give the request to the seller; when you have the certificate, install it with the key under "Install a signed certificate". :></p>
+                </div>
+                <form class="sc-form sc-act" action="./?module=sencrypt&amp;ShowPanel=third-party&amp;action=MakeCSR" method="post">
+                    <label><span><: Domain :></span>
+                        <select class="form-control" name="inDomain" required>
+                            <option value="">-- <: Select a domain :> --</option>
+                            <% loop DomainList %><option value="<& domain &>"><& domain &></option><% endloop %>
+                        </select></label>
+                    <label><span><: Organization :></span><input class="form-control" type="text" name="inCompany" required></label>
+                    <label><span><: Email address :></span><input class="form-control" type="email" name="inAddress" required></label>
+                    <label><span><: City :></span><input class="form-control" type="text" name="inCity" required></label>
+                    <label><span><: State or province :></span><input class="form-control" type="text" name="inName" required></label>
+                    <label><span><: Country :></span>
+                        <select class="form-control" name="inCountry" required>
+                            <option value="">-- <: Select country :> --</option>
+                            <@ ListCountry @>
+                        </select></label>
+                    <div class="sc-form-foot">
+                        <button type="submit" class="btn btn-primary" name="inSave"><: Make request :></button>
+                        <a class="btn btn-default" href="./?module=sencrypt&amp;ShowPanel=third-party"><: Cancel :></a>
+                    </div>
+                    <@ CSFR_Tag @>
+                </form>
+            </div>
+            <% endif %>
 
-			<a href="/?module=sencrypt" class="button-loader btn btn-warning pull-right"><: Cancel :></a>
-		</div>
-  	<% if Admin %>
-		<% if List_of_Panel_Domains %>
-			<div class="zgrid_wrapper">
-				<table class="table">
-					<h4><: Create a certificate for your Control Panel login: :></h4>
-					
-					<tr>
-						<th><: Domain :></th>
-						<th><: Actions :></th>	
-					</tr>
-					
-					<% loop List_of_Panel_Domains %>
-						<tr>
-							<td>
-								<& Panel_Domain &>
-							</td>
-							<td>
-								<& Panel_Button &>
-							</td>
-						</tr>
-					<% endloop %>
-				
-				</table>
-			</div>	
-		<% endif %>
-	<% endif %>
-			
-	<div class="zgrid_wrapper" >
-		<table class="table">
-			<h4><: Create certificates for your domains: :></h4>
-			
-			<tr>
-				<th><: Domains :></th>
-				<th><: Actions :></th>	
-			</tr>
-			
-			<% loop List_of_domains %>
-				<tr>
-					<td>
-						<& Vh_Domain &>
-					</td> 
-					<td>
-						<& Vh_Button &>
-					</td>
-				</tr>
-			<% endloop %>
-			
-		</table>
-	</div>
-</div>
-
-<div style="display: <@ ShowThirdPartyTab @>;" id="Third-party" class="tabcontent">
-  
-		<h3><: Create, Add, or Manage your own certificates: :></h3>
-		<h4><: Manage, make a self-signed SSL certificate or add a purchased (third-party) SSL certificate (GoDaddy, Bluehost, etc.) :></h4>
-		<hr></hr>
-
-			<form action="./?module=sencrypt&ShowPanel=third-party&action=select" method="post">
-				<button class="button-loader btn btn-primary" type="submit" id="button" name="inSSLself" id="inSSLself" value="inSSLself"><: Self-signed :></button> 
-				<button class="button-loader btn btn-primary" type="submit" id="button" name="inSSLCSR" id="inSSLCSR" value="inSSLCSR"><: Certificate Signing Request :></button> 
-				<button class="button-loader btn btn-primary" type="submit" id="button" name="inSSLbought" id="inSSLbought" value="inSSLbought"><: Install Signed Certificate :></button>
-				<a href="/?module=sencrypt" class="button-loader btn btn-warning"><: Cancel :></a>
-				<@ CSFR_Tag @> 
-			</form>
-			
-<% if isShowCSR %>
-	<h3><: Certificate Signing Request :></h3>
-    <div class="zgrid_wrapper" style="position:relative; padding:15px; background-color:var(--sn-soft, #eee);">
-        
-        <form action="./?module=sencrypt&ShowPanel=third-party&action=MakeCSR" method="post">
-            <table class="table table-striped">
-				<tr>
-					<th nowrap="nowrap"><: Domain :>:</th>
-					<td>
-						<select name="inDomain" id="inDomain">
-							<option value="" selected="selected">-- <: Select a domain :> --</option>
-							<% loop DomainList %>
-							<option value="<& domain &>"><& domain &></option>
-							<% endloop %>
-						</select>
-					</td>
-				</tr>
-				<tr>
-					<th nowrap="nowrap"><: Your Name :>:</th>
-					<td>
-						<input type="text" name="inName" id="inName" />
-					</td>
-				</tr>
-				<tr>
-					<th nowrap="nowrap"><: Domain Email :>:</th>
-					<td>
-						<input type="text" name="inAddress" id="inAddress" />
-					</td>
-				</tr>
-				<tr>
-					<th nowrap="nowrap"><: City :>:</th>
-					<td>
-						<input type="text" name="inCity" id="inCity" />
-					</td>
-				</tr>
-				<tr>
-					<th nowrap="nowrap"><: Country :>:</th>
-					<td>
-						<select name="inCountry" id="inCountry">
-						<option value="" selected="selected">-- <: Select country :> --</option>
-							<@ ListCountry @>
-						</select>
-					</td>
-				</tr>
-				<tr>
-					<th nowrap="nowrap"><: Company :>:</th>
-					<td>
-						<input type="text" name="inCompany" id="inCompany" />
-					</td>
-				</tr>
-				<tr>
-					<th nowrap="nowrap"><: Key Password :>:</th>
-					<td>
-						<input type="text" name="inPassword" id="inPasword" />
-					</td>
-				</tr>
-				<tr>
-					<th nowrap="nowrap"><button class="button-loader btn btn-primary" type="submit" id="button" name="inSave" id="inSave"><: Save :></button></th>
-					<td></td>
-				</tr>
-			</table>
-            <@ CSFR_Tag @>
-        </form>
+            <% if isBought %>
+            <div class="sc-card">
+                <div class="sc-card-head">
+                    <h4><: Install a signed certificate :></h4>
+                    <p><: The files the seller sent, and the private key made with the request. :></p>
+                </div>
+                <form class="sc-form sc-act" action="./?module=sencrypt&amp;ShowPanel=third-party&amp;action=UploadSSL" method="post" enctype="multipart/form-data">
+                    <label><span><: Domain :></span>
+                        <select class="form-control" name="inDomain" required>
+                            <option value="">-- <: Select a domain :> --</option>
+                            <% loop DomainList %><option value="<& domain &>"><& domain &></option><% endloop %>
+                        </select></label>
+                    <label class="sc-file"><span><: Private key (.key) :></span><input type="file" name="inkey" required></label>
+                    <label class="sc-file"><span><: Certificate (.crt or .cer) :></span><input type="file" name="inWCA" required></label>
+                    <label class="sc-file"><span><: CA chain, the intermediate certificate (.crt or .cer) :></span><input type="file" name="inICA" required></label>
+                    <div class="sc-form-foot">
+                        <button type="submit" class="btn btn-primary" name="inCreateSSL"><: Install certificate :></button>
+                        <a class="btn btn-default" href="./?module=sencrypt&amp;ShowPanel=third-party"><: Cancel :></a>
+                    </div>
+                    <@ CSFR_Tag @>
+                </form>
+            </div>
+            <% endif %>
+        </section>
     </div>
-<% endif %>
-
-<% if isShowSelf %>
-	<h3><: Create a self-signed certificate :></h3>
-    <div class="zgrid_wrapper" style="position:relative; padding:15px; background-color:var(--sn-soft, #eee);">
-        
-        <form action="./?module=sencrypt&ShowPanel=third-party&action=Makenew" method="post">
-            <table class="table table-striped">
-				<tr>
-					<th nowrap="nowrap"><: Domain :>:</th>
-					<td>
-						<select name="inDomain" id="inDomain">
-							<option value="" selected="selected">-- <: Select a domain :> --</option>
-							<% loop DomainList %>
-							<option value="<& domain &>"><& domain &></option>
-							<% endloop %>
-						</select><br>
-					</td>
-				</tr>
-				<tr>
-					<th nowrap="nowrap"><: Your Name :>:</th>
-					<td>
-						<input type="text" name="inName" id="inName" />
-					</td>
-				</tr>
-				<tr>
-					<th nowrap="nowrap"><: Domain Email :>:</th>
-					<td>
-						<input type="text" name="inAddress" id="inAddress" />
-					</td>
-				</tr>
-				<tr>
-					<th nowrap="nowrap"><: City :>:</th>
-					<td>
-						<input type="text" name="inCity" id="inCity" />
-					</td>
-				</tr>
-				<tr>
-					<th nowrap="nowrap"><: Country :>:</th>
-					<td>
-						<select name="inCountry" id="inCountry">
-						<option value="" selected="selected">-- <: Select country :> --</option>
-							<@ ListCountry @>
-						</select>
-					</td>
-				</tr>
-				<tr>
-					<th nowrap="nowrap"><: Company :>:</th>
-					<td>
-						<input type="text" name="inCompany" id="inCompany" />
-					</td>
-				</tr>
-				<tr>
-					<th nowrap="nowrap"><button class="button-loader btn btn-primary" type="submit" id="button" name="inSave" id="inSave"><: Save :></button></th>
-					<td></td>
-				</tr>
-			</table>
-            <@ CSFR_Tag @>
-        </form>
-    </div>
-<% endif %>
-
-<% if isBought %>
-	<h3><: Install a purchased certificate :></h3>
-    <div class="zgrid_wrapper" style="position:relative; padding:15px; background-color:var(--sn-soft, #eee);">
-        
-		<form action="./?module=sencrypt&ShowPanel=third-party&action=UploadSSL" method="post" enctype="multipart/form-data">
-			<table class="table table-striped">
-				<tr>
-					<th nowrap="nowrap"><: Available Domains :>:</th>
-					<td>
-						<select name="inDomain" id="inDomain">
-							<option value="" selected="selected">-- <: Select a domain :> --</option>
-							<% loop DomainList %>
-							<option value="<& domain &>"><& domain &></option>
-							<% endloop %>
-						</select>
-					</td>
-				</tr>
-				<tr>
-					<th nowrap="nowrap"><: Upload Domain Signing Certificate Key (.key) :>:</th>
-					<td>
-					<input type="file" name="inkey" id="inkey" />
-					</td>
-				</tr>
-				<tr>
-					<th nowrap="nowrap"><: Upload Signed Server Certificate (.cer) :>:</th>
-					<td>
-					<input type="file" name="inWCA" id="inWCA" />
-					</td>
-				</tr>
-				<tr>
-					<th nowrap="nowrap"><: Upload CA Certificate (.cer) :>:</th>
-					<td>
-					<input type="file" name="inICA" id="inICA" />
-					</td>
-				</tr>
-				<tr>
-					<th nowrap="nowrap"><button class="button-loader btn btn-primary" type="submit" id="button" name="inCreateSSL" id="inCreateSSL"><: Save :></button></th>
-					<td></td>
-				</tr>
-			</table>
-				<@ CSFR_Tag @>
-		</form>
-	</div>
-<% endif %>
-</div>
-<div id="Settings" class="tabcontent">
-	<h3><: Settings for Sencrypt :></h3>
-	<h4><: Here you can manage settings for this module :></h4>
-	<p>&nbsp;</p>
-	<h3>Coming Soon!</h3>
-</div>	
-<br />
 </div>
 
 <script>
-function openTABS(evt, tabName)
-{
-	var i, tabcontent, tablinks;
-	tabcontent = document.getElementsByClassName("tabcontent");
-	for (i = 0; i < tabcontent.length; i++)
-	{
-	tabcontent[i].style.display = "none";
-	}
-	tablinks = document.getElementsByClassName("tablinks");
-	for (i = 0; i < tablinks.length; i++)
-	{
-	tablinks[i].className = tablinks[i].className.replace(" active", "");
-	}
-	document.getElementById(tabName).style.display = "block";
-	evt.currentTarget.className += " active";
-}
-document.getElementById("ViewCerts").click();
+(function () {
+    'use strict';
+    var root = document.getElementById('sc');
+    if (!root) { return; }
+    // tabs switch in place (the links still work without scripts)
+    Array.prototype.forEach.call(root.querySelectorAll('.sc-tab'), function (a) {
+        a.addEventListener('click', function (e) {
+            if (e.ctrlKey || e.metaKey || e.shiftKey || e.button !== 0) { return; }
+            e.preventDefault();
+            var tab = a.getAttribute('data-tab');
+            Array.prototype.forEach.call(root.querySelectorAll('.sc-tab'), function (t) { t.classList.toggle('on', t === a); t.setAttribute('aria-selected', t === a ? 'true' : 'false'); });
+            Array.prototype.forEach.call(root.querySelectorAll('.sc-pane'), function (p) { p.classList.toggle('on', p.getAttribute('data-pane') === tab); });
+            try { history.replaceState(null, '', a.getAttribute('href')); } catch (err) { /* ignore */ }
+        });
+    });
+    // confirm what can not be undone, then show the panel's "working" overlay
+    Array.prototype.forEach.call(root.querySelectorAll('form.sc-act'), function (f) {
+        f.addEventListener('submit', function (e) {
+            var q = f.getAttribute('data-confirm');
+            if (q && !window.confirm(q)) { e.preventDefault(); return; }
+            // (not for a download: the page stays, so the overlay would never go)
+            if (f.action.indexOf('action=Download') < 0 && window.Sentora && Sentora.loader && Sentora.loader.showLoader) { Sentora.loader.showLoader(); }
+        });
+    });
+})();
 </script>

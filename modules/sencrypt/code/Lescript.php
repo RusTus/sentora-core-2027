@@ -693,6 +693,10 @@ keyUsage = nonRepudiation, digitalSignature, keyEncipherment');
             $this->urlRevokeCert,
             $data
         );
+        // Sentora: a refusal (already revoked, not this account's, bad request) was taken as success
+        if ((int) $this->client->getLastCode() !== 200) {
+            throw new RuntimeException("Revoke refused: HTTP code " . $this->client->getLastCode() . ", " . json_encode($response));
+        }
         //$lastLocation = $this->client->getLastLocation();
         //if (!empty($lastLocation)) {
            // $this->accountId = $lastLocation;

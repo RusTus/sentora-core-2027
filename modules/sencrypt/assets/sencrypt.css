@@ -1,115 +1,93 @@
-/* SenCrypt core css */
-body {font-family: Arial;}
+/* Sencrypt: certificates page in the panel's style. Colours come from the theme's shared
+   --sn-* variables (etc/styles/THEMES.md), with these as the fallback, so it follows
+   Light, Dark and Auto. */
+.sc { --sc-blue: #447fb3; --sc-green: #2db87d; --sc-amber: #f5a623; --sc-red: #ff6854; --sc-teal: #1fa2b5;
+      --sc-ink: var(--sn-ink, #1f2933); --sc-muted: var(--sn-muted, #6b7785); --sc-line: var(--sn-line, #e6e9ee);
+      --sc-card: var(--sn-card, #ffffff); --sc-bg: var(--sn-soft, #f4f6f9); --sc-field-line: var(--sn-line-strong, #cfd6de);
+      --sc-hover: var(--sn-hover, #f4f6f9); --sc-accent: var(--sn-accent, #447fb3);
+      color: var(--sc-ink); background: var(--sc-bg); border-radius: 8px; padding: 18px; margin-top: 10px; }
+.sc * { box-sizing: border-box; }
+.sc-ico { width: 18px; height: 18px; flex: none; vertical-align: -4px; }
 
-/* Style the tab */
-.tab {
-	overflow: hidden;
-	border: 1px solid var(--sn-line, #ccc);
-	background-color: var(--sn-soft, #f1f1f1);
+/* tabs */
+.sc-tabs { display: flex; flex-wrap: wrap; gap: 2px; border-bottom: 1px solid var(--sc-line); margin-bottom: 16px; }
+.sc-tab { display: inline-flex; align-items: center; gap: 8px; padding: 9px 16px 8px; font-size: 14px; font-weight: 600; color: var(--sc-muted);
+    border-bottom: 3px solid transparent; margin-bottom: -1px; text-decoration: none !important; }
+.sc-tab:hover, .sc-tab:focus { color: var(--sc-ink); }
+.sc-tab.on { color: var(--sc-ink); border-bottom-color: var(--sc-accent); }
+.sc-tab.on .sc-ico { color: var(--sc-accent); }
+.sc-tab:focus-visible, .sc-choice:focus-visible { outline: 2px solid var(--sc-accent); outline-offset: 2px; }
+.sc-pane { display: none; }
+.sc-pane.on { display: block; }
+
+/* summary */
+.sc-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; margin-bottom: 14px; }
+.sc-stat { display: flex; align-items: center; gap: 12px; background: var(--sc-card); border-radius: 6px; padding: 12px 14px;
+    border-top: 4px solid var(--c); box-shadow: 0 1px 3px rgba(20,30,40,0.08); }
+.sc-stat .sc-ico { width: 28px; height: 28px; color: var(--c); }
+.sc-stat b { display: block; font-size: 24px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.sc-stat span { font-size: 12px; color: var(--sc-muted); }
+.sc-stat.blue { --c: var(--sc-blue); } .sc-stat.green { --c: var(--sc-green); } .sc-stat.amber { --c: var(--sc-amber); }
+.sc-stat.red { --c: var(--sc-red); } .sc-stat.grey { --c: var(--sc-field-line); }
+
+/* cards and tables */
+.sc-card { background: var(--sc-card); border-radius: 6px; box-shadow: 0 1px 3px rgba(20,30,40,0.08); padding: 14px 16px 10px; margin-bottom: 14px; }
+.sc-card-head h4 { margin: 0 0 2px; font-size: 15px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; }
+.sc-card-head p { margin: 0 0 10px; color: var(--sc-muted); font-size: 13px; }
+.sc-scroll { overflow-x: auto; }
+.sc-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.sc-table th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--sc-muted);
+    border-bottom: 2px solid var(--sc-line); padding: 6px 8px; white-space: nowrap; }
+.sc-table td { padding: 9px 8px; border-bottom: 1px solid var(--sc-line); vertical-align: middle; }
+.sc-table tbody tr:last-child td { border-bottom: 0; }
+.sc-table tbody tr:hover td { background: var(--sc-hover); }
+.sc-table .sc-actions { text-align: right; white-space: nowrap; }
+.sc-table td.sc-empty { text-align: center; color: var(--sc-muted); padding: 22px 8px; }
+.sc-domain { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; }
+.sc-domain .sc-ico { color: var(--sc-muted); }
+.sc-muted { color: var(--sc-muted); font-size: 12px; margin-top: 2px; }
+.sc-type { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
+.sc-type .sc-ico { width: 16px; height: 16px; }
+.sc-type.le .sc-ico { color: var(--sc-green); }
+.sc-type.tp .sc-ico { color: var(--sc-amber); }
+.sc-pill { display: inline-block; padding: 2px 10px; border-radius: 10px; font-size: 12px; font-weight: 600; border: 1px solid; white-space: nowrap; }
+.sc-pill.ok { background: var(--sn-ok-soft, #e3f4ea); border-color: var(--sn-ok-line, #a9dcbd); color: var(--sn-ok, #1e8a4c); }
+.sc-pill.warn { background: var(--sn-warn-soft, #fff4d6); border-color: var(--sn-warn-line, #f2cf7a); color: var(--sn-warn, #8f5b00); }
+.sc-pill.bad { background: var(--sn-bad-soft, #fdeaea); border-color: var(--sn-bad-line, #f0a9a7); color: var(--sn-bad, #b42b27); }
+.sc-pill.info { background: var(--sn-info-soft, #e4f1f8); border-color: var(--sn-info-line, #b3d5e8); color: var(--sn-info, #2a5f80); }
+
+/* buttons */
+.sc-act { display: inline-block; margin: 0 0 0 6px; }
+.sc-btn { display: inline-flex !important; align-items: center; gap: 6px; }
+.sc-btn .sc-ico { width: 15px; height: 15px; }
+
+/* Let's Encrypt note */
+.sc-note { display: flex; gap: 12px; align-items: flex-start; background: var(--sn-info-soft, #e4f1f8); border: 1px solid var(--sn-info-line, #b3d5e8);
+    color: var(--sn-info, #2a5f80); border-radius: 6px; padding: 12px 14px; margin-bottom: 14px; font-size: 13px; line-height: 1.5; }
+.sc-note .sc-ico { width: 22px; height: 22px; margin-top: 1px; }
+.sc-note b { display: block; font-size: 14px; }
+.sc-note a { color: inherit; text-decoration: underline; white-space: nowrap; }
+
+/* your own certificate: choices and forms */
+.sc-choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; margin-bottom: 14px; }
+.sc-choice { display: block; background: var(--sc-card); border-radius: 6px; padding: 16px; border: 2px solid transparent;
+    box-shadow: 0 1px 3px rgba(20,30,40,0.08); color: var(--sc-ink) !important; text-decoration: none !important; transition: border-color .15s; }
+.sc-choice:hover { border-color: var(--sc-field-line); }
+.sc-choice.on { border-color: var(--sc-accent); }
+.sc-choice .sc-ico { width: 30px; height: 30px; color: var(--sc-accent); display: block; margin-bottom: 10px; }
+.sc-choice b { display: block; font-size: 15px; margin-bottom: 4px; }
+.sc-choice span { display: block; font-size: 13px; color: var(--sc-muted); line-height: 1.45; }
+.sc-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px 18px; padding: 4px 0 6px; }
+.sc-form label { display: block; margin: 0; font-weight: normal; }
+.sc-form label > span { display: block; font-size: 12px; font-weight: 600; color: var(--sc-muted); margin-bottom: 4px; }
+.sc-form label small { font-weight: normal; }
+.sc-form .form-control { width: 100%; }
+.sc-file input[type="file"] { width: 100%; padding: 6px; border: 1px dashed var(--sc-field-line); border-radius: 4px; background: var(--sc-bg); color: var(--sc-ink); font-size: 13px; }
+.sc-form-foot { grid-column: 1 / -1; display: flex; gap: 8px; padding-top: 8px; border-top: 1px solid var(--sc-line); }
+
+@media (max-width: 640px) {
+    .sc { padding: 12px; }
+    .sc-tab { padding: 8px 10px; }
+    .sc-table .sc-actions { white-space: normal; }
+    .sc-act { margin: 2px 0 2px 4px; }
 }
-
-/* Style the buttons inside the tab */
-.tab button {
-	background-color: inherit;
-	float: left;
-	border: none;
-	outline: none;
-	cursor: pointer;
-	padding: 14px 16px;
-	transition: 0.3s;
-	font-size: 17px;
-}
-
-/* Change background color of buttons on hover */
-.tab button:hover {
-  background-color: var(--sn-hover, #ddd);
-}
-
-/* Create an active/current tablink class */
-.tab button.active {
-  background-color: var(--sn-hover-strong, #ccc);
-}
-
-/* Style the tab content */
-.tabcontent {
-  display: none;
-  padding: 6px 12px;
-  border: 1px solid var(--sn-line, #ccc);
-  border-top: none;
-}
-
-	/* Fix bad behavior of styling */
-	.active {
-		color: inherit;
-	}
-	
-	.actions {
-		width: 200px;
-		min-width: 200px !important;
-		max-width: 300px !important;
-	}
-	
-	.status {
-		width: 250px;
-		min-width: 200px !important;
-		max-width: 300px !important;
-	}
-	
-	div#settings[role="tabpanel"],
-	div#single[role="tabpanel"],
-	div#wildcard[role="tabpanel"] {
-		margin-left: -15px;
-		margin-right: -15px;
-	}
-	
-	.zgrid_wrapper.alerts {
-		margin-left: 15px;
-		margin-right: 15px;
-	}
-	
-	.table thead > tr.first > th,
-	.table tbody > tr.first > th,
-	.table thead > tr.first > td,
-	.table tbody > tr.first > td {
-		border-top: inherit;
-	}
-	
-	.nav-tabs > li:first-child {
-		margin-left: 10px;
-	}
-	
-	.nav-tabs > li:last-child {
-		margin-right: 10px;
-	}
-	
-	.tab-pane {
-		margin-bottom: 0px;
-	}
-
-	div.panel-heading:not(:first-child) {
-		border-top: 2px solid var(--sn-line, #DDDDDD);
-		border-radius: inherit;
-		margin-top: -1px;
-	}
-	
-	.zmodule_content.panel {
-		padding-bottom: 0px;
-	}
-
-	.buttons td {
-		background-color: inherit !important;
-	}
-	
-	.no-domains {
-		margin-bottom: 25px;
-	}
-	
-	th.icon {
-		width: 30px;
-		text-align: center;
-		padding: 15px 0px 15px 10px !important;
-	}
-	
-	th.icon img {
-		min-width: 24px;
-	}
