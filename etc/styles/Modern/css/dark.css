@@ -10,6 +10,7 @@
     --ml-card: #1b222b; --ml-chrome: #171d24; --ml-hover: #232c36; --ml-stripe: #1f2730;
     --ml-input: #12171d; --ml-input-line: #3a4552;
     --ml-link: #79aedb; --ml-link-hover: #a3c8e8;
+    --ml-ok-ink: #3cc98d; --ml-warn-ink: #f7b545; --ml-bad-ink: #ff8a7a; --ml-info-ink: #79aedb;
     --ml-tint: 18%;
     --ml-alert-ink: var(--ml-ink);
     --ml-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);

@@ -188,7 +188,7 @@
 			
 <% if isShowCSR %>
 	<h3><: Certificate Signing Request :></h3>
-    <div class="zgrid_wrapper" style="position:relative; padding:15px; background-color:#eee;">
+    <div class="zgrid_wrapper" style="position:relative; padding:15px; background-color:var(--sn-soft, #eee);">
         
         <form action="./?module=sencrypt&ShowPanel=third-party&action=MakeCSR" method="post">
             <table class="table table-striped">
@@ -254,7 +254,7 @@
 
 <% if isShowSelf %>
 	<h3><: Create a self-signed certificate :></h3>
-    <div class="zgrid_wrapper" style="position:relative; padding:15px; background-color:#eee;">
+    <div class="zgrid_wrapper" style="position:relative; padding:15px; background-color:var(--sn-soft, #eee);">
         
         <form action="./?module=sencrypt&ShowPanel=third-party&action=Makenew" method="post">
             <table class="table table-striped">
@@ -314,7 +314,7 @@
 
 <% if isBought %>
 	<h3><: Install a purchased certificate :></h3>
-    <div class="zgrid_wrapper" style="position:relative; padding:15px; background-color:#eee;">
+    <div class="zgrid_wrapper" style="position:relative; padding:15px; background-color:var(--sn-soft, #eee);">
         
 		<form action="./?module=sencrypt&ShowPanel=third-party&action=UploadSSL" method="post" enctype="multipart/form-data">
 			<table class="table table-striped">

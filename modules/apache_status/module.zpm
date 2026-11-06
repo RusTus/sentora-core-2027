@@ -7,7 +7,7 @@
     <div class="zgrid_wrapper">
         <% if IsModServerStatus %>
         <p><a href="modules/apache_status/app/index.php" target="_blank" rel="noopener"><: Open in a new window :></a></p>
-        <iframe class="sn-autoheight" data-sn-free="html, body, .wrapper, .content-wrapper, .right-side, .main-sidebar" src="modules/apache_status/app/index.php" title="<: Apache Status :>" style="width: 100%; height: 900px; border: 1px solid #ddd;"></iframe>
+        <iframe class="sn-autoheight" data-sn-free="html, body, .wrapper, .content-wrapper, .right-side, .main-sidebar" src="modules/apache_status/app/index.php" title="<: Apache Status :>" style="width: 100%; height: 900px; border: 1px solid var(--sn-line, #ddd);"></iframe>
         <script src="etc/lib/sentora/frame-height.js"></script>
         <% else %>
         <div class="alert alert-warning">

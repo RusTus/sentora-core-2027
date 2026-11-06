@@ -55,7 +55,7 @@ class module_controller extends ctrl_module
         global $zdbh;
         global $controller;
 
-        $line = "<style>.active {color: #333;}</style>";
+        $line = "<style>.active {color: var(--sn-ink, #333);}</style>";
         $line .= "<h2>" . ui_language::translate("Configure your DNS Settings") . "</h2>";
         $line .= "<div style=\"display: block; margin-right:20px;\">";
         $line .= "<div class=\"ui-tabs ui-widget ui-widget-content ui-corner-all\" id=\"dnsTabs\">";

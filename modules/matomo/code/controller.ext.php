@@ -86,7 +86,7 @@ class module_controller extends ctrl_module
         }
         $src = 'etc/apps/matomo/index.php?module=CoreHome&action=index&idSite=' . (int) $d['idsite'] . '&period=day&date=yesterday&token_auth=' . $token . '&force_api_session=1';
         return '<h3>' . self::h($d['domain']) . '</h3><p><a href="' . self::h($src) . '" target="_blank" rel="noopener">' . ui_language::translate('Open in a new window') . '</a></p>'
-            . '<iframe class="sn-autoheight" data-sn-free="#secondNavBar" src="' . self::h($src) . '" title="Matomo" style="width: 100%; height: 900px; border: 1px solid #ddd;"></iframe>'
+            . '<iframe class="sn-autoheight" data-sn-free="#secondNavBar" src="' . self::h($src) . '" title="Matomo" style="width: 100%; height: 900px; border: 1px solid var(--sn-line, #ddd);"></iframe>'
             . '<script src="etc/lib/sentora/frame-height.js"></script>';
     }
 

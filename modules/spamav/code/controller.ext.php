@@ -229,10 +229,10 @@ class module_controller extends ctrl_module
     {
         sys_spamav::Ensure();
         $off = !sys_spamav::On('sa_enabled') || !sys_spamav::On('clam_enabled');
-        return '<style>.sv-cards{display:flex;gap:14px;flex-wrap:wrap;margin:8px 0 6px}.sv-card{flex:1 1 160px;border:1px solid #ddd;border-radius:6px;padding:12px 16px;background:#fff}'
-            . '.sv-num{font-size:26px;font-weight:600}.sv-label{color:#777}.sv-card.is-spam .sv-num{color:#a86b00}.sv-card.is-virus .sv-num{color:#c62f2b}.sv-form{border:1px solid #ddd;border-radius:6px;padding:4px 16px 14px;margin:10px 0 20px;background:#fafafa}'
-            . '.sv-scroll{max-height:620px;overflow-y:auto;border:1px solid #ddd;border-radius:4px;margin:6px 0}.sv-scroll table{margin:0}'
-            . '.sv-scroll thead th{position:sticky;top:0;background:#f5f5f5;z-index:1;box-shadow:0 1px 0 #ddd}'
+        return '<style>.sv-cards{display:flex;gap:14px;flex-wrap:wrap;margin:8px 0 6px}.sv-card{flex:1 1 160px;border:1px solid var(--sn-line, #ddd);border-radius:6px;padding:12px 16px;background:var(--sn-card, #fff)}'
+            . '.sv-num{font-size:26px;font-weight:600}.sv-label{color:var(--sn-muted, #777)}.sv-card.is-spam .sv-num{color:var(--sn-warn, #a86b00)}.sv-card.is-virus .sv-num{color:var(--sn-bad, #c62f2b)}.sv-form{border:1px solid var(--sn-line, #ddd);border-radius:6px;padding:4px 16px 14px;margin:10px 0 20px;background:var(--sn-soft, #fafafa)}'
+            . '.sv-scroll{max-height:620px;overflow-y:auto;border:1px solid var(--sn-line, #ddd);border-radius:4px;margin:6px 0}.sv-scroll table{margin:0}'
+            . '.sv-scroll thead th{position:sticky;top:0;background:var(--sn-soft, #f5f5f5);z-index:1;box-shadow:0 1px 0 var(--sn-line, #ddd)}'
             . '.sv-nav{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin:6px 0}</style>'
             . ($off ? '<p class="text-muted">' . ui_status::Warn('Off') . ' ' . self::h(self::t(!sys_spamav::On('sa_enabled') && !sys_spamav::On('clam_enabled') ? 'Spam and virus filtering are switched off on this server.' : (!sys_spamav::On('sa_enabled') ? 'Spam filtering is switched off on this server.' : 'Virus scanning is switched off on this server.'))) . '</p>' : '')
             . self::Totals()

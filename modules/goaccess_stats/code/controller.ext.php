@@ -139,7 +139,7 @@ class module_controller extends ctrl_module
             return '';
         }
         return '<h3>' . self::h($reports[$key][0]) . '</h3>'
-            . '<iframe class="sn-autoheight" src="modules/goaccess_stats/code/report.php?r=' . self::h(rawurlencode($key)) . '" title="GoAccess" style="width: 100%; height: 1100px; border: 1px solid #ddd;"></iframe>'
+            . '<iframe class="sn-autoheight" src="modules/goaccess_stats/code/report.php?r=' . self::h(rawurlencode($key)) . '" title="GoAccess" style="width: 100%; height: 1100px; border: 1px solid var(--sn-line, #ddd);"></iframe>'
             . '<script src="etc/lib/sentora/frame-height.js"></script>';
     }
 

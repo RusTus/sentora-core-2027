@@ -25,7 +25,7 @@ div.account > div.content > div > div.actions > a {
 div.account > div.content > div > div.actions > a.disabled:hover {
     background-color: inherit;
     cursor: default;
-    color: #005297;
+    color: var(--sn-accent, #005297);
 }
 div.account > div.content > div > div.actions > a.hidden {
     display: none;
@@ -117,7 +117,7 @@ div.accountTitle > div.content > div > a:hover {
 #dnsRecords div.dnsRecord,
 #dnsRecords div.add {
     padding: 10px 0 10px 0;
-    color: #333;
+    color: var(--sn-ink, #333);
     font-size: 12px;
 }
 
@@ -127,7 +127,7 @@ div.accountTitle > div.content > div > a:hover {
 }*/
 
 #dnsRecords div.dnsRecordError {
-    background-color: #bf7979;
+    background-color: var(--sn-bad, #bf7979);
     color: white;
     height: 52px;
 }
@@ -377,7 +377,7 @@ div.accountTitle > div.content > div > a:hover {
     border-top: 1px solid silver;
 }
 #dnsImport div.content > div:hover {
-    background-color: #e8e3e3;
+    background-color: var(--sn-soft, #e8e3e3);
     color: inherit;
 }
 
@@ -397,7 +397,7 @@ div.accountTitle > div.content > div > a:hover {
     margin-left: 24px;
     border: 1px solid silver;
     padding-left: 18px;
-    background: url(/icons/16x16/plain/server.png) no-repeat 0 2px white;
+    background: url(/icons/16x16/plain/server.png) no-repeat 0 2px var(--sn-card, white);
     min-height: 18px;
 }
 
@@ -415,7 +415,7 @@ div.accountTitle > div.content > div > a:hover {
 
 #dnsExport div.content > div.output {
     white-space: pre;
-    background-color: white;
+    background-color: var(--sn-card, white);
     font-size: 12px;
     font-family: monospace;
     overflow: auto;
@@ -429,7 +429,7 @@ div.accountTitle > div.content > div > a:hover {
 }
 
 .tabError {
-    background-color: #bf7979;
+    background-color: var(--sn-bad, #bf7979);
 }
 
 .ui-tabs .ui-tabs-panel {
@@ -452,24 +452,24 @@ div.accountTitle > div.content > div > a:hover {
 
 
 .dnsRecord:nth-child(even) {
-    background-color: #F9F9F9;
+    background-color: var(--sn-soft, #F9F9F9);
 }
 
 #dnsRecords .tab-content > .tab-pane{
-     color: #333;
+     color: var(--sn-ink, #333);
 }
 
 .row.new:nth-child(even) {
-    background-color: #DFF0D8;
+    background-color: var(--sn-ok-soft, #DFF0D8);
 }
 
 #dnsRecords .row.dnsRecord.new {
-    background-color: #DFF0D8;
-    border-color: #D6E9C6;
+    background-color: var(--sn-ok-soft, #DFF0D8);
+    border-color: var(--sn-ok-line, #D6E9C6);
 }
 #dnsRecords .row.dnsRecord.deleted {
-    background-color: #F2DEDE;
-    border-color: #EED3D7;
+    background-color: var(--sn-bad-soft, #F2DEDE);
+    border-color: var(--sn-bad-line, #EED3D7);
 }
 
 #dnsRecords div.dnsRecord > .delete {
@@ -495,12 +495,12 @@ div.accountTitle > div.content > div > a:hover {
 
 #dnsRecords .description {
     padding: 20px 0 20px 0;
-    color: #777;
+    color: var(--sn-muted, #777);
 }
 
 
 #dnsRecords div.row {
-    border-top: 1px solid #EEE;
+    border-top: 1px solid var(--sn-line, #EEE);
     position: relative;
     margin-left: 0px;
     margin-right: 0px;

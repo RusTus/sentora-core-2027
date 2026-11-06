@@ -3,6 +3,17 @@
    Files whose names start with "_" are parts, not variations: Theme Manager does
    not offer them. */
 
+/* Shared colours every theme provides for modules (see etc/styles/THEMES.md) */
+:root {
+    --sn-card: var(--ml-card); --sn-ink: var(--ml-ink); --sn-muted: var(--ml-muted);
+    --sn-line: var(--ml-line); --sn-line-strong: var(--ml-input-line);
+    --sn-soft: var(--ml-hover); --sn-hover: var(--ml-hover); --sn-hover-strong: var(--ml-line);
+    --sn-accent: var(--ml-blue); --sn-accent-soft: color-mix(in srgb, var(--ml-blue) var(--ml-tint), var(--ml-card));
+    --sn-ok: var(--ml-ok-ink); --sn-ok-soft: color-mix(in srgb, var(--ml-green) var(--ml-tint), var(--ml-card)); --sn-ok-line: color-mix(in srgb, var(--ml-green) 40%, var(--ml-card));
+    --sn-warn: var(--ml-warn-ink); --sn-warn-soft: color-mix(in srgb, var(--ml-amber) var(--ml-tint), var(--ml-card)); --sn-warn-line: color-mix(in srgb, var(--ml-amber) 45%, var(--ml-card));
+    --sn-bad: var(--ml-bad-ink); --sn-bad-soft: color-mix(in srgb, var(--ml-red) var(--ml-tint), var(--ml-card)); --sn-bad-line: color-mix(in srgb, var(--ml-red) 40%, var(--ml-card));
+    --sn-info: var(--ml-info-ink); --sn-info-soft: color-mix(in srgb, var(--ml-teal) var(--ml-tint), var(--ml-card)); --sn-info-line: color-mix(in srgb, var(--ml-teal) 40%, var(--ml-card));
+}
 body { background: var(--ml-bg); color: var(--ml-ink); }
 a { color: var(--ml-link); }
 a:hover, a:focus { color: var(--ml-link-hover); }
@@ -143,5 +154,10 @@ legend { color: var(--ml-ink); border-bottom-color: var(--ml-line); }
 /* Server Monitor follows the template's colours */
 .sm { --sm-ink: var(--ml-ink); --sm-muted: var(--ml-muted); --sm-line: var(--ml-line); --sm-card: var(--ml-card); --sm-bg: var(--ml-bg); }
 .sm-controls select, .sm-controls button { background: var(--ml-input); color: var(--ml-ink); border-color: var(--ml-input-line); }
+
+/* Status icons (dryden/ui/status.class.php) */
+.sn-ok circle { fill: var(--sn-ok-soft); stroke: var(--sn-ok-line); } .sn-ok path { stroke: var(--sn-ok); }
+.sn-bad circle { fill: var(--sn-bad-soft); stroke: var(--sn-bad-line); } .sn-bad path { stroke: var(--sn-bad); }
+.sn-warn circle { fill: var(--sn-warn-soft); stroke: var(--sn-warn-line); } .sn-warn path { stroke: var(--sn-warn); }
 
 #footer { color: var(--ml-muted); }

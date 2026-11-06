@@ -1024,6 +1024,17 @@ i.greyscale[class^="icon-"]:before, i.greyscale[class*=" icon-"]:before { conten
     --kerf-display: "Kerf Display", "Bahnschrift", "Arial Narrow", sans-serif;
     --kerf-body: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
 }
+/* Shared colours every theme provides for modules (see etc/styles/THEMES.md) */
+:root {
+    --sn-card: #ffffff; --sn-ink: var(--kerf-ink); --sn-muted: var(--kerf-graphite);
+    --sn-line: var(--kerf-scribe); --sn-line-strong: #a9b4ba;
+    --sn-soft: var(--kerf-plate); --sn-hover: #eef1f2; --sn-hover-strong: #dde2e4;
+    --sn-accent: var(--kerf-dykem); --sn-accent-soft: #e8ecf8;
+    --sn-ok: #1e7a45; --sn-ok-soft: #e3f5ea; --sn-ok-line: #9ad4b1;
+    --sn-warn: #8f5b00; --sn-warn-soft: #fff4d6; --sn-warn-line: #f2cf7a;
+    --sn-bad: #b42b27; --sn-bad-soft: #fdeaea; --sn-bad-line: #f0a9a7;
+    --sn-info: #2a5f80; --sn-info-soft: #e4f1f8; --sn-info-line: #b3d5e8;
+}
 
 body {
     background: var(--kerf-steel);

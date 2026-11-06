@@ -4,8 +4,8 @@ body {font-family: Arial;}
 /* Style the tab */
 .tab {
 	overflow: hidden;
-	border: 1px solid #ccc;
-	background-color: #f1f1f1;
+	border: 1px solid var(--sn-line, #ccc);
+	background-color: var(--sn-soft, #f1f1f1);
 }
 
 /* Style the buttons inside the tab */
@@ -22,19 +22,19 @@ body {font-family: Arial;}
 
 /* Change background color of buttons on hover */
 .tab button:hover {
-  background-color: #ddd;
+  background-color: var(--sn-hover, #ddd);
 }
 
 /* Create an active/current tablink class */
 .tab button.active {
-  background-color: #ccc;
+  background-color: var(--sn-hover-strong, #ccc);
 }
 
 /* Style the tab content */
 .tabcontent {
   display: none;
   padding: 6px 12px;
-  border: 1px solid #ccc;
+  border: 1px solid var(--sn-line, #ccc);
   border-top: none;
 }
 
@@ -87,7 +87,7 @@ body {font-family: Arial;}
 	}
 
 	div.panel-heading:not(:first-child) {
-		border-top: 2px solid #DDDDDD;
+		border-top: 2px solid var(--sn-line, #DDDDDD);
 		border-radius: inherit;
 		margin-top: -1px;
 	}

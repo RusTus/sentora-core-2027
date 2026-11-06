@@ -10,6 +10,7 @@
     --ml-card: #ffffff; --ml-chrome: #ffffff; --ml-hover: #f4f6f9; --ml-stripe: #fafbfc;
     --ml-input: #ffffff; --ml-input-line: #cfd6de;
     --ml-link: #447fb3; --ml-link-hover: #3a6d9a;
+    --ml-ok-ink: #1e8a4c; --ml-warn-ink: #a86b00; --ml-bad-ink: #c62f2b; --ml-info-ink: #2f6f9f;
     --ml-tint: 13%;
     --ml-shadow: 0 1px 3px rgba(20, 30, 40, 0.08);
     --ml-logo-ink: inline; --ml-logo-white: none;

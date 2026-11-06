@@ -411,7 +411,7 @@ class module_controller extends ctrl_module
                     ? '<td>' . count($s['accounts']) . '</td><td>' . count($s['databases']) . '</td><td>' . $h($s['sentora'] ?? '') . '</td><td><a class="btn btn-default btn-xs" href="./?module=backup_admin&amp;snap=' . rawurlencode($key) . '#restore">' . $t('Open') . '</a></td>'
                     : '<td colspan="4" class="text-muted">' . $t('made by an older version: restore it by hand') . '</td>') . '</tr>';
         }
-        $out .= '<div style="max-height: 300px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px;"><table class="table table-condensed" style="margin: 0;"><thead><tr><th>' . $t('Night') . '</th><th>' . $t('Server') . '</th><th>' . $t('Accounts') . '</th><th>'
+        $out .= '<div style="max-height: 300px; overflow-y: auto; border: 1px solid var(--sn-line, #ddd); border-radius: 4px;"><table class="table table-condensed" style="margin: 0;"><thead><tr><th>' . $t('Night') . '</th><th>' . $t('Server') . '</th><th>' . $t('Accounts') . '</th><th>'
             . $t('Databases') . '</th><th>Sentora</th><th></th></tr></thead><tbody>' . $rows . '</tbody></table></div>';
         if ($chosen === '' || strpos($chosen, '/') === false) {
             return $out . '<p class="text-muted" style="margin-top: 8px;">' . $t('Open a snapshot to see what it holds and restore from it.') . '</p>';
@@ -431,7 +431,7 @@ class module_controller extends ctrl_module
         }
         $out .= '<h3 style="margin-top: 18px;">' . $h($t('Snapshot') . ' ' . $snap['date'] . ' ' . $t('of') . ' ' . $snap['server']) . '</h3>'
             . '<p class="text-muted">' . $h('Sentora-' . ($snap['sentora'] ?? '') . ', ' . $t('panel') . ' ' . ($snap['panel'] ?? '') . ', ' . count($snap['databases']) . ' ' . $t('databases') . ($snap['mail'] ? ', ' . $t('with the mailboxes') : ', ' . $t('without the mailboxes'))) . '</p>'
-            . '<div style="max-height: 260px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px;"><table class="table table-condensed table-striped" style="margin: 0;"><thead><tr><th>' . $t('Account') . '</th><th>' . $t('Domains') . '</th><th>' . $t('Databases') . '</th><th>' . $t('Mailboxes') . '</th><th>' . $t('Size') . '</th></tr></thead><tbody>' . $acc . '</tbody></table></div>'
+            . '<div style="max-height: 260px; overflow-y: auto; border: 1px solid var(--sn-line, #ddd); border-radius: 4px;"><table class="table table-condensed table-striped" style="margin: 0;"><thead><tr><th>' . $t('Account') . '</th><th>' . $t('Domains') . '</th><th>' . $t('Databases') . '</th><th>' . $t('Mailboxes') . '</th><th>' . $t('Size') . '</th></tr></thead><tbody>' . $acc . '</tbody></table></div>'
             // one account
             . '<form method="post" action="./?module=backup_admin&amp;action=RestoreAccount&amp;snap=' . rawurlencode($chosen) . '#restore" class="bk-restore" onsubmit="return confirm(\'' . $h($t('Restore this account? What it has now is saved first.')) . '\');">'
             . '<h4>' . $t('Restore one account') . '</h4><p>' . $t('Account') . ' <select class="form-control" name="inAccount" style="display: inline-block; width: auto;">' . $opts . '</select></p>'

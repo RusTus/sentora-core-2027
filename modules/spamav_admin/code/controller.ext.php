@@ -207,7 +207,7 @@ class module_controller extends ctrl_module
         }
         sys_spamav::Ensure();
         return '<style>.sa-switch{font-weight:normal;margin:0}'
-            . '.sa-job{color:#31708f}.sa-spin{display:inline-block;width:14px;height:14px;vertical-align:-2px;border:2px solid #bcdcec;border-top-color:#31708f;border-radius:50%;animation:sa-spin .9s linear infinite}'
+            . '.sa-job{color:var(--sn-info, #31708f)}.sa-spin{display:inline-block;width:14px;height:14px;vertical-align:-2px;border:2px solid var(--sn-info-line, #bcdcec);border-top-color:var(--sn-info, #31708f);border-radius:50%;animation:sa-spin .9s linear infinite}'
             . '@keyframes sa-spin{to{transform:rotate(360deg)}}@media (prefers-reduced-motion: reduce){.sa-spin{animation-duration:2.5s}}</style>'
             . '<p><a href="#clamav">ClamAV</a> &middot; <a href="#spamassassin">SpamAssassin</a></p>'
             . '<h2>' . self::t('Status') . '</h2>' . self::StatusBlock()

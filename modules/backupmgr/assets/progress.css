@@ -1,8 +1,8 @@
 /* Backup: the progress panel while a backup is being made */
 .bk-progress { display: flex; align-items: center; gap: 14px; padding: 14px 16px; margin: 6px 0 16px;
-    border: 1px solid #bce8f1; background: #d9edf7; color: #31708f; border-radius: 4px; }
-.bk-progress .text-muted { color: #4a7d97; }
-.bk-spinner { flex: 0 0 auto; width: 28px; height: 28px; border: 3px solid #a9cfe3; border-top-color: #31708f;
+    border: 1px solid var(--sn-info-line, #bce8f1); background: var(--sn-info-soft, #d9edf7); color: var(--sn-info, #31708f); border-radius: 4px; }
+.bk-progress .text-muted { color: var(--sn-info, #4a7d97); }
+.bk-spinner { flex: 0 0 auto; width: 28px; height: 28px; border: 3px solid var(--sn-info-line, #a9cfe3); border-top-color: var(--sn-info, #31708f);
     border-radius: 50%; animation: bk-spin 0.9s linear infinite; }
 @keyframes bk-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .bk-spinner { animation-duration: 2.5s; } }
