@@ -18,6 +18,15 @@ $mtime = $mtime[1] + $mtime[0];
 $starttime = $mtime;
 $class_name = null;
 
+/**
+ * Class autoloader: load the dryden class file of a class (ctrl_users -> dryden/ctrl/users.class.php).
+ *
+ * Underscores in the class name become directory separators. Does nothing when
+ * the file does not exist. Registered with spl_autoload_register() below.
+ *
+ * @param string $class_name The class being loaded.
+ * @return void
+ */
 function x__autoload($class_name)
 {
     // Absolute path so classes still load if the working directory changes

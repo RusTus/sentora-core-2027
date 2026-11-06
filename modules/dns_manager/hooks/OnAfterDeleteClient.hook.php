@@ -1,7 +1,23 @@
 <?php
 
+/**
+ * DNS Manager module: OnAfterDeleteClient hook.
+ *
+ * Marks the DNS records of deleted accounts as deleted and queues a zone update.
+ *
+ * @package Sentora
+ * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
+ */
 DeleteDNSRecordsForDeletedClient();
 
+/**
+ * Mark the DNS records of every deleted account as deleted.
+ *
+ * Queues a zone update for the domain of the first record found per account.
+ *
+ * @global db_driver $zdbh The panel's database connection.
+ * @return void
+ */
 function DeleteDNSRecordsForDeletedClient() {
     global $zdbh;
     $deletedclients = array();
@@ -32,6 +48,13 @@ function DeleteDNSRecordsForDeletedClient() {
     }
 }
 
+/**
+ * Add a domain ID to the dns_hasupdates list so the daemon rewrites its zone.
+ *
+ * @global db_driver $zdbh The panel's database connection.
+ * @param int|string $id The domain (x_vhosts) ID.
+ * @return true|null True when the ID was added, null when it was already in the list.
+ */
 function TriggerDNSUpdate($id) {
     global $zdbh;
     $GetRecords = ctrl_options::GetSystemOption('dns_hasupdates');

@@ -1,8 +1,29 @@
 <?php
 
+/**
+ * DNS Manager module: web service (XMWS API) for listing, creating and deleting DNS records.
+ *
+ * Called through bin/api.php?m=dns_manager; each public method reads its
+ * parameters from the XML request and returns the response data object.
+ *
+ * @package Sentora
+ * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
+ */
+
+/**
+ * DNS Manager web service (methods called by name from the 'request' tag).
+ */
 class webservice extends ws_xmws
 {
 
+    /**
+     * Look up the ID of a domain (not a parked one) owned by an account.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $uid The account ID.
+     * @param string $domainName The domain name.
+     * @return int|string|null The domain (x_vhosts) ID, or null when not found.
+     */
     private function GetDomainID($uid, $domainName)
     {
         global $zdbh;
@@ -16,9 +37,12 @@ class webservice extends ws_xmws
     }
 
     /**
-     *   Get list of all DNS records for a given domain. Parameters of XML request:
-     *       uid - user ID
-     *       domainName - name of domain
+     * Get list of all DNS records for a given domain. Parameters of XML request:
+     *     uid - user ID
+     *     domainName - name of domain
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return array<string, string> The response data object: 'response' and 'content' (one <dns_record> section per record).
      */
     public function GetAllDNSRecords()
     {
@@ -51,13 +75,15 @@ class webservice extends ws_xmws
     }
 
     /**
-     *   Create a new DNS record.  Parameters of XML request:
-     *       uid - user ID
-     *       domainName - the domain for which DNS record is being created
-     *       hostName - the host part of new DNS record (e.g. 'www')
-     *       type - type of new DNS record (e.g. 'CNAME')
-     *       target - the destination of DNS record (e.g. '@')
-     *       ttl - time to live (e.g. '3600')
+     * Create a new DNS record.  Parameters of XML request:
+     *     uid - user ID
+     *     domainName - the domain for which DNS record is being created
+     *     hostName - the host part of new DNS record (e.g. 'www')
+     *     type - type of new DNS record (e.g. 'CNAME')
+     *     target - the destination of DNS record (e.g. '@')
+     *     ttl - time to live (e.g. '3600')
+     *
+     * @return array<string, string> The response data object: 'response' and 'content' (a <dns_record> section with created true).
      */
     public function CreateDNSRecord()
     {
@@ -97,10 +123,13 @@ class webservice extends ws_xmws
     }
 
     /**
-     *   Delete one or multiple DNS records
-     *   Mandatory parameters: uid and domainName
-     *   Optional parameters: hostName, record type, target
-     *   The meaning of parameters is same as in CreateDNSRecord()
+     * Delete one or multiple DNS records
+     * Mandatory parameters: uid and domainName
+     * Optional parameters: hostName, record type, target
+     * The meaning of parameters is same as in CreateDNSRecord()
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return array<string, string> The response data object: 'response' and 'content' (one <dns_record> section per deleted record).
      */
     public function DeleteDNSRecords()
     {

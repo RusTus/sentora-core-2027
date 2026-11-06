@@ -6,6 +6,9 @@
  * there: a hosted site can otherwise point its .htaccess at the panel's socket
  * (SetHandler "proxy:unix:/run/php/sentora-panel.sock|..." or RewriteRule [H=...])
  * and have its own PHP file run as the panel's user.
+ *
+ * @package Sentora
+ * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
  */
 $sentoraPanelRoot = dirname(__DIR__) . '/';
 $sentoraScript = isset($_SERVER['SCRIPT_FILENAME']) ? realpath((string) $_SERVER['SCRIPT_FILENAME']) : false;

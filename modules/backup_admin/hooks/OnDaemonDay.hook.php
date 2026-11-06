@@ -1,5 +1,16 @@
 <?php
 
+/**
+ * Backup Config module: daily daemon hook (OnDaemonDay).
+ *
+ * When the module is enabled: makes a backup of every enabled account when
+ * scheduled backups are on, purges each account's backups older than the purge
+ * age when purging is on, and empties old files from the module's temp folder.
+ * Opens its own database connection ($zdbh) from cnf/db.php.
+ *
+ * @package Sentora
+ * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
+ */
 include('cnf/db.php');
 $z_db_user = $user;
 $z_db_pass = $pass;

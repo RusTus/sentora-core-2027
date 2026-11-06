@@ -5,6 +5,9 @@
  * (index.php and the dryden/ajax handlers): never readable by scripts, not sent
  * with cross-site posts, only over HTTPS when the panel is on HTTPS; ids the
  * server did not make are refused. Include this before session_start().
+ *
+ * @package Sentora
+ * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
  */
 ini_set('session.cookie_httponly', '1');
 ini_set('session.cookie_samesite', 'Lax');

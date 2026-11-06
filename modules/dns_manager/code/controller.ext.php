@@ -26,14 +26,30 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
  */
+/**
+ * DNS Manager module: lets an account view and edit the DNS records of its own domains.
+ *
+ * Records are kept in x_dns; changed domains are listed in the dns_hasupdates
+ * setting and the daemon (hooks/OnDaemonRun.hook.php) writes their zone files.
+ */
 class module_controller extends ctrl_module
 {
 
+    /** @var int|string|bool|null The domain (x_vhosts) ID being edited, set by doDisplayRecords()/doCreateDefaultRecords(). */
     static $editdomain;
+    /** @var mixed Unused. */
     static $showform;
+    /** @var string|null Success message shown by getResult(). */
     static $ResultOk;
+    /** @var string|null First error message of the save, shown by getResult(). */
     static $ResultErr;
 
+    /**
+     * Remember an error message for getResult(), keeping only the first one.
+     *
+     * @param string $ErrorText The message (translated when shown).
+     * @return void
+     */
     private static function SetError($ErrorText)
     {
         if (empty(self::$ResultErr))
@@ -42,6 +58,12 @@ class module_controller extends ctrl_module
 
     /* Load DNS CSS and JS files */
 
+    /**
+     * The module's CSS and JavaScript tags (template <@ Init @>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return string The HTML <link> and <script> tags.
+     */
     static function getInit()
     {
         global $controller;
@@ -55,6 +77,15 @@ class module_controller extends ctrl_module
      * Domain List or DNS Records
      */
 
+    /**
+     * Determine which DNS page to show: the domain list or a domain's records (template <@ RecordAction @>).
+     *
+     * Shows the "create default records" page when the chosen domain has no records yet.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller.
+     * @return string The HTML of the page.
+     */
     static function getRecordAction()
     {
         global $zdbh;
@@ -92,6 +123,13 @@ class module_controller extends ctrl_module
      * Allow user to Create Initial Domain DNS records for the First time
      */
 
+    /**
+     * Build the page that offers to create the default records for a domain that has none.
+     *
+     * @global db_driver $zdbh The panel's database connection (unused).
+     * @global runtime_controller $controller The request controller.
+     * @return string The HTML.
+     */
     static function DisplayDefaultRecords()
     {
         global $zdbh;
@@ -127,6 +165,18 @@ class module_controller extends ctrl_module
         return $line;
     }
 
+    /**
+     * Build the tab with one record type's records of a domain, and the template row for new records.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller (unused).
+     * @param string $type The record type ('A', 'AAAA', 'CNAME', 'MX', 'TXT', 'SRV', 'SPF' or 'NS').
+     * @param int|string $ttl The default TTL for new records.
+     * @param string $description HTML help text shown above the records.
+     * @param int|string $userID The account ID that owns the records.
+     * @param int|string $domainID The domain (x_vhosts) ID.
+     * @return string|null The HTML, or null when the type is not in the allowed_types setting.
+     */
     static function DnsRecordField($type, $ttl, $description, $userID, $domainID)
     {
         global $zdbh;
@@ -230,6 +280,13 @@ class module_controller extends ctrl_module
      * TODO: Break into smaller Functions
      */
 
+    /**
+     * Build and show DNS Record HTML output: the zone check result and one tab per record type.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller.
+     * @return string The HTML.
+     */
     static function DisplayRecords()
     {
         //Post Debug
@@ -376,6 +433,13 @@ class module_controller extends ctrl_module
      * TODO: Tell them to add a domain if no domains exist
      */
 
+    /**
+     * Show the domain drop-down list (entrance page); the list is empty when the account has no domains.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller (unused).
+     * @return string The HTML.
+     */
     static function DisplayDomains()
     {
         global $zdbh;
@@ -409,6 +473,16 @@ class module_controller extends ctrl_module
         return $line;
     }
 
+    /**
+     * Handle the edit/delete buttons of a client list (left over from another module).
+     *
+     * Checks the CSRF token. Refers to self::$clientid and self::DeleteClient(), which
+     * this class does not have.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller.
+     * @return void
+     */
     static function doEditClient()
     {
         global $zdbh;
@@ -431,6 +505,15 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Handle the domain chosen in the list: show its records if the account owns it.
+     *
+     * Checks the CSRF token and sets self::$editdomain.
+     *
+     * @global db_driver $zdbh The panel's database connection (unused).
+     * @global runtime_controller $controller The request controller.
+     * @return void
+     */
     static function doDisplayRecords()
     {
         global $zdbh;
@@ -444,6 +527,16 @@ class module_controller extends ctrl_module
         return;
     }
 
+    /**
+     * Handle the records form: check the posted records and save them when they are valid.
+     *
+     * Checks the CSRF token and that the account owns the domain; sets self::$ResultOk
+     * on success (errors are set by CheckForErrors()).
+     *
+     * @global db_driver $zdbh The panel's database connection (unused).
+     * @global runtime_controller $controller The request controller.
+     * @return void
+     */
     static function doSaveDNS()
     {
         global $zdbh;
@@ -463,7 +556,12 @@ class module_controller extends ctrl_module
 
     /**
      * Creates a new DNS record from an array of key value pairs.
-     * @param array $rec Array of record properties (uid, domainName, domainID, type, hostName, ttl, target)
+     *
+     * Cleans the type, host name and target, inserts the record and marks the domain
+     * for a zone update. Also used by the web service API.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param array<string,mixed> $rec Array of record properties: 'uid', 'domainName', 'domainID', 'type', 'hostName', 'ttl', 'target'; optional 'priority', 'weight', 'port', 'time'.
      * @return void
      */
     static function createDNSRecord(array $rec)
@@ -519,6 +617,16 @@ class module_controller extends ctrl_module
         self::TriggerDNSUpdate($rec['domainID']);
     }
 
+    /**
+     * Handle "Create Records": create a domain's records from x_dns_create (the account's own list, else the default one).
+     *
+     * Checks the CSRF token, that the account owns the domain and that inUserID is the
+     * logged-in account; sets self::$editdomain so the records are shown next.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller.
+     * @return void
+     */
     static function doCreateDefaultRecords()
     {
         global $zdbh;
@@ -585,6 +693,13 @@ class module_controller extends ctrl_module
         return;
     }
 
+    /**
+     * Save the posted record changes: updates, deletions and new records, then mark the domain for a zone update.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller.
+     * @return void
+     */
     static function SaveDNS()
     {
         global $zdbh;
@@ -813,6 +928,15 @@ class module_controller extends ctrl_module
     }
 
     //Use the same method as above and check for input errors doSaveDNS() uses before continuing.
+    /**
+     * Validate the posted records (host names, targets, TTLs, priorities, weights, ports, IP addresses).
+     *
+     * Sets the first error through SetError().
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller.
+     * @return bool True when every record is valid.
+     */
     static function CheckForErrors()
     {
         global $zdbh;
@@ -1075,6 +1199,12 @@ class module_controller extends ctrl_module
         return true;
     }
 
+    /**
+     * Check a host name: '@', or dot-separated labels of letters, digits and dashes (no dash at the end).
+     *
+     * @param string $a The host name.
+     * @return bool
+     */
     static function IsValidDomainName($a)
     {
         if ($a != "@") {
@@ -1088,6 +1218,12 @@ class module_controller extends ctrl_module
         return true;
     }
 
+    /**
+     * Check a target name: like IsValidDomainName() but labels may also contain underscores.
+     *
+     * @param string $a The target name.
+     * @return bool
+     */
     static function IsValidTargetName($a)
     {
         if ($a != "@") {
@@ -1101,6 +1237,16 @@ class module_controller extends ctrl_module
         return true;
     }
 
+    /**
+     * Clean a record value for the zone file.
+     *
+     * Removes control characters and surrounding space; for SPF/TXT removes quotes and
+     * adds slashes, for other types removes spaces and lowercases; an empty NS/MX value becomes '@'.
+     *
+     * @param mixed $data The value (used as a string).
+     * @param string $type The record type.
+     * @return string The cleaned value.
+     */
     static function CleanRecord($data, $type)
     {
         // No line breaks or other control characters: a record is one line of the zone
@@ -1129,6 +1275,13 @@ class module_controller extends ctrl_module
         return $data;
     }
 
+    /**
+     * Check that a record type is in the allowed_types setting.
+     *
+     * @global db_driver $zdbh The panel's database connection (unused).
+     * @param string $type The record type.
+     * @return bool
+     */
     static function IsTypeAllowed($type)
     {
         global $zdbh;
@@ -1141,6 +1294,12 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Check for a public IPv4 or IPv6 address (no private or reserved ranges).
+     *
+     * @param string $ip The address.
+     * @return bool
+     */
     static function IsValidIP($ip)
     {
         if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
@@ -1150,6 +1309,12 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Check for a public IPv4 address (no private or reserved ranges).
+     *
+     * @param string $ip The address.
+     * @return bool
+     */
     static function IsValidIPv4($ip)
     {
         if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4 | FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
@@ -1159,6 +1324,12 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Check for a public IPv6 address (no private or reserved ranges).
+     *
+     * @param string $ip The address.
+     * @return bool
+     */
     static function IsValidIPv6($ip)
     {
         if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6 | FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
@@ -1168,6 +1339,11 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * The message box for the last save (template <@ Result @>).
+     *
+     * @return string|null The HTML of the message, or null when there is nothing to show.
+     */
     static function getResult()
     {
         if (!fs_director::CheckForEmptyValue(self::$ResultOk)) {
@@ -1178,6 +1354,14 @@ class module_controller extends ctrl_module
         return;
     }
 
+    /**
+     * Add a domain ID to the dns_hasupdates list so the daemon rewrites its zone.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller (unused).
+     * @param int|string $id The domain (x_vhosts) ID.
+     * @return true|null True when the ID was added, null when it was already in the list.
+     */
     static function TriggerDNSUpdate($id)
     {
         global $zdbh;
@@ -1198,15 +1382,27 @@ class module_controller extends ctrl_module
         }
     }
 
-    /** the zone test file of this request (its name is removed from named-checkzone's message) */
+    /** @var string|false|null The zone test file of this request (its name is removed from named-checkzone's message). */
     static $zonecheckFile = null;
 
-    /** a value for the zone test file: no line breaks or control characters (as the daemon writes zones) */
+    /**
+     * A value for the zone test file: no line breaks or control characters (as the daemon writes zones).
+     *
+     * @param mixed $v The value (used as a string).
+     * @return string The value without control characters.
+     */
     static function ZoneValue($v)
     {
         return preg_replace('/[\x00-\x1F\x7F]/', '', (string) $v);
     }
 
+    /**
+     * Make a new, private (0600) zone test file in the panel's own etc/tmp folder.
+     *
+     * Stores its path in self::$zonecheckFile.
+     *
+     * @return string|false The file path, or false when it could not be made there.
+     */
     static function ZoneCheckFile()
     {
         $dir = rtrim((string) ctrl_options::GetSystemOption('sentora_root'), '/') . '/etc/tmp';
@@ -1219,6 +1415,13 @@ class module_controller extends ctrl_module
         return $file;
     }
 
+    /**
+     * Write a domain's records to a test zone file and run named-checkzone on it.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $domainID The domain (x_vhosts) ID.
+     * @return string|null The output of named-checkzone; '' when no test file could be made; null when the domain has no records.
+     */
     static function CheckZoneRecord($domainID)
     {
         global $zdbh;

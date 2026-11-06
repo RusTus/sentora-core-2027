@@ -1,6 +1,22 @@
 <?php
 
-/** One line per record in the zone file: control characters never reach it (also for records saved before this check) */
+/**
+ * DNS Manager module: daemon hook (OnDaemonRun).
+ *
+ * When domains are listed in the dns_hasupdates setting: writes their zone files,
+ * rewrites the named.conf include of checked zones, clears the list, removes zone
+ * files of domains that have no records any more and reloads BIND.
+ *
+ * @package Sentora
+ * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
+ */
+
+/**
+ * One line per record in the zone file: control characters never reach it (also for records saved before this check).
+ *
+ * @param mixed $v The value (used as a string).
+ * @return string The value without control characters.
+ */
 function SentoraZoneValue($v)
 {
     return preg_replace('/[\x00-\x1F\x7F]/', '', (string) $v);
@@ -25,6 +41,12 @@ if (ui_module::CheckModuleEnabled('DNS Config')) {
 }
 echo "END DNS Manager Hook." . fs_filehandler::NewLine();
 
+/**
+ * Write the zone file of every domain in dns_hasupdates that has records, with a new SOA serial.
+ *
+ * @global db_driver $zdbh The panel's database connection.
+ * @return void
+ */
 function WriteDNSZoneRecordsHook()
 {
     global $zdbh;
@@ -115,6 +137,12 @@ function WriteDNSZoneRecordsHook()
     }
 }
 
+/**
+ * Check every zone file with named-checkzone and rewrite the named.conf include with the zones that pass.
+ *
+ * @global db_driver $zdbh The panel's database connection.
+ * @return void
+ */
 function WriteDNSNamedHook()
 {
     global $zdbh;
@@ -165,6 +193,12 @@ function WriteDNSNamedHook()
     fs_filehandler::UpdateFile($named_file, 0777, $line);
 }
 
+/**
+ * Empty the dns_hasupdates list.
+ *
+ * @global db_driver $zdbh The panel's database connection.
+ * @return void
+ */
 function ResetDNSRecordsUpatedHook()
 {
     global $zdbh;
@@ -172,6 +206,12 @@ function ResetDNSRecordsUpatedHook()
     $sql->execute();
 }
 
+/**
+ * Delete the zone files of domains that no longer have any active record.
+ *
+ * @global db_driver $zdbh The panel's database connection.
+ * @return void
+ */
 function PurgeOldZoneDNSRecordsHook()
 {
     global $zdbh;
@@ -198,6 +238,11 @@ function PurgeOldZoneDNSRecordsHook()
     }
 }
 
+/**
+ * Reload BIND (rndc on Windows, the service command through zsudo elsewhere).
+ *
+ * @return void
+ */
 function ReloadBindHook()
 {
     if (sys_versions::ShowOSPlatformVersion() == "Windows") {

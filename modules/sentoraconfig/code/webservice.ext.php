@@ -1,6 +1,8 @@
 <?php
 
 /**
+ * Sentora Config module: web service (XMWS API).
+ *
  * @package zpanelx
  * @subpackage modules
  * @author Bobby Allen (ballen@bobbyallen.me)
@@ -8,12 +10,19 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  */
+
+/**
+ * Sentora Config web service (methods called by name from the 'request' tag).
+ */
 class webservice extends ws_xmws {
 
     /**
-     * Get the full list of currently active domains on the server.
-     * @global type $zdbh
-     * @return type 
+     * Get the full list of system options (every row of x_settings).
+     *
+     * Empty values are sent as "NULL".
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return array<string, string> The response data object: 'response' and 'content' (one <setting> section per option: id, name, value, description, usereditable).
      */
     function GetAllSystemOptions() {
         global $zdbh;

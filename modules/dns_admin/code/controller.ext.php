@@ -26,30 +26,64 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
  */
+/**
+ * DNS Config module (Admin): DNS settings, BIND service control, record tools and BIND logs.
+ *
+ * Changes to zones are written by the daemon (dns_manager hooks): most actions
+ * here only update x_dns / x_settings and mark the zones for an update.
+ */
 class module_controller extends ctrl_module
 {
 
+    /** @var bool|null True after a domain's records were reset (read by getResult()). */
     static $ok;
+    /** @var mixed Unused. */
     static $service;
+    /** @var int|null Number of deleted records purged from the database by Purge(). */
     static $purged;
+    /** @var int|null Number of records marked as deleted by DeleteAll() or DeleteDomainRecords(). */
     static $deleted;
+    /** @var int|null Number of records of one type marked as deleted by DeleteType(). */
     static $deletedtype;
+    /** @var string|null The record type DeleteType() deleted (from the inType form field). */
     static $type;
+    /** @var int|null Number of domains whose records ResetAll() reset to the defaults. */
     static $reset;
+    /** @var int|null Number of domains AddMissing() created default records for. */
     static $addmissing;
+    /** @var string[]|null The error lines of the BIND log (set by ViewErrors()). */
     static $logerror;
+    /** @var string[]|null The warning lines of the BIND log (set by ViewErrors()). */
     static $logwarning;
+    /** @var string[]|null All lines of the BIND log (set by ViewErrors()). */
     static $getlog;
+    /** @var bool|null True when the "View logs" button was pressed (set, not read, here). */
     static $showlog;
+    /** @var bool|null True when the BIND log could not be written (shown by getResult()). */
     static $notwritable;
+    /** @var bool|null True after "force update" marked all zones for the next daemon run. */
     static $forceupdate;
 
+    /**
+     * The whole DNS Config page body (template <@ DNSConfig @>).
+     *
+     * @return string The HTML (see DisplayDNSConfig()).
+     */
     static function getDNSConfig()
     {
         $display = self::DisplayDNSConfig();
         return $display;
     }
 
+    /**
+     * Build the DNS Config page: tabs for settings, tools, the BIND service, logs and the usage charts.
+     *
+     * Reads the BIND log through ViewErrors() for the error/warning counts.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller.
+     * @return string The HTML.
+     */
     static function DisplayDNSConfig()
     {
         global $zdbh;
@@ -260,6 +294,13 @@ class module_controller extends ctrl_module
         return $line;
     }
 
+    /**
+     * Save the posted DNS settings (empty values are skipped) and mark all zones for an update.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller.
+     * @return void
+     */
     static function doUpdateDNSConfig()
     {
         global $zdbh;
@@ -290,6 +331,13 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Start, stop or reload BIND, depending on which button was posted.
+     *
+     * @global db_driver $zdbh The panel's database connection (unused).
+     * @global runtime_controller $controller The request controller.
+     * @return void
+     */
     static function doUpdateService()
     {
         global $zdbh;
@@ -305,6 +353,15 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Run the record tool whose button was posted (reset, add missing, delete by type, purge, delete all, force update).
+     *
+     * Each tool (except purge) also marks all zones for an update by the daemon.
+     *
+     * @global db_driver $zdbh The panel's database connection (unused).
+     * @global runtime_controller $controller The request controller.
+     * @return void
+     */
     static function doUpdateTools()
     {
         global $zdbh;
@@ -338,6 +395,13 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Clear the errors, the warnings or the whole BIND log, or show the log, depending on the button posted.
+     *
+     * @global db_driver $zdbh The panel's database connection (unused).
+     * @global runtime_controller $controller The request controller.
+     * @return void
+     */
     static function doUpdateLogs()
     {
         global $zdbh;
@@ -357,6 +421,11 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Start the BIND service (through zsudo on Linux; waits 2 seconds).
+     *
+     * @return void
+     */
     static function StartBind()
     {
         if (sys_versions::ShowOSPlatformVersion() == "Windows") {
@@ -368,6 +437,11 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Stop the BIND service (through zsudo on Linux; waits 2 seconds).
+     *
+     * @return void
+     */
     static function StopBind()
     {
         if (sys_versions::ShowOSPlatformVersion() == "Windows") {
@@ -379,6 +453,11 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Reload the BIND service (rndc on Windows, the service command through zsudo elsewhere).
+     *
+     * @return void
+     */
     static function ReloadBind()
     {
         if (sys_versions::ShowOSPlatformVersion() == "Windows") {
@@ -390,6 +469,15 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Replace the records of every domain that has records with the default records.
+     *
+     * Sets self::$reset to the number of domains reset.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller (unused).
+     * @return void
+     */
     static function ResetAll()
     {
         global $zdbh;
@@ -417,6 +505,13 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Replace the records of one domain with the default records.
+     *
+     * @global db_driver $zdbh The panel's database connection (unused).
+     * @param int|string $dn_vhost_fk The domain (x_vhosts) ID, from the inResetDomainID form field.
+     * @return void
+     */
     static function ResetDomain($dn_vhost_fk)
     {
         global $zdbh;
@@ -427,6 +522,15 @@ class module_controller extends ctrl_module
         self::$ok = true;
     }
 
+    /**
+     * Create the default records for every domain that has none.
+     *
+     * Sets self::$addmissing to the number of domains done.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller (unused).
+     * @return void
+     */
     static function AddMissing()
     {
         global $zdbh;
@@ -459,6 +563,15 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Mark every record of the posted type (inType) as deleted.
+     *
+     * Sets self::$deletedtype and self::$type.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller.
+     * @return void
+     */
     static function DeleteType()
     {
         global $zdbh;
@@ -492,6 +605,15 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Remove the records marked as deleted from the database for good.
+     *
+     * Sets self::$purged to the number removed.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller (unused).
+     * @return void
+     */
     static function Purge()
     {
         global $zdbh;
@@ -514,6 +636,15 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Mark every record of every domain as deleted.
+     *
+     * Sets self::$deleted to the number marked.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller (unused).
+     * @return void
+     */
     static function DeleteAll()
     {
         global $zdbh;
@@ -537,6 +668,16 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Mark every record of one domain as deleted.
+     *
+     * Sets self::$deleted to the number marked.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller (unused).
+     * @param int|string $domainid The domain (x_vhosts) ID.
+     * @return void
+     */
     static function DeleteDomainRecords($domainid)
     {
         global $zdbh;
@@ -563,6 +704,11 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Remove the error lines from the BIND log (sets self::$notwritable when it cannot be written).
+     *
+     * @return void
+     */
     static function ClearErrors()
     {
         $bindlog = ctrl_options::GetSystemOption('bind_log');
@@ -594,6 +740,11 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Remove the warning lines from the BIND log (sets self::$notwritable when it cannot be written).
+     *
+     * @return void
+     */
     static function ClearWarnings()
     {
         $bindlog = ctrl_options::GetSystemOption('bind_log');
@@ -625,6 +776,11 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Empty the BIND log (sets self::$notwritable when it cannot be written).
+     *
+     * @return void
+     */
     static function ClearLog()
     {
         $bindlog = ctrl_options::GetSystemOption('bind_log');
@@ -640,6 +796,13 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Build the pie chart of active against deleted DNS records.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller (unused).
+     * @return string The HTML (a heading and the chart image).
+     */
     static function DisplayDNSUsagepChart()
     {
         global $zdbh;
@@ -674,6 +837,13 @@ class module_controller extends ctrl_module
         return $line;
     }
 
+    /**
+     * Build the pie chart of the active DNS records by type.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller (unused).
+     * @return string The HTML (a heading and the chart image).
+     */
     static function DisplayRecordsUsagepChart()
     {
         global $zdbh;
@@ -744,6 +914,14 @@ class module_controller extends ctrl_module
         return $line;
     }
 
+    /**
+     * Create the default records for one domain: A @, CNAME www and ftp, A mail, MX, A ns1/ns2 and two NS.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller (unused).
+     * @param int|string $vh_acc_fk The domain (x_vhosts) ID (despite the name; cast to int).
+     * @return void
+     */
     static function CreateDefaultRecords($vh_acc_fk)
     {
         global $zdbh;
@@ -1025,6 +1203,11 @@ class module_controller extends ctrl_module
         return;
     }
 
+    /**
+     * Read the BIND log into self::$getlog, with its error and warning lines in self::$logerror and self::$logwarning.
+     *
+     * @return void
+     */
     static function ViewErrors()
     {
         $bindlog = ctrl_options::GetSystemOption('bind_log');
@@ -1058,6 +1241,11 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * The message box for the last action (template <@ Result @>).
+     *
+     * @return string|null The HTML of the message, or null when there is nothing to show.
+     */
     static function getResult()
     {
         if (!fs_director::CheckForEmptyValue(self::$ok)) {
@@ -1087,6 +1275,14 @@ class module_controller extends ctrl_module
         return;
     }
 
+    /**
+     * Add a domain ID to the dns_hasupdates list so the daemon rewrites its zone.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller (unused).
+     * @param int|string $id The domain ID; "0" here (all zones).
+     * @return true|null True when the ID was added, null when it was already in the list.
+     */
     static function TriggerDNSUpdate($id)
     {
         global $zdbh;
@@ -1107,6 +1303,12 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Say whether the BIND log can be read.
+     *
+     * @param string $filename Path of the log file.
+     * @return string HTML: a green or red message.
+     */
     static function CheckLogReadable($filename)
     {
         if (is_readable($filename)) {
@@ -1117,6 +1319,12 @@ class module_controller extends ctrl_module
         return $retval;
     }
 
+    /**
+     * Say whether the BIND log can be written.
+     *
+     * @param string $filename Path of the log file.
+     * @return string|null HTML: a green "(writable)" or red "(readonly)", or null when the file cannot be read.
+     */
     static function CheckLogWritable($filename)
     {
         if (is_readable($filename)) {

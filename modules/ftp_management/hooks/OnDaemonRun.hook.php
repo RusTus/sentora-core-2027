@@ -10,14 +10,28 @@ echo fs_filehandler::NewLine() . "START FTP password hashes" . fs_filehandler::N
 FtpHashStoredPasswords();
 echo "END FTP password hashes" . fs_filehandler::NewLine();
 
-/** the same hash the FTP module makes (module_controller::HashPassword); a copy, since
- *  every module's controller is called module_controller and only one can be loaded */
+/**
+ * The same hash the FTP module makes (module_controller::HashPassword); a copy, since
+ * every module's controller is called module_controller and only one can be loaded.
+ *
+ * @param string $password The plain password.
+ * @return string The SHA-512 crypt hash ("$6$...").
+ */
 function FtpHashPassword($password)
 {
     $salt = substr(strtr(base64_encode(random_bytes(12)), '+', '.'), 0, 16);
     return crypt((string) $password, '$6$rounds=50000$' . $salt . '$');
 }
 
+/**
+ * Widen the password columns, add the encrypted-copy column and hash every FTP password still stored as plain text.
+ *
+ * Updates both x_ftpaccounts and ProFTPD's ftpuser table (database from the ftp_db
+ * setting) and prints what it did.
+ *
+ * @global db_driver $zdbh The panel's database connection.
+ * @return void
+ */
 function FtpHashStoredPasswords()
 {
     global $zdbh;

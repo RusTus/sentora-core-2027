@@ -1,7 +1,21 @@
 <?php
 
+/**
+ * DNS Manager module: OnAfterDeleteParkedDomain hook.
+ *
+ * Marks the DNS records of deleted domains as deleted and queues their zone update.
+ *
+ * @package Sentora
+ * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
+ */
 DeleteDNSRecordsForDeletedDomain();
 
+/**
+ * Mark the DNS records of every deleted domain (x_vhosts) as deleted and queue a zone update for it.
+ *
+ * @global db_driver $zdbh The panel's database connection.
+ * @return void
+ */
 function DeleteDNSRecordsForDeletedDomain() {
     global $zdbh;
     $deleteddomains = array();
@@ -32,6 +46,13 @@ function DeleteDNSRecordsForDeletedDomain() {
     }
 }
 
+/**
+ * Add a domain ID to the dns_hasupdates list so the daemon rewrites its zone.
+ *
+ * @global db_driver $zdbh The panel's database connection.
+ * @param int|string $id The domain (x_vhosts) ID.
+ * @return true|null True when the ID was added, null when it was already in the list.
+ */
 function TriggerDNSUpdate($id) {
     global $zdbh;
     $GetRecords = ctrl_options::GetSystemOption('dns_hasupdates');

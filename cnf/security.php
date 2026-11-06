@@ -14,4 +14,8 @@
  */
 global $security;
 
+// The installer replaces the placeholder below with a random key for this server.
+// It is the salt/key the panel uses for its own hashing and encryption: keep it
+// secret and do not change it on a running panel.
+
 $security['server_crypto_key'] = "GENERATED_SALT_HERE";

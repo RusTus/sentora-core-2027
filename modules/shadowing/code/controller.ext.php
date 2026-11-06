@@ -26,10 +26,23 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
  */
+/**
+ * Shadowing module: lets an administrator or reseller log in as one of their client accounts.
+ *
+ * The original account ID is kept in the session ('ruid') so ./?returnsession can switch back.
+ */
 class module_controller extends ctrl_module
 {
+    /** @var mixed Unused. */
     static $shout;
 
+    /**
+     * The accounts the logged-in user may shadow: every account for zadmin, else the reseller's own clients (template <% loop ShadowAccounts %>).
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller (unused).
+     * @return array<int, array<string, mixed>>|false One row per account: 'clientusername', 'clientid', 'packagename', 'usergroup', 'currentdisk', 'currentbandwidth', 'resellerid', 'resellername'; false when there are none.
+     */
     static function getShadowAccounts()
     {
         global $zdbh;
@@ -59,7 +72,7 @@ class module_controller extends ctrl_module
             $sql->execute();
             while ($rowclients = $sql->fetch()) {
                 if ($rowclients['ac_id_pk'] != $currentuser['userid']) {
-                    # tg - added code to get reseller's name
+                    // tg - added code to get reseller's name
                     $grn_sql = "SELECT ac_user_vc FROM x_accounts WHERE ac_id_pk=:resellerid AND ac_deleted_ts IS NULL";
                     $grn = $zdbh->prepare($grn_sql);
                     $grn->bindParam(':resellerid', $rowclients['ac_reseller_fk']);
@@ -75,7 +88,7 @@ class module_controller extends ctrl_module
                         'currentdisk' => fs_director::ShowHumanFileSize(ctrl_users::GetQuotaUsages('diskspace', $rowclients['ac_id_pk'])),
                         'currentbandwidth' => fs_director::ShowHumanFileSize(ctrl_users::GetQuotaUsages('bandwidth', $rowclients['ac_id_pk'])),
                         'resellerid' => $rowclients['ac_reseller_fk'],
-                        'resellername' => $resellerName)); # tg - added code to get reseller's name
+                        'resellername' => $resellerName)); // tg - added code to get reseller's name
                 }
             }
             return $res;
@@ -84,6 +97,16 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Handle the Shadow button: log in as the chosen account (inShadow_<id>), redirect to the panel and exit.
+     *
+     * Checks the CSRF token. Only accounts listed by getShadowAccounts() can be chosen;
+     * nothing happens for any other ID.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller.
+     * @return void
+     */
     static function doShadowUser()
     {
         global $zdbh;

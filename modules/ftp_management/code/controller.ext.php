@@ -26,32 +26,60 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
  */
+/**
+ * FTP Accounts module: create, delete, reset and show the FTP accounts of the logged-in account.
+ *
+ * Accounts are rows of x_ftpaccounts (a crypt hash for ProFTPD plus an encrypted
+ * copy for "show password"); the FTP server specific file named by the ftp_php
+ * setting is included after each change.
+ */
 class module_controller extends ctrl_module
 {
 
+    /** @var string|null Show password: the FTP user name whose password is shown. */
     static $shownuser = null; // Show password
 
+    /** @var string|null Show password: the decrypted password ('' when it could not be decrypted). */
     static $shownpass = null;
 
+    /** @var array{0: string, 1: string, 2: string}|null Show password: ask for the panel password first (form action, button name, FTP user name). */
     static $askpw = null;   // Show password: ask for the panel password first
 
+    /** @var bool|null True when the panel password typed to show a password was wrong. */
     static $wrongpw = null;
 
+    /** @var bool|null General error flag (shown by getResult()). */
     static $error;
+    /** @var bool|null True when the FTP user name is already taken. */
     static $alreadyexists;
+    /** @var bool|null True when the user name or password was blank. */
     static $blank;
+	/** @var bool|null True when the new password was blank. */
 	static $blankpassword;	
+    /** @var bool|null True when the user name has invalid characters. */
     static $badname;
+	/** @var bool|null True when the password does not have a digit, a lower-case and an upper-case letter. */
 	static $badpass;
+	/** @var bool|null True when the password is shorter than the password_minlength setting. */
 	static $badpasswordlength;
+    /** @var bool|null True when the chosen home folder is outside the account's folder. */
     static $invalidPath;
+    /** @var bool|null True after a successful create, delete or password reset. */
     static $ok;
+    /** @var bool|null True after an FTP account was deleted. */
     static $delete;
+    /** @var bool|null True after an FTP password was reset. */
     static $reset;
+    /** @var bool|null True after an FTP account was created. */
     static $create;
 
+    // The 'worker' methods.
+
     /**
-     * The 'worker' methods.
+     * The logged-in account's user name (template <@ CurrentUserName @>, the FTP user name prefix).
+     *
+     * @global runtime_controller $controller The request controller (unused).
+     * @return string The user name.
      */
     static function getCurrentUserName()
     {
@@ -60,6 +88,13 @@ class module_controller extends ctrl_module
         return $currentuser['username'];
     }
 	
+    /**
+     * List an account's FTP accounts.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $uid The panel account ID.
+     * @return array<int, array<string, mixed>>|false One row per FTP account: 'id', 'directory', 'access', 'password' (always ''), 'username'; false when there are none.
+     */
     static function ListClients($uid)
     {
         global $zdbh;
@@ -86,6 +121,13 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Get one FTP account by its ID.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $uid The FTP account ID (ft_id_pk), despite the name.
+     * @return array<int, array<string, mixed>>|false A list with the one row ('id', 'directory', 'access', 'password', 'username'), or false when not found.
+     */
     static function ListCurrentClient($uid)
     {
         global $zdbh;
@@ -112,6 +154,12 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * List the folders in an account's home folder (except _errorpages).
+     *
+     * @param int|string $uid The panel account ID.
+     * @return array<int, array<string, string>> One row per folder: 'domains' => folder name.
+     */
     static function ListMasterDirs($uid)
     {
         $currentuser = ctrl_users::GetUserDetail($uid);
@@ -133,6 +181,12 @@ class module_controller extends ctrl_module
         return $res;
     }
 
+    /**
+     * List the folders in an account's public_html folder (except _errorpages).
+     *
+     * @param int|string $uid The panel account ID.
+     * @return array<int, array<string, string>> One row per folder: 'domains' => folder name.
+     */
     static function ListDomainDirs($uid)
     {
         $currentuser = ctrl_users::GetUserDetail($uid);
@@ -154,6 +208,18 @@ class module_controller extends ctrl_module
         return $res;
     }
 
+    /**
+     * Set a new password on one of the logged-in account's FTP accounts.
+     *
+     * Stores the crypt hash and an encrypted copy, sets self::$reset, includes the FTP
+     * server specific file and runs the OnBefore/OnAfterResetFTPPassword hooks.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller.
+     * @param int|string $ft_id_pk The FTP account ID.
+     * @param string $password The new password.
+     * @return bool|null True when changed; null when the account is not the logged-in account's; false when the password is not valid.
+     */
     static function ExecuteResetPassword($ft_id_pk, $password)
     {
         global $zdbh;
@@ -207,6 +273,23 @@ class module_controller extends ctrl_module
 		
     }
 
+    /**
+     * Create an FTP account (named <account>_<username>) for a panel account.
+     *
+     * Sets self::$create, includes the FTP server specific file and runs the
+     * OnBefore/OnAfterCreateFTPAccount hooks.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller.
+     * @param int|string $uid The panel account ID.
+     * @param string $username The FTP user name without the account prefix.
+     * @param string $password The password.
+     * @param string $destination The existing folder in the account's home folder (when $home is not 1 or 3).
+     * @param string $domainDestination The existing folder in public_html (when $home is 3).
+     * @param string $access_type The access: 'RO', 'WO' or 'RW'.
+     * @param int|string $home 1: a new folder named after the user; 3: $domainDestination; else $destination.
+     * @return bool True when created.
+     */
     static function ExecuteCreateFTP($uid, $username, $password, $destination, $domainDestination, $access_type, $home)
     {
         global $zdbh;
@@ -272,7 +355,10 @@ class module_controller extends ctrl_module
 
     /**
      * SHA-512 crypt hash ("$6$", salted, 50,000 rounds) of an FTP password: ProFTPD
-     * checks logins against it with the system's crypt() (SQLAuthTypes Crypt)
+     * checks logins against it with the system's crypt() (SQLAuthTypes Crypt).
+     *
+     * @param string $password The plain password.
+     * @return string The crypt hash.
      */
     static function HashPassword($password)
     {
@@ -280,6 +366,16 @@ class module_controller extends ctrl_module
         return crypt((string) $password, '$6$rounds=50000$' . $salt . '$');
     }
 
+    /**
+     * Validate a new FTP account's user name and password and check the name is free.
+     *
+     * Sets the matching error flags (self::$blank, $badname, $badpass, $alreadyexists).
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param string $username The full FTP user name.
+     * @param string $password The password.
+     * @return bool True when there is an error.
+     */
     static function CheckForErrors($username, $password)
     {
         global $zdbh;
@@ -313,11 +409,26 @@ class module_controller extends ctrl_module
         return $retval;
     }
 	
+    /**
+     * Check an FTP user name: letters, digits, underscores and dashes, at most 63 characters.
+     *
+     * @param string $username The user name.
+     * @return bool
+     */
     static function IsValidUserName($username)
     {
         return preg_match('/^[a-z\d_][a-z\d_-]{0,62}$/i', $username) || preg_match('/-$/', $username) == 1;
     }
 
+	/**
+	 * Validate a new FTP password.
+	 *
+	 * Sets self::$blankpassword, self::$badpasswordlength or self::$badpass.
+	 *
+	 * @global db_driver $zdbh The panel's database connection (unused).
+	 * @param string $password The password.
+	 * @return bool True when there is an error (but false when the password is too short).
+	 */
 	static function CheckPasswordForErrors($password)
     {
         global $zdbh;
@@ -341,12 +452,30 @@ class module_controller extends ctrl_module
 		return $retval;
     }
 	
+	/**
+	 * Check that a password has a digit, a lower-case and an upper-case letter.
+	 *
+	 * @param string $password The password.
+	 * @return bool
+	 */
 	static function IsValidPassword($password)
     {
         //return preg_match('/(?=.*\d)(?=.*[a-z])(?=.*[A-Z]).{8,}/', $password) || preg_match('/-$/', $password) == 1;
 		return preg_match('/(?=.*\d)(?=.*[a-z])(?=.*[A-Z])/', $password) || preg_match('/-$/', $password) == 1;
     }
 	
+    /**
+     * Delete one of an account's FTP accounts (marks it deleted).
+     *
+     * Sets self::$delete, includes the FTP server specific file and runs the
+     * OnBefore/OnAfterDeleteFTPAccount hooks.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller.
+     * @param int|string $ft_id_pk The FTP account ID.
+     * @param int|null $uid Optional. The panel account ID; null for the logged-in account. Default null.
+     * @return true|null True when deleted, null when the FTP account is not the account's.
+     */
     static function ExecuteDeleteFTP($ft_id_pk, $uid = null)
     {
         global $zdbh;
@@ -392,8 +521,15 @@ class module_controller extends ctrl_module
      * End 'worker' methods.
      */
 
+    // Webinterface sudo methods.
+
     /**
-     * Webinterface sudo methods.
+     * Handle the create form: create the FTP account for the logged-in account.
+     *
+     * Checks the CSRF token; sets self::$ok on success.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return bool True when created.
      */
     static function doCreateFTP()
     {
@@ -409,6 +545,14 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Handle the delete confirmation: delete the posted FTP account (inDelete).
+     *
+     * Checks the CSRF token; sets self::$ok on success.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return true
+     */
     static function doDeleteFTP()
     {
         global $controller;
@@ -419,6 +563,14 @@ class module_controller extends ctrl_module
         return true;
     }
 
+    /**
+     * Handle the password form: set the posted password (inPassword) on the FTP account inReset.
+     *
+     * Checks the CSRF token; sets self::$ok on success.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return true
+     */
     static function doResetPassword()
     {
         global $controller;
@@ -429,6 +581,11 @@ class module_controller extends ctrl_module
         return true;
     }
 
+    /**
+     * The logged-in account's FTP accounts (template <% loop ClientList %>).
+     *
+     * @return array<int, array<string, mixed>>|false One row per FTP account (see ListClients()), or false when there are none.
+     */
     static function getClientList()
     {
         $currentuser = ctrl_users::GetUserDetail();
@@ -436,6 +593,11 @@ class module_controller extends ctrl_module
         return (!fs_director::CheckForEmptyValue($clientlist)) ? $clientlist : false;
     }
 
+    /**
+     * The folders in the account's public_html (template <% loop DomainDirsList %>).
+     *
+     * @return array<int, array<string, string>>|false One row per folder ('domains'), or false when there are none.
+     */
     static function getDomainDirsList()
     {
         $currentuser = ctrl_users::GetUserDetail();
@@ -443,6 +605,11 @@ class module_controller extends ctrl_module
         return (!fs_director::CheckForEmptyValue($domaindirectories)) ? $domaindirectories : false;
     }
 
+    /**
+     * The folders in the account's home folder (template <% loop MasterDirsList %>).
+     *
+     * @return array<int, array<string, string>>|false One row per folder ('domains'), or false when there are none.
+     */
     static function getMasterDirsList()
     {
         $currentuser = ctrl_users::GetUserDetail();
@@ -450,6 +617,17 @@ class module_controller extends ctrl_module
         return (!fs_director::CheckForEmptyValue($domaindirectories)) ? $domaindirectories : false;
     }
 
+    /**
+     * Handle the buttons of the FTP account list: delete, reset password or show password.
+     *
+     * Checks the CSRF token. Delete and reset redirect to the confirmation page and
+     * exit; show password asks for the panel password first, then decrypts it into
+     * self::$shownuser / self::$shownpass.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @global db_driver $zdbh The panel's database connection.
+     * @return void
+     */
     static function doEditFTP()
     {
         global $controller;
@@ -494,6 +672,12 @@ class module_controller extends ctrl_module
         return;
     }
 
+    /**
+     * Whether to show the create form: no 'show' in the URL (template <% if isCreateFTP %>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return bool
+     */
     static function getisCreateFTP()
     {
         global $controller;
@@ -501,6 +685,14 @@ class module_controller extends ctrl_module
         return !isset($urlvars['show']);
     }
 
+    /**
+     * Whether to show the delete confirmation for the FTP account in the URL ('other') (template <% if isDeleteFTP %>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|null $uid Optional. The panel account ID; null for the logged-in account. Default null.
+     * @return bool|null Null when the FTP account is not the account's.
+     */
     static function getisDeleteFTP($uid = null)
     {
         global $controller;
@@ -526,6 +718,14 @@ class module_controller extends ctrl_module
         return (isset($urlvars['show'])) && ($urlvars['show'] == "Delete");
     }
 
+    /**
+     * Whether to show the reset password form for the FTP account in the URL ('other') (template <% if isEditFTP %>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|null $uid Optional. The panel account ID; null for the logged-in account. Default null.
+     * @return bool|null Null when the FTP account is not the account's.
+     */
     static function getisEditFTP($uid = null)
     {
         global $controller;
@@ -551,6 +751,12 @@ class module_controller extends ctrl_module
         return (isset($urlvars['show'])) && ($urlvars['show'] == "Edit");
     }
 
+    /**
+     * The user name of the FTP account in the URL ('other') (template <@ EditCurrentName @>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return string The user name, or '' when there is no 'other'.
+     */
     static function getEditCurrentName()
     {
         global $controller;
@@ -562,6 +768,12 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * The ID of the FTP account in the URL ('other') (template <@ EditCurrentID @>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return int|string The ID, or '' when there is no 'other'.
+     */
     static function getEditCurrentID()
     {
         global $controller;
@@ -573,6 +785,11 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Whether the account may create another FTP account (template <% if QuotaLimit %>).
+     *
+     * @return bool
+     */
     static function getQuotaLimit()
     {
         $currentuser = ctrl_users::GetUserDetail();
@@ -580,6 +797,12 @@ class module_controller extends ctrl_module
                 ($currentuser['ftpaccountsquota'] > ctrl_users::GetQuotaUsages('ftpaccounts', $currentuser['userid']));
     }
 
+    /**
+     * The FTP accounts quota image: "unlimited", or a pie chart of free and used (template <@ FTPUsagepChart @>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return string The HTML <img> tag.
+     */
     static function getFTPUsagepChart()
     {
     global $controller;
@@ -601,6 +824,11 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * The password length to suggest: the password_minlength setting, at least 9 (template <@ MinPassLength @>).
+     *
+     * @return int|string
+     */
     static function getMinPassLength()
     {
         $minpasswordlength = ctrl_options::GetSystemOption('password_minlength');
@@ -613,6 +841,11 @@ class module_controller extends ctrl_module
         return $uselength;
     }
 
+    /**
+     * The message box for the last action, or the panel password form for "show password" (template <@ Result @>).
+     *
+     * @return string|null The HTML, or null when there is nothing to show.
+     */
     static function getResult()
     {
         if (self::$askpw !== null) {

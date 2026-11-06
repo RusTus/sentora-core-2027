@@ -26,11 +26,24 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
  */
+/**
+ * Backup Config module (Admin): backup settings, off-server backup and panel restore.
+ *
+ * The settings are rows of x_settings for this module; the off-server backup and
+ * the restore requests are carried out by the daemon (hooks/OnDaemonRun.hook.php).
+ */
 class module_controller extends ctrl_module
 {
 
+    /** @var bool|null True after doUpdateConfig() saved the settings (read by getResult()). */
     static $ok;
 
+    /**
+     * List the module's user-editable settings for the settings form.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return array<int, array<string, string>>|false One row per setting: 'cleanname', 'name', 'description', 'value', 'fieldhtml'; false when there are none.
+     */
     static function getConfig()
     {
         global $zdbh;
@@ -66,6 +79,15 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Save the posted values of the module's settings (empty values are skipped).
+     *
+     * Checks the CSRF token and sets self::$ok.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller.
+     * @return void
+     */
     static function doUpdateConfig()
     {
         global $zdbh;
@@ -96,11 +118,18 @@ class module_controller extends ctrl_module
 
     // --- off-server backup (its own section: proper fields, an encrypted password) ------------
 
+    /** @var string[] Validation errors of the last off-server backup form post (shown by getResult()). */
     static $offsiteErrors = array();
+    /** @var bool True after doSaveOffsite() saved the off-server backup settings. */
     static $offsiteSaved = false;
+    /** @var string The job just queued for the daemon: 'check', 'now', or '' for none. */
     static $offsiteQueued = '';
 
-    /** the off-server backup settings, with their defaults */
+    /**
+     * The off-server backup settings, with their defaults.
+     *
+     * @return array<string, string> Setting name (offsite_*) => default value.
+     */
     static function OffsiteDefaults()
     {
         return array('offsite_enabled' => 'false', 'offsite_server' => '', 'offsite_port' => '22', 'offsite_user' => 'sentora-backup',
@@ -108,6 +137,11 @@ class module_controller extends ctrl_module
             'offsite_mail' => 'true', 'offsite_request' => '');
     }
 
+    /**
+     * Read the current off-server backup settings, using the defaults for missing ones.
+     *
+     * @return array<string, string> Setting name (offsite_*) => value.
+     */
     static function Offsite()
     {
         $v = array();
@@ -118,6 +152,14 @@ class module_controller extends ctrl_module
         return $v;
     }
 
+    /**
+     * Store one off-server backup setting, creating the x_settings row when it is missing.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param string $name The setting name (offsite_*).
+     * @param string|int $value The value (stored as a string).
+     * @return void
+     */
     static function SetOffsite($name, $value)
     {
         global $zdbh;
@@ -130,6 +172,15 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Validate and save the posted off-server backup form.
+     *
+     * Checks the CSRF token. On errors fills self::$offsiteErrors and saves nothing;
+     * otherwise stores the settings (the password encrypted) and sets self::$offsiteSaved.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return void
+     */
     static function doSaveOffsite()
     {
         global $controller;
@@ -193,7 +244,15 @@ class module_controller extends ctrl_module
         self::$offsiteSaved = true;
     }
 
-    /** Test connection / Back up now: run by the daemon (root) within 5 minutes */
+    /**
+     * Test connection / Back up now: queue a job for the daemon (root), run within 5 minutes.
+     *
+     * Checks the CSRF token; sets self::$offsiteQueued, or self::$offsiteErrors when no
+     * server or folder is set.
+     *
+     * @param string $what The job: 'check' (test connection) or 'now' (back up now).
+     * @return void
+     */
     static function QueueOffsite($what)
     {
         runtime_csfr::Protect();
@@ -206,16 +265,31 @@ class module_controller extends ctrl_module
         self::$offsiteQueued = $what;
     }
 
+    /**
+     * Handle the "Test connection" button: queue a connection test.
+     *
+     * @return void
+     */
     static function doOffsiteCheck()
     {
         self::QueueOffsite('check');
     }
 
+    /**
+     * Handle the "Back up now" button: queue an off-server backup.
+     *
+     * @return void
+     */
     static function doOffsiteNow()
     {
         self::QueueOffsite('now');
     }
 
+    /**
+     * Build the off-server backup settings form and its two action buttons (template <@ OffsiteForm @>).
+     *
+     * @return string The HTML.
+     */
     static function getOffsiteForm()
     {
         $o = self::Offsite();
@@ -243,6 +317,13 @@ class module_controller extends ctrl_module
         return $html;
     }
 
+    /**
+     * Build the off-server backup status table (template <@ OffsiteStatus @>).
+     *
+     * Reads the queued request and /var/lib/sentora/offsite-backup.json written by the backup script.
+     *
+     * @return string The HTML.
+     */
     static function getOffsiteStatus()
     {
         $o = self::Offsite();
@@ -270,15 +351,28 @@ class module_controller extends ctrl_module
     const RESTORE_REQ = '/var/lib/sentora/tmp/panel-restore-request.json';
     const RESTORE_STATE = '/var/lib/sentora/panel-restore.json';
     const RESTORE_CATALOG = '/var/lib/sentora/restore-catalog.json';
+    /** @var array<int, array{0: string, 1: string}> Messages for getResult(): array(kind 'ok'|'error', text). */
     static $restoreMsg = array();
 
+    /**
+     * Read a JSON file of the restore tool.
+     *
+     * @param string $file Path of the JSON file.
+     * @return array<string, mixed> The decoded data, or an empty array when the file is missing or not valid JSON.
+     */
     static function RestoreJson($file)
     {
         $d = @json_decode((string) @file_get_contents($file), true);
         return is_array($d) ? $d : array();
     }
 
-    /** a snapshot of the catalog, by server and date (format 2 only), or null */
+    /**
+     * A snapshot of the catalog, by server and date (format 2 only), or null.
+     *
+     * @param string $server The server name of the snapshot.
+     * @param string $date The date (night) of the snapshot.
+     * @return array<string, mixed>|null The snapshot entry ('server', 'date', 'format', 'accounts', 'databases', ...), or null when not found.
+     */
     static function RestoreSnapshot($server, $date)
     {
         foreach ((array) (self::RestoreJson(self::RESTORE_CATALOG)['snapshots'] ?? array()) as $s) {
@@ -289,8 +383,16 @@ class module_controller extends ctrl_module
         return null;
     }
 
-    /** after a request is accepted: its message in the session and a plain address, so a
-     *  reload of the page does not send the request again */
+    /**
+     * After a request is accepted: its message in the session and a plain address, so a
+     * reload of the page does not send the request again.
+     *
+     * Sends a Location header and exits.
+     *
+     * @param string $message The message to show after the redirect.
+     * @param string $snap Optional. The snapshot ('server/date') to open again. Default ''.
+     * @return void Never returns (exit).
+     */
     static function RestoreDone($message, $snap = '')
     {
         $_SESSION['bk_restore_msg'] = $message;
@@ -298,6 +400,12 @@ class module_controller extends ctrl_module
         exit;
     }
 
+    /**
+     * Write a restore request for the daemon, unless one is already queued or running.
+     *
+     * @param array<string,mixed> $req The request: 'action' ('list', 'account' or 'full') and its details.
+     * @return bool True when queued; false (with a message in self::$restoreMsg) when busy.
+     */
     static function RestoreQueue(array $req)
     {
         $st = self::RestoreJson(self::RESTORE_STATE);
@@ -311,6 +419,13 @@ class module_controller extends ctrl_module
         return true;
     }
 
+    /**
+     * Handle "Read the backups": queue a listing of the snapshots, then redirect.
+     *
+     * Checks the CSRF token; exits through RestoreDone() when queued.
+     *
+     * @return void
+     */
     static function doRestoreList()
     {
         runtime_csfr::Protect();
@@ -319,6 +434,15 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Handle "Restore this account": validate the form and queue the restore of one account.
+     *
+     * Checks the CSRF token; exits through RestoreDone() when queued, otherwise adds
+     * an error to self::$restoreMsg.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return void
+     */
     static function doRestoreAccount()
     {
         global $controller;
@@ -352,6 +476,15 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Handle "Restore the whole panel": validate the form and queue a full restore.
+     *
+     * Checks the CSRF token and the typed RESTORE confirmation; exits through
+     * RestoreDone() when queued, otherwise adds an error to self::$restoreMsg.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return void
+     */
     static function doRestoreFull()
     {
         global $controller;
@@ -371,6 +504,12 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Build the restore section: job status, the snapshot list and the restore forms (template <@ Restore @>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return string The HTML.
+     */
     static function getRestore()
     {
         global $controller;
@@ -449,6 +588,11 @@ class module_controller extends ctrl_module
         return $out;
     }
 
+    /**
+     * The message box for the last action (template <@ Result @>).
+     *
+     * @return string|null The HTML of the message, or null when there is nothing to show.
+     */
     static function getResult()
     {
         foreach (self::$offsiteErrors as $e) {

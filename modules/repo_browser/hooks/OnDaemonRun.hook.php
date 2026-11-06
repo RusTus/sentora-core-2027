@@ -6,6 +6,9 @@
  * The panel (user "sentora") can only queue a command; the modules folder and
  * the zppy package cache belong to root. Every command is checked again here
  * against the same rules before it runs.
+ *
+ * @package Sentora
+ * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
  */
 require_once dirname(__FILE__) . '/../code/repohelper.php';
 
@@ -13,6 +16,15 @@ echo fs_filehandler::NewLine() . "START Repo Browser queued commands." . fs_file
 RepoBrowserRunQueue();
 echo "END Repo Browser queued commands." . fs_filehandler::NewLine();
 
+/**
+ * Run every queued zppy command as root, one at a time, and store each result in x_zppy_queue.
+ *
+ * Each job is claimed first (status 'running') so two daemon runs never run the same
+ * one; installed modules are made root's and given to the administrators.
+ *
+ * @global db_driver $zdbh The panel's database connection.
+ * @return void
+ */
 function RepoBrowserRunQueue()
 {
     global $zdbh;
@@ -76,7 +88,12 @@ function RepoBrowserRunQueue()
     RepoBrowserSummary();
 }
 
-/** a queued command in words, for the daemon log */
+/**
+ * A queued command in words, for the daemon log.
+ *
+ * @param mixed $args The decoded zppy arguments (anything but an array is "unreadable").
+ * @return string
+ */
 function RepoBrowserDescribe($args)
 {
     if (!is_array($args) || !isset($args[0])) {
@@ -94,7 +111,14 @@ function RepoBrowserDescribe($args)
     return 'zppy ' . implode(' ', $a);
 }
 
-/** the result line of a command's output (its last meaningful line, not download progress) */
+/**
+ * The result line of a command's output (its last meaningful line, not download progress).
+ *
+ * Adds the "Failed to contact" lines when there are any; at most 300 characters.
+ *
+ * @param string $output The command's output.
+ * @return string
+ */
 function RepoBrowserLastLine($output)
 {
     $lines = array_values(array_filter(array_map('trim', preg_split('/\r\n|\r|\n/', (string) $output)), function ($l) {
@@ -112,6 +136,12 @@ function RepoBrowserLastLine($output)
     return strlen($last) > 300 ? substr($last, 0, 300) . '...' : $last;
 }
 
+/**
+ * A duration for the daemon log, such as "4.2s", "35s" or "2m 5s".
+ *
+ * @param int|float $seconds The duration in seconds.
+ * @return string
+ */
 function RepoBrowserDuration($seconds)
 {
     $seconds = max(0, (float) $seconds);
@@ -121,7 +151,12 @@ function RepoBrowserDuration($seconds)
     return floor($seconds / 60) . 'm ' . ((int) $seconds % 60) . 's';
 }
 
-/** repositories, available packages and failed jobs still waiting for attention */
+/**
+ * Print the repositories, available packages and failed jobs still waiting for attention.
+ *
+ * @global db_driver $zdbh The panel's database connection.
+ * @return void
+ */
 function RepoBrowserSummary()
 {
     global $zdbh;
@@ -136,7 +171,13 @@ function RepoBrowserSummary()
         . ($failed ? "; " . $failed . " command(s) failed in the last 7 days (see Repo Browser)" : '') . "." . fs_filehandler::NewLine();
 }
 
-/** an installed module's files belong to root and can not be changed by the panel or the sites */
+/**
+ * An installed module's files belong to root and can not be changed by the panel or the sites.
+ *
+ * @param string $root The panel's root folder (sentora_root, with a trailing slash).
+ * @param string $module The module folder name.
+ * @return void
+ */
 function RepoBrowserSecureModule($root, $module)
 {
     $dir = $root . 'modules/' . $module;
@@ -145,7 +186,13 @@ function RepoBrowserSecureModule($root, $module)
     }
 }
 
-/** new modules start out for administrators only */
+/**
+ * New modules start out for administrators only (group 1 gets the permission if it has none).
+ *
+ * @global db_driver $zdbh The panel's database connection.
+ * @param string $module The module folder name.
+ * @return void
+ */
 function RepoBrowserGiveToAdmins($module)
 {
     global $zdbh;
@@ -162,7 +209,13 @@ function RepoBrowserGiveToAdmins($module)
     }
 }
 
-/** a .zpp uploaded in Module Admin */
+/**
+ * Install a .zpp uploaded in Module Admin: unzip it (refusing paths outside the module folder), register it and run its deploy/install.run.
+ *
+ * @param string $root The panel's root folder (sentora_root, with a trailing slash).
+ * @param string $module The module folder name.
+ * @return array{0: bool, 1: string} array(success, output message).
+ */
 function RepoBrowserInstallUpload($root, $module)
 {
     $zpp = repo_browser_helper::UPLOAD_DIR . $module . '.zpp';

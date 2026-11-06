@@ -46,7 +46,13 @@ if (isset($_GET['returnsession'])) {
     exit;
 }
 
-/** where a login lands: the Dashboard when it is on and the account may open it */
+/**
+ * Where a login lands: the Dashboard when it is on and the account may open it.
+ *
+ * @global db_driver $zdbh The panel's database connection.
+ * @param int|string $uid The account ID that just logged in.
+ * @return string './?module=dashboard' or './'.
+ */
 function sentora_after_login($uid)
 {
     global $zdbh;
@@ -84,9 +90,9 @@ if (isset($_POST['inForgotPassword'])) {
         }
         $port = ctrl_options::GetSystemOption('sentora_port');
         $domain = ctrl_options::GetSystemOption('sentora_domain');
-        # If using non-standard port
+        // If using non-standard port
         if ($port !== "80" && $port !== "443" && !empty($port)) {
-            # Append port to domain
+            // Append port to domain
             $domain .= ":" . $port;
         }
         $phpmailer = new sys_email();

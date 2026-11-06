@@ -4,6 +4,9 @@
  * Panel administrators only (it covers every customer's domains: this checked only that
  * somebody was logged in), every line escaped (a DNS name in the log could otherwise put
  * a script into the administrator's page), the last 2000 lines, never through a link.
+ *
+ * @package Sentora
+ * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
  */
 chdir(dirname(__FILE__) . '/../../../');
 require_once 'dryden/loader.inc.php';

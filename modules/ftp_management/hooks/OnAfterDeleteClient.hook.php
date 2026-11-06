@@ -1,7 +1,25 @@
 <?php
 
+/**
+ * FTP Accounts module: OnAfterDeleteClient hook.
+ *
+ * Lists the deleted accounts and includes the FTP server specific hook file
+ * (ftp_php setting), which removes their FTP users.
+ *
+ * @package Sentora
+ * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
+ */
 DeleteFTPForDeletedClient();
 
+/**
+ * Remove the FTP users of deleted accounts through the FTP server specific hook file.
+ *
+ * The included file uses $deletedclients (the IDs of the deleted accounts).
+ *
+ * @global db_driver $zdbh The panel's database connection.
+ * @global runtime_controller $controller The request controller (unused).
+ * @return void
+ */
 function DeleteFTPForDeletedClient() {
     global $zdbh;
     global $controller;

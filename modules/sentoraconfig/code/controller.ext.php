@@ -24,11 +24,23 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
  */
+/**
+ * Sentora Config module (Admin): the panel's general settings and the daemon run times.
+ */
 class module_controller extends ctrl_module
 {
 
+    /** @var bool|null True after the settings were saved or a daemon run was forced (shown by getResult()). */
     static $ok;
 
+    /**
+     * List the module's user-editable settings for the settings form (template <% loop Config %>).
+     *
+     * The SMTP password gets a password field.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return array<int, array<string, string>>|false One row per setting: 'cleanname', 'name', 'description', 'value', 'fieldhtml'; false when there are none.
+     */
     static function getConfig()
     {
         global $zdbh;
@@ -64,6 +76,11 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * When the daemon last ran, formatted with the sentora_df setting (template <@ LastRunTime @>).
+     *
+     * @return string|false The date, or false when it has not run (or a full run was forced).
+     */
     static function getLastRunTime()
     {
         $time = ctrl_options::GetSystemOption('daemon_lastrun');
@@ -74,6 +91,11 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * When the daemon runs next: the last run plus daemon_run_interval, else the next 5-minute mark (template <@ NextRunTime @>).
+     *
+     * @return string The formatted date.
+     */
     static function getNextRunTime()
     {
         if (ctrl_options::GetSystemOption('daemon_lastrun') > 0) {
@@ -85,6 +107,11 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * When the daily daemon jobs last ran (template <@ LastDayRunTime @>).
+     *
+     * @return string|false The formatted date, or false when they have not run.
+     */
     static function getLastDayRunTime()
     {
         $time = ctrl_options::GetSystemOption('daemon_dayrun');
@@ -95,6 +122,11 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * When the weekly daemon jobs last ran (template <@ LastWeekRunTime @>).
+     *
+     * @return string|false The formatted date, or false when they have not run.
+     */
     static function getLastWeekRunTime()
     {
         $time = ctrl_options::GetSystemOption('daemon_weekrun');
@@ -105,6 +137,11 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * When the monthly daemon jobs last ran (template <@ LastMonthRunTime @>).
+     *
+     * @return string|false The formatted date, or false when they have not run.
+     */
     static function getLastMonthRunTime()
     {
         $time = ctrl_options::GetSystemOption('daemon_monthrun');
@@ -115,6 +152,15 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Save the posted values of the module's settings (empty values are skipped) and have the vhosts rewritten.
+     *
+     * Checks the CSRF token and sets self::$ok.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller.
+     * @return void
+     */
     static function doUpdateConfig()
     {
         global $zdbh;
@@ -138,11 +184,17 @@ class module_controller extends ctrl_module
                     $updatesql->execute();
                 }
             }
-            self::SetWriteApacheConfigTrue(); #sentora apache port changed require rewrite of vhosts
+            self::SetWriteApacheConfigTrue(); //sentora apache port changed require rewrite of vhosts
         }
         self::$ok = true;
     }
 
+    /**
+     * Set apache_changed so the daemon rewrites the Apache vhosts on its next run.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return void
+     */
     static function SetWriteApacheConfigTrue()
     {
         global $zdbh;
@@ -150,6 +202,15 @@ class module_controller extends ctrl_module
         $sql->execute();
     }
 
+    /**
+     * Handle "force full daemon run": reset the last run times so every daily, weekly and monthly job runs next time.
+     *
+     * Checks the CSRF token and sets self::$ok.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller.
+     * @return void
+     */
     static function doForceDaemon()
     {
         global $zdbh;
@@ -169,6 +230,11 @@ class module_controller extends ctrl_module
         self::$ok = true;
     }
 
+    /**
+     * The message box for the last action (template <@ Result @>).
+     *
+     * @return string|null The HTML, or null when there is nothing to show.
+     */
     static function getResult()
     {
         if (!fs_director::CheckForEmptyValue(self::$ok)) {

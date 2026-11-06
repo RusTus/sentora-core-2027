@@ -4,6 +4,12 @@
  * Repo Browser: status and information fragments loaded by the module page.
  * Only a logged-in administrator may use it, and it only contacts
  * repositories that are listed in etc/zppy-cache/repo.list.
+ *
+ * GET parameters (one per request): request, modinfo, update or repostat; each
+ * prints an HTML fragment.
+ *
+ * @package Sentora
+ * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
  */
 error_reporting(E_ERROR | E_PARSE);
 chdir(dirname(__FILE__) . '/../../../');
@@ -31,13 +37,28 @@ if (isset($_GET['request'])) {
     AjaxReturnDownloads((string) $_GET['repostat']);
 }
 
+/**
+ * An OK / failed label with a tooltip.
+ *
+ * @param bool $ok True for a green OK label.
+ * @param string $title The tooltip text.
+ * @param string $bad Optional. The text of the red label. Default 'NO'.
+ * @return string The HTML.
+ */
 function Label($ok, $title, $bad = 'NO')
 {
     $class = $ok ? 'label-success' : 'label-danger';
     return '<a href="javascript:void(0)" title="' . repo_browser_helper::h($title) . '"><span class="label ' . $class . '">' . ($ok ? 'OK' : $bad) . '</span></a>';
 }
 
-/* "R:::repo" for a repository, "M:::<repository address>/module.zpp" for a package */
+/**
+ * Print the status label of a repository ("R:::repo") or a package ("M:::<repository address>/module.zpp").
+ *
+ * Only repositories in repo.list are contacted; prints nothing for anything else.
+ *
+ * @param string $request The request value.
+ * @return void
+ */
 function AjaxReturnStatus($request)
 {
     $parts = explode(':::', $request, 2);
@@ -64,6 +85,13 @@ function AjaxReturnStatus($request)
     }
 }
 
+/**
+ * The x_modules row of an installed module.
+ *
+ * @global db_driver $zdbh The panel's database connection.
+ * @param string $module The module folder name.
+ * @return array<int|string, mixed>|false The row, or false when the module is not installed.
+ */
 function InstalledModule($module)
 {
     global $zdbh;
@@ -73,6 +101,12 @@ function InstalledModule($module)
     return $sql->fetch();
 }
 
+/**
+ * Print the information box of a module ("repo:::module"): the installed version, or what the repository says about it.
+ *
+ * @param string $full The "repo:::module" value.
+ * @return void
+ */
 function AjaxReturnModInfo($full)
 {
     $split = repo_browser_helper::SplitFull($full);
@@ -113,6 +147,14 @@ function AjaxReturnModInfo($full)
         . SiteLink($info) . '<br>Repo: ' . $h($repo) . $ostype;
 }
 
+/**
+ * Print the "new version available" box (and a version-mismatch fix) for an installed module ("repo:::module").
+ *
+ * Prints nothing when the module is not installed, is a core module or is up to date.
+ *
+ * @param string $full The "repo:::module" value.
+ * @return void
+ */
 function AjaxReturnUpdate($full)
 {
     $split = repo_browser_helper::SplitFull($full);
@@ -149,6 +191,12 @@ function AjaxReturnUpdate($full)
     echo $line;
 }
 
+/**
+ * Print the download count of a module ("repo:::module") from the repository's statistics.
+ *
+ * @param string $full The "repo:::module" value.
+ * @return void
+ */
 function AjaxReturnDownloads($full)
 {
     $split = repo_browser_helper::SplitFull($full);
@@ -178,6 +226,12 @@ function AjaxReturnDownloads($full)
     }
 }
 
+/**
+ * The author's name, as a mailto link when the e-mail address is valid.
+ *
+ * @param array<string,string> $info Module tags (see ModuleXMLTags()).
+ * @return string The HTML.
+ */
 function MailLink($info)
 {
     $h = 'repo_browser_helper::h';
@@ -189,6 +243,12 @@ function MailLink($info)
     return $h($name);
 }
 
+/**
+ * A "Visit Author Site" link when the author URL is a valid http(s) URL.
+ *
+ * @param array<string,string> $info Module tags (see ModuleXMLTags()).
+ * @return string The HTML, or ''.
+ */
 function SiteLink($info)
 {
     $url = isset($info['authorurl']) ? (string) $info['authorurl'] : '';
@@ -198,7 +258,13 @@ function SiteLink($info)
     return '';
 }
 
-/* Tags of a module.xml (local file) or update xml (downloaded text) */
+/**
+ * Tags of a module.xml (local file) or update xml (downloaded text).
+ *
+ * @param string|null $file Optional. Path of a local module.xml (read instead of $xml). Default null.
+ * @param string|null $xml Optional. The XML text. Default null.
+ * @return array<string, string>|false Tag => value for name, version, desc, updatedesc, authorname, authoremail, authorurl, latestversion, downloadurl and ostype; false when there is none or the XML is not valid.
+ */
 function ModuleXMLTags($file = null, $xml = null)
 {
     if ($file !== null) {

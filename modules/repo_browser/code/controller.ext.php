@@ -1,38 +1,64 @@
 <?php
 
+/**
+ * Repo Browser module (Admin): controller.
+ *
+ * @package Sentora
+ * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
+ */
+
 require_once dirname(__FILE__) . '/repohelper.php';
 
 /**
  *
  * Sentora - repo browser zpanel plugin, written by RusTus: www.zpanelcp.com.
  *
+ * Lists the module repositories and their packages and queues zppy commands
+ * (install, remove, upgrade, repo add/remove) for the daemon, which runs them as root.
  */
  
 class module_controller {
 
-    /** the warning icon in the page (ui_status, no image file) */
+    /**
+     * The warning icon in the page (ui_status, no image file) (template <@ WarnIcon @>).
+     *
+     * @return string The HTML.
+     */
     static function getWarnIcon()
     {
         return ui_status::Warn('Warning');
     }
 
 
+    /** @var bool|null True after a command was queued (shown by getResult()). */
     static $ok = NULL;
+	/** @var string|null HTML: the queued command, shown by getZppyOut(). */
 	static $zppyout1 = NULL;
+	/** @var string|null HTML: more output for getZppyOut() (not set any more). */
 	static $zppyout2 = NULL;
+	/** @var bool|null True when the module to install is not in the repository. */
 	static $modulenotfound = NULL;
+	/** @var bool|null True when a zppy command or repository address was not valid or could not be queued. */
 	static $zppycommanderror = NULL;
+	/** @var bool|null True when the module or repository already has a job waiting. */
 	static $alreadyqueued = NULL;
+	/** @var bool|null True after a repository that could not be added was removed from the list. */
 	static $repodismissed = NULL;
+	/** @var bool|null True when the zppy command was empty. */
 	static $zppycommandblank = NULL;
+	/** @var bool|null True when the typed command started with "zppy". */
 	static $zppycommandzppynotneeded = NULL;
+	/** @var bool|null ZPPY patch installed (not set any more). */
 	static $zppypatchok = NULL;
+	/** @var bool|null ZPPY patch failed (not set any more). */
 	static $zppypatcherror = NULL;
 
     /**
      * The repositories: those in the list (checked live by ajax.php; a Retry button
      * appears if the check fails), those waiting to be added or removed (Queued), and
-     * those the daemon could not add (Failed, with Retry and Remove)
+     * those the daemon could not add (Failed, with Retry and Remove).
+     *
+     * @return array<int, array<string, string>>|false One row per repository: 'line', 'statushtml', 'buttonshtml'; false when there are none.
      */
     static function ListRepositories() {
 		$h = function ($s) { return repo_browser_helper::h($s); };
@@ -80,6 +106,13 @@ class module_controller {
 		return array_values($res);
     }
 	
+    /**
+     * The packages in etc/zppy-cache/package.list (not the core modules), with install state and author information.
+     *
+     * @global db_driver $zdbh The panel's database connection (unused).
+     * @global runtime_controller $controller The request controller (unused).
+     * @return array<int, array<string, mixed>>|false One row per package: 'modulename', 'buttonattr', 'reponame', 'description', 'buttonaction', 'buttoncss', 'authorurl', 'version', 'authoremail', 'authorname', 'installed', 'title', 'installedhtml', 'url'; false when there is no package list.
+     */
     static function ListModules() {
         global $zdbh;
 		global $controller;
@@ -154,6 +187,13 @@ class module_controller {
 		}
     }
 	
+    /**
+     * The number of lines in the package list (template <% if TotalPackages %> / <@ totalpackages @>).
+     *
+     * @global db_driver $zdbh The panel's database connection (unused).
+     * @global runtime_controller $controller The request controller (unused).
+     * @return int|false The count, or false when there is no package list.
+     */
     static function GetTotalPackages() {
         global $zdbh;
 		global $controller;
@@ -167,6 +207,12 @@ class module_controller {
 		}
 	}
 
+	/**
+	 * Queue a zppy command typed by the admin.
+	 *
+	 * @param string $commandtorun The command line without "zppy".
+	 * @return bool True when queued (sets self::$zppycommandblank when empty).
+	 */
 	static function RunZPPYCommand($commandtorun){
 		if (!fs_director::CheckForEmptyValue($commandtorun)) {	 
 			if (self::RunZPPYClient($commandtorun, false, true)){;
@@ -180,6 +226,13 @@ class module_controller {
 		 }
 	}
 	
+	/**
+	 * Queue "repo add" for a repository, followed by an update.
+	 *
+	 * @param string $repotoadd The repository address.
+	 * @param mixed $debug Optional. Truthy: show the queued command. Default false.
+	 * @return bool True when queued.
+	 */
 	static function AddRepo($repotoadd, $debug=false){
 		 if (!fs_director::CheckForEmptyValue($repotoadd)) {
 		 	$command = "repo add " . $repotoadd;
@@ -193,6 +246,13 @@ class module_controller {
 		 }
 	}
 
+	/**
+	 * Queue "repo remove" for a repository, followed by an update.
+	 *
+	 * @param string $repotodelete The repository address.
+	 * @param mixed $debug Optional. Non-empty: show the queued command. Default false.
+	 * @return bool True when queued.
+	 */
 	static function ConfirmDeleteRepo($repotodelete, $debug=false){
 		if (!fs_director::CheckForEmptyValue($repotodelete)) {
 			if (!fs_director::CheckForEmptyValue($debug)) {
@@ -209,6 +269,17 @@ class module_controller {
 		}
 	}
 
+	/**
+	 * Queue the install of a module ("repo:::module") from a known repository, after checking its .zpp exists.
+	 *
+	 * Sets self::$modulenotfound when the package is not in the repository.
+	 *
+	 * @global db_driver $zdbh The panel's database connection (unused).
+	 * @global runtime_controller $controller The request controller (unused).
+	 * @param string $moduletoadd The "repo:::module" value.
+	 * @param mixed $debug Optional. Truthy: show the queued command. Default false.
+	 * @return bool True when queued.
+	 */
 	static function ConfirmInstallModule($moduletoadd, $debug=false){
 		global $zdbh;
 		global $controller;
@@ -233,6 +304,13 @@ class module_controller {
 		 }
 	}
 
+	/**
+	 * Queue the removal of a module ("repo:::module"); core modules are refused.
+	 *
+	 * @param string $moduletodelete The "repo:::module" value.
+	 * @param mixed $debug Optional. Truthy: show the queued command. Default false.
+	 * @return bool True when queued.
+	 */
 	static function ConfirmDeleteModule($moduletodelete, $debug=false){
 		$moduletodelete = repo_browser_helper::SplitFull($moduletodelete);
 		if ($moduletodelete && !repo_browser_helper::IsCoreModule($moduletodelete[1])) {
@@ -255,6 +333,14 @@ class module_controller {
 		}
 	}
 
+	/**
+	 * Set an installed module's version number in x_modules (Fix version number).
+	 *
+	 * @global db_driver $zdbh The panel's database connection.
+	 * @param string $module The module folder name.
+	 * @param string $version The version from the module's own module.xml.
+	 * @return bool True when saved.
+	 */
 	static function ConfirmUpdateVersionDB($module, $version){
 		global $zdbh;
 		if (!repo_browser_helper::ValidModule($module) || !repo_browser_helper::ValidVersion((string) $version)) {
@@ -271,6 +357,13 @@ class module_controller {
 		}
 	}
 
+	/**
+	 * The x_modules row of an installed module.
+	 *
+	 * @global db_driver $zdbh The panel's database connection.
+	 * @param string $module The module folder name.
+	 * @return array<int|string, mixed>|false The row, or false when the module is not installed.
+	 */
 	static function InstalledModule($module){
 		global $zdbh;
 		$sql = $zdbh->prepare("SELECT * FROM x_modules WHERE mo_folder_vc = :folder");
@@ -279,6 +372,13 @@ class module_controller {
 		return $sql->fetch();
 	}
 
+	/**
+	 * Queue the upgrade of a module ("repo:::module") from a known repository; core modules are refused.
+	 *
+	 * @param string $moduletoupdate The "repo:::module" value.
+	 * @param mixed $debug Optional. Truthy: show the queued command. Default false.
+	 * @return bool True when queued.
+	 */
 	static function ConfirmUpdateModule($moduletoupdate, $debug=false){
 		$moduletoupdate = repo_browser_helper::SplitFull($moduletoupdate);
 		if ($moduletoupdate && repo_browser_helper::KnownRepo($moduletoupdate[0]) && !repo_browser_helper::IsCoreModule($moduletoupdate[1])) {
@@ -293,6 +393,11 @@ class module_controller {
 		}
 	}
 	
+    /**
+     * The repositories (template <% loop RepoList %>).
+     *
+     * @return array<int, array<string, string>>|false See ListRepositories().
+     */
     static function getRepoList() {
         $repolist = self::ListRepositories();
         if (!fs_director::CheckForEmptyValue($repolist)) {
@@ -302,6 +407,11 @@ class module_controller {
         }
     }
 	
+    /**
+     * The packages (template <% loop ModuleList %>).
+     *
+     * @return array<int, array<string, mixed>>|false See ListModules().
+     */
     static function getModuleList() {
         $modulelist = self::ListModules();
         if (!fs_director::CheckForEmptyValue($modulelist)) {
@@ -311,6 +421,14 @@ class module_controller {
         }
     }	
 
+    /**
+     * Handle "add repository": queue it when it has a packages.txt, otherwise redirect to a confirmation page and exit.
+     *
+     * Checks the CSRF token.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return false|null False when the address is not valid or could not be queued.
+     */
     static function doAddRepo() {
         global $controller;
         runtime_csfr::Protect();
@@ -338,6 +456,15 @@ class module_controller {
         return;
     }
 
+    /**
+     * Handle the repository buttons: Remove (redirects to a confirmation page and exits), Retry and dismiss a failed add.
+     *
+     * Checks the CSRF token.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @global db_driver $zdbh The panel's database connection.
+     * @return void
+     */
     static function doDeleteRepo() {
         global $controller;
         runtime_csfr::Protect();
@@ -371,6 +498,14 @@ class module_controller {
         return;
     }
 
+    /**
+     * Handle the remove-repository confirmation: queue the removal.
+     *
+     * Checks the CSRF token.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return false|null False when it could not be queued.
+     */
     static function doConfirmDeleteRepo() {
         global $controller;
         runtime_csfr::Protect();
@@ -387,6 +522,12 @@ class module_controller {
         return;
     }
 
+    /**
+     * Whether to show the remove-repository confirmation (template <% if isConfirmDeleteRepo %>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return bool
+     */
     static function getisConfirmDeleteRepo() {
         global $controller;
         $urlvars = $controller->GetAllControllerRequests('URL');
@@ -395,6 +536,12 @@ class module_controller {
         return false;
     }
 
+    /**
+     * The repository in the URL ('other'), escaped (template <@ CurrentRepo @>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return string
+     */
     static function getCurrentRepo() {
         global $controller;
         if ($controller->GetControllerRequest('URL', 'other')) {
@@ -404,6 +551,12 @@ class module_controller {
         }
     }
 
+    /**
+     * Whether to show the add-repository confirmation (template <% if isConfirmAddRepo %>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return bool
+     */
     static function getisConfirmAddRepo() {
         global $controller;
         $urlvars = $controller->GetAllControllerRequests('URL');
@@ -412,6 +565,14 @@ class module_controller {
         return false;
     }
 
+    /**
+     * Handle the add-repository confirmation: queue it even though no packages.txt was found.
+     *
+     * Checks the CSRF token.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return false|null False when it could not be queued.
+     */
     static function doConfirmAddRepo() {
         global $controller;
         runtime_csfr::Protect();
@@ -428,6 +589,14 @@ class module_controller {
         return;
     }
 
+    /**
+     * Handle the Install button: queue the install of the posted module (inInstallModule).
+     *
+     * Checks the CSRF token.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return false|null False when it could not be queued.
+     */
     static function doAddModule() {
         global $controller;
         runtime_csfr::Protect();
@@ -444,6 +613,14 @@ class module_controller {
         return;
     }
 	
+    /**
+     * Handle the zppy command box: queue the posted command.
+     *
+     * Checks the CSRF token.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return false|null False when it could not be queued.
+     */
     static function doRunZPPYCommand() {
         global $controller;
         runtime_csfr::Protect();
@@ -457,6 +634,14 @@ class module_controller {
     }
 
 
+    /**
+     * Handle the package buttons (remove, install, fix version, update): redirect to the matching confirmation page and exit.
+     *
+     * Checks the CSRF token.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return void
+     */
     static function doDeleteModule() {
         global $controller;
         runtime_csfr::Protect();
@@ -481,6 +666,14 @@ class module_controller {
         return;
     }
 
+    /**
+     * Handle the remove-module confirmation: queue the removal.
+     *
+     * Checks the CSRF token.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return false|null False when it could not be queued.
+     */
     static function doConfirmDeleteModule() {
         global $controller;
         runtime_csfr::Protect();
@@ -497,6 +690,14 @@ class module_controller {
         return;
     }
 
+    /**
+     * Handle the install-module confirmation: queue the install.
+     *
+     * Checks the CSRF token.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return false|null False when it could not be queued.
+     */
     static function doConfirmInstallModule() {
         global $controller;
         runtime_csfr::Protect();
@@ -513,6 +714,14 @@ class module_controller {
         return;
     }
 
+    /**
+     * Handle the fix-version confirmation: save the module's version number.
+     *
+     * Checks the CSRF token.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return false|null False when it could not be saved.
+     */
     static function doConfirmUpdateVersionDB() {
         global $controller;
         runtime_csfr::Protect();
@@ -525,6 +734,14 @@ class module_controller {
         return;
     }
 
+    /**
+     * Handle the update-module confirmation: queue the upgrade.
+     *
+     * Checks the CSRF token.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return false|null False when it could not be queued.
+     */
     static function doConfirmUpdateModule() {
         global $controller;
         runtime_csfr::Protect();
@@ -541,6 +758,12 @@ class module_controller {
         return;
     }
 
+    /**
+     * Whether to show the remove-module confirmation (template <% if isConfirmDeleteModule %>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return bool
+     */
     static function getisConfirmDeleteModule() {
         global $controller;
         $urlvars = $controller->GetAllControllerRequests('URL');
@@ -549,10 +772,21 @@ class module_controller {
         return false;
     }
 
+    /**
+     * Whether to show the ZPPY patch page (no longer used).
+     *
+     * @return false
+     */
     static function getisConfirmZPPYPatch() {
         return false;
     }
 
+    /**
+     * Whether to show the install-module confirmation (template <% if isConfirmInstallModule %>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return bool
+     */
     static function getisConfirmInstallModule() {
         global $controller;
         $urlvars = $controller->GetAllControllerRequests('URL');
@@ -561,6 +795,12 @@ class module_controller {
         return false;
     }
 
+    /**
+     * Whether to show the fix-version confirmation (template <% if isConfirmUpdateVersionDB %>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return bool
+     */
     static function getisConfirmUpdateVersionDB() {
         global $controller;
         $urlvars = $controller->GetAllControllerRequests('URL');
@@ -569,6 +809,12 @@ class module_controller {
         return false;
     }
 
+    /**
+     * Whether to show the update-module confirmation (template <% if isConfirmUpdateModule %>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return bool
+     */
     static function getisConfirmUpdateModule() {
         global $controller;
         $urlvars = $controller->GetAllControllerRequests('URL');
@@ -577,6 +823,12 @@ class module_controller {
         return false;
     }
 
+    /**
+     * The whole 'other' URL value, escaped (template <@ CurrentModuleFull @>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return string
+     */
     static function getCurrentModuleFull() {
         global $controller;
         if ($controller->GetControllerRequest('URL', 'other')) {
@@ -586,6 +838,12 @@ class module_controller {
         }
     }
 
+    /**
+     * The second ":::" part of 'other' (the module name), escaped (template <@ CurrentModuleName @>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return string
+     */
     static function getCurrentModuleName() {
         global $controller;
         if ($controller->GetControllerRequest('URL', 'other')) {
@@ -600,6 +858,12 @@ class module_controller {
         }
     }
 
+    /**
+     * The first ":::" part of 'other' (the version, for "fix version number"), escaped (template <@ CurrentModuleVersion @>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return string
+     */
     static function getCurrentModuleVersion() {
         global $controller;
         if ($controller->GetControllerRequest('URL', 'other')) {
@@ -614,6 +878,12 @@ class module_controller {
         }
     }
 
+    /**
+     * The third ":::" part of 'other' (the installed version), escaped (template <@ CurrentModuleInstalledVersion @>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return string
+     */
     static function getCurrentModuleInstalledVersion() {
         global $controller;
         if ($controller->GetControllerRequest('URL', 'other')) {
@@ -628,6 +898,12 @@ class module_controller {
         }
     }
 
+    /**
+     * Whether to show the main page: no 'show' in the URL (template <% if isMain %>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return bool
+     */
     static function getisMain() {
         global $controller;
         $urlvars = $controller->GetAllControllerRequests('URL');
@@ -636,39 +912,88 @@ class module_controller {
         return false;
     }
 
+	/**
+	 * The logged-in account's ID (template <@ ZPanelID @>).
+	 *
+	 * @return int|string|false
+	 */
 	static function getZPanelID() {
 		return ctrl_auth::CurrentUserID();
     }
 
+	/**
+	 * The module's description (template <@ ModuleDesc @>).
+	 *
+	 * @return string|null
+	 */
 	static function getModuleDesc() {
 			return ui_module::GetModuleDescription();
     }
 
+    /**
+     * The module's folder, "modules/<module>/" (template <@ ModulePath @>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return string
+     */
     static function getModulePath() {
         global $controller;
         $module_path = "modules/" . $controller->GetControllerRequest('URL', 'module') . "/";
         return $module_path;
     }
 
+	/**
+	 * The module's name (template <@ ModuleName @>).
+	 *
+	 * @return string|null
+	 */
 	static function getModuleName() {
 		$module_name = ui_module::GetModuleName();
         return $module_name;
     }
 
+	/**
+	 * The path of the module's icon (template <@ ModuleIcon @>).
+	 *
+	 * @global runtime_controller $controller The request controller.
+	 * @return string
+	 */
 	static function getModuleIcon() {
 		global $controller;
 		$module_icon = "/modules/" . $controller->GetControllerRequest('URL', 'module') . "/assets/icon.png";
         return $module_icon;
     }
 
+    /**
+     * The CSRF token field for the module's forms (template <@ CSFR_Tag @>).
+     *
+     * @return string The hidden input HTML.
+     */
     static function getCSFR_Tag() {
         return runtime_csfr::Token();
     }
 
+	/**
+	 * Whether a URL answers 200 (see repo_browser_helper::UrlExists()).
+	 *
+	 * @param string $url The URL.
+	 * @return bool
+	 */
 	static function is_url_exist($url){
 		return repo_browser_helper::UrlExists($url);
 	}
 
+	/**
+	 * Queue a zppy command for the daemon (root), optionally followed by an update.
+	 *
+	 * Refuses empty commands, commands starting with "zppy", install-upload, invalid
+	 * arguments and a second job for the same module or repository (sets the matching flag).
+	 *
+	 * @param string $command The command line without "zppy".
+	 * @param bool $update Optional. Also queue "update" afterwards. Default false.
+	 * @param mixed $out Optional. Truthy: show the queued command (self::$zppyout1). Default false.
+	 * @return bool True when queued.
+	 */
 	static function RunZPPYClient($command, $update=false, $out=false){
 		$args = preg_split('/\s+/', trim((string) $command));
 		if (fs_director::CheckForEmptyValue($command) || count($args) == 0 || $args[0] === '') {
@@ -699,10 +1024,21 @@ class module_controller {
 		return true;
 	}
 
+	/**
+	 * Check zppy arguments (see repo_browser_helper::ValidZPPYArguments()).
+	 *
+	 * @param string[] $args The arguments.
+	 * @return bool
+	 */
 	static function ValidZPPYArguments($args){
 		return repo_browser_helper::ValidZPPYArguments($args);
 	}
 
+	/**
+	 * The table rows of the last 10 queued zppy commands (template <@ QueueRows @>).
+	 *
+	 * @return string The HTML <tr> rows.
+	 */
 	static function getQueueRows(){
 		$rows = '';
 		foreach (repo_browser_helper::Recent(10) as $r) {
@@ -714,6 +1050,11 @@ class module_controller {
 	}
 
 
+    /**
+     * The message box for the last action (template <@ result @>).
+     *
+     * @return string|null The HTML, or null when there is nothing to show.
+     */
     static function getResult() {
         if (!fs_director::CheckForEmptyValue(self::$alreadyqueued)) {
             return ui_sysmessage::shout(ui_language::translate("That module or repository already has a change queued (this can take up to 5 minutes); you can queue another once it has finished (see Recent ZPPY commands)."), "zannounceerror");
@@ -745,6 +1086,11 @@ class module_controller {
         return;
     }
 
+    /**
+     * The box with the queued command (template <@ ZppyOut @>).
+     *
+     * @return string|null The HTML, or null when there is nothing to show.
+     */
     static function getZppyOut() {
 		$out = false;
 		if (!fs_director::CheckForEmptyValue(self::$zppyout1)) {
@@ -762,6 +1108,12 @@ class module_controller {
         return;
     }
 
+	/**
+	 * Whether a module ships with the panel (see repo_browser_helper::IsCoreModule()).
+	 *
+	 * @param string $module The module folder name.
+	 * @return bool
+	 */
 	static function ForbiddenModule($module){
 		return repo_browser_helper::IsCoreModule($module);
 	}

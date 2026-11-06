@@ -26,11 +26,23 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
  */
+/**
+ * Manage Groups module (resellers): create, edit and delete the reseller's user groups.
+ *
+ * The built-in groups (Administrators, Resellers, Users) are listed separately and
+ * cannot be edited here.
+ */
 class module_controller extends ctrl_module
 {
 
+    // The 'worker' methods.
+
     /**
-     * The 'worker' methods.
+     * Get one group by its ID.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $gid The group ID.
+     * @return array<int, array<string, mixed>>|false A list with the one row ('groupid', 'groupname', 'groupdesc'), or false when not found.
      */
     static function GroupInfo($gid)
     {
@@ -54,6 +66,13 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * List a reseller's own groups (not the built-in ones), with the number of accounts in each.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $uid The reseller's account ID.
+     * @return array<int, array<string, mixed>>|false One row per group: 'groupid', 'groupname', 'groupdesc', 'usersingroup'; false when the reseller has no groups at all.
+     */
     static function ListGroups($uid)
     {
         global $zdbh;
@@ -82,6 +101,13 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * List a reseller's built-in groups (Administrators, Resellers, Users), with the number of accounts in each.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $uid The reseller's account ID.
+     * @return array<int, array<string, mixed>>|false One row per group: 'groupid', 'groupname', 'groupdesc', 'usersingroup'; false when the reseller has no groups at all.
+     */
     static function ListDefaultGroups($uid)
     {
         global $zdbh;
@@ -110,6 +136,14 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * List a reseller's groups other than one, to move that group's accounts to.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $uid The reseller's account ID.
+     * @param int|string $gid The group ID to leave out.
+     * @return array<int, array<string, mixed>>|false One row per group: 'groupid', 'groupname', 'groupdesc'; false when there are none.
+     */
     static function GroupMoveTo($uid, $gid)
     {
         global $zdbh;
@@ -134,6 +168,15 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Create a group for a reseller (nothing happens when the name is empty).
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param string $name The group name.
+     * @param string $desc The description.
+     * @param int|string $uid The reseller's account ID.
+     * @return true
+     */
     static function ExectuteCreateGroup($name, $desc, $uid)
     {
         global $zdbh;
@@ -147,6 +190,15 @@ class module_controller extends ctrl_module
         return true;
     }
 
+    /**
+     * Change a group's name and description.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $gid The group ID.
+     * @param string $name The new name.
+     * @param string $desc The new description.
+     * @return true
+     */
     static function ExectuteUpdateGroup($gid, $name, $desc)
     {
         global $zdbh;
@@ -158,6 +210,14 @@ class module_controller extends ctrl_module
         return true;
     }
 
+    /**
+     * Delete a group, first moving its accounts to another group when one is given.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $gid The group ID to delete.
+     * @param int|string $mgid Optional. The group to move the accounts to. Default "" (do not move).
+     * @return true
+     */
     static function ExecuteDeleteGroup($gid, $mgid = "")
     {
         global $zdbh;
@@ -189,8 +249,13 @@ class module_controller extends ctrl_module
      * End 'worker' methods.
      */
 
+    // Webinterface sudo methods.
+
     /**
-     * Webinterface sudo methods.
+     * The reseller's own groups (template <% loop GroupList %>).
+     *
+     * @global runtime_controller $controller The request controller (unused).
+     * @return array<int, array<string, mixed>>|false See ListGroups().
      */
     static function getGroupList()
     {
@@ -199,6 +264,12 @@ class module_controller extends ctrl_module
         return self::ListGroups($currentuser['userid']);
     }
 
+    /**
+     * The reseller's built-in groups (template <% loop DefaultGroupList %>).
+     *
+     * @global runtime_controller $controller The request controller (unused).
+     * @return array<int, array<string, mixed>>|false See ListDefaultGroups().
+     */
     static function getDefaultGroupList()
     {
         global $controller;
@@ -206,6 +277,12 @@ class module_controller extends ctrl_module
         return self::ListDefaultGroups($currentuser['userid']);
     }
 
+    /**
+     * The groups the accounts of the group in the URL ('other') can be moved to (template <% loop GroupMoveToList %>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return array<int, array<string, mixed>>|false See GroupMoveTo().
+     */
     static function getGroupMoveToList()
     {
         global $controller;
@@ -214,6 +291,14 @@ class module_controller extends ctrl_module
         return self::GroupMoveTo($currentuser['userid'], $urlvars['other']);
     }
 
+    /**
+     * Handle the create form: create the posted group for the logged-in reseller.
+     *
+     * Checks the CSRF token.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return bool Always true (ExectuteCreateGroup() always returns true).
+     */
     static function doCreateGroup()
     {
         global $controller;
@@ -228,6 +313,14 @@ class module_controller extends ctrl_module
         return;
     }
 
+    /**
+     * Handle the buttons of the group list: redirect to the delete or edit page and exit.
+     *
+     * Checks the CSRF token.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return void
+     */
     static function doEditGroup()
     {
         global $controller;
@@ -247,6 +340,14 @@ class module_controller extends ctrl_module
         return;
     }
 
+    /**
+     * Handle the delete form: delete the posted group (inGroupID), moving its accounts to inMoveGroup.
+     *
+     * Checks the CSRF token.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return bool
+     */
     static function doDeleteGroup()
     {
         global $controller;
@@ -262,6 +363,14 @@ class module_controller extends ctrl_module
         return false;
     }
 
+    /**
+     * Handle the edit form: save the posted group's name and description.
+     *
+     * Checks the CSRF token.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return bool
+     */
     static function doUpdateGroup()
     {
         global $controller;
@@ -272,6 +381,12 @@ class module_controller extends ctrl_module
         return false;
     }
 
+    /**
+     * Whether to show the create form: no 'show' in the URL (template <% if isCreateGroup %>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return bool
+     */
     static function getisCreateGroup()
     {
         global $controller;
@@ -281,6 +396,14 @@ class module_controller extends ctrl_module
         return false;
     }
 
+    /**
+     * Whether to show the delete page (template <% if isDeleteGroup %>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|null $uid Optional. The reseller's account ID; null for the logged-in account. Default null.
+     * @return bool|null Null when the reseller has no groups.
+     */
     static function getisDeleteGroup($uid = null)
     {
         global $controller;
@@ -305,6 +428,14 @@ class module_controller extends ctrl_module
         return (isset($urlvars['show'])) && ($urlvars['show'] == "Delete");
     }
 
+    /**
+     * Whether to show the edit page (template <% if isEditGroup %>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|null $uid Optional. The reseller's account ID; null for the logged-in account. Default null.
+     * @return bool|null Null when the reseller has no groups.
+     */
     static function getisEditGroup($uid = null)
     {
         global $controller;
@@ -329,6 +460,12 @@ class module_controller extends ctrl_module
         return (isset($urlvars['show'])) && ($urlvars['show'] == "Edit");
     }
 
+    /**
+     * The ID of the group in the URL ('other') (template <@ CurrentID @>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return int|string The group ID, or '' when there is no 'other'.
+     */
     static function getCurrentID()
     {
         global $controller;
@@ -340,6 +477,12 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * The name of the group in the URL ('other') (template <@ EditCurrentName @>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return string The name, or '' when there is no 'other'.
+     */
     static function getEditCurrentName()
     {
         global $controller;
@@ -351,6 +494,12 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * The description of the group in the URL ('other') (template <@ EditCurrentDesc @>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return string The description, or '' when there is no 'other'.
+     */
     static function getEditCurrentDesc()
     {
         global $controller;

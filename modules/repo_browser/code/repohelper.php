@@ -1,6 +1,13 @@
 <?php
 
 /**
+ * Repo Browser module: helper class (repo_browser_helper).
+ *
+ * @package Sentora
+ * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
+ */
+
+/**
  * Repo Browser helpers shared by the controller and ajax.php.
  * Everything that reaches the shell, the database or an outgoing HTTP request
  * is checked here first.
@@ -8,7 +15,12 @@
 class repo_browser_helper
 {
 
-    /** host[:port][/path] as stored in etc/zppy-cache/repo.list */
+    /**
+     * Check a repository address: [https://]host[:port][/path] as stored in etc/zppy-cache/repo.list.
+     *
+     * @param mixed $repo The address (anything that is not a string fails).
+     * @return bool
+     */
     static function ValidRepo($repo)
     {
         return is_string($repo) && strlen($repo) <= 200
@@ -17,7 +29,10 @@ class repo_browser_helper
 
     /**
      * The address of a repository: "https://host/path" as written (GitHub serves only
-     * HTTPS), or http:// in front of "host[:port][/path]" (the old form, kept working)
+     * HTTPS), or http:// in front of "host[:port][/path]" (the old form, kept working).
+     *
+     * @param string $repo The repository as stored.
+     * @return string The base URL, without a trailing slash.
      */
     static function Base($repo)
     {
@@ -25,25 +40,44 @@ class repo_browser_helper
         return (stripos($repo, 'https://') === 0) ? $repo : 'http://' . $repo;
     }
 
-    /** what the admin typed: https:// kept, http:// dropped (it is the default) */
+    /**
+     * What the admin typed: https:// kept, http:// dropped (it is the default).
+     *
+     * @param string $repo The typed address.
+     * @return string The address as stored in repo.list.
+     */
     static function Normalize($repo)
     {
         return preg_replace('#^http://#i', '', trim((string) $repo));
     }
 
-    /** a module folder name */
+    /**
+     * Check a module folder name (letters, digits, '_' and '-', at most 64).
+     *
+     * @param mixed $module The name (anything that is not a string fails).
+     * @return bool
+     */
     static function ValidModule($module)
     {
         return is_string($module) && preg_match('/^[A-Za-z0-9_-]{1,64}$/', $module) === 1;
     }
 
-    /** a module version number such as 101 or 1.2.0 */
+    /**
+     * Check a module version number such as 101 or 1.2.0.
+     *
+     * @param mixed $version The version (anything that is not a string fails).
+     * @return bool
+     */
     static function ValidVersion($version)
     {
         return is_string($version) && preg_match('/^[0-9]{1,6}(\.[0-9]{1,6}){0,3}$/', $version) === 1;
     }
 
-    /** repositories currently in repo.list (comments and blank lines skipped) */
+    /**
+     * The repositories currently in repo.list (comments, blank and invalid lines skipped).
+     *
+     * @return string[]
+     */
     static function Repos()
     {
         $file = ctrl_options::GetSystemOption('sentora_root') . "etc/zppy-cache/repo.list";
@@ -57,13 +91,23 @@ class repo_browser_helper
         return $repos;
     }
 
-    /** only repositories the admin added may be contacted (no requests to arbitrary hosts) */
+    /**
+     * Only repositories the admin added may be contacted (no requests to arbitrary hosts).
+     *
+     * @param mixed $repo The repository address.
+     * @return bool True when it is valid and in repo.list.
+     */
     static function KnownRepo($repo)
     {
         return self::ValidRepo($repo) && in_array($repo, self::Repos(), true);
     }
 
-    /** "repo:::module" -> array(repo, module), or false */
+    /**
+     * Split "repo:::module" into its repository and module.
+     *
+     * @param string $full The combined value.
+     * @return array{0: string, 1: string}|false array(repo, module), or false when either part is not valid.
+     */
     static function SplitFull($full)
     {
         $parts = explode(':::', (string) $full);
@@ -73,7 +117,12 @@ class repo_browser_helper
         return array($parts[0], $parts[1]);
     }
 
-    /** modules shipped with this panel: Repo Browser must never replace or remove them */
+    /**
+     * Modules shipped with this panel: Repo Browser must never replace or remove them.
+     *
+     * @param string $module The module folder name (compared case-insensitively).
+     * @return bool
+     */
     static function IsCoreModule($module)
     {
         static $core = array(
@@ -90,7 +139,12 @@ class repo_browser_helper
         return in_array(strtolower((string) $module), $core, true);
     }
 
-    /** HTTP status check used to see whether a repository or package exists */
+    /**
+     * HTTP status check used to see whether a repository or package exists (HEAD request, no redirects).
+     *
+     * @param string $url The URL.
+     * @return bool True when the server answers 200.
+     */
     static function UrlExists($url)
     {
         $ch = curl_init($url);
@@ -105,7 +159,12 @@ class repo_browser_helper
         return $code == 200;
     }
 
-    /** small XML file from a known repository, or '' */
+    /**
+     * A small file (at most 256 KB, usually XML) from a known repository, or ''.
+     *
+     * @param string $url The URL.
+     * @return string The content, or '' when it could not be read.
+     */
     static function Fetch($url)
     {
         $ctx = stream_context_create(array('http' => array('timeout' => 10, 'follow_location' => 0)));
@@ -113,6 +172,12 @@ class repo_browser_helper
         return ($data === false) ? '' : $data;
     }
 
+    /**
+     * Escape text for HTML.
+     *
+     * @param mixed $text The text (used as a string).
+     * @return string
+     */
     static function h($text)
     {
         return htmlspecialchars((string) $text, ENT_QUOTES, 'UTF-8');
@@ -125,6 +190,9 @@ class repo_browser_helper
      *   install|upgrade <module>   remove <module> [-y]   repo add|remove <[https://]host[/path]>
      *   install-upload <module>    (a .zpp uploaded in Module Admin)
      * Modules shipped with the panel can not be installed over, upgraded or removed.
+     *
+     * @param string[] $args The zppy arguments.
+     * @return bool
      */
     static function ValidZPPYArguments($args)
     {
@@ -155,6 +223,11 @@ class repo_browser_helper
      * command and the daemon runs it (within 5 minutes). The modules folder
      * belongs to root, so a break-in to the panel can not plant code that the
      * root daemon would run.
+     *
+     * Creates the x_zppy_queue table when it does not exist.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return void
      */
     static function QueueEnsure()
     {
@@ -167,7 +240,11 @@ class repo_browser_helper
 
     /**
      * The install, removal or upgrade of $module waiting for the daemon (queued or
-     * running), as its command name, or false
+     * running), as its command name, or false.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param string $module The module folder name.
+     * @return string|false 'install', 'install-upload', 'remove' or 'upgrade'; false when nothing waits.
      */
     static function Pending($module)
     {
@@ -187,7 +264,10 @@ class repo_browser_helper
 
     /**
      * Each repository's latest add or remove job, if it is still waiting or it failed:
-     * repo => array('state' => 'queued' or 'failed', 'action' => 'add' or 'remove', 'id' => job id)
+     * repo => array('state' => 'queued' or 'failed', 'action' => 'add' or 'remove', 'id' => job id).
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return array<string, array{state: string, action: string, id: int}>
      */
     static function RepoJobs()
     {
@@ -208,6 +288,16 @@ class repo_browser_helper
         return array_filter($jobs, function ($j) { return $j['state'] !== 'done'; });
     }
 
+    /**
+     * Queue a zppy command for the daemon (root) to run.
+     *
+     * Refused when the arguments are not allowed, or when a job for the same module or
+     * repository is already waiting.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param string[] $args The zppy arguments.
+     * @return bool True when queued.
+     */
     static function Enqueue($args)
     {
         global $zdbh;
@@ -240,6 +330,13 @@ class repo_browser_helper
         return true;
     }
 
+    /**
+     * The latest queued zppy jobs, newest first.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int $limit Optional. How many jobs. Default 10.
+     * @return array<int, array<int|string, mixed>> The x_zppy_queue rows.
+     */
     static function Recent($limit = 10)
     {
         global $zdbh;
