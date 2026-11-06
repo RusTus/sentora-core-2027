@@ -4,35 +4,42 @@
         <div class="zmodule_title"><@ ModuleName @></div>
         <div class="zmodule_desc" id="zmodule_desc_<@ ModuleName @>"><@ ModuleDesc @></div>
     </div>
-    <div class="zgrid_wrapper">
-        <% if LogList %>
-        <p><: Open a log to follow it live. New lines appear every two seconds. :></p>
-        <table class="table table-striped">
-            <tr>
-                <th><: View :></th>
-                <th><: Log :></th>
-                <th><: Service :></th>
-                <th><: Size :></th>
-                <th><: Changed :></th>
-                <th><: Readable :></th>
-            </tr>
-            <% loop LogList %>
-            <tr>
-                <td nowrap="nowrap">
-                    <a href="modules/system_logviewer/code/view.php?id=<& id &>&amp;theme=dark" target="_blank" rel="noopener" title="<: Dark :>"><img src="modules/system_logviewer/assets/log1.png" alt="<: Dark :>" border="0"></a>
-                    <a href="modules/system_logviewer/code/view.php?id=<& id &>&amp;theme=light" target="_blank" rel="noopener" title="<: Light :>"><img src="modules/system_logviewer/assets/log2.png" alt="<: Light :>" border="0"></a>
-                </td>
-                <td><code><& path &></code></td>
-                <td><& group &></td>
-                <td nowrap="nowrap"><& size &></td>
-                <td nowrap="nowrap"><& changed &></td>
-                <td><& readable &></td>
-            </tr>
-            <% endloop %>
-        </table>
-        <p class="text-muted"><: Logs marked no belong to root or the adm group, which the panel can not read: it runs as its own user, with no more rights than it needs. Read those on the server as root, for example with tail -f. :></p>
-        <% else %>
-        <p><: No log files were found. :></p>
-        <% endif %>
+    <link rel="stylesheet" href="modules/system_logviewer/assets/logviewer.css">
+    <% if LogList %>
+    <div class="lv lv-panel" id="lv" data-read="modules/system_logviewer/code/read.php" data-view="modules/system_logviewer/code/view.php"
+         data-locked="<: The panel can not read this log: it belongs to root or the adm group, and the panel runs as its own user, with no more rights than it needs. Read it on the server as root, for example: :>"
+         data-pick="<: Pick a log on the left to follow it. New lines appear every two seconds. :>"
+         data-rotated="<: The log was rotated or truncated; showing its end. :>"
+         data-ago="<: ago :>" data-lines="<: lines :>" data-shown="<: shown :>">
+        <aside class="lv-side">
+            <label class="lv-find"><svg class="lv-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                <input type="search" class="form-control lv-find-input" placeholder="<: Find a log :>" aria-label="<: Find a log :>"></label>
+            <div class="lv-list"><@ LogMenu @></div>
+        </aside>
+        <section class="lv-main">
+            <div class="lv-head">
+                <div class="lv-title">
+                    <svg class="lv-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h6"/></svg>
+                    <div><b class="lv-path"><: No log open :></b><span class="lv-meta"></span></div>
+                </div>
+                <div class="lv-tools">
+                    <span class="lv-live"><i></i><span class="lv-live-text"><: Live :></span></span>
+                    <label class="lv-filter"><svg class="lv-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></svg>
+                        <input type="search" class="form-control lv-filter-input" placeholder="<: Show lines with... :>" aria-label="<: Show only lines with this text :>"></label>
+                    <label class="lv-check"><input type="checkbox" class="lv-follow" checked> <: Follow :></label>
+                    <label class="lv-check"><input type="checkbox" class="lv-wrap"> <: Wrap :></label>
+                    <button type="button" class="btn btn-default btn-sm lv-pause" data-resume="<: Resume :>"><: Pause :></button>
+                    <button type="button" class="btn btn-default btn-sm lv-clear" title="<: Clear the screen (the log itself is not changed) :>"><: Clear :></button>
+                    <a class="btn btn-default btn-sm lv-popout" target="_blank" rel="noopener" hidden title="<: Open in a new window :>"><svg class="lv-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></a>
+                </div>
+            </div>
+            <div class="lv-out" tabindex="0" aria-live="off"></div>
+            <div class="lv-foot"><span class="lv-count"></span><span class="lv-legend"><i class="bad"></i><: errors :> <i class="warn"></i><: warnings :></span></div>
+        </section>
     </div>
+    <p class="lv-note"><: Logs marked with a lock belong to root or the adm group, which the panel can not read: it runs as its own user, with no more rights than it needs. Read those on the server as root, for example with tail -f. :></p>
+    <script src="modules/system_logviewer/assets/logviewer.js"></script>
+    <% else %>
+    <div class="lv lv-empty"><p><: No log files were found. :></p></div>
+    <% endif %>
 </div>

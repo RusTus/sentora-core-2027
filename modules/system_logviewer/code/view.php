@@ -26,31 +26,38 @@ $h = function ($s) {
     return htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
 };
 ?><!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="lv-window<?php echo $dark ? ' lv-dark' : ''; ?>">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title><?php echo $h(basename($log['path'])); ?> - System Log Viewer</title>
-<style>
-html, body { height: 100%; margin: 0; }
-body { display: flex; flex-direction: column; font: 13px/1.4 system-ui, sans-serif;
-       background: <?php echo $dark ? '#111' : '#f4f4f4'; ?>; color: <?php echo $dark ? '#ccc' : '#111'; ?>; }
-header { padding: 6px 10px; display: flex; gap: 14px; align-items: center; flex-wrap: wrap;
-         border-bottom: 1px solid <?php echo $dark ? '#333' : '#ccc'; ?>; }
-header b { font-family: ui-monospace, monospace; }
-#log { flex: 1; margin: 0; padding: 8px 10px; overflow: auto; white-space: pre; tab-size: 4;
-       font: 12px/1.45 ui-monospace, "DejaVu Sans Mono", monospace; }
-.muted { opacity: .7; }
-</style>
+<link rel="stylesheet" href="../assets/logviewer.css">
 </head>
-<body data-id="<?php echo $h($log['id']); ?>" data-readable="<?php echo $log['readable'] ? '1' : '0'; ?>">
-<header>
-    <b><?php echo $h($log['path']); ?></b>
-    <span class="muted"><?php echo $h($log['group']); ?></span>
-    <span id="size" class="muted"></span>
-    <label><input type="checkbox" id="follow" checked> Follow</label>
-    <label><input type="checkbox" id="pause"> Pause</label>
-</header>
-<pre id="log"><?php echo $log['readable'] ? '' : $h('The web server can not read this log. It belongs to root or the adm group; the panel runs as www-data, the same user as every hosted site, so giving the panel access would give it to every site too. Read it on the server: sudo tail -f ' . $log['path']); ?></pre>
+<body>
+<div class="lv" id="lv" data-read="read.php" data-id="<?php echo $h($log['id']); ?>" data-path="<?php echo $h($log['path']); ?>" data-group="<?php echo $h($log['group']); ?>"
+     data-readable="<?php echo $log['readable'] ? '1' : '0'; ?>"
+     data-locked="The panel can not read this log: it belongs to root or the adm group, and the panel runs as its own user, with no more rights than it needs. Read it on the server as root, for example:"
+     data-rotated="The log was rotated or truncated; showing its end." data-ago="ago" data-lines="lines" data-shown="shown">
+    <section class="lv-main">
+        <div class="lv-head">
+            <div class="lv-title">
+                <svg class="lv-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h6"/></svg>
+                <div><b class="lv-path"></b><span class="lv-meta"></span></div>
+            </div>
+            <div class="lv-tools">
+                <span class="lv-live"><i></i><span class="lv-live-text">Live</span></span>
+                <label class="lv-filter"><svg class="lv-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></svg>
+                    <input type="search" class="lv-filter-input" placeholder="Show lines with..." aria-label="Show only lines with this text"></label>
+                <label class="lv-check"><input type="checkbox" class="lv-follow" checked> Follow</label>
+                <label class="lv-check"><input type="checkbox" class="lv-wrap"> Wrap</label>
+                <button type="button" class="lv-btn lv-pause" data-resume="Resume">Pause</button>
+                <button type="button" class="lv-btn lv-clear" title="Clear the screen (the log itself is not changed)">Clear</button>
+            </div>
+        </div>
+        <div class="lv-out" tabindex="0"></div>
+        <div class="lv-foot"><span class="lv-count"></span><span class="lv-legend"><i class="bad"></i>errors <i class="warn"></i>warnings</span></div>
+    </section>
+</div>
 <script src="../assets/logviewer.js"></script>
 </body>
 </html>

@@ -15,24 +15,67 @@ class module_controller extends ctrl_module
 {
 
     /**
-     * List the log files for the page (template: <% loop LogList %>).
+     * Escape text for HTML.
      *
-     * @return array<int, array<string, string>>|false One row per log: 'id', 'group', 'path' (HTML-escaped), 'size' (human readable), 'changed' (date or ''), 'readable' (translated yes/no); false when no log was found.
+     * @param mixed $s The text.
+     * @return string
+     */
+    static function h($s)
+    {
+        return htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
+    }
+
+    /**
+     * Translated and HTML-escaped text.
+     *
+     * @param string $s The English text.
+     * @return string
+     */
+    static function t($s)
+    {
+        return self::h(ui_language::translate($s));
+    }
+
+    /**
+     * Whether any log was found (template: <% if LogList %>).
+     *
+     * @return bool
      */
     static function getLogList()
     {
-        $rows = array();
+        return count(system_logviewer_logs::All()) > 0;
+    }
+
+    /**
+     * Template HTML: the logs, grouped by service, as a list to pick from.
+     *
+     * Each entry carries its id, path, group and whether the panel can read it; dates
+     * are shown as "changed ... ago" by the page script from data-mtime.
+     *
+     * @return string HTML.
+     */
+    static function getLogMenu()
+    {
+        $groups = array();
         foreach (system_logviewer_logs::All() as $log) {
-            $rows[] = array(
-                'id' => $log['id'],
-                'group' => htmlspecialchars($log['group'], ENT_QUOTES, 'UTF-8'),
-                'path' => htmlspecialchars($log['path'], ENT_QUOTES, 'UTF-8'),
-                'size' => system_logviewer_logs::HumanSize($log['size']),
-                'changed' => $log['mtime'] ? date('Y-m-d H:i', $log['mtime']) : '',
-                'readable' => $log['readable'] ? ui_language::translate('yes') : ui_language::translate('no (root or adm only)'),
-            );
+            $groups[$log['group']][] = $log;
         }
-        return count($rows) ? $rows : false;
+        $out = '';
+        foreach ($groups as $group => $logs) {
+            usort($logs, function ($a, $b) { return strcmp($a['path'], $b['path']); });
+            $out .= '<div class="lv-group"><div class="lv-group-name">' . self::h(ui_language::translate($group)) . ' <span>' . count($logs) . '</span></div>';
+            foreach ($logs as $log) {
+                $dir = dirname($log['path']);
+                $out .= '<button type="button" class="lv-item' . ($log['readable'] ? '' : ' locked') . '" data-id="' . self::h($log['id']) . '" data-path="' . self::h($log['path']) . '"'
+                    . ' data-group="' . self::h(ui_language::translate($group)) . '" data-readable="' . ($log['readable'] ? '1' : '0') . '" data-s="' . self::h(strtolower($log['path'] . ' ' . $group)) . '">'
+                    . '<span class="lv-item-name">' . self::h(basename($log['path'])) . '</span>'
+                    . '<span class="lv-item-meta">' . self::h($dir) . '</span>'
+                    . '<span class="lv-item-meta">' . ($log['readable'] ? self::h(system_logviewer_logs::HumanSize($log['size'])) . ' · <span class="lv-ago" data-mtime="' . (int) $log['mtime'] . '"></span>'
+                        : self::t('root or adm only')) . '</span></button>';
+            }
+            $out .= '</div>';
+        }
+        return $out;
     }
 
 }

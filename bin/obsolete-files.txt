@@ -114,3 +114,6 @@ modules/dns_manager/assets/undo.png
 modules/dns_manager/assets/undo_small.png
 # PHP Info: the plain phpinfo() page (it showed the environment to every account); the module shows it all now
 etc/apps/phpinfo/index.php
+# System Log Viewer: the two buttons its old page had
+modules/system_logviewer/assets/log1.png
+modules/system_logviewer/assets/log2.png
