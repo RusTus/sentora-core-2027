@@ -301,6 +301,17 @@ retire_module() {
     fi
 }
 retire_module phpsysinfo phpsysinfo
+# Folders a core module no longer has (rsync never deletes them): Apache Status's bundled
+# Pimped Apache Status, which the module's own dashboard replaced
+#   retire_dir <folder, relative to the panel>
+retire_dir() {
+    local d="$1"
+    case "$d" in ''|/*|*..*) return ;; esac
+    if [ -d "$PANEL/$d" ] && [ ! -L "$PANEL/$d" ] && [ ! -e "$SRC/$d" ]; then
+        rm -rf -- "${PANEL:?}/$d" && say "Removed $d (no longer part of the core)"
+    fi
+}
+retire_dir modules/apache_status/app
 # Theme and module files are revalidated by the browser after each update (the panel's
 # vhost sends Cache-Control: no-cache for them; that needs mod_headers): rewrite the vhost
 if [ ! -e /etc/apache2/mods-enabled/headers.load ]; then

@@ -3,29 +3,27 @@
 /**
  * Apache Status module: controller.
  *
+ * The page (module.zpm) is a live dashboard filled by assets/status.js from
+ * code/status.php. This controller only tells the template whether Apache's status
+ * page answers, and where the module's files are.
+ *
  * @package Sentora
  * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
  */
 
 /**
- * Apache Status: the page itself is app/index.php (admin only, see app/sentora_guard.php).
- * This only checks that Apache's status page answers on this server.
+ * Apache Status controller (template values).
  */
 class module_controller extends ctrl_module
 {
 
-    /**
-     * @var array{ok: bool, body: string, code: int}|null Cached result of Status(), null until it has run.
-     */
+    /** @var array{ok: bool, code: int}|null Apache's status page check, once per page. */
     static $status = null;
 
     /**
-     * Fetch Apache's server-status page once per request and cache the result.
+     * Ask Apache's status page whether it answers (http://127.0.0.1/server-status?auto).
      *
-     * Requests http://127.0.0.1/server-status?auto with a 5 second timeout.
-     *
-     * @return array{ok: bool, body: string, code: int} 'ok' true when it answered 200 with
-     *         status data, 'body' the response body, 'code' the HTTP status (0 when no answer).
+     * @return array{ok: bool, code: int} Whether it answered with the status summary, and the HTTP code.
      */
     static function Status()
     {
@@ -35,16 +33,17 @@ class module_controller extends ctrl_module
             curl_setopt($ch, CURLOPT_TIMEOUT, 5);
             curl_setopt($ch, CURLOPT_FOLLOWLOCATION, false);
             $body = (string) curl_exec($ch);
-            $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            self::$status = array('ok' => ($code == 200 && strpos($body, 'Total Accesses') !== false), 'body' => $body, 'code' => $code);
+            $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+            self::$status = array('ok' => ($code === 200 && strpos($body, 'Total Accesses') !== false), 'code' => $code);
         }
         return self::$status;
     }
 
     /**
-     * Template flag <% if IsModServerStatus %>: does Apache's status page answer?
+     * Whether Apache's status page answers (template: <% if IsModServerStatus %>).
      *
-     * @return bool True when mod_status answers on this server.
+     * @return bool True when it answers.
      */
     static function getIsModServerStatus()
     {
@@ -53,20 +52,9 @@ class module_controller extends ctrl_module
     }
 
     /**
-     * Whether extended status is available (same check as getIsModServerStatus()).
+     * The HTTP code Apache's status page answered with (template: <@ StatusCode @>).
      *
-     * @return bool True when the status page answers with status data.
-     */
-    static function getIsExtendedStatus()
-    {
-        $s = self::Status();
-        return $s['ok'];
-    }
-
-    /**
-     * Template value <@ StatusCode @>: the HTTP status the status page answered with.
-     *
-     * @return int The HTTP status code (0 when there was no answer).
+     * @return int The code, 0 when Apache did not answer.
      */
     static function getStatusCode()
     {
@@ -74,6 +62,14 @@ class module_controller extends ctrl_module
         return (int) $s['code'];
     }
 
-}
+    /**
+     * The module's assets folder (template: <@ Assets @>).
+     *
+     * @return string The path, relative to the panel.
+     */
+    static function getAssets()
+    {
+        return 'modules/apache_status/assets/';
+    }
 
-?>
+}

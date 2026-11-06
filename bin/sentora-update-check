@@ -4,8 +4,8 @@
 #
 # Run it by hand, as root:   bash /etc/sentora/panel/bin/sentora-update-check
 #
-# The bundled apps (phpMyAdmin, Roundcube, Matomo, Tiny File Manager, Pimped Apache
-# Status, GoAccess and, if installed, Adminer) do not update through apt: they are
+# The bundled apps (phpMyAdmin, Roundcube, Matomo, Tiny File Manager, GoAccess and,
+# if installed, Adminer) do not update through apt: they are
 # updated by rebuilding the Sentora bundles. Nothing here runs by itself or reports
 # anywhere: it only reads public release information from GitHub (no API key, no
 # GitHub API rate limit) and prints the result. The report is also saved as
@@ -26,7 +26,6 @@ add "phpMyAdmin" "$(v_php $PANEL/etc/apps/phpmyadmin/libraries/classes/Version.p
 add "Roundcube" "$(v_php $PANEL/etc/apps/webmail/program/include/iniset.php "RCMAIL_VERSION', '[^']*'")" "release:roundcube/roundcubemail" ""
 add "Matomo" "$(v_php $PANEL/etc/apps/matomo/core/Version.php "VERSION = '[^']*'")" "release:matomo-org/matomo" ""
 add "Tiny File Manager" "$(grep -o "Tiny File Manager [0-9.]*" $PANEL/modules/file_manager/app/VERSION 2>/dev/null | head -1 | awk '{print $4}')" "release:prasathmani/tinyfilemanager" "$(commit_of $PANEL/modules/file_manager/app/VERSION)"
-add "Pimped Apache Status" "$(grep -o "Pimped Apache Status [0-9.]*" $PANEL/modules/apache_status/app/VERSION 2>/dev/null | head -1 | awk '{print $4}')" "head:axelhahn/pimped-apache-status" "$(commit_of $PANEL/modules/apache_status/app/VERSION)"
 add "GoAccess" "$($GOACCESS --version 2>/dev/null | head -1 | grep -o '[0-9][0-9.]*[0-9]')" "tags:allinurl/goaccess" ""
 if [ -f $PANEL/modules/PHP-Adminer/app/adminer.php ]; then
     add "Adminer (PHP-Adminer)" "$(grep -o '@version [0-9.]*' $PANEL/modules/PHP-Adminer/app/adminer.php | head -1 | awk '{print $2}')" "release:vrana/adminer" ""

@@ -4,18 +4,144 @@
         <div class="zmodule_title"><@ ModuleName @></div>
         <div class="zmodule_desc" id="zmodule_desc_<@ ModuleName @>"><@ ModuleDesc @></div>
     </div>
+    <% if IsModServerStatus %>
+    <link rel="stylesheet" href="<@ Assets @>status.css">
+    <div class="as" id="as" data-url="modules/apache_status/code/status.php">
+        <div class="as-error" id="as-error"></div>
+        <div class="as-head">
+            <div>
+                <div class="as-title" id="as-version">&nbsp;</div>
+                <div class="as-sub" id="as-ident">&nbsp;</div>
+                <div class="as-sub" id="as-uptime">&nbsp;</div>
+            </div>
+            <div class="as-controls">
+                <span><span class="as-dot" id="as-live"></span><: Live :> · <span id="as-updated">…</span></span>
+                <label><: Every :> <select id="as-interval"><option value="2000">2 s</option><option value="5000" selected>5 s</option><option value="10000">10 s</option><option value="30000">30 s</option></select></label>
+                <button type="button" id="as-pause"><: Pause :></button>
+            </div>
+        </div>
+        <div class="as-hints" id="as-hints"></div>
+
+        <div class="as-tabs" role="tablist">
+            <button type="button" role="tab" class="on" data-tab="overview"><: Overview :></button>
+            <button type="button" role="tab" data-tab="requests"><: Requests :> <span class="as-badge" id="as-badge-active">0</span></button>
+            <button type="button" role="tab" data-tab="analysis"><: Analysis :></button>
+            <button type="button" role="tab" data-tab="workers"><: Workers :></button>
+            <button type="button" role="tab" data-tab="server"><: Server :></button>
+        </div>
+
+        <!-- Overview -->
+        <div class="as-pane on" data-pane="overview">
+            <div class="as-cards">
+                <div class="as-card" style="--c:#447fb3"><div class="as-card-label"><: Requests :></div><div class="as-card-value" id="as-rps">…</div><div class="as-card-detail" id="as-rps-d"></div><div id="as-rps-s"></div></div>
+                <div class="as-card" style="--c:#1fa2b5"><div class="as-card-label"><: Traffic :></div><div class="as-card-value" id="as-bps">…</div><div class="as-card-detail" id="as-bps-d"></div><div id="as-bps-s"></div></div>
+                <div class="as-card" style="--c:#8e6bd8"><div class="as-card-label"><: Response time :></div><div class="as-card-value" id="as-ms">…</div><div class="as-card-detail" id="as-ms-d"></div><div id="as-ms-s"></div></div>
+                <div class="as-card" style="--c:#2db87d"><div class="as-card-label"><: Busy workers :></div><div class="as-card-value" id="as-busy">…</div><div class="as-card-detail" id="as-busy-d"></div><div id="as-busy-s"></div></div>
+                <div class="as-card" style="--c:#f5a623"><div class="as-card-label"><: Connections :></div><div class="as-card-value" id="as-conn">…</div><div class="as-card-detail" id="as-conn-d"></div><div id="as-conn-s"></div></div>
+                <div class="as-card" style="--c:#ff6854"><div class="as-card-label"><: Apache CPU :></div><div class="as-card-value" id="as-cpu">…</div><div class="as-card-detail" id="as-cpu-d"></div><div id="as-cpu-s"></div></div>
+            </div>
+            <div class="as-panel as-wide">
+                <h4><: Worker slots :></h4>
+                <div class="as-sub" id="as-slots-sub"></div>
+                <div class="as-bar-states" id="as-statebar"></div>
+                <div class="as-legend" id="as-statelegend"></div>
+            </div>
+            <div class="as-grid">
+                <div class="as-panel"><h4><: Requests per second :></h4><div class="as-sub"><: Measured between reads, last 10 minutes :></div><div class="as-legend" id="as-rps-l"></div><div class="as-chart" id="as-rps-c"></div></div>
+                <div class="as-panel"><h4><: Workers :></h4><div class="as-sub"><: Busy and idle worker threads :></div><div class="as-legend" id="as-wk-l"></div><div class="as-chart" id="as-wk-c"></div></div>
+                <div class="as-panel"><h4><: Traffic :></h4><div class="as-sub"><: Bytes Apache sent per second, counted as each request finishes :></div><div class="as-legend" id="as-bps-l"></div><div class="as-chart" id="as-bps-c"></div></div>
+                <div class="as-panel"><h4><: Connections :></h4><div class="as-sub"><: Open connections, and those Apache handles without a thread :></div><div class="as-legend" id="as-cn-l"></div><div class="as-chart" id="as-cn-c"></div></div>
+            </div>
+        </div>
+
+        <!-- Requests -->
+        <div class="as-pane" data-pane="requests">
+            <div class="as-panel as-wide">
+                <div class="as-toolbar">
+                    <div class="as-seg" role="group">
+                        <button type="button" class="on" data-show="active"><: Running now :></button>
+                        <button type="button" data-show="all"><: All worker slots :></button>
+                    </div>
+                    <input type="search" id="as-filter" placeholder="<: Filter: client, host, URL, method :>" autocomplete="off">
+                    <span class="as-sub" id="as-req-count"></span>
+                </div>
+                <div class="as-scroll">
+                    <table class="as-table" id="as-req-table">
+                        <thead><tr>
+                            <th data-sort="mode"><: State :></th><th data-sort="client"><: Client :></th><th data-sort="vhost"><: Host :></th>
+                            <th data-sort="request"><: Request :></th><th data-sort="protocol"><: Protocol :></th>
+                            <th class="num on" data-sort="ss" title="<: Seconds since the request started :>"><: Running :></th>
+                            <th class="num" data-sort="req" title="<: Milliseconds the last request took :>"><: Took :></th>
+                            <th class="num" data-sort="cpu"><: CPU s :></th><th class="num" data-sort="pid"><: PID :></th>
+                            <th class="num" data-sort="srv"><: Slot :></th>
+                            <th class="num" data-sort="acc" title="<: Requests on this connection / child process / slot :>"><: Requests :></th>
+                            <th class="num" data-sort="slotMb" title="<: Sent by this slot since the restart (point at a value for the connection and child process) :>"><: Sent :></th>
+                        </tr></thead>
+                        <tbody id="as-req-body"></tbody>
+                    </table>
+                </div>
+                <p class="as-note"><: Apache remembers the last request of each worker slot: this is what each slot is doing or last did, not a full log. :></p>
+            </div>
+        </div>
+
+        <!-- Analysis -->
+        <div class="as-pane" data-pane="analysis">
+            <p class="as-note"><: Counted over the last request of every worker slot, as Apache remembers them. :></p>
+            <div class="as-grid">
+                <div class="as-panel"><h4><: Most requested :></h4><div class="as-sub"><: Same method and URL :></div><div id="as-top-req"></div></div>
+                <div class="as-panel"><h4><: Hosts :></h4><div class="as-sub"><: Virtual hosts that were asked :></div><div id="as-top-host"></div></div>
+                <div class="as-panel"><h4><: Clients :></h4><div class="as-sub"><: Addresses the requests came from :></div><div id="as-top-client"></div></div>
+                <div class="as-panel"><h4><: Methods :></h4><div class="as-sub"><: GET, POST and the rest :></div><div id="as-top-method"></div></div>
+                <div class="as-panel as-wide"><h4><: Longest requests :></h4><div class="as-sub"><: The 25 slowest, by the time their last request took :></div><div id="as-longest"></div></div>
+            </div>
+        </div>
+
+        <!-- Workers -->
+        <div class="as-pane" data-pane="workers">
+            <div class="as-panel as-wide">
+                <h4><: Scoreboard :></h4>
+                <div class="as-sub"><: One square per worker slot; point at one to see its state :></div>
+                <div class="as-scoreboard" id="as-scoreboard"></div>
+                <div class="as-legend" id="as-scorelegend"></div>
+            </div>
+            <div class="as-panel as-wide" id="as-proc-panel">
+                <h4><: Processes :></h4>
+                <div class="as-sub"><: Each Apache child process, its threads and the connections it holds :></div>
+                <div class="as-scroll">
+                    <table class="as-table">
+                        <thead><tr>
+                            <th class="num"><: Slot :></th><th class="num"><: PID :></th><th><: Stopping :></th><th class="num"><: Connections :></th><th><: Accepting :></th>
+                            <th class="num"><: Busy :></th><th class="num"><: Graceful :></th><th class="num"><: Idle :></th>
+                            <th class="num"><: Writing :></th><th class="num"><: Keep-alive :></th><th class="num"><: Closing :></th>
+                        </tr></thead>
+                        <tbody id="as-proc-body"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Server -->
+        <div class="as-pane" data-pane="server">
+            <div class="as-grid">
+                <div class="as-panel"><h4><: Server :></h4><dl class="as-dl" id="as-dl-server"></dl></div>
+                <div class="as-panel"><h4><: Since the last restart :></h4><dl class="as-dl" id="as-dl-totals"></dl></div>
+                <div class="as-panel as-wide">
+                    <h4><: Status summary :></h4>
+                    <div class="as-sub"><: As Apache reports it (server-status?auto). The load averages are on Server Monitor. :></div>
+                    <pre class="as-raw" id="as-raw"></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="<@ Assets @>status.js"></script>
+    <% else %>
     <div class="zgrid_wrapper">
-        <% if IsModServerStatus %>
-        <p><a href="modules/apache_status/app/index.php" target="_blank" rel="noopener"><: Open in a new window :></a></p>
-        <iframe class="sn-autoheight" data-sn-free="html, body, .wrapper, .content-wrapper, .right-side, .main-sidebar" src="modules/apache_status/app/index.php" title="<: Apache Status :>" style="width: 100%; height: 900px; border: 1px solid var(--sn-line, #ddd);"></iframe>
-        <script src="etc/lib/sentora/frame-height.js"></script>
-        <% else %>
         <div class="alert alert-warning">
             <h4><: Apache's status page is not answering :></h4>
             <p><: This module reads http://127.0.0.1/server-status (Apache's mod_status, with ExtendedStatus On). It returned HTTP :> <@ StatusCode @>.</p>
             <p><: A 301 or 302 means Apache redirected the request, usually to https. The panel's redirect leaves /server-status alone, so let the daemon rewrite the Apache config (within 5 minutes) and reload this page. :></p>
             <p><: Otherwise check that the status module is enabled with a2enmod status, then restart Apache. :></p>
         </div>
-        <% endif %>
     </div>
+    <% endif %>
 </div>

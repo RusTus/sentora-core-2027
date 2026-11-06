@@ -1,11 +1,11 @@
 /*
- * Frames that size to their content (Apache Status, GoAccess, Matomo): a frame with
+ * Frames that size to their content (GoAccess, Matomo): a frame with
  * class "sn-autoheight" grows and shrinks to the height of the page inside it, so the
  * panel page scrolls as a whole instead of the frame having its own scroll bar.
  * Pages from the panel itself are measured directly; a sandboxed page (GoAccess
  * reports) tells its height with postMessage({snFrameHeight: n}), accepted only from
  * that frame and only as a number. data-sn-free="selectors" lifts min-heights a page
- * sets from the window (AdminLTE) so it can be measured. A page that still sizes itself
+ * sets from the window (Matomo's menu) so it can be measured. A page that still sizes itself
  * from the frame (and would grow for ever) is noticed and its frame left as it is.
  */
 (function () {
