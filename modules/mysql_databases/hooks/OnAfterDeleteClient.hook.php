@@ -29,32 +29,39 @@ function DeleteClientDatabases() {
         while ($rowclient = $sql->fetch()) {
             //$rowdatabase = $zdbh->query("SELECT * FROM x_mysql_databases WHERE my_acc_fk=" . $rowclient['ac_id_pk'] . " AND my_deleted_ts IS NULL")->fetch();
             
+            // Every database of the deleted client (this took only the first, dropped it and
+            // then marked all of them deleted, so the others stayed on the server with the
+            // client's data and nothing ever came back for them). Each one is marked deleted
+            // only once it is really gone, so a failed drop is tried again next time.
             $numrows = $zdbh->prepare("SELECT * FROM x_mysql_databases WHERE my_acc_fk=:ac_id_pk AND my_deleted_ts IS NULL");
             $numrows->bindParam(':ac_id_pk', $rowclient['ac_id_pk']);
             $numrows->execute();
-            $rowdatabase = $numrows->fetch();
-        
-            if ($rowdatabase) {
+            $databases = $numrows->fetchAll();
+            foreach ($databases as $rowdatabase) {
                 try {
                     $my_name_vc = $zdbh->mysqlRealEscapeString($rowdatabase['my_name_vc']);
                     $delete = $zdbh->prepare("DROP DATABASE IF EXISTS `$my_name_vc`;");
-                    //$delete->bindParam(':my_name_vc', $rowdatabase['my_name_vc'], PDO::PARAM_STR);
                     $delete->execute();
-                    $delete = $zdbh->prepare("FLUSH PRIVILEGES");
-                    $delete->execute();
-                    $delete = $zdbh->prepare("UPDATE x_mysql_databases 
-						SET my_deleted_ts = :time 
-						WHERE my_acc_fk = :ac_id_pk");
-                    $delete->bindParam(':ac_id_pk', $rowclient['ac_id_pk']);
+                    $delete = $zdbh->prepare("UPDATE x_mysql_databases
+						SET my_deleted_ts = :time
+						WHERE my_id_pk = :my_id_pk");
                     $time = time();
                     $delete->bindParam(':time', $time);
+                    $delete->bindParam(':my_id_pk', $rowdatabase['my_id_pk']);
                     $delete->execute();
-                    $delete = $zdbh->prepare("DELETE FROM x_mysql_dbmap 
+                    $delete = $zdbh->prepare("DELETE FROM x_mysql_dbmap
 						WHERE mm_database_fk=:my_id_pk");
                     $delete->bindParam(':my_id_pk', $rowdatabase['my_id_pk']);
                     $delete->execute();
+                    echo "Dropped database " . $rowdatabase['my_name_vc'] . " of deleted client " . $rowclient['ac_user_vc'] . "\n";
                 } catch (PDOException $e) {
-                    
+                    echo "Could not drop database " . $rowdatabase['my_name_vc'] . " of deleted client " . $rowclient['ac_user_vc'] . ": " . $e->getMessage() . "\n";
+                }
+            }
+            if ($databases) {
+                try {
+                    $zdbh->prepare("FLUSH PRIVILEGES")->execute();
+                } catch (PDOException $e) {
                 }
             }
         }
