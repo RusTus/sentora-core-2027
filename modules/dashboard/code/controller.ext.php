@@ -8,15 +8,33 @@
  */
 require_once dirname(__FILE__) . '/widgets.php';
 
+/**
+ * Dashboard module: controller.
+ *
+ * Shows the logged-in account's widgets and handles adding, removing, moving and
+ * resetting them; the layout is a JSON list of widget IDs in x_dashboard.
+ */
 class module_controller extends ctrl_module
 {
+    /** @var string 'reset' after the widgets were reset (shown by getResult()), else ''. */
     static $msg = '';
 
+    /**
+     * Return the logged-in account.
+     *
+     * @return array<string, string> See ctrl_users::GetUserDetail().
+     */
     static function Me()
     {
         return ctrl_users::GetUserDetail();
     }
 
+    /**
+     * Create the x_dashboard table if it is missing (once per request).
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return void
+     */
     static function Ensure()
     {
         global $zdbh;
@@ -27,7 +45,13 @@ class module_controller extends ctrl_module
         }
     }
 
-    /** this account's widgets, in order (only ones it may have) */
+    /**
+     * Return this account's widgets, in order (only ones it may have).
+     *
+     * The defaults when the account has not saved a layout yet.
+     * @global db_driver $zdbh The panel's database connection.
+     * @return string[] Widget IDs.
+     */
     static function Layout()
     {
         global $zdbh;
@@ -41,6 +65,13 @@ class module_controller extends ctrl_module
         return array_values(array_filter($list, function ($id) use ($ok) { return is_string($id) && isset($ok[$id]); }));
     }
 
+    /**
+     * Save the account's widget list (duplicates removed).
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param string[] $list Widget IDs in order.
+     * @return void
+     */
     static function SaveLayout(array $list)
     {
         global $zdbh;
@@ -49,6 +80,12 @@ class module_controller extends ctrl_module
             ->execute(array(':a' => (int) self::Me()['userid'], ':w' => json_encode(array_values(array_unique($list)))));
     }
 
+    /**
+     * Return the widget ID posted in inWidget, if the account may have that widget.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return string The widget ID, or ''.
+     */
     static function FormWidget()
     {
         global $controller;
@@ -56,6 +93,12 @@ class module_controller extends ctrl_module
         return isset(dashboard_widgets::Available(self::Me())[$id]) ? $id : '';
     }
 
+    /**
+     * Handle the Add widget form (POST): add the widget to the end of the dashboard.
+     *
+     * Checks the CSFR token (dies when it is wrong).
+     * @return void
+     */
     static function doAddWidget()
     {
         runtime_csfr::Protect();
@@ -69,6 +112,12 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Handle a widget's remove button (POST).
+     *
+     * Checks the CSFR token (dies when it is wrong).
+     * @return void
+     */
     static function doRemoveWidget()
     {
         runtime_csfr::Protect();
@@ -76,6 +125,13 @@ class module_controller extends ctrl_module
         self::SaveLayout(array_values(array_diff(self::Layout(), array($id))));
     }
 
+    /**
+     * Handle a widget's up/down button (POST, inDir 'up' or 'down').
+     *
+     * Checks the CSFR token (dies when it is wrong).
+     * @global runtime_controller $controller The request controller.
+     * @return void
+     */
     static function doMoveWidget()
     {
         global $controller;
@@ -90,6 +146,12 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Handle "Back to the default widgets" (POST).
+     *
+     * Checks the CSFR token (dies when it is wrong) and sets $msg.
+     * @return void
+     */
     static function doResetWidgets()
     {
         runtime_csfr::Protect();
@@ -97,6 +159,11 @@ class module_controller extends ctrl_module
         self::$msg = 'reset';
     }
 
+    /**
+     * Return "Good morning/afternoon/evening, <name>" (template: <@ Greeting @>).
+     *
+     * @return string HTML-escaped text.
+     */
     static function getGreeting()
     {
         $me = self::Me();
@@ -106,6 +173,11 @@ class module_controller extends ctrl_module
         return dashboard_widgets::h(ui_language::translate($part)) . ', ' . dashboard_widgets::h($name !== '' ? $name : $me['username']);
     }
 
+    /**
+     * Return the account's widgets with their move/remove buttons (template: <@ Widgets @>).
+     *
+     * @return string HTML.
+     */
     static function getWidgets()
     {
         $me = self::Me();
@@ -131,6 +203,11 @@ class module_controller extends ctrl_module
         return $out . '</div>';
     }
 
+    /**
+     * Return the Add widget form and the reset button (template: <@ WidgetPicker @>).
+     *
+     * @return string HTML.
+     */
     static function getWidgetPicker()
     {
         $me = self::Me();
@@ -149,6 +226,11 @@ class module_controller extends ctrl_module
             . '<button class="btn btn-default" type="submit">' . ui_language::translate('Back to the default widgets') . '</button></form>';
     }
 
+    /**
+     * Return the message for the last action (template: <@ Result @>).
+     *
+     * @return string The HTML message, or ''.
+     */
     static function getResult()
     {
         return self::$msg === 'reset' ? ui_sysmessage::shout(ui_language::translate('Your dashboard is back to the default widgets.'), 'zannounceok') : '';

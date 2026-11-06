@@ -18,9 +18,11 @@ class sys_archive {
     /**
      * Uncompresses a ZIP archive to a given location.
      * @author Bobby Allen (ballen@bobbyallen.me)
+     * Logs to the panel log when the archive is invalid or can not be extracted.
+     * @global debug_logger $zlo The panel's logger.
      * @param string $archive Full path and filename to the ZIP archive.
      * @param string $dest The full path to the folder to extract the archive into (with trailing slash!)
-     * @return boolean 
+     * @return bool True when extracted; false without ZipArchive or on any error.
      */
     static function Unzip($archive, $dest) {
         global $zlo;

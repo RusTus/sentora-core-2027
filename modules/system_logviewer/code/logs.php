@@ -10,7 +10,7 @@
 class system_logviewer_logs
 {
 
-    /** label => glob patterns */
+    /** @var array<string, string[]> Group label => glob patterns (a file is listed under the first group that matches it). */
     static $sources = array(
         // A file is listed under the first group that matches it
         'PHP-FPM (extra PHP versions)' => array('/var/sentora/logs/php*-fpm.log'),
@@ -24,7 +24,12 @@ class system_logviewer_logs
         'System' => array('/var/log/syslog', '/var/log/auth.log', '/var/log/kern.log'),
     );
 
-    /** every log file found, keyed by id */
+    /**
+     * Return every log file found, keyed by id.
+     *
+     * Only real files (no symlinks); the id is the first 16 hex characters of sha1(path).
+     * @return array<string, array{id: string, group: string, path: string, readable: bool, size: int, mtime: int}>
+     */
     static function All()
     {
         $list = array();
@@ -53,12 +58,24 @@ class system_logviewer_logs
         return $list;
     }
 
+    /**
+     * Return one log by its id.
+     *
+     * @param mixed $id The id from the request (only a string can match).
+     * @return array{id: string, group: string, path: string, readable: bool, size: int, mtime: int}|false The log, or false when there is no such id.
+     */
     static function Get($id)
     {
         $all = self::All();
         return (is_string($id) && isset($all[$id])) ? $all[$id] : false;
     }
 
+    /**
+     * Format a size in bytes as bytes, KB, MB or GB.
+     *
+     * @param int|float $bytes The size.
+     * @return string For example "12.3 MB".
+     */
     static function HumanSize($bytes)
     {
         $units = array('bytes', 'KB', 'MB', 'GB');
@@ -71,7 +88,12 @@ class system_logviewer_logs
         return ($i ? number_format($n, 1) : (int) $n) . ' ' . $units[$i];
     }
 
-    /** the logged-in panel user, if an administrator (for read.php / view.php) */
+    /**
+     * Return the logged-in panel user, if an administrator (for read.php / view.php).
+     *
+     * Starts (and closes) the session; anyone else gets a 403 and the request ends (exit).
+     * @return array<string, string> The user (ctrl_users::GetUserDetail()).
+     */
     static function RequireAdmin()
     {
         session_start();

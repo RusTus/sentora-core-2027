@@ -1,5 +1,14 @@
 <?php
 
+/**
+ * Core module daily hook: clears leftover module update notices.
+ *
+ * Module update checks and usage reporting to sentora.org are switched off in this build.
+ *
+ * @package Sentora
+ * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
+ */
+
 global $zdbh;
 
 /*

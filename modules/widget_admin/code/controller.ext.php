@@ -8,31 +8,64 @@
  */
 require_once dirname(__FILE__) . '/../../dashboard/code/widgets.php';
 
+/**
+ * Widget Admin module: controller.
+ *
+ * Saves the widget settings (x_dashboard_widgets), resets every dashboard, and queues
+ * widget uploads and removals as files in QUEUE for the daemon.
+ */
 class module_controller extends ctrl_module
 {
     const QUEUE = '/var/lib/sentora/tmp/';
     const RESULTS = '/var/lib/sentora/widget-results.json';
     const MAX_ZIP = 524288;
 
+    /** @var array<int, array{0: string, 1: string}> Messages for getResult(): array('ok'|'error', English text). */
     static $msg = array();
 
+    /**
+     * Escape text for HTML (UTF-8, quotes too).
+     *
+     * @param mixed $s The text.
+     * @return string
+     */
     static function h($s)
     {
         return htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
     }
 
+    /**
+     * Is the logged-in user an administrator (group 1)?
+     *
+     * @return bool
+     */
     static function IsAdmin()
     {
         $me = ctrl_users::GetUserDetail();
         return (int) $me['usergroupid'] === 1;
     }
 
+    /**
+     * Return the user groups.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return array<int|string, string> Group ID => group name, by ID.
+     */
     static function Groups()
     {
         global $zdbh;
         return $zdbh->query("SELECT ug_id_pk, ug_name_vc FROM x_groups ORDER BY ug_id_pk")->fetchAll(PDO::FETCH_KEY_PAIR);
     }
 
+    /**
+     * Handle the widget settings form (POST): save on/off, default, order and groups of every widget.
+     *
+     * Checks the CSFR token (dies when it is wrong); does nothing for non-administrators.
+     * Widgets marked administrators-only keep group 1 only.
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller.
+     * @return void
+     */
     static function doSaveWidgets()
     {
         global $zdbh, $controller;
@@ -61,6 +94,13 @@ class module_controller extends ctrl_module
         self::$msg[] = array('ok', 'The widget settings have been saved. They apply on the next page every account opens.');
     }
 
+    /**
+     * Handle "Apply the defaults to every account now" (POST): delete every saved dashboard layout.
+     *
+     * Checks the CSFR token (dies when it is wrong); does nothing for non-administrators.
+     * @global db_driver $zdbh The panel's database connection.
+     * @return void
+     */
     static function doApplyDefaults()
     {
         global $zdbh;
@@ -74,7 +114,14 @@ class module_controller extends ctrl_module
         self::$msg[] = array('ok', 'Every dashboard now shows the default widgets (' . (int) $n . ' arranged dashboard(s) reset).');
     }
 
-    /** quick checks here; the daemon checks the package fully before installing it */
+    /**
+     * Handle the widget upload form (POST, file inWidgetFile): check the zip and queue it for the daemon.
+     *
+     * Quick checks here; the daemon checks the package fully before installing it.
+     * Checks the CSFR token (dies when it is wrong); does nothing for non-administrators.
+     * The result is added to $msg.
+     * @return void
+     */
     static function doUploadWidget()
     {
         runtime_csfr::Protect();
@@ -106,6 +153,13 @@ class module_controller extends ctrl_module
         self::$msg[] = array('ok', 'Widget "' . $check['name'] . '" is queued: the daemon checks and installs it within 5 minutes.');
     }
 
+    /**
+     * Handle a widget's Remove button (POST, inWidget): queue an uploaded widget for removal.
+     *
+     * Checks the CSFR token (dies when it is wrong); does nothing for non-administrators.
+     * @global runtime_controller $controller The request controller.
+     * @return void
+     */
     static function doRemoveWidget()
     {
         global $controller;
@@ -125,6 +179,11 @@ class module_controller extends ctrl_module
         self::$msg[] = array('ok', 'Widget "' . $up[$id]['name'] . '" is queued for removal (within 5 minutes).');
     }
 
+    /**
+     * Return the queued uploads and removals that the daemon has not handled yet.
+     *
+     * @return array<int, array<string, mixed>> The queue files' contents: 'action' ('install'|'remove'), 'id', 'name', 'by', 'time' (and 'version' for installs).
+     */
     static function Pending()
     {
         $out = array();
@@ -137,6 +196,11 @@ class module_controller extends ctrl_module
         return $out;
     }
 
+    /**
+     * Return the widget settings form, the remove forms and the apply-defaults form (template: <@ WidgetTable @>).
+     *
+     * @return string HTML (a short notice for non-administrators).
+     */
     static function getWidgetTable()
     {
         if (!self::IsAdmin()) {
@@ -181,6 +245,11 @@ class module_controller extends ctrl_module
             . ' <span class="text-muted">' . ui_language::translate('Every dashboard then shows the default widgets above, in that order.') . '</span></form>';
     }
 
+    /**
+     * Return the upload form with the queued and recent results (template: <@ UploadForm @>).
+     *
+     * @return string HTML, or '' for non-administrators.
+     */
     static function getUploadForm()
     {
         if (!self::IsAdmin()) {
@@ -207,6 +276,11 @@ class module_controller extends ctrl_module
         return $out;
     }
 
+    /**
+     * Return the messages of the last action (template: <@ Result @>).
+     *
+     * @return string HTML messages, or ''.
+     */
     static function getResult()
     {
         $out = '';

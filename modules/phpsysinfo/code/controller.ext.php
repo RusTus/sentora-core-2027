@@ -26,6 +26,9 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
  */
+/**
+ * PHPSysInfo module: controller (no methods of its own; the page uses the ctrl_module defaults).
+ */
 class module_controller extends ctrl_module
 {
     

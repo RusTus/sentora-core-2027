@@ -1,6 +1,13 @@
 <?php
 
 /**
+ * Core class: extra PHP-FPM versions for hosted domains.
+ *
+ * @package Sentora
+ * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
+ */
+
+/**
  * Extra PHP versions for hosted domains.
  *
  * The panel and every domain without a choice run on the system PHP (8.5,
@@ -15,9 +22,7 @@ class sys_phpversions
     const BASE_DIR = '/opt/sentora-php/';
     const SOCKET_DIR = '/run/sentora-php/';
 
-    /**
-     * Last day of security fixes from the PHP project for each version.
-     */
+    /** @var array<string, string> Last day of security fixes from the PHP project for each version: version => 'Y-m-d'. */
     static $supportEnds = array(
         '8.1' => '2025-12-31',
         '8.2' => '2026-12-31',
@@ -27,7 +32,9 @@ class sys_phpversions
     );
 
     /**
-     * The system PHP version, used by the panel and by domains without a choice.
+     * Return the system PHP version, used by the panel and by domains without a choice.
+     *
+     * @return string Version as 'major.minor', e.g. '8.5'.
      */
     static function DefaultVersion()
     {
@@ -35,7 +42,11 @@ class sys_phpversions
     }
 
     /**
-     * Extra versions installed on this server, e.g. array('8.1', '8.2').
+     * List the extra versions installed on this server, e.g. array('8.1', '8.2').
+     *
+     * The system version is never in the list.
+     *
+     * @return string[] Versions, oldest first.
      */
     static function Installed()
     {
@@ -51,7 +62,9 @@ class sys_phpversions
     }
 
     /**
-     * Installed versions the administrator has enabled.
+     * List the installed versions the administrator has enabled.
+     *
+     * @return string[] Versions, oldest first.
      */
     static function Enabled()
     {
@@ -60,6 +73,12 @@ class sys_phpversions
         return array_values(array_intersect(self::Installed(), $chosen));
     }
 
+    /**
+     * Check whether a version is installed and enabled.
+     *
+     * @param string $version PHP version, e.g. '8.3'.
+     * @return bool True when the version is enabled.
+     */
     static function IsEnabled($version)
     {
         return in_array((string) $version, self::Enabled(), true);
@@ -67,6 +86,9 @@ class sys_phpversions
 
     /**
      * Normalise a version a user picked: '' (the default) or an enabled version.
+     *
+     * @param string $version The submitted version.
+     * @return string An enabled version, or '' for the default.
      */
     static function Clean($version)
     {
@@ -75,9 +97,14 @@ class sys_phpversions
     }
 
     /**
-     * Is this version's PHP-FPM service running? Accounts have their own pools now,
-     * so the old shared socket is gone; every running version keeps its small idle
-     * pool's socket (php<version>-idle.sock), made when the service starts.
+     * Check whether a version's PHP-FPM service is running.
+     *
+     * Accounts have their own pools now, so the old shared socket is gone; every
+     * running version keeps its small idle pool's socket (php<version>-idle.sock),
+     * made when the service starts.
+     *
+     * @param string $version PHP version, e.g. '8.3'.
+     * @return bool True when the idle pool's socket exists.
      */
     static function IsRunning($version)
     {
@@ -85,25 +112,47 @@ class sys_phpversions
         return preg_match('/^[0-9]+\.[0-9]+$/', $v) === 1 && file_exists(self::SOCKET_DIR . 'php' . $v . '-idle.sock');
     }
 
+    /**
+     * Return the old shared PHP-FPM socket of a version.
+     *
+     * @param string $version PHP version, e.g. '8.3'.
+     * @return string Full socket path.
+     */
     static function Socket($version)
     {
         return self::SOCKET_DIR . 'php' . $version . '-fpm.sock';
     }
 
+    /**
+     * Return the systemd service name of an extra version.
+     *
+     * @param string $version PHP version, e.g. '8.3'.
+     * @return string Service name, e.g. 'sentora-php8.3-fpm'.
+     */
     static function Service($version)
     {
         return 'sentora-php' . $version . '-fpm';
     }
 
     /**
-     * Version a domain actually runs: its choice if that version is still
-     * enabled, otherwise the default.
+     * Return the version a domain actually runs.
+     *
+     * Its choice if that version is still enabled, otherwise the default.
+     *
+     * @param string $version The domain's chosen version ('' for the default).
+     * @return string PHP version, e.g. '8.3'.
      */
     static function Effective($version)
     {
         return self::IsEnabled($version) ? (string) $version : self::DefaultVersion();
     }
 
+    /**
+     * Return a translated note on how long a version gets security fixes.
+     *
+     * @param string $version PHP version, e.g. '8.3'.
+     * @return string E.g. 'security fixes until 2027-12-31', or '' when unknown.
+     */
     static function SupportNote($version)
     {
         if (!isset(self::$supportEnds[$version])) {
@@ -117,7 +166,10 @@ class sys_phpversions
     }
 
     /**
-     * <option> list for the domain forms: the default first, then enabled versions.
+     * Build the <option> list for the domain forms: the default first, then enabled versions.
+     *
+     * @param string $selected Optional. The version to preselect ('' for the default). Default ''.
+     * @return string HTML <option> elements.
      */
     static function SelectOptions($selected = '')
     {
@@ -132,7 +184,10 @@ class sys_phpversions
     }
 
     /**
-     * Label for lists: "8.5 (default)" or "8.3", noting a disabled choice.
+     * Return the label for lists: "8.5 (default)" or "8.3", noting a disabled choice.
+     *
+     * @param string $version The domain's chosen version ('' for the default).
+     * @return string The label (not HTML-escaped).
      */
     static function Label($version)
     {
@@ -147,7 +202,10 @@ class sys_phpversions
     }
 
     /**
-     * Days until a version's security support ends (negative: ended), or null if unknown
+     * Return the days until a version's security support ends.
+     *
+     * @param string $version PHP version, e.g. '8.3'.
+     * @return int|null Days left (negative: ended), or null if unknown.
      */
     static function DaysLeft($version)
     {
@@ -158,8 +216,13 @@ class sys_phpversions
     }
 
     /**
-     * Label for the domain lists: Label() plus a warning when the version the domain
-     * runs gets no security fixes any more (red) or stops getting them within 90 days
+     * Return the label for the domain lists.
+     *
+     * Label() plus a warning when the version the domain runs gets no security fixes
+     * any more (red) or stops getting them within 90 days.
+     *
+     * @param string $version The domain's chosen version ('' for the default).
+     * @return string HTML.
      */
     static function ListLabel($version)
     {
@@ -180,10 +243,16 @@ class sys_phpversions
     }
 
     /**
-     * Apache lines that hand a domain's PHP files to its PHP-FPM version.
+     * Build the Apache lines that hand a domain's PHP files to its PHP-FPM version.
+     *
      * Returns '' for the default (mod_php) so the normal php_handler is used.
      * The open_basedir, upload and session settings that mod_php gets from
      * php_admin_value are passed to PHP-FPM as PHP_ADMIN_VALUE instead.
+     *
+     * @param string $version PHP version, e.g. '8.3'.
+     * @param string $openBasedir The open_basedir value, or '' for none.
+     * @param string $tmpDir Folder for uploads and sessions.
+     * @return string Apache configuration lines, or '' when the version is not enabled.
      */
     static function ApacheHandler($version, $openBasedir, $tmpDir)
     {
@@ -207,6 +276,10 @@ class sys_phpversions
 
     /**
      * Start enabled versions and stop disabled ones. Run by the daemon (root).
+     *
+     * Prints a line for each service it starts or stops.
+     *
+     * @return void
      */
     static function SyncServices()
     {
@@ -230,7 +303,10 @@ class sys_phpversions
     }
 
     /**
-     * Number of live domains and subdomains that chose each version.
+     * Count the live domains and subdomains that chose each version.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return array<string, int> Version => number of domains.
      */
     static function UsageCounts()
     {

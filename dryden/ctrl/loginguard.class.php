@@ -20,6 +20,13 @@ class ctrl_loginguard
     const RESET_PREFIX = 'reset:';  // reset requests share x_login_failures under this prefix
     const AUTH_LOG = '/var/lib/sentora/sentora-auth.log';
 
+    /**
+     * Create the x_login_failures and x_remember_tokens tables if they are missing.
+     *
+     * Runs the CREATE TABLE statements at most once per request.
+     * @global db_driver $zdbh The panel's database connection.
+     * @return void
+     */
     static function Ensure()
     {
         global $zdbh;
@@ -38,12 +45,21 @@ class ctrl_loginguard
         $done = true;
     }
 
+    /**
+     * Return the client's IP address (REMOTE_ADDR), cut to 45 characters.
+     * @return string The address, or '' when there is none (CLI).
+     */
     static function Address()
     {
         return substr((string) (isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : ''), 0, 45);
     }
 
-    /** too many recent failures for this account name or this address? */
+    /**
+     * Too many recent failures for this account name or this address?
+     * @global db_driver $zdbh The panel's database connection.
+     * @param string $username The user name typed on the login form.
+     * @return bool True when the login must be refused for now.
+     */
     static function IsLocked($username)
     {
         global $zdbh;
@@ -63,6 +79,15 @@ class ctrl_loginguard
         return ((int) $row['byuser'] >= self::ACCOUNT_LIMIT) || ((int) $row['byip'] >= self::ADDRESS_LIMIT);
     }
 
+    /**
+     * Record one wrong password for this user name and address.
+     *
+     * Also writes a line to the fail2ban log (AUTH_LOG) and deletes failures older
+     * than a day.
+     * @global db_driver $zdbh The panel's database connection.
+     * @param string $username The user name typed on the login form.
+     * @return void
+     */
     static function Failed($username)
     {
         global $zdbh;
@@ -83,6 +108,12 @@ class ctrl_loginguard
         $zdbh->prepare("DELETE FROM x_login_failures WHERE lf_time_in < :old")->execute(array(':old' => $old));
     }
 
+    /**
+     * Clear the recorded failures for a user name after a good login.
+     * @global db_driver $zdbh The panel's database connection.
+     * @param string $username The user name that logged in.
+     * @return void
+     */
     static function Succeeded($username)
     {
         global $zdbh;
@@ -95,6 +126,9 @@ class ctrl_loginguard
      * Forgot password: may another reset email be sent for this address, from this IP?
      * Counts every request (known address or not), so the form can neither flood an
      * inbox nor be used to find out which addresses have accounts.
+     * @global db_driver $zdbh The panel's database connection.
+     * @param string $email The email address typed on the form.
+     * @return bool True when another reset email may be sent.
      */
     static function ResetAllowed($email)
     {
@@ -115,7 +149,12 @@ class ctrl_loginguard
         return ((int) $row['byemail'] < self::RESET_EMAIL_LIMIT) && ((int) $row['byip'] < self::RESET_ADDRESS_LIMIT);
     }
 
-    /** records one forgot-password request (no fail2ban line: it is not a wrong password) */
+    /**
+     * Record one forgot-password request (no fail2ban line: it is not a wrong password).
+     * @global db_driver $zdbh The panel's database connection.
+     * @param string $email The email address typed on the form.
+     * @return void
+     */
     static function ResetRequested($email)
     {
         global $zdbh;
@@ -132,18 +171,34 @@ class ctrl_loginguard
         $zdbh->prepare("DELETE FROM x_login_failures WHERE lf_time_in < :old")->execute(array(':old' => $old));
     }
 
+    /**
+     * Was this request made over HTTPS?
+     * @return bool
+     */
     static function IsHttps()
     {
         return (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['SERVER_PORT']) && (int) $_SERVER['SERVER_PORT'] === 443);
     }
 
+    /**
+     * Set an HttpOnly, SameSite=Lax cookie on path /, secure when the request is HTTPS.
+     * @param string $name The cookie name.
+     * @param string $value The cookie value ('' to delete it).
+     * @param int $expires Unix time the cookie expires.
+     * @return void
+     */
     private static function SetCookie($name, $value, $expires)
     {
         setcookie($name, $value, array(
             'expires' => $expires, 'path' => '/', 'secure' => self::IsHttps(), 'httponly' => true, 'samesite' => 'Lax'));
     }
 
-    /** "Remember me": a random token, only its hash is stored */
+    /**
+     * "Remember me": store a new random token (only its hash) and set the zRemember cookie.
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $uid The account ID (cast to int).
+     * @return void
+     */
     static function Remember($uid)
     {
         global $zdbh;
@@ -157,7 +212,13 @@ class ctrl_loginguard
         self::SetCookie('zRemember', $uid . ':' . $token, $expires);
     }
 
-    /** log in from a valid "Remember me" cookie (the token is replaced each time) */
+    /**
+     * Log in from a valid "Remember me" cookie (the token is replaced each time).
+     *
+     * Also deletes the old zUser/zPass cookies, and the zRemember cookie when it is not valid.
+     * @global db_driver $zdbh The panel's database connection.
+     * @return bool True when the session was started from the cookie.
+     */
     static function LoginFromCookie()
     {
         global $zdbh;
@@ -191,7 +252,11 @@ class ctrl_loginguard
         return true;
     }
 
-    /** log out: the token stops working everywhere it was copied to */
+    /**
+     * Log out: delete the stored token (it stops working everywhere it was copied to) and the cookie.
+     * @global db_driver $zdbh The panel's database connection.
+     * @return void
+     */
     static function Forget()
     {
         global $zdbh;

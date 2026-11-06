@@ -26,13 +26,19 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
  */
+
+/**
+ * Client Notices module: lets a reseller set the notice shown to its clients.
+ */
 class module_controller extends ctrl_module
 {
 
     /**
-     * The 'worker' methods.
+     * Load the TinyMCE editor for the notice textarea (<@ Init @>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return string HTML <script> tags.
      */
-    /* Load CSS and JS files */
     static function getInit() {
         global $controller;
 		// TinyMCE JS
@@ -53,6 +59,14 @@ class module_controller extends ctrl_module
         return $line;
     }
 	
+    /**
+     * Save an account's notice text.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int $uid The account ID.
+     * @param string $notice The notice text (HTML from the editor).
+     * @return bool Always true.
+     */
     static function ExectuteUpdateNotice($uid, $notice)
     {
         global $zdbh;
@@ -66,6 +80,13 @@ class module_controller extends ctrl_module
         return true;
     }
 
+    /**
+     * Return an account's notice text, XSS-cleaned.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int $rid The account ID (the reseller whose notice is shown).
+     * @return string|false The notice, or false when the account is not found.
+     */
     static function ExecuteShowNotice($rid)
     {
         global $zdbh;
@@ -87,7 +108,10 @@ class module_controller extends ctrl_module
      */
 
     /**
-     * Webinterface sudo methods.
+     * Return the notice of the current user's reseller (<@ CurrentNoticeText @>).
+     *
+     * @global runtime_controller $controller The request controller (not used).
+     * @return string|false The notice, or false when not found.
      */
     static function getCurrentNoticeText()
     {
@@ -96,6 +120,12 @@ class module_controller extends ctrl_module
 		return self::ExecuteShowNotice($currentuser['resellerid']);
     }
 
+    /**
+     * Save the posted notice for the current user, then redirect back and exit.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return void Ends with a redirect header and exit.
+     */
     static function doUpdateMessage()
     {
         global $controller;

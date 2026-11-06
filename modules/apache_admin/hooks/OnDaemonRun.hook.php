@@ -1,4 +1,15 @@
 <?php
+/**
+ * Apache admin module hook (OnDaemonRun): write the Apache vhost configuration.
+ *
+ * Every daemon run: syncs the account users and PHP pools, flags the config when a
+ * disk or bandwidth quota state changed, and when apache_changed is set (or the request
+ * guard is missing) rewrites the vhosts file, tests it, reloads Apache and optionally
+ * backs it up. A failed config test restores the previous file.
+ *
+ * @package Sentora
+ * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
+ */
 defined('SENTORA_PANEL_FPM_SOCKET') || define('SENTORA_PANEL_FPM_SOCKET', '/run/php/sentora-panel.sock');
 
 echo fs_filehandler::NewLine() . "START Apache Config Hook." . fs_filehandler::NewLine();
@@ -22,7 +33,7 @@ if (ui_module::CheckModuleEnabled('Apache Config')) {
         echo "Begin writing Apache Config to: " . ctrl_options::GetSystemOption('apache_vhost') . fs_filehandler::NewLine();
         WriteVhostConfigFile();
 		
-		# If Apache vhost file passes configuration test, run Apache vhost file Backup. Helping To prevent backing up a currupt vhost.conf
+		// If Apache vhost file passes configuration test, run Apache vhost file Backup. Helping To prevent backing up a currupt vhost.conf
 		if ( ctrl_options::GetSystemOption('apache_changed') != strtolower("true") ) {
 			
 			if (ctrl_options::GetSystemOption('apache_backup') == strtolower("true")) {
@@ -40,11 +51,12 @@ if (ui_module::CheckModuleEnabled('Apache Config')) {
 echo "END Apache Config Hook." . fs_filehandler::NewLine();
 
 /**
+ * Build a vhost on the Apache port that redirects to the domain's custom port.
  *
- * @param string $vhostName
- * @param numeric $customPort
- * @param string $userEmail[5~ * @return string
- *
+ * @param string $vhostName The domain name.
+ * @param int|string $customPort The port to forward to ("443" redirects to https://).
+ * @param string $userEmail The ServerAdmin address.
+ * @return string Apache configuration lines.
  */
 function BuildVhostPortForward($vhostName, $customPort, $userEmail) {
 		
@@ -73,7 +85,13 @@ function BuildVhostPortForward($vhostName, $customPort, $userEmail) {
     return $line;
 }
 
-# vhost SSL ReWrite http to https -tg
+/**
+ * Build a vhost on the Apache port that redirects http to https (vhost SSL ReWrite -tg).
+ *
+ * @param string $vhostName The domain name.
+ * @param string $userEmail The ServerAdmin address.
+ * @return string Apache configuration lines.
+ */
 function BuildVhostReWriteSSL($vhostName, $userEmail) {
 		
     $line = "# DOMAIN: " . $vhostName . fs_filehandler::NewLine();
@@ -100,12 +118,11 @@ function BuildVhostReWriteSSL($vhostName, $userEmail) {
 }
 
 /**
- * PHP handler lines for a regular domain or subdomain: the system PHP (mod_php,
- * the php_handler setting) or the PHP-FPM version chosen for the domain.
- */
-/**
  * The panel also answers on this server's own IP addresses (https://<server IP>),
  * not only on its name; any other unknown name still gets "not found".
+ *
+ * Switched off by the panel_ip_access setting ('false', '0', 'no', 'off').
+ * @return string A "ServerAlias ..." line, or '' when switched off or no address was found.
  */
 function SentoraPanelAliases() {
     // Whether the panel also answers on the server's own IP addresses is controlled by
@@ -131,7 +148,12 @@ function SentoraPanelAliases() {
     }, array_keys($ips))) . fs_filehandler::NewLine();
 }
 
-/** A setting that belongs on one line of the Apache config (no line breaks) */
+/**
+ * A setting that belongs on one line of the Apache config (no line breaks).
+ *
+ * @param mixed $v The setting value.
+ * @return string The value with control characters replaced by spaces.
+ */
 function SentoraOneLine($v) {
     return preg_replace('/[\x00-\x1F\x7F]/', ' ', (string) $v);
 }
@@ -141,6 +163,9 @@ function SentoraOneLine($v) {
  * directives that would let them run a program as root (Apache's main process
  * starts piped loggers and rewrite-map programs as root) or load outside code
  * are kept but commented out.
+ *
+ * @param string $text The custom entry.
+ * @return string The entry with the dangerous (and mod_php) lines commented out.
  */
 function SentoraSafeCustom($text) {
     $text = SentoraNoModPhp($text);
@@ -154,11 +179,22 @@ function SentoraSafeCustom($text) {
  * Custom vhost entries written for mod_php ("php_value ...", "php_admin_flag ...")
  * would stop Apache now that PHP runs in PHP-FPM: they are kept, commented out.
  * (In PHP-FPM, per-site PHP settings go in a .user.ini file in the site's folder.)
+ *
+ * @param string $text The custom entry.
+ * @return string
  */
 function SentoraNoModPhp($text) {
     return preg_replace('/^(\s*)(php_(?:admin_)?(?:value|flag)\b.*)$/mi', '$1# Not used with PHP-FPM (use .user.ini): $2', (string) $text);
 }
 
+/**
+ * PHP handler lines for a regular domain or subdomain: the PHP-FPM pool of the
+ * account, in the version chosen for the domain (or the default).
+ *
+ * @param array<string,mixed> $rowvhost The x_vhosts row ('vh_php_version_vc', 'vh_obasedir_in', 'vh_directory_vc').
+ * @param array<string,string> $vhostuser The owner from ctrl_users::GetUserDetail() ('userid', 'username').
+ * @return string Apache configuration lines.
+ */
 function BuildVhostPhpHandler($rowvhost, $vhostuser) {
     // Every domain's PHP runs in its account's own PHP-FPM pool (user web<id>),
     // in the version chosen for the domain (or the default)
@@ -179,6 +215,9 @@ function BuildVhostPhpHandler($rowvhost, $vhostuser) {
  * account's own PHP-FPM sockets, and refuses the panel's pool, other accounts' pools,
  * server-status, server-info and proxying. Writes the account map it reads, makes
  * sure mod_lua is on, and returns the lines for the top of the vhost file.
+ *
+ * @global db_driver $zdbh The panel's database connection.
+ * @return string Apache configuration lines, or '' when the Lua script is not installed.
  */
 function SentoraRequestGuard()
 {
@@ -213,6 +252,15 @@ function SentoraRequestGuard()
         . "</IfModule>" . $nl . $nl;
 }
 
+/**
+ * Build and write the whole Apache vhosts file, then test and reload Apache.
+ *
+ * Writes the panel's default vhost and one vhost per domain (enabled, over quota,
+ * parked, regular/subdomain, disabled). The old file is kept as a backup and put back
+ * when the config test fails (the failed file is kept as <file>-failed).
+ * @global db_driver $zdbh The panel's database connection.
+ * @return void
+ */
 function WriteVhostConfigFile() {
     global $zdbh;
 
@@ -235,7 +283,7 @@ function WriteVhostConfigFile() {
         $apgrant = "1";
     }
 	
-    # Get email for server admin of Sentora
+    // Get email for server admin of Sentora
     $getserveremail = $zdbh->query("SELECT ac_email_vc FROM x_accounts where ac_id_pk=1")->fetch();
     $serveremail = ( $getserveremail['ac_email_vc'] != "" ) ? $getserveremail['ac_email_vc'] : "postmaster@" . ctrl_options::GetSystemOption('sentora_domain');
 
@@ -249,7 +297,7 @@ function WriteVhostConfigFile() {
 		while ($rowport = $portQuery->fetch()) {
 			$customPorts[] = (empty($rowport['vh_custom_port_in'])) ? $VHostDefaultPort : $rowport['vh_custom_port_in'];
 			
-			# Add vh_ssl_port_in ports to list array 
+			// Add vh_ssl_port_in ports to list array 
 			$portQuery2 = $zdbh->prepare("SELECT vh_ssl_port_in FROM x_vhosts WHERE vh_deleted_ts IS NULL");
 			$portQuery2->execute();
 			while ($rowport2 = $portQuery2->fetch()) {
@@ -277,9 +325,9 @@ function WriteVhostConfigFile() {
     $line .= fs_filehandler::NewLine();
     $line .= SentoraRequestGuard();
 
-    # Listen is mandatory for each port <> 80 (80 is defined in system config)
+    // Listen is mandatory for each port <> 80 (80 is defined in system config)
 	//$line .= "Listen " . SentoraOneLine(ctrl_options::GetSystemOption('apache_port'));
-	# For each custom port
+	// For each custom port
     foreach ($customPortList as $port) {
         $line .= "Listen " . $port . fs_filehandler::NewLine();
     }
@@ -307,9 +355,9 @@ function WriteVhostConfigFile() {
 	
 	if (ctrl_options::GetSystemOption('panel_ssl_tx') == null) {
 		
-		##
-		## Sentora Control Panel default vhost entry
-		##
+		//#
+		//# Sentora Control Panel default vhost entry
+		//#
 		
 		//$line .= "# Configuration for Sentora control panel." . fs_filehandler::NewLine();
 		$line .= "<VirtualHost *:" . ctrl_options::GetSystemOption('sentora_port') . ">" . fs_filehandler::NewLine();
@@ -318,7 +366,7 @@ function WriteVhostConfigFile() {
 		$line .= "ServerName " . ctrl_options::GetSystemOption('sentora_domain') . fs_filehandler::NewLine();
 		$line .= SentoraPanelAliases();
 		
-		# Vhost PHP settings
+		// Vhost PHP settings
 		// The panel runs as its own user through PHP-FPM (pool "sentora"), never as the
 		// web server user that every hosted site's PHP runs as. Its session and upload
 		// folders are set in that pool, out of reach of the sites.
@@ -385,15 +433,15 @@ function WriteVhostConfigFile() {
 		$line .= "# END PANEL DOMAIN: " . ctrl_options::GetSystemOption('sentora_domain') . fs_filehandler::NewLine();
 		$line .= fs_filehandler::NewLine();
 	
-		# Load template file into vhost cofig to save
+		// Load template file into vhost cofig to save
 		//$line .= $smarty->fetch("vhost_cp.tpl") . fs_filehandler::NewLine();
 	
-	# Forwrd Sentora Panel if SSL is in use
-	# If vhost SSL_TX not null create spearate <virtualhost>
-	# Build Vhost SSL section
+	// Forwrd Sentora Panel if SSL is in use
+	// If vhost SSL_TX not null create spearate <virtualhost>
+	// Build Vhost SSL section
     } elseif (ctrl_options::GetSystemOption('panel_ssl_tx') != null) {
 		
-		# Build HTTP to HTTPS Redirect
+		// Build HTTP to HTTPS Redirect
 		$line .= BuildVhostReWriteSSL(ctrl_options::GetSystemOption('sentora_domain'), $serveremail);
 		
 		//$line .= "################################################################" . fs_filehandler::NewLine();
@@ -406,7 +454,7 @@ function WriteVhostConfigFile() {
 		$line .= "ServerName " . ctrl_options::GetSystemOption('sentora_domain') . fs_filehandler::NewLine();
 		$line .= SentoraPanelAliases();
 		
-		# Vhost PHP settings
+		// Vhost PHP settings
 		// The panel runs as its own user through PHP-FPM (pool "sentora"), never as the
 		// web server user that every hosted site's PHP runs as. Its session and upload
 		// folders are set in that pool, out of reach of the sites.
@@ -454,7 +502,7 @@ function WriteVhostConfigFile() {
 		$line .= "</Directory>" . fs_filehandler::NewLine();
 		$line .= fs_filehandler::NewLine();
 
-		# SSL Settings
+		// SSL Settings
 		$line .= "# SSL settings (if any exist)" . fs_filehandler::NewLine();
 		$line .= ctrl_options::GetSystemOption('panel_ssl_tx') . fs_filehandler::NewLine();
 		$line .= fs_filehandler::NewLine();
@@ -476,14 +524,14 @@ function WriteVhostConfigFile() {
 		$line .= "# END PANEL DOMAIN: " . ctrl_options::GetSystemOption('sentora_domain') . fs_filehandler::NewLine();
 		$line .= fs_filehandler::NewLine();
 		
-		############################## add back old code
+		//############################# add back old code
 		//$line .= $smarty->fetch("vhost_cp_ssl.tpl") . fs_filehandler::NewLine();
 		
 	}
 	
-	#*********Write to file
+	//*********Write to file
 	//writetofile($server_panel . "sentora-cp.conf", $line);
-	#***********
+	//***********
 	
 	//$line .= fs_filehandler::NewLine();
     $line .= "################################################################" . fs_filehandler::NewLine();
@@ -499,29 +547,29 @@ function WriteVhostConfigFile() {
      * ##############################################################################################################
      */
 	
-	#
-    # Sentora virtual host container configuration
-	#
+	//
+    // Sentora virtual host container configuration
+	//
 	$sql = $zdbh->prepare("SELECT * FROM x_vhosts WHERE vh_deleted_ts IS NULL");
     $sql->execute();
     while ($rowvhost = $sql->fetch()) {
 	
-	# Grab some variables we will use for later...
+	// Grab some variables we will use for later...
 	$vhostuser = ctrl_users::GetUserDetail($rowvhost['vh_acc_fk']);
 	$bandwidth = ctrl_users::GetQuotaUsages('bandwidth', $vhostuser['userid']);
 	$diskspace = ctrl_users::GetQuotaUsages('diskspace', $vhostuser['userid']);
-	# Set the vhosts to "LIVE"
+	// Set the vhosts to "LIVE"
 	$vsql = $zdbh->prepare("UPDATE x_vhosts SET vh_active_in=1 WHERE vh_id_pk=:id");
 	$vsql->bindParam(':id', $rowvhost['vh_id_pk']);
 	$vsql->execute();
 	
-	# Add a default email if no email found for client.
+	// Add a default email if no email found for client.
 	$useremail = ( fs_director::CheckForEmptyValue($vhostuser['email']) ) ? "postmaster@" . $rowvhost['vh_name_vc'] : $vhostuser['email'];
 	
-	# Check if domain or subdomain to see if we add an alias with 'www'
+	// Check if domain or subdomain to see if we add an alias with 'www'
 	$serveralias = ( $rowvhost['vh_type_in'] == 2 ) ? '' : " www." . $rowvhost['vh_name_vc'];
 	
-	# Check if site is ssl enabled to pevent duplicate Port 443
+	// Check if site is ssl enabled to pevent duplicate Port 443
 	//if ($rowvhost['vh_ssl_tx'] == !null) {
 		//$vhostPort = $VHostDefaultPort;
 	//} else {
@@ -530,19 +578,19 @@ function WriteVhostConfigFile() {
 	
 	$vhostIp = ( fs_director::CheckForEmptyValue($rowvhost['vh_custom_ip_vc']) ) ? "*" : $rowvhost['vh_custom_ip_vc'];
 	
-	# Get Package php and cgi enabled options
+	// Get Package php and cgi enabled options
 	$rows = $zdbh->prepare("SELECT * FROM x_packages WHERE pk_id_pk=:packageid AND pk_deleted_ts IS NULL");
 	$rows->bindParam(':packageid', $vhostuser['packageid']);
 	$rows->execute();
 	$packageinfo = $rows->fetch();
 	
-	#*************************************************
+	//*************************************************
 		  
 	$RootDir =  ctrl_options::GetSystemOption('hosted_dir') . $vhostuser['username'] . '/public_html' . $rowvhost['vh_directory_vc'];  
 	
-	# Domain is enabled
-	# Line1: Domain enabled & Client also is enabled.
-	# Line2: Domain enabled & Client may be disabled, but 'Allow Disabled' = 'true' in apache settings.
+	// Domain is enabled
+	// Line1: Domain enabled & Client also is enabled.
+	// Line2: Domain enabled & Client may be disabled, but 'Allow Disabled' = 'true' in apache settings.
 	if ($rowvhost['vh_enabled_in'] == 1 && ctrl_users::CheckUserEnabled($rowvhost['vh_acc_fk']) ||
 		$rowvhost['vh_enabled_in'] == 1 && ctrl_options::GetSystemOption('apache_allow_disabled') == strtolower("true")) {
 	
@@ -554,12 +602,12 @@ function WriteVhostConfigFile() {
 		 * ##################################################
 		 */
 	
-		# Domain is beyond its diskusage
+		// Domain is beyond its diskusage
 		if ($vhostuser['diskquota'] != 0 && $diskspace > $vhostuser['diskquota']) {
 			
 			if ($rowvhost['vh_ssl_tx'] == null) {
 			
-				# Load template file into vhost cofig to save
+				// Load template file into vhost cofig to save
 				$line .= "# DOMAIN: " . $rowvhost['vh_name_vc'] . fs_filehandler::NewLine();
 				$line .= "# THIS DOMAIN HAS BEEN DISABLED FOR DISK QUOTA OVERAGE" . fs_filehandler::NewLine();
 				$line .= "<virtualhost " . $vhostIp . ":" . $vhostPort . ">" . fs_filehandler::NewLine();
@@ -581,7 +629,7 @@ function WriteVhostConfigFile() {
 				$line .= SentoraSafeCustom($rowvhost['vh_custom_tx']) . fs_filehandler::NewLine();
 				$line .= "</virtualhost>" . fs_filehandler::NewLine();
 		
-				############################## add back old code
+				//############################# add back old code
 				//$line .= $smarty->fetch("vhost_disk_quota.tpl") . fs_filehandler::NewLine();
 				
 				$line .= "# END DOMAIN: " . $rowvhost['vh_name_vc'] . fs_filehandler::NewLine();
@@ -592,13 +640,13 @@ function WriteVhostConfigFile() {
 					$line .= BuildVhostPortForward($rowvhost['vh_name_vc'], $vhostPort, $useremail);
 				}
 			
-			# If vhost SSL_TX not null create spearate <virtualhost>
+			// If vhost SSL_TX not null create spearate <virtualhost>
 			} elseif ($rowvhost['vh_ssl_tx'] != null && $rowvhost['vh_ssl_port_in'] != null ) {
 				
-				# Build HTTP to HTTPS Redirect
+				// Build HTTP to HTTPS Redirect
 				$line .= BuildVhostReWriteSSL($rowvhost['vh_name_vc'], $useremail);
 				
-				# Build Vhost SSL section
+				// Build Vhost SSL section
 				$line .= "# DOMAIN: " . $rowvhost['vh_name_vc'] . fs_filehandler::NewLine();
 				$line .= "# THIS DOMAIN HAS BEEN DISABLED FOR DISK QUOTA OVERAGE & HAS SSL ENABLED" . fs_filehandler::NewLine();
 				//$line .= "<virtualhost " . $vhostIp . ":" . $vhostPort . ">" . fs_filehandler::NewLine();
@@ -618,7 +666,7 @@ function WriteVhostConfigFile() {
 				$line .= sys_accountphp::PanelHandler();
 				$line .= SentoraOneLine(ctrl_options::GetSystemOption('dir_index')) . fs_filehandler::NewLine();
 				
-				# SSL Settings
+				// SSL Settings
 				$line .= "# SSL settings (if any exist)" . fs_filehandler::NewLine();
 				$line .= $rowvhost['vh_ssl_tx'] . fs_filehandler::NewLine();
 				$line .= fs_filehandler::NewLine();
@@ -628,7 +676,7 @@ function WriteVhostConfigFile() {
 				$line .= SentoraSafeCustom($rowvhost['vh_custom_tx']) . fs_filehandler::NewLine();
 				$line .= "</virtualhost>" . fs_filehandler::NewLine();
 				
-				############################## add back old code
+				//############################# add back old code
 				//$line .= $smarty->fetch("vhost_disk_quota_ssl.tpl") . fs_filehandler::NewLine();
 				
 				$line .= "# END DOMAIN: " . $rowvhost['vh_name_vc'] . fs_filehandler::NewLine();
@@ -637,9 +685,9 @@ function WriteVhostConfigFile() {
 			$line .= fs_filehandler::NewLine();
 			
 			
-			#*********Write to file
+			//*********Write to file
 			//writetofile($vh_path . $rowvhost['vh_name_vc']. ".conf"  , $line);
-			#***********	
+			//***********	
 			
 		/*
 		 * ##################################################
@@ -649,12 +697,12 @@ function WriteVhostConfigFile() {
 		 * ##################################################
 		 */
 	
-		# Domain is beyond its quota
+		// Domain is beyond its quota
 		} elseif ($vhostuser['bandwidthquota'] != 0 && $bandwidth > $vhostuser['bandwidthquota']) {
 			
 			if ($rowvhost['vh_ssl_tx'] == null) {
 			
-				# Load template file into vhost cofig to save
+				// Load template file into vhost cofig to save
 				$line .= "# DOMAIN: " . $rowvhost['vh_name_vc'] . fs_filehandler::NewLine();
 				$line .= "# THIS DOMAIN HAS BEEN DISABLED FOR BANDWIDTH OVERAGE" . fs_filehandler::NewLine();
 				$line .= "<virtualhost " . $vhostIp . ":" . $vhostPort . ">" . fs_filehandler::NewLine();
@@ -676,7 +724,7 @@ function WriteVhostConfigFile() {
 				$line .= SentoraSafeCustom($rowvhost['vh_custom_tx']) . fs_filehandler::NewLine();
 				$line .= "</virtualhost>" . fs_filehandler::NewLine();
 				
-				############################## add back old code
+				//############################# add back old code
 				//$line .= $smarty->fetch("vhost_bandwidth.tpl") . fs_filehandler::NewLine();
 				
 				$line .= "# END DOMAIN: " . $rowvhost['vh_name_vc'] . fs_filehandler::NewLine();
@@ -687,13 +735,13 @@ function WriteVhostConfigFile() {
 					$line .= BuildVhostPortForward($rowvhost['vh_name_vc'], $vhostPort, $useremail);
 				}
 			
-			# If vhost SSL_TX not null create spearate <virtualhost>
+			// If vhost SSL_TX not null create spearate <virtualhost>
 			} elseif ($rowvhost['vh_ssl_tx'] != null && $rowvhost['vh_ssl_port_in'] != null ) {
 				
-				# Build HTTP to HTTPS Redirect
+				// Build HTTP to HTTPS Redirect
 				$line .= BuildVhostReWriteSSL($rowvhost['vh_name_vc'], $useremail);
 				
-				# Build Vhost SSL section
+				// Build Vhost SSL section
 				$line .= "# DOMAIN: " . $rowvhost['vh_name_vc'] . fs_filehandler::NewLine();
 				$line .= "# THIS DOMAIN HAS BEEN DISABLED FOR BANDWIDTH OVERAGE & HAS SSL ENABLED" . fs_filehandler::NewLine();
 				//$line .= "<virtualhost " . $vhostIp . ":" . $vhostPort . ">" . fs_filehandler::NewLine();
@@ -712,7 +760,7 @@ function WriteVhostConfigFile() {
 				$line .= sys_accountphp::PanelHandler();
 				$line .= SentoraOneLine(ctrl_options::GetSystemOption('dir_index')) . fs_filehandler::NewLine();
 				
-				# SSL Settings
+				// SSL Settings
 				$line .= "# SSL settings (if any exist)" . fs_filehandler::NewLine();
 				$line .= $rowvhost['vh_ssl_tx'] . fs_filehandler::NewLine();
 				$line .= fs_filehandler::NewLine();
@@ -722,7 +770,7 @@ function WriteVhostConfigFile() {
 				$line .= SentoraSafeCustom($rowvhost['vh_custom_tx']) . fs_filehandler::NewLine();
 				$line .= "</virtualhost>" . fs_filehandler::NewLine();
 				
-				############################## add back old code
+				//############################# add back old code
 				//$line .= $smarty->fetch("vhost_bandwidth_ssl.tpl") . fs_filehandler::NewLine();
 				
 				$line .= "# END DOMAIN: " . $rowvhost['vh_name_vc'] . fs_filehandler::NewLine();
@@ -730,9 +778,9 @@ function WriteVhostConfigFile() {
 			}
 			$line .= fs_filehandler::NewLine();
 			
-			# Write to file
+			// Write to file
 			//writetofile($vh_path . $rowvhost['vh_name_vc']. ".conf"  , $line);
-			#***********				
+			//***********				
 			
 		/*
 		 * ##################################################
@@ -742,12 +790,12 @@ function WriteVhostConfigFile() {
 		 * ##################################################
 		 */
 	
-		# Domain is a PARKED domain.
+		// Domain is a PARKED domain.
 		} elseif ($rowvhost['vh_type_in'] == 3) {
 			
 			if ($rowvhost['vh_ssl_tx'] == null) {			
 			
-				# Load template file into vhost config to save
+				// Load template file into vhost config to save
 				$line .= "# DOMAIN: " . $rowvhost['vh_name_vc'] . fs_filehandler::NewLine();
 				$line .= "# THIS DOMAIN HAS BEEN PARKED" . fs_filehandler::NewLine();
 				$line .= "<virtualhost " . $vhostIp . ":" . $vhostPort . ">" . fs_filehandler::NewLine();
@@ -772,7 +820,7 @@ function WriteVhostConfigFile() {
 				$line .= SentoraSafeCustom($rowvhost['vh_custom_tx']) . fs_filehandler::NewLine();
 				$line .= "</virtualhost>" . fs_filehandler::NewLine();
 				
-				############################## add back old code
+				//############################# add back old code
 				//$line .= $smarty->fetch("vhost_parked.tpl") . fs_filehandler::NewLine();
 				
 				$line .= "# END DOMAIN: " . $rowvhost['vh_name_vc'] . fs_filehandler::NewLine();
@@ -783,13 +831,13 @@ function WriteVhostConfigFile() {
 					$line .= BuildVhostPortForward($rowvhost['vh_name_vc'], $vhostPort, $useremail);
 				}
 			
-			# If vhost SSL_TX not null create spearate <virtualhost>
+			// If vhost SSL_TX not null create spearate <virtualhost>
 			} elseif ($rowvhost['vh_ssl_tx'] != null && $rowvhost['vh_ssl_port_in'] != null) {
 				
-				# Build HTTP to HTTPS Redirect
+				// Build HTTP to HTTPS Redirect
 				$line .= BuildVhostReWriteSSL($rowvhost['vh_name_vc'], $useremail);
 				
-				# Build Vhost SSL section
+				// Build Vhost SSL section
 				$line .= "# DOMAIN: " . $rowvhost['vh_name_vc'] . fs_filehandler::NewLine();
 				$line .= "# THIS DOMAIN IS PARKED & HAS SSL ENABLED" . fs_filehandler::NewLine();
 				//$line .= "<virtualhost " . $vhostIp . ":" . $vhostPort . ">" . fs_filehandler::NewLine();
@@ -808,7 +856,7 @@ function WriteVhostConfigFile() {
 				$line .= sys_accountphp::PanelHandler();
 				$line .= SentoraOneLine(ctrl_options::GetSystemOption('dir_index')) . fs_filehandler::NewLine();
 				
-				# SSL Settings
+				// SSL Settings
 				$line .= "# SSL settings (if any exist)" . fs_filehandler::NewLine();
 				$line .= $rowvhost['vh_ssl_tx'] . fs_filehandler::NewLine();
 				$line .= fs_filehandler::NewLine();
@@ -821,7 +869,7 @@ function WriteVhostConfigFile() {
 				$line .= SentoraSafeCustom($rowvhost['vh_custom_tx']) . fs_filehandler::NewLine();
 				$line .= "</virtualhost>" . fs_filehandler::NewLine();
 				
-				############################## add back old code
+				//############################# add back old code
 				//$line .= $smarty->fetch("vhost_parked_ssl.tpl") . fs_filehandler::NewLine();
 				
 				$line .= "# END DOMAIN: " . $rowvhost['vh_name_vc'] . fs_filehandler::NewLine();
@@ -829,9 +877,9 @@ function WriteVhostConfigFile() {
 			}
 			$line .= fs_filehandler::NewLine();
 							
-			# Write to file
+			// Write to file
 			//writetofile($vh_path . $rowvhost['vh_name_vc']. ".conf"  , $line);
-			#***********
+			//***********
 			
 		/*
 		 * ##################################################
@@ -841,23 +889,23 @@ function WriteVhostConfigFile() {
 		 * ##################################################
 		 */
 	
-		#check
-		#Domain is a regular domain or a subdomain with PHP MOD.
+		//check
+		//Domain is a regular domain or a subdomain with PHP MOD.
 		} else {
 		   
 		    if ($rowvhost['vh_ssl_tx'] == null) {
 		   
-				# Create Apache Vhost direcory and log folders
-				# Temp
+				// Create Apache Vhost direcory and log folders
+				// Temp
 				if ( !is_dir( ctrl_options::GetSystemOption('hosted_dir') . $vhostuser[ 'username' ] . "/tmp" ) ) {
 					fs_director::CreateDirectory( ctrl_options::GetSystemOption( 'hosted_dir' ) . $vhostuser[ 'username' ] . "/tmp" );
 				}
-				# Logs
+				// Logs
 				if (!is_dir(ctrl_options::GetSystemOption('log_dir') . "domains/" . $vhostuser['username'] . "/")) {
 					fs_director::CreateDirectory(ctrl_options::GetSystemOption('log_dir') . "domains/" . $vhostuser['username'] . "/");
 				}
-				###
-				#START HERE
+				//##
+				//START HERE
 				$line .= "# DOMAIN: " . $rowvhost['vh_name_vc'] . fs_filehandler::NewLine();
 				$line .= "<virtualhost " . $vhostIp . ":" . $vhostPort . ">" . fs_filehandler::NewLine();
 				// Server name, alias, email settings
@@ -887,9 +935,9 @@ function WriteVhostConfigFile() {
 				$line .= "    Require all granted" . fs_filehandler::NewLine();
 				$line .= "</Directory>" . fs_filehandler::NewLine();
 				
-				# Vhost PHP settings. For future use ( PHP Mod/FPM/Fcgi ) Coming soon!!!! :-)
+				// Vhost PHP settings. For future use ( PHP Mod/FPM/Fcgi ) Coming soon!!!! :-)
 				//if ($packageinfo['pk_enablephp_in'] <> 0) {
-					# Test build PHP handler
+					// Test build PHP handler
 					//$line .= BuildVhostPHPHandler($packageinfo['pk_enablephp_in'], $rowchost['vh_phphandler_id']);
 				//}
 		
@@ -906,14 +954,14 @@ function WriteVhostConfigFile() {
 				$rows->execute();
 				$packageinfo = $rows->fetch();
 				
-				# curently disabled because un secure
-				# need correct cleaning in interface for full removal or in comment here until restoration
-				#                if ( $packageinfo[ 'pk_enablecgi_in' ] <> 0 ) {
-				#                     $line .= ctrl_options::GetSystemOption( 'cgi_handler' ) . fs_filehandler::NewLine();
-				#                     if ( !is_dir( ctrl_options::GetSystemOption( 'hosted_dir' ) . $vhostuser[ 'username' ] . "/public_html" . $rowvhost[ 'vh_directory_vc' ] . "/_cgi-bin" ) ) {
-				#                         fs_director::CreateDirectory( ctrl_options::GetSystemOption( 'hosted_dir' ) . $vhostuser[ 'username' ] . "/public_html" . $rowvhost[ 'vh_directory_vc' ] . "/_cgi-bin" );
-				#                     }
-				#                 }
+				// curently disabled because un secure
+				// need correct cleaning in interface for full removal or in comment here until restoration
+				//                if ( $packageinfo[ 'pk_enablecgi_in' ] <> 0 ) {
+				//                     $line .= ctrl_options::GetSystemOption( 'cgi_handler' ) . fs_filehandler::NewLine();
+				//                     if ( !is_dir( ctrl_options::GetSystemOption( 'hosted_dir' ) . $vhostuser[ 'username' ] . "/public_html" . $rowvhost[ 'vh_directory_vc' ] . "/_cgi-bin" ) ) {
+				//                         fs_director::CreateDirectory( ctrl_options::GetSystemOption( 'hosted_dir' ) . $vhostuser[ 'username' ] . "/public_html" . $rowvhost[ 'vh_directory_vc' ] . "/_cgi-bin" );
+				//                     }
+				//                 }
 				
 				// Error documents:- Error pages are added automatically if they are found in the _errorpages directory
 				// and if they are a valid error code, and saved in the proper format, i.e. <error_number>.html
@@ -946,10 +994,10 @@ function WriteVhostConfigFile() {
 				// End Virtual Host Settings
 				$line .= "</virtualhost>" . fs_filehandler::NewLine();
 				
-				# Load template file into vhost config to save
+				// Load template file into vhost config to save
 				//$line .= $smarty->fetch("vhost_domain.tpl") . fs_filehandler::NewLine();
 				
-				# End Virtual Host Settings
+				// End Virtual Host Settings
 				$line .= "# END DOMAIN: " . $rowvhost['vh_name_vc'] . fs_filehandler::NewLine();
 				$line .= "################################################################" . fs_filehandler::NewLine();
 				
@@ -959,17 +1007,17 @@ function WriteVhostConfigFile() {
 					$line .= BuildVhostPortForward($rowvhost['vh_name_vc'], $vhostPort, $useremail);
 				}
 							
-			# If vhost SSL_TX not null create spearate <virtualhost>
+			// If vhost SSL_TX not null create spearate <virtualhost>
 			} elseif ($rowvhost['vh_ssl_tx'] != null && $rowvhost['vh_ssl_port_in'] != null) {
 				
-				# Build HTTP to HTTPS Redirect
+				// Build HTTP to HTTPS Redirect
 				$line .= BuildVhostReWriteSSL($rowvhost['vh_name_vc'], $useremail);
 				
-				# Build Vhost SSL section
+				// Build Vhost SSL section
 				$line .= "# DOMAIN: " . $rowvhost['vh_name_vc'] . fs_filehandler::NewLine();
 				$line .= "# THIS DOMAIN HAS SSL ENABLED" . fs_filehandler::NewLine();
 				
-				#START HERE
+				//START HERE
 				//$line .= "<virtualhost " . $vhostIp . ":" . $vhostPort . ">" . fs_filehandler::NewLine();
 				$line .= "<virtualhost " . $vhostIp . ":" . $rowvhost['vh_ssl_port_in'] . ">" . fs_filehandler::NewLine();
 		
@@ -1002,9 +1050,9 @@ function WriteVhostConfigFile() {
 				$line .= "    Require all granted" . fs_filehandler::NewLine();
 				$line .= "</Directory>" . fs_filehandler::NewLine();
 		
-				# Vhost PHP settings. For future use ( PHP Mod/FPM/Fcgi ) Coming soon!!!! :-)
+				// Vhost PHP settings. For future use ( PHP Mod/FPM/Fcgi ) Coming soon!!!! :-)
 				//if ($packageinfo['pk_enablephp_in'] <> 0) {
-					# Test build PHP handler
+					// Test build PHP handler
 					//$line .= BuildVhostPHPHandler($packageinfo['pk_enablephp_in'], $rowchost['vh_phphandler_id']);
 				//}
 				
@@ -1019,14 +1067,14 @@ function WriteVhostConfigFile() {
 				$rows->execute();
 				$packageinfo = $rows->fetch();
 			
-				# curently disabled because un secure
-				# need correct cleaning in interface for full removal or in comment here until restoration
-				#                if ( $packageinfo[ 'pk_enablecgi_in' ] <> 0 ) {
-				#                     $line .= ctrl_options::GetSystemOption( 'cgi_handler' ) . fs_filehandler::NewLine();
-				#                     if ( !is_dir( ctrl_options::GetSystemOption( 'hosted_dir' ) . $vhostuser[ 'username' ] . "/public_html" . $rowvhost[ 'vh_directory_vc' ] . "/_cgi-bin" ) ) {
-				#                         fs_director::CreateDirectory( ctrl_options::GetSystemOption( 'hosted_dir' ) . $vhostuser[ 'username' ] . "/public_html" . $rowvhost[ 'vh_directory_vc' ] . "/_cgi-bin" );
-				#                     }
-				#                 }
+				// curently disabled because un secure
+				// need correct cleaning in interface for full removal or in comment here until restoration
+				//                if ( $packageinfo[ 'pk_enablecgi_in' ] <> 0 ) {
+				//                     $line .= ctrl_options::GetSystemOption( 'cgi_handler' ) . fs_filehandler::NewLine();
+				//                     if ( !is_dir( ctrl_options::GetSystemOption( 'hosted_dir' ) . $vhostuser[ 'username' ] . "/public_html" . $rowvhost[ 'vh_directory_vc' ] . "/_cgi-bin" ) ) {
+				//                         fs_director::CreateDirectory( ctrl_options::GetSystemOption( 'hosted_dir' ) . $vhostuser[ 'username' ] . "/public_html" . $rowvhost[ 'vh_directory_vc' ] . "/_cgi-bin" );
+				//                     }
+				//                 }
 		
 				// Error documents:- Error pages are added automatically if they are found in the _errorpages directory
 				// and if they are a valid error code, and saved in the proper format, i.e. <error_number>.html
@@ -1048,7 +1096,7 @@ function WriteVhostConfigFile() {
 				// Directory indexes
 				$line .= SentoraOneLine(ctrl_options::GetSystemOption('dir_index')) . fs_filehandler::NewLine();
 		
-				# SSL Settings
+				// SSL Settings
 				$line .= "# SSL settings (if any exist)" . fs_filehandler::NewLine();
 				$line .= $rowvhost['vh_ssl_tx'] . fs_filehandler::NewLine();
 				$line .= fs_filehandler::NewLine();
@@ -1064,7 +1112,7 @@ function WriteVhostConfigFile() {
 				// End Virtual Host Settings
 				$line .= "</virtualhost>" . fs_filehandler::NewLine();
 				
-				############################## add back old code
+				//############################# add back old code
 				//$line .= $smarty->fetch("vhost_domain_ssl.tpl") . fs_filehandler::NewLine();
 				
 				$line .= "# END DOMAIN: " . $rowvhost['vh_name_vc'] . fs_filehandler::NewLine();
@@ -1072,9 +1120,9 @@ function WriteVhostConfigFile() {
 			}
 			$line .= fs_filehandler::NewLine();
 			
-			#*********Write to file
+			//*********Write to file
 			//writetofile($vh_path . $rowvhost['vh_name_vc']. ".conf"  , $line);
-			#***********
+			//***********
 		}
 	
 		/*
@@ -1085,11 +1133,11 @@ function WriteVhostConfigFile() {
 		 * ##################################################
 		 */
 		} else {
-		# Domain is NOT enabled
+		// Domain is NOT enabled
 		
 			if ($rowvhost['vh_ssl_tx'] == null) {
 		
-				# Load template file into vhost cofig to save
+				// Load template file into vhost cofig to save
 				$line .= "# DOMAIN: " . $rowvhost['vh_name_vc'] . fs_filehandler::NewLine();
 				$line .= "# THIS DOMAIN HAS BEEN DISABLED" . fs_filehandler::NewLine();
 				$line .= "<virtualhost " . $vhostIp . ":" . $vhostPort . ">" . fs_filehandler::NewLine();
@@ -1110,20 +1158,20 @@ function WriteVhostConfigFile() {
 				$line .= SentoraSafeCustom($rowvhost['vh_custom_tx']) . fs_filehandler::NewLine();
 				$line .= "</virtualhost>" . fs_filehandler::NewLine();
 				
-				############################## add back old code
+				//############################# add back old code
 				//$line .= $smarty->fetch("vhost_disabled.tpl") . fs_filehandler::NewLine();
 				
 				$line .= "# END DOMAIN: " . $rowvhost['vh_name_vc'] . fs_filehandler::NewLine();
 				$line .= "################################################################" . fs_filehandler::NewLine();
 				$line .= fs_filehandler::NewLine();
 			
-			# If vhost SSL_TX not null create spearate <virtualhost>
+			// If vhost SSL_TX not null create spearate <virtualhost>
 			} elseif ( $rowvhost['vh_ssl_tx'] != NULL && $rowvhost['vh_ssl_port_in'] != NULL ) {
 				
-				# Build HTTP to HTTPS Redirect
+				// Build HTTP to HTTPS Redirect
 				$line .= BuildVhostReWriteSSL($rowvhost['vh_name_vc'], $useremail);
 				
-				# Build Vhost SSL section
+				// Build Vhost SSL section
 				$line .= "# DOMAIN: " . $rowvhost['vh_name_vc'] . fs_filehandler::NewLine();
 				$line .= "# THIS DOMAIN HAS BEEN DISABLED & HAS SSL ENABLED" . fs_filehandler::NewLine();
 				//$line .= "<virtualhost " . $vhostIp . ":" . $vhostPort . ">" . fs_filehandler::NewLine();
@@ -1142,7 +1190,7 @@ function WriteVhostConfigFile() {
 				$line .= "</Directory>" . fs_filehandler::NewLine();
 				$line .= SentoraOneLine(ctrl_options::GetSystemOption('dir_index')) . fs_filehandler::NewLine();
 				
-				# SSL Settings
+				// SSL Settings
 				$line .= "# SSL settings (if any exist)" . fs_filehandler::NewLine();
 				$line .= $rowvhost['vh_ssl_tx'] . fs_filehandler::NewLine();
 				$line .= fs_filehandler::NewLine();
@@ -1152,7 +1200,7 @@ function WriteVhostConfigFile() {
 				$line .= SentoraSafeCustom($rowvhost['vh_custom_tx']) . fs_filehandler::NewLine();
 				$line .= "</virtualhost>" . fs_filehandler::NewLine();
 				
-				############################## add back old code
+				//############################# add back old code
 				//$line .= $smarty->fetch("vhost_disabled_ssl.tpl") . fs_filehandler::NewLine();
 				
 				$line .= "# END DOMAIN: " . $rowvhost['vh_name_vc'] . fs_filehandler::NewLine();
@@ -1160,9 +1208,9 @@ function WriteVhostConfigFile() {
 				$line .= fs_filehandler::NewLine();
 			}
 		
-		#*********Write to file
+		//*********Write to file
 		//writetofile($vh_path . $rowvhost['vh_name_vc']. ".conf"  , $line);
-		#***********
+		//***********
 		}
 //}
 		
@@ -1209,51 +1257,57 @@ function WriteVhostConfigFile() {
     }
 	*/
 	
-	# Check, Write config and Restart/Reload Webserver service if apache config passes check
+	// Check, Write config and Restart/Reload Webserver service if apache config passes check
 
-	# Move current vhosts.conf file to backup incase Apache config test fails on new config
+	// Move current vhosts.conf file to backup incase Apache config test fails on new config
 	$vhconfigfile = ctrl_options::GetSystemOption('apache_vhost');
 	$BackupFileName = $vhconfigfile . "_bak_" . time();
 	rename($vhconfigfile, $BackupFileName);
 	
-	# Write to new Apache vhosts.conf file
+	// Write to new Apache vhosts.conf file
 	WriteDataToFile($vhconfigfile, $line);
 		
-	# Check Apache vhosts file for errors
+	// Check Apache vhosts file for errors
 	echo "Checking Apache vhost config for errors..." . fs_filehandler::NewLine();
-	# If Apache config check return 0 or False
+	// If Apache config check return 0 or False
 	if ( CheckApacheVhostConfig() == FALSE ) {
 		
-		# Delete vhost backup file and Failed config if exists
+		// Delete vhost backup file and Failed config if exists
 		unlink($BackupFileName);
 		
-		# Delete httpd-vhost.conf_failed config file after apache config passes syntax check
+		// Delete httpd-vhost.conf_failed config file after apache config passes syntax check
 		if (is_file($vhconfigfile . "-failed")) {
 			unlink($vhconfigfile . "-failed");
 		}
 			
-		# Restart Apache service
+		// Restart Apache service
 		RestartHttpdServices();
 				
 	} else {
 		
 		echo "   Error: Restoring orginal vhost file. Check in Sentora Panel Apache vhost config settings or httpd-vhosts.conf file for errors and retry." . fs_filehandler::NewLine();
 		
-		# If config failed. Copy file to (httpd-vhosts.conf_failed)
+		// If config failed. Copy file to (httpd-vhosts.conf_failed)
 		fs_filehandler::CopyFile($vhconfigfile, $vhconfigfile . "-failed");
 		
-		# Restore orginal apache vhosts config file if failed.
+		// Restore orginal apache vhosts config file if failed.
 		fs_filehandler::CopyFile($BackupFileName, $vhconfigfile);
 		unlink($BackupFileName);
 		
 	}
 }
 
+/**
+ * Reset apache_changed (to the current time) and reload Apache.
+ *
+ * @global db_driver $zdbh The panel's database connection.
+ * @return void
+ */
 function RestartHttpdServices() {
 	   
     global $zdbh;
    
-	# Reset Apache settings to reflect that config file has been written, until the next change.
+	// Reset Apache settings to reflect that config file has been written, until the next change.
 	$time = time();
 	$vsql = $zdbh->prepare("UPDATE x_settings
 								SET so_value_tx=:time
@@ -1280,20 +1334,33 @@ function RestartHttpdServices() {
 
 }
 
+/**
+ * Write the entire vhost string to a file.
+ *
+ * @param string $panel The file path.
+ * @param string $line The file contents.
+ * @return void
+ */
 function WriteDataToFile($panel, $line) {
 	
-	# Write the entire vhost string
+	// Write the entire vhost string
 	file_put_contents($panel , $line);
 	
 }
 
+/**
+ * Run Apache's config test (apachectl configtest) and print the result.
+ *
+ * Also locks the shared log folders before Apache opens them.
+ * @return int The test's exit status (0 when the config is valid).
+ */
 function CheckApacheVhostConfig() {
 	
-	# Check Apache vhost.conf for errors
+	// Check Apache vhost.conf for errors
 	if (sys_versions::ShowOSPlatformVersion() == "Windows") {
-		system("httpd -t " , $ConfigReturnValue); # NEEDS MORE TESTING
+		system("httpd -t " , $ConfigReturnValue); // NEEDS MORE TESTING
 		
-	} else { # Linux systems
+	} else { // Linux systems
 		$command = "apachectl";
 		$args = "configtest";
 	// New domain log folders made above: root's and the panel's only, before Apache opens them
@@ -1307,6 +1374,12 @@ function CheckApacheVhostConfig() {
 	return $ConfigReturnValue;
 }
 
+/**
+ * Is $error an HTTP status code an ErrorDocument can be set for?
+ *
+ * @param int|string $error The status code (from an error page file name).
+ * @return bool
+ */
 function CheckErrorDocument($error) {
     $errordocs = array(100, 101, 102, 200, 201, 202, 203, 204, 205, 206, 207,
         300, 301, 302, 303, 304, 305, 306, 307, 400, 401, 402,
@@ -1321,13 +1394,18 @@ function CheckErrorDocument($error) {
     }
 }
 
+/**
+ * Copy the vhosts file to apache_budir and purge old backups when apache_purgebu is on.
+ *
+ * @return void
+ */
 function BackupVhostConfigFile() {
     echo "Apache VHost backups are enabled... Backing up current vhost.conf to: " . ctrl_options::GetSystemOption('apache_budir') . fs_filehandler::NewLine();
     if (!is_dir(ctrl_options::GetSystemOption('apache_budir'))) {
         fs_director::CreateDirectory(ctrl_options::GetSystemOption('apache_budir'));
     }
 	
-	# Vhost backup file name
+	// Vhost backup file name
 	$CurrBackupVhostName = ctrl_options::GetSystemOption('apache_budir') . "VHOST_BACKUP_" . time();
 	
 	//copy(ctrl_options::GetSystemOption('apache_vhost'), ctrl_options::GetSystemOption('apache_budir') . "VHOST_BACKUP_" . time());
@@ -1350,7 +1428,7 @@ function BackupVhostConfigFile() {
                     $filetime = floor((time() - $filetime) / 86400);
                     echo $file . " - " . $purge_date . " - " . $filetime . "";
                     if ($purge_date < $filetime) {
-                        #delete the file
+                        //delete the file
                         echo " - Deleting file..." . fs_filehandler::NewLine();
                         unlink(ctrl_options::GetSystemOption('apache_budir') . $file);
                     } else {
@@ -1364,18 +1442,26 @@ function BackupVhostConfigFile() {
     echo "Apache backups complete..." . fs_filehandler::NewLine();
 }
 	   	   
-#
-# Error fucntion for all sites - Smarty template
-#
+/**
+ * Error function for all sites: build ErrorDocument lines from an error pages folder.
+ *
+ * $type 'cp' uses the panel's etc/static/errorpages, 'vh' the site's _errorpages folder.
+ * Not called anywhere in this file.
+ * @global db_driver $zdbh The panel's database connection. Declared but not used.
+ * @param string $type 'cp' (control panel) or 'vh' (virtual host).
+ * @param string $vhUser The account user name (for 'vh').
+ * @param string $vhDir The domain's folder under public_html (for 'vh').
+ * @return string[]|null The ErrorDocument lines; null when the folder is missing or has no error pages.
+ */
 function is_errorpages($type, $vhUser, $vhDir) {
 	global $zdbh;
 	
-	# Set error pages location
+	// Set error pages location
 	if ($type == 'cp') {
-		# Return CP error pages				
+		// Return CP error pages				
 		$errorpages = ctrl_options::GetSystemOption('sentora_root') . "/etc/static/errorpages";
 	} elseif ($type == 'vh') {
-		# Return VH error pages
+		// Return VH error pages
 		$errorpages = ctrl_options::GetSystemOption('hosted_dir') . $vhUser . '/public_html' . $vhDir . '/_errorpages';
 	}
 	
@@ -1401,6 +1487,14 @@ function is_errorpages($type, $vhUser, $vhDir) {
 	}
 }
 	
+/**
+ * Set apache_changed when an account's disk or bandwidth "over quota" state changed.
+ *
+ * Also stores the new state in x_bandwidth (bd_diskcheck_in, bd_transcheck_in).
+ * @global db_driver $zdbh The panel's database connection.
+ * @global runtime_controller $controller The request controller. Declared but not used.
+ * @return void
+ */
 function TriggerApacheQuotaUsage() {
     global $zdbh;
     global $controller;

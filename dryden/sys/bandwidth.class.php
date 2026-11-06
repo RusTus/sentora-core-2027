@@ -17,9 +17,9 @@ class sys_bandwidth
 {
 
     /**
-     * Generate the toal amount of bandwidth based on an Apache Access Log (common format).
+     * Generate the total amount of bandwidth based on an Apache Access Log (common format).
      * @author Bobby Allen (ballen@bobbyallen.me)
-     * @param string $logfile The path to the log file of which to parse.
+     * @param string $logfile The path to the log file to parse.
      * @return int Total amount of bandwidth used (bytes)
      * @change 09/07/2013 Pascal Peyremorte (ppeyremorte@sentora.org) : Full rewrite of bandwidth extraction
      * @change 12/02/2015 Pascal Peyremorte : replace readfile/foreach by fopen/fgets/fclose to remove memory requirement

@@ -26,13 +26,25 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
  */
+
+/**
+ * My Account module: the user's contact details, language, appearance and two-factor login.
+ */
 class module_controller extends ctrl_module
 {
 
+    /** @var bool|null True when the account settings were saved (shown by getResult()). */
     static $ok;
+    /** @var bool|null True when a required field was left empty (shown by getResult()). */
     static $blank;
+    /** @var bool|null True when the email address is not valid (shown by getResult()). */
     static $emailerror;
 
+    /**
+     * Return the current user's contact details, XSS-cleaned (<% loop AccountSettings %>).
+     *
+     * @return array<int, array<string, string>> One row with 'fullname', 'email', 'phone', 'address', 'postcode'.
+     */
     static function getAccountSettings()
     {
         $currentuser = ctrl_users::GetUserDetail();
@@ -45,6 +57,11 @@ class module_controller extends ctrl_module
         return $res;
     }
 
+    /**
+     * List the panel's languages for the language drop-down (<% loop LangList %>).
+     *
+     * @return array<int, array<string, string>> Rows with 'language' (code) and 'selected' ('SELECTED' or '').
+     */
     static function getLangList()
     {
         $currentuser = ctrl_users::GetUserDetail();
@@ -65,6 +82,13 @@ class module_controller extends ctrl_module
         return $res;
     }
 
+    /**
+     * Save the posted account settings and run the OnAfterUpdateMyAccount hook.
+     *
+     * @global db_driver $zdbh The panel's database connection (not used).
+     * @global runtime_controller $controller The request controller.
+     * @return void
+     */
     static function doUpdateAccountSettings()
     {
         global $zdbh;
@@ -89,6 +113,19 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Check and save an account's email and profile.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $userid The account ID.
+     * @param string $email The email address (spaces removed, lower-cased).
+     * @param string $fullname The full name (words capitalised).
+     * @param string $language Two-letter language code.
+     * @param string $phone The phone number.
+     * @param string $address The postal address.
+     * @param string $postalCode The postal code.
+     * @return bool True when saved, false when CheckUpdateForErrors() failed.
+     */
     static function ExecuteUpdateAccountSettings($userid, $email, $fullname, $language, $phone, $address, $postalCode)
     {
         global $zdbh;
@@ -113,6 +150,18 @@ class module_controller extends ctrl_module
         return true;
     }
 
+    /**
+     * Check the account settings; sets $blank or $emailerror on failure.
+     *
+     * @global db_driver $zdbh The panel's database connection (not used).
+     * @param string $email The email address.
+     * @param string $fullname The full name.
+     * @param string $language Two-letter language code.
+     * @param string $phone The phone number.
+     * @param string $address The postal address.
+     * @param string $postalCode The postal code.
+     * @return bool True when all fields are filled in and the email is valid.
+     */
     static function CheckUpdateForErrors($email, $fullname, $language, $phone, $address, $postalCode)
     {
         global $zdbh;
@@ -132,6 +181,12 @@ class module_controller extends ctrl_module
         return true;
     }
 
+    /**
+     * Check that an email address looks valid.
+     *
+     * @param string $email The email address.
+     * @return bool True when valid.
+     */
     static function IsValidEmail($email)
     {
         if (!preg_match('/^[a-z0-9]+([_\\.-][a-z0-9]+)*@([a-z0-9]+([\.-][a-z0-9]+)*)+\\.[a-z]{2,}$/i', $email)) {
@@ -140,11 +195,19 @@ class module_controller extends ctrl_module
         return true;
     }
 
+    /** @var string|null Result of the last two-factor action: 'on', 'off', 'newcodes', 'forced' or 'wrong' (shown by getResult()). */
     static $tfmsg = null;
 
     /* ---------- Two-factor login (only when switched on in Sentora Config) ---------- */
 
-    /** new recovery codes: only with a current code from the app (not just an open browser) */
+    /**
+     * Make new recovery codes: only with a current code from the app (not just an open browser).
+     *
+     * The codes are put in the session for getTwoFactorCodes().
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return bool Always true.
+     */
     static function doTwoFactorNewCodes()
     {
         global $controller;
@@ -159,7 +222,14 @@ class module_controller extends ctrl_module
         return true;
     }
 
-    /** the recovery codes, once: straight after they are made */
+    /**
+     * Show the recovery codes, once: straight after they are made (<@ TwoFactorCodes @>).
+     *
+     * The template engine calls this twice per page (to compile it, then to show it):
+     * the codes are taken from the session once and kept for this request.
+     *
+     * @return string HTML box with the codes, or '' when there are none.
+     */
     static function getTwoFactorCodes()
     {
         // the template engine calls this twice per page (to compile it, then to show
@@ -183,51 +253,96 @@ class module_controller extends ctrl_module
             . '<button type="button" class="btn btn-default btn-sm" onclick="window.print()">' . ui_language::translate('Print') . '</button></div>';
     }
 
+    /**
+     * Return how many recovery codes the user has left (<@ TwoFactorRecoveryLeft @>).
+     *
+     * @return string The number, as text.
+     */
     static function getTwoFactorRecoveryLeft()
     {
         $currentuser = ctrl_users::GetUserDetail();
         return (string) ctrl_twofactor::RecoveryLeft($currentuser['userid']);
     }
 
+    /**
+     * Check whether two-factor login is required on this server (<% if TwoFactorForced %>).
+     *
+     * @return bool True when required.
+     */
     static function getTwoFactorForced()
     {
         return ctrl_twofactor::Forced();
     }
 
+    /**
+     * Check whether two-factor login is switched on in Sentora Config (<% if TwoFactorAvailable %>).
+     *
+     * @return bool True when available.
+     */
     static function getTwoFactorAvailable()
     {
         return ctrl_twofactor::Enabled();
     }
 
+    /**
+     * Return the current user's two-factor row.
+     *
+     * @return array<int|string, mixed>|false The row, or false when the user has none.
+     */
     static function TwoFactorRow()
     {
         $currentuser = ctrl_users::GetUserDetail();
         return ctrl_twofactor::Row($currentuser['userid']);
     }
 
+    /**
+     * Check whether the user has two-factor login on (<% if TwoFactorOn %>).
+     *
+     * @return bool True when set up and confirmed.
+     */
     static function getTwoFactorOn()
     {
         $row = self::TwoFactorRow();
         return $row && (int) $row['tf_enabled_in'] === 1;
     }
 
+    /**
+     * Check whether the user started a setup that is not confirmed yet (<% if TwoFactorPending %>).
+     *
+     * @return bool True when pending.
+     */
     static function getTwoFactorPending()
     {
         $row = self::TwoFactorRow();
         return $row && (int) $row['tf_enabled_in'] === 0;
     }
 
+    /**
+     * Check whether the user has no two-factor login (<% if TwoFactorOff %>).
+     *
+     * @return bool True when off.
+     */
     static function getTwoFactorOff()
     {
         return !self::TwoFactorRow();
     }
 
+    /**
+     * Return the secret of a pending setup, in groups of four (<@ TwoFactorSecret @>).
+     *
+     * @return string The secret, or '' when no setup is pending.
+     */
     static function getTwoFactorSecret()
     {
         $row = self::TwoFactorRow();
         return ($row && (int) $row['tf_enabled_in'] === 0) ? trim(chunk_split($row['tf_secret_vc'], 4, ' ')) : '';
     }
 
+    /**
+     * Return the otpauth:// URI of a pending setup, HTML-escaped (<@ TwoFactorUri @>).
+     *
+     * @return string The URI, or '' when no setup is pending.
+     */
     static function getTwoFactorUri()
     {
         $row = self::TwoFactorRow();
@@ -235,6 +350,11 @@ class module_controller extends ctrl_module
         return ($row && (int) $row['tf_enabled_in'] === 0) ? htmlspecialchars(ctrl_twofactor::OtpauthUri($row['tf_secret_vc'], $currentuser['username']), ENT_QUOTES, 'UTF-8') : '';
     }
 
+    /**
+     * Return the QR code of a pending setup (<@ TwoFactorQr @>).
+     *
+     * @return string The <svg> element, or '' when no setup is pending.
+     */
     static function getTwoFactorQr()
     {
         $row = self::TwoFactorRow();
@@ -242,6 +362,11 @@ class module_controller extends ctrl_module
         return ($row && (int) $row['tf_enabled_in'] === 0) ? ctrl_twofactor::QrSvg(ctrl_twofactor::OtpauthUri($row['tf_secret_vc'], $currentuser['username'])) : '';
     }
 
+    /**
+     * Start a two-factor setup (a new secret, not active until confirmed).
+     *
+     * @return bool False when two-factor login is not available, else true.
+     */
     static function doTwoFactorBegin()
     {
         runtime_csfr::Protect();
@@ -253,6 +378,12 @@ class module_controller extends ctrl_module
         return true;
     }
 
+    /**
+     * Confirm a pending setup with a code from the app and make recovery codes.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return bool Always true.
+     */
     static function doTwoFactorConfirm()
     {
         global $controller;
@@ -268,6 +399,12 @@ class module_controller extends ctrl_module
         return true;
     }
 
+    /**
+     * Turn two-factor login off (needs a current code unless the setup is still pending).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return bool|null Null when it is required on this server and was not turned off, else true.
+     */
     static function doTwoFactorDisable()
     {
         global $controller;
@@ -288,17 +425,33 @@ class module_controller extends ctrl_module
         return true;
     }
 
-    /** the current theme's variations, when it has more than one (Modern: Light, Dark, Auto) */
+    /**
+     * List the current theme's variations (Modern: Light, Dark, Auto).
+     *
+     * @return array<int, array<string, string>> Rows with 'name' (CSS file name without .css).
+     */
     private static function AppearanceStyles()
     {
         return ui_template::ListAvaliableCSS(ctrl_users::SafeTheme(ui_template::GetUserTemplate()));
     }
 
+    /**
+     * Check whether the current theme has more than one variation (<% if AppearanceAvailable %>).
+     *
+     * @return bool True when there is a choice.
+     */
     static function getAppearanceAvailable()
     {
         return count(self::AppearanceStyles()) > 1;
     }
 
+    /**
+     * List the appearance choices (<% loop AppearanceList %>).
+     *
+     * The first row is "Theme default", naming the variation the reseller chose.
+     *
+     * @return array<int, array<string, string>> Rows with 'value', 'label' (HTML-escaped) and 'selected' ('selected' or '').
+     */
     static function getAppearanceList()
     {
         $currentuser = ctrl_users::GetUserDetail();
@@ -322,6 +475,12 @@ class module_controller extends ctrl_module
         return $res;
     }
 
+    /**
+     * Save the user's appearance choice, then redirect to reload the page and exit.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return false Only when the choice is not one of the theme's variations; otherwise it redirects and exits.
+     */
     static function doSetAppearance()
     {
         global $controller;
@@ -338,6 +497,11 @@ class module_controller extends ctrl_module
         exit;
     }
 
+    /**
+     * Return the message for the last action (<@ Result @>).
+     *
+     * @return string|null HTML message, or null when there is none.
+     */
     static function getResult()
     {
         if (isset($_GET['appearance']) && $_GET['appearance'] === 'saved') {

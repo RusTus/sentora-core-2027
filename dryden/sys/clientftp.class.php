@@ -1,6 +1,13 @@
 <?php
 
 /**
+ * Core class: clients' own off-site FTP backups.
+ *
+ * @package Sentora
+ * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
+ */
+
+/**
  * Clients' own off-site backups (Advanced > Backup): a backup of the account's
  * websites and databases (sys_backup::Create, no mail) uploaded to an FTP server the
  * client names, at the hour they choose, keeping the number of copies they choose.
@@ -18,6 +25,12 @@ class sys_clientftp
 {
     const STATE_DIR = '/var/lib/sentora/clientftp/';
 
+    /**
+     * Create the x_backup_ftp table and the Backup Config settings when missing.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return void
+     */
     static function Ensure()
     {
         global $zdbh;
@@ -49,11 +62,23 @@ class sys_clientftp
         }
     }
 
+    /**
+     * Check whether the administrator lets clients use FTP backups (client_ftp_backup).
+     *
+     * @return bool True unless the setting is 'false'.
+     */
     static function Allowed()
     {
         return strtolower((string) ctrl_options::GetSystemOption('client_ftp_backup')) !== 'false';
     }
 
+    /**
+     * Return an account's FTP backup settings, or the defaults when it has none.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $accountId The account ID (cast to int).
+     * @return array<string, mixed> The x_backup_ftp row (bf_* columns).
+     */
     static function Get($accountId)
     {
         global $zdbh;
@@ -65,6 +90,14 @@ class sys_clientftp
             'bf_request_vc' => '', 'bf_status_tx' => '');
     }
 
+    /**
+     * Insert or update an account's FTP backup settings.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $accountId The account ID (cast to int).
+     * @param array<string,mixed> $v The bf_* values to store (already checked; password already encrypted).
+     * @return void
+     */
     static function Save($accountId, array $v)
     {
         global $zdbh;
@@ -78,18 +111,40 @@ class sys_clientftp
                 ':ins' => (int) $v['bf_insecure_in'], ':hr' => (int) $v['bf_hour_in'], ':k' => (int) $v['bf_keep_in']));
     }
 
+    /**
+     * Ask the daemon to check the connection or make a backup now.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $accountId The account ID (cast to int).
+     * @param string $what 'check', 'run', or '' to clear the request.
+     * @return void
+     */
     static function SetRequest($accountId, $what)
     {
         global $zdbh;
         $zdbh->prepare("UPDATE x_backup_ftp SET bf_request_vc = :r WHERE bf_acc_fk = :a")->execute(array(':r' => (string) $what, ':a' => (int) $accountId));
     }
 
+    /**
+     * Return the stored status of an account's last check and backup.
+     *
+     * @param int|string $accountId The account ID.
+     * @return array<string, mixed> Decoded bf_status_tx (e.g. 'check_time', 'run_ok', 'run_message'), or an empty array.
+     */
     static function Status($accountId)
     {
         $s = json_decode((string) self::Get($accountId)['bf_status_tx'], true);
         return is_array($s) ? $s : array();
     }
 
+    /**
+     * Merge values into an account's stored status.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $accountId The account ID (cast to int).
+     * @param array<string,mixed> $changes Status keys and values to set.
+     * @return void
+     */
     static function SetStatus($accountId, array $changes)
     {
         global $zdbh;
@@ -99,23 +154,45 @@ class sys_clientftp
 
     // --- checks ------------------------------------------------------------------------------
 
+    /**
+     * Check that a value is a valid host name or IP address.
+     *
+     * @param mixed $h The value to check (only strings pass).
+     * @return bool True when valid.
+     */
     static function ValidHost($h)
     {
         return is_string($h) && (preg_match('/^(?=.{1,253}$)([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)*[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$/', $h) === 1
             || filter_var($h, FILTER_VALIDATE_IP) !== false);
     }
 
+    /**
+     * Check that a value is a safe remote folder path (absolute, no '..' or '//').
+     *
+     * @param mixed $p The value to check (only strings pass).
+     * @return bool True when valid.
+     */
     static function ValidPath($p)
     {
         return is_string($p) && preg_match('#^/[A-Za-z0-9._ /-]{0,200}$#', $p) === 1 && strpos($p, '..') === false && strpos($p, '//') === false;
     }
 
+    /**
+     * Check that a value is a safe FTP user name (no spaces, controls, ':', '@' or slashes).
+     *
+     * @param mixed $u The value to check (only strings pass).
+     * @return bool True when valid.
+     */
     static function ValidUser($u)
     {
         return is_string($u) && $u !== '' && strlen($u) <= 128 && !preg_match('/[\x00-\x20\x7f:@\/\\\\]/', $u);
     }
 
-    /** this server's own addresses */
+    /**
+     * Return this server's own addresses.
+     *
+     * @return array<string, bool> IP address => true.
+     */
     static function OwnAddresses()
     {
         $own = array();
@@ -129,8 +206,15 @@ class sys_clientftp
     }
 
     /**
-     * The address to connect to for host:port, or an error text. Looked up once here and
-     * then pinned for the transfer.
+     * Find the address to connect to for host:port, or an error text.
+     *
+     * Looked up once here and then pinned for the transfer. Loopback, link-local and
+     * similar addresses are refused, private networks unless allowed, and on this
+     * server's own addresses all ports but 21 and 990.
+     *
+     * @param string $host Host name or IP address.
+     * @param int|string $port The port (cast to int).
+     * @return array{0: string|false, 1: string} array(IP address, '') or array(false, error text).
      */
     static function ResolveTarget($host, $port)
     {
@@ -192,7 +276,17 @@ class sys_clientftp
 
     // --- the transfer (root, from the daemon) ---------------------------------------------------------
 
-    /** run curl with the login in a root-only file; returns array(exit code, output) */
+    /**
+     * Run curl with the login in a root-only file.
+     *
+     * The password is decrypted, written to a temporary netrc file and masked in the
+     * output.
+     *
+     * @param array<string,mixed> $cfg The account's settings from Get().
+     * @param string $ip The pinned address from ResolveTarget().
+     * @param string[] $args Extra curl arguments; '{URL}' is replaced with the folder's URL.
+     * @return array{0: int, 1: string} array(exit code, output).
+     */
     static function Curl($cfg, $ip, array $args)
     {
         $pw = ctrl_secret::Decrypt((string) $cfg['bf_pass_tx']);
@@ -220,7 +314,17 @@ class sys_clientftp
         return array($rc, $text);
     }
 
-    /** "check" (connect, write and remove a small file) or "run" (back up and upload) */
+    /**
+     * Check the connection or make a backup and upload it (root, from the daemon).
+     *
+     * "check" connects, writes and removes a small file; "run" makes a backup
+     * (sys_backup::Create), uploads it and removes the oldest copies beyond the
+     * number to keep. The result is stored with SetStatus().
+     *
+     * @param int|string $accountId The account ID.
+     * @param string $mode 'check' or 'run'.
+     * @return bool True when the check or the upload worked.
+     */
     static function Run($accountId, $mode)
     {
         $cfg = self::Get($accountId);
@@ -291,12 +395,24 @@ class sys_clientftp
         return true;
     }
 
-    /** a backup name's time (user_Mon-dd-YYYY_HHMMSS_xxxx.zip), for sorting */
+    /**
+     * Return a backup name's time (user_Mon-dd-YYYY_HHMMSS_xxxx.zip), for sorting.
+     *
+     * @param string $n The backup's file name.
+     * @return int Unix time, or 0 when the name has none.
+     */
     static function NameTime($n)
     {
         return preg_match('/_([A-Za-z]{3}-[0-9]{2}-[0-9]{4})_([0-9]{2})([0-9]{2})([0-9]{2})/', $n, $m) ? (int) strtotime($m[1] . ' ' . $m[2] . ':' . $m[3] . ':' . $m[4]) : 0;
     }
 
+    /**
+     * Turn a curl exit code and its output into a message for the client.
+     *
+     * @param int $rc The curl exit code.
+     * @param string $out The curl output (first 160 characters are shown).
+     * @return string The message, ending with a period.
+     */
     static function Explain($rc, $out)
     {
         $known = array(6 => 'the server name could not be found', 7 => 'could not connect (is the server and port right, and is it running?)',

@@ -18,6 +18,16 @@
 		}
 	echo "END AutoIP Update Hook." . fs_filehandler::NewLine();
 	
+	/**
+	 * Detect the public IP and, when it changed, update server_ip and the DNS records.
+	 *
+	 * Asks the configured service (then a few public ones) for the IPv4 address. On a
+	 * change it updates x_settings, x_dns and x_autoip, flags the DNS for rewriting,
+	 * emails the alert addresses and runs the configured script (only when
+	 * AutoIPScriptIsSafe()). Prints progress for the daemon log.
+	 * @global db_driver $zdbh The panel's database connection.
+	 * @return void
+	 */
 	function UpdateServerIPHook() {
 		global $zdbh;
 		$oldip = $zdbh->query("SELECT * FROM x_settings WHERE so_name_vc='server_ip'")->Fetch();
@@ -100,6 +110,14 @@
 		}
     }
 
+   	/**
+   	 * Add a zone ID to the dns_hasupdates setting so the DNS module rewrites it.
+   	 *
+   	 * @global db_driver $zdbh The panel's database connection.
+   	 * @global runtime_controller $controller The request controller. Declared but not used.
+   	 * @param int|string $id The domain ID ("0" = all zones).
+   	 * @return true|null True when the ID was added, null when it was already listed.
+   	 */
    	function TriggerDNSUpdateAutoIPHook($id) {
 		global $zdbh;
         global $controller;
@@ -118,6 +136,12 @@
 		}
     }
 
+    /**
+     * Set apache_changed to 'true' so the daemon rewrites the Apache config (not used at present).
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return void
+     */
     function TriggerApacheUpdateAutoIPHook() {
         global $zdbh;
         $sql = $zdbh->prepare("UPDATE x_settings
@@ -126,6 +150,12 @@
         $sql->execute();
     }
 
+	/**
+	 * Run a command in the background (not used at present).
+	 *
+	 * @param string $cmd The command line, already escaped.
+	 * @return void
+	 */
 	function execAutoIPScriptInBackground($cmd) {
 	    if (sys_versions::ShowOSPlatformVersion() == "Windows"){
 	        pclose(popen("start /B ". $cmd, "r")); 
@@ -136,9 +166,13 @@
 	}
 
     /**
+     * May the daemon run this script?
+     *
      * The daemon runs as root: the script must be a plain file (not a link) named by its
      * full path, owned by root, executable, and not writable by anyone else, in folders
      * only root may change (otherwise whoever can write it runs commands as root)
+     * @param string $path The script's full path.
+     * @return bool
      */
     function AutoIPScriptIsSafe($path) {
         if (!preg_match('#^/[A-Za-z0-9._/-]+$#', $path) || strpos($path, '..') !== false) {
@@ -160,6 +194,12 @@
         return $st && $st['uid'] === 0 && !($st['mode'] & 0022);
     }
 
+    /**
+     * Is $email a valid email address?
+     *
+     * @param string $email The address.
+     * @return bool
+     */
     function IsValidAutoIPEmail($email) {
         if (!preg_match('/^[a-z0-9]+([_\\.-][a-z0-9]+)*@([a-z0-9]+([\.-][a-z0-9]+)*)+\\.[a-z]{2,}$/i', $email)) {
             return false;

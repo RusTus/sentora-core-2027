@@ -1,7 +1,19 @@
 <?php
+/**
+ * Domains module hook (OnAfterDeleteClient): delete the domains of deleted clients.
+ *
+ * @package Sentora
+ * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
+ */
 
 DeleteDomainsForDeletedClient();
 
+/**
+ * Mark the domains of deleted accounts deleted and remove their hosted_dir folders.
+ *
+ * @global db_driver $zdbh The panel's database connection.
+ * @return void
+ */
 function DeleteDomainsForDeletedClient() {
     global $zdbh;
     $deletedclients = array();

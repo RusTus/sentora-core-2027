@@ -26,13 +26,26 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
  */
+
+/**
+ * FAQs module: lists FAQ items and lets administrators and resellers add and delete them.
+ */
 class module_controller extends ctrl_module
 {
 
+    /** @var bool|null True when an added FAQ had no question or answer (shown by getResult()). */
     static $error;
+    /** @var bool|null True when a FAQ was deleted (shown by getResult()). */
     static $delete;
+    /** @var bool|null True when a FAQ was added (shown by getResult()). */
     static $ok;
 
+    /**
+     * List all FAQ items that are not deleted, HTML-escaped.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return array<int, array<string, mixed>>|false Rows with 'question', 'answer' (HTML), 'reseller', 'global', 'id'; false when there are none.
+     */
     public static function getFAQS()
     {
         global $zdbh;
@@ -56,6 +69,13 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * List one FAQ item by its ID, HTML-escaped (not used by the module).
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $fid The FAQ ID.
+     * @return array<int, array<string, mixed>>|false Rows with 'question', 'answer', 'reseller', 'global', 'id'; false when none.
+     */
     public function ListCurrentFAQ($fid)
     {
         global $zdbh;
@@ -83,6 +103,16 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * List the FAQ items the current user may see (<% loop UserFAQS %>).
+     *
+     * Items of the user's reseller, the user's own, global ones, or all for
+     * administrators; 'allowdelete' holds a delete button when the user may delete it.
+     *
+     * @global db_driver $zdbh The panel's database connection (not used).
+     * @global runtime_controller $controller The request controller (not used).
+     * @return array<int, array<string, mixed>>|false Rows with 'question', 'answer', 'reseller', 'global', 'allowdelete', 'id'; false when there are no FAQs.
+     */
     public static function getUserFAQS()
     {
         global $zdbh;
@@ -118,6 +148,12 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Check whether the current user may add FAQ items (<% if AddFAQS %>).
+     *
+     * @global runtime_controller $controller The request controller (not used).
+     * @return bool True for administrators and resellers.
+     */
     public static function getAddFAQS()
     {
         global $controller;
@@ -129,6 +165,12 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Handle a delete button: redirect to the confirmation page for that FAQ and exit.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return void Ends with a redirect and exit when a delete button was pressed.
+     */
     static function doDeleteFaq()
     {
         global $controller;
@@ -144,6 +186,12 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Delete the FAQ confirmed on the form.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return bool True when deleted.
+     */
     static function doConfirmDeleteFAQ()
     {
         global $controller;
@@ -154,6 +202,12 @@ class module_controller extends ctrl_module
         return false;
     }
 
+    /**
+     * Add the FAQ item posted on the form (global when added by an administrator).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return void
+     */
     static function doAddFaq()
     {
         global $controller;
@@ -172,6 +226,12 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Return the FAQ ID from the URL ('other'), for the delete confirmation (<@ EditCurrentFAQID @>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return mixed The URL value, or '' when none.
+     */
     static function getEditCurrentFAQID()
     {
         global $controller;
@@ -182,6 +242,13 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Mark a FAQ item as deleted and set the $delete flag.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $fq_id_pk The FAQ ID.
+     * @return bool Always true.
+     */
     static function ExecuteDeleteFaq($fq_id_pk)
     {
         global $zdbh;
@@ -195,6 +262,16 @@ class module_controller extends ctrl_module
         return true;
     }
 
+    /**
+     * Add a FAQ item; sets $ok, or $error when the question or answer is empty.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param string $question The question.
+     * @param string $answer The answer.
+     * @param int|string $userid The account ID of the author.
+     * @param int $global 1 to show it to everyone, else 0.
+     * @return bool True when added.
+     */
     static function ExecuteAddFaq($question, $answer, $userid, $global)
     {
         global $zdbh;
@@ -216,6 +293,12 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Check whether the delete confirmation is shown (<% if isDeleteFAQ %>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return bool True when the URL has show=Delete.
+     */
     static function getisDeleteFAQ()
     {
         global $controller;
@@ -225,6 +308,11 @@ class module_controller extends ctrl_module
         return false;
     }
 
+    /**
+     * Return the message for the last action (<@ Result @>).
+     *
+     * @return string|null HTML message, or null when there is none.
+     */
     static function getResult()
     {
         if (!fs_director::CheckForEmptyValue(self::$error)) {

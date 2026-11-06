@@ -11,12 +11,16 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  */
+/**
+ * Domains module: XMWS web service methods (called through bin/api.php with the server API key).
+ */
 class webservice extends ws_xmws {
 
     /**
      * Get the full list of currently active domains on the server.
-     * @global type $zdbh
-     * @return type 
+     *
+     * @global db_driver $zdbh The panel's database connection. Declared but not used.
+     * @return array<string, string> Response data object: 'response' ('') and 'content' (one <domain> section per domain).
      */
     public function GetAllDomains() {
         global $zdbh;
@@ -39,8 +43,9 @@ class webservice extends ws_xmws {
 
     /**
      * Gets a list of all the domains that a user has configured on their hosting account (the user id needs to be sent in the <content> tag).
-     * @global type $zdbh
-     * @return type 
+     *
+     * @global db_driver $zdbh The panel's database connection. Declared but not used.
+     * @return array<string, string> Response data object: 'response' ('') and 'content' (one <domain> section per domain).
      */
     public function GetDomainsForUser() {
         global $zdbh;
@@ -68,7 +73,9 @@ class webservice extends ws_xmws {
 
     /**
      * Enables an authenticated user to create a domain on their hosting account.
-     * @return type 
+     *
+     * Reads <uid>, <domain>, <destination> and <autohome> from the request content.
+     * @return array<string, string> Response data object: 'response' ('') and 'content' (<domain> and <created>true|false</created>).
      */
     public function CreateDomain() {
         $request_data = $this->RawXMWSToArray($this->wsdata);
@@ -84,7 +91,8 @@ class webservice extends ws_xmws {
 
     /**
      * Delete a specified domain using the content <domainid> tag to pass the domain DB ID through.
-     * @return type 
+     *
+     * @return array<string, string> Response data object: 'response' ('') and 'content' (<domainid> and <deleted>true|false</deleted>).
      */
     public function DeleteDomain() {
         $request_data = $this->RawXMWSToArray($this->wsdata);

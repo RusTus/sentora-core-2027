@@ -1,6 +1,13 @@
 <?php
 
 /**
+ * Core class: account backups (web files and MySQL databases).
+ *
+ * @package Sentora
+ * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
+ */
+
+/**
  * Account backups (web files + MySQL databases) for the Backup module and the
  * daily backup job.
  *
@@ -17,21 +24,41 @@
 class sys_backup
 {
 
-    /** where finished backups for an account are kept */
+    /**
+     * Return the folder where finished backups for an account are kept.
+     *
+     * Not checked for links; use SafeBackupDir() before reading or writing.
+     *
+     * @param string $username The account's panel user name.
+     * @return string Folder path with a trailing slash.
+     */
     static function BackupDir($username)
     {
         return ctrl_options::GetSystemOption('hosted_dir') . $username . '/backups/';
     }
 
+    /**
+     * Check that a user name is safe to use in paths and file names.
+     *
+     * @param mixed $username The user name to check (any type; only strings pass).
+     * @return bool True for 1-64 letters, digits, '_' or '-'.
+     */
     static function ValidUser($username)
     {
         return is_string($username) && preg_match('/^[A-Za-z0-9_-]{1,64}$/', $username) === 1;
     }
 
     /**
-     * The account's backups folder, only when it is a real folder inside the account
-     * (never a symbolic link a site put in its place: the panel and the daily job
-     * would otherwise read, write and delete wherever it points). Made if missing.
+     * Return the account's backups folder, only when it is a real folder inside the account.
+     *
+     * Never a symbolic link a site put in its place: the panel and the daily job
+     * would otherwise read, write and delete wherever it points. Made if missing
+     * (and, when run as root, given to the account's own user).
+     *
+     * @global db_driver $zdbh The panel's database connection (read through $GLOBALS).
+     * @param string $username The account's panel user name.
+     * @param bool $create Optional. Create the folder when missing. Default true.
+     * @return string|false Folder path with a trailing slash, or false.
      */
     static function SafeBackupDir($username, $create = true)
     {
@@ -60,8 +87,13 @@ class sys_backup
     }
 
     /**
-     * The account's backup files: real files with a backup name only (links and
-     * anything else in the folder are left out), newest first
+     * List the account's backup files, newest first.
+     *
+     * Real files with a backup name only (links and anything else in the folder are
+     * left out).
+     *
+     * @param string $username The account's panel user name.
+     * @return array<string, array{size: int, mtime: int}> File name => size in bytes and modification time.
      */
     static function ListFiles($username)
     {
@@ -85,10 +117,15 @@ class sys_backup
     }
 
     /**
-     * One of the account's backups, opened for reading: a real file (not a link) with
-     * a backup name, and the file opened is the one checked (same device and inode),
-     * so swapping in a link between the check and the open fails.
-     * Returns array(handle, size) or false.
+     * Open one of the account's backups for reading.
+     *
+     * A real file (not a link) with a backup name, and the file opened is the one
+     * checked (same device and inode), so swapping in a link between the check and
+     * the open fails.
+     *
+     * @param string $username The account's panel user name.
+     * @param string $file The backup's file name (no path).
+     * @return array{0: resource, 1: int}|false array(handle, size), or false.
      */
     static function OpenFile($username, $file)
     {
@@ -113,7 +150,13 @@ class sys_backup
         return array($fh, $fs['size']);
     }
 
-    /** remove one of the account's backups (a link of that name is removed itself) */
+    /**
+     * Remove one of the account's backups (a link of that name is removed itself).
+     *
+     * @param string $username The account's panel user name.
+     * @param string $file The backup's file name (no path).
+     * @return bool True when removed.
+     */
     static function DeleteFile($username, $file)
     {
         $dir = self::SafeBackupDir($username, false);
@@ -124,7 +167,13 @@ class sys_backup
         return (is_link($dir . $file) || is_file($dir . $file)) ? @unlink($dir . $file) : false;
     }
 
-    /** the daily purge: backups older than $days, in the account's real backups folder only */
+    /**
+     * Delete backups older than $days, in the account's real backups folder only (the daily purge).
+     *
+     * @param string $username The account's panel user name.
+     * @param int|string $days Age in days (cast to int); nothing is removed below 1.
+     * @return int Number of files removed.
+     */
     static function Purge($username, $days)
     {
         $dir = self::SafeBackupDir($username, false);
@@ -147,12 +196,23 @@ class sys_backup
 
     // --- a backup in the background (Advanced > Backup > Back up now) --------------------------
 
+    /**
+     * Return the progress file of an account's background backup.
+     *
+     * @param int|string $accountId The account ID (cast to int).
+     * @return string Full path of the JSON file.
+     */
     static function ProgressFile($accountId)
     {
         return '/var/lib/sentora/tmp/backup-' . (int) $accountId . '.json';
     }
 
-    /** is a backup of this account being made now (its worker holds the lock)? */
+    /**
+     * Check whether a backup of this account is being made now (its worker holds the lock).
+     *
+     * @param int|string $accountId The account ID (cast to int).
+     * @return bool True while the worker holds the lock.
+     */
     static function Running($accountId)
     {
         $h = @fopen('/var/lib/sentora/tmp/backup-' . (int) $accountId . '.lock', 'c');
@@ -167,7 +227,15 @@ class sys_backup
         return !$free;
     }
 
-    /** the progress of this account's backup, for the page: state none|running|done|failed */
+    /**
+     * Return the progress of this account's backup, for the page.
+     *
+     * 'state' is none, running, done or failed; a worker that stopped without
+     * finishing reads as failed.
+     *
+     * @param int|string $accountId The account ID.
+     * @return array<string, mixed> 'state' always; 'started', 'elapsed' and, when known, 'file', 'size', 'message', 'finished'.
+     */
     static function Progress($accountId)
     {
         $s = json_decode((string) @file_get_contents(self::ProgressFile($accountId)), true);
@@ -195,8 +263,13 @@ class sys_backup
     }
 
     /**
-     * Start a backup in the background; returns started|running|recent|failed.
-     * The worker (bin/sentora-account-backup) runs as the panel's user, like the page did.
+     * Start a backup in the background.
+     *
+     * The worker (bin/sentora-account-backup) runs as the panel's user, like the page
+     * did. Writes the progress file with state 'starting'.
+     *
+     * @param int|string $accountId The account ID (cast to int).
+     * @return string 'started', 'running', 'recent' (one finished less than 2 minutes ago) or 'failed'.
      */
     static function StartBackground($accountId)
     {
@@ -223,7 +296,13 @@ class sys_backup
         return 'started';
     }
 
-    /** valid name of one of this account's backup files */
+    /**
+     * Check that a name is a valid name of one of this account's backup files.
+     *
+     * @param string $username The account's panel user name.
+     * @param mixed $file The file name to check (any type; only strings pass).
+     * @return bool True for '<user>_<date>_<time>[_<random>].zip'.
+     */
     static function ValidFile($username, $file)
     {
         return self::ValidUser($username) && is_string($file)
@@ -231,8 +310,15 @@ class sys_backup
     }
 
     /**
-     * Make a backup; returns the full path of the zip in the account's backups
-     * folder, or false.
+     * Make a backup of an account's public_html and MySQL databases.
+     *
+     * Builds the zip in a private work folder, then moves it into the account's
+     * backups folder.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $userid The account ID.
+     * @param string $username The account's panel user name.
+     * @return string|false Full path of the zip in the account's backups folder, or false.
      */
     static function Create($userid, $username)
     {

@@ -16,22 +16,22 @@
 class ws_xmws {
 
     /**
-     * @var string Used to store the current RAW XML request data.
+     * @var string|false Used to store the current RAW XML request data (false when the request had no body).
      */
     var $wsdata;
 
     /**
-     * @var string Used to store the array of request variables.
+     * @var array<string, string> Used to store the array of request variables ('version', 'apikey', 'request', 'response', 'authuser', 'authpass', 'content').
      */
     var $wsdataarray;
 
     /**
-     * @var obj Current module controller
+     * @var module_controller Current module controller (the called module's webservice class)
      */
     var $currentmodule;
 
     /**
-     * @var int Authenticated User ID
+     * @var int|string Authenticated User ID (set by RequireUserAuth())
      */
     var $authuserid;
 
@@ -45,7 +45,10 @@ class ws_xmws {
         $this->currentmodule = new module_controller;
     }
 
-    /** API keys that are public (the default in Sentora's and ZPanel's database templates) */
+    /**
+     * Return the API keys that are public (the default in Sentora's and ZPanel's database templates).
+     * @return string[]
+     */
     static function PublicKeys()
     {
         return array('ee8795c8c53bfdb3b2cc595186b68912');
@@ -53,7 +56,10 @@ class ws_xmws {
 
     /**
      * Requests that the web service method requires that the user must be authenticated wth the server.
+     *
+     * On failure it sends a 1105 response and ends the request (die).
      * @author Bobby Allen (ballen@bobbyallen.me) 
+     * @return bool True when authenticated (otherwise the request ends).
      */
     public function RequireUserAuth() {
         $ws_auth = new ctrl_auth;
@@ -72,7 +78,7 @@ class ws_xmws {
     /**
      * Checks that the Server API given in the webservice request XML is valid and matches the one stored in the x_settings table.
      * @author Bobby Allen (ballen@bobbyallen.me)
-     * @return boolean
+     * @return bool
      */
     public function CheckServerAPIKey() {
         // Sentora: the key must be this server's own (the installer and the daemon make a
@@ -93,7 +99,9 @@ class ws_xmws {
     /**
      * Will format and send a valid XMWS XML response.
      * @author Bobby Allen (ballen@bobbyallen.me)
-     * @param array $responsearray Array of data to send.
+     * Sends the Content-Type header and echoes the XML; an empty 'response' becomes '1101'.
+     * @param array<string,string> $responsearray Array of data to send: 'response' (code) and 'content' (XML or text).
+     * @return void
      */
     public function SendResponse($responsearray) {
         if ($responsearray['response'] == '')
@@ -110,7 +118,7 @@ class ws_xmws {
      * Takes RAW XMWS XML request data and converts its contents into a usable data array.
      * @author Bobby Allen (ballen@bobbyallen.me)
      * @param string $xml The RAW XML content.
-     * @return array Array containing all the request data that has been received.
+     * @return array<string, string> Array containing all the request data that has been received.
      */
     public function RawXMWSToArray($xml) {
         $return_dataobject = new runtime_dataobject();
@@ -128,7 +136,7 @@ class ws_xmws {
      * A simple way to build an XML section for the <content> tag, perfect for multiple data lines etc.
      * @author Bobby Allen (ballen@bobbyallen.me)
      * @param string $name The name of the section <tag>.
-     * @param array $tags An associated array of the tag names and values to be added.
+     * @param array<string,string|int> $tags An associated array of the tag names and values to be added.
      * @return string A formatted XML section block which can then be used in the <content> tag if required.
      */
     static function NewXMLContentSection($name, $tags) {
@@ -156,9 +164,9 @@ class ws_xmws {
      * Takes an XML string and converts it into a usable PHP array.
      * @author Bobby Allen (ballen@bobbyallen.me)
      * @param string $contents The XML content to convert to a PHP array.
-     * @param int $get_arrtibutes Retieve the tag attrubtes too (1 = yes, 0 =no)?
-     * @param string $priotiry What should take priority? tag or attributes?
-     * @return array Associated array of the XML tag data.
+     * @param int $get_attributes Retieve the tag attrubtes too (1 = yes, 0 =no)?
+     * @param string $priority What should take priority? 'tag' or attributes?
+     * @return array<string, mixed>|null Associated array of the XML tag data; null when the XML could not be parsed.
      */
     function XMLDataToArray($contents, $get_attributes = 1, $priority = 'tag') {
         return ws_generic::XMLToArray($contents, $get_attributes, $priority);

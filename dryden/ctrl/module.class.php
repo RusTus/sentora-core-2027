@@ -18,6 +18,8 @@ class ctrl_module
 
     /**
      * Returns the name of the module.
+     *
+     * Read from x_modules for the module in the URL; used by templates as <@ ModuleName @>.
      * @return string
      */
     public static function getModuleName()
@@ -29,7 +31,7 @@ class ctrl_module
     /**
      * Returns the modules description, this is pretty standard and by default is taken from the module description in the module table but
      * is designed to be overwritten in the module_controller class if a different alternative is required.
-     * @return type
+     * @return string The translated description.
      */
     public static function getModuleDesc()
     {
@@ -39,8 +41,11 @@ class ctrl_module
 
     /**
      * Provides module icon functionality.
-     * @global type $controller
-     * @return type
+     *
+     * Uses the theme's own icon when it has one, then a theme override of the
+     * module's icon.png, else the module's own assets/icon.png.
+     * @global runtime_controller $controller The request controller.
+     * @return string Relative URL of the module icon.
      */
     public static function getModuleIcon()
     {
@@ -59,7 +64,7 @@ class ctrl_module
 
     /**
      * Provides a simple method to access the current path to the module.
-     * @global type $controller
+     * @global runtime_controller $controller The request controller.
      * @return string Directory path to the module root.
      */
     static function getModulePath()
@@ -70,7 +75,7 @@ class ctrl_module
 
     /**
      * Returns the CSFR tag of which the module should use when attempting to post FORM data.
-     * @return string
+     * @return string HTML hidden input holding the session's form token.
      */
     public static function getCSFR_Tag()
     {

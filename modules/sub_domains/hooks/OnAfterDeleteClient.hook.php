@@ -1,7 +1,23 @@
 <?php
 
+/**
+ * Sub-domains module hook (after a client is deleted): removes the client's subdomains.
+ *
+ * @package Sentora
+ * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
+ */
+
 DeleteSubDomainsForDeletedClient();
 
+/**
+ * Mark the subdomains of every deleted client as deleted and remove their hosting folders.
+ *
+ * Runs over all deleted accounts each time; the account's whole hosting folder is
+ * removed when it still had live subdomains.
+ *
+ * @global db_driver $zdbh The panel's database connection.
+ * @return void
+ */
 function DeleteSubDomainsForDeletedClient() {
     global $zdbh;
     $deletedclients = array();

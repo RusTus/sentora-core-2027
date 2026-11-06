@@ -1,6 +1,13 @@
 <?php
 
 /**
+ * Core class: SpamAssassin and ClamAV settings, configuration files and mail log events.
+ *
+ * @package Sentora
+ * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
+ */
+
+/**
  * SpamAV: SpamAssassin and ClamAV for the mail server.
  *
  * Mail flow: Postfix hands each message to two milters while the sender is connected:
@@ -24,8 +31,12 @@ class sys_spamav
     const SA_DB = 'sentora_spamav';
 
     /**
-     * The administrator's settings: name => array(section, label, type, default, help, choices or range)
+     * Return the definitions of the administrator's settings.
+     *
+     * name => array(section, label, type, default, help, choices or range)
      * types: bool, int (min, max), float (min, max), select (value => label), text (max length, pattern), list (one per line)
+     *
+     * @return array<string, array{0: string, 1: string, 2: string, 3: string, 4: string, 5: mixed}> Setting name => definition.
      */
     static function Definitions()
     {
@@ -81,13 +92,25 @@ class sys_spamav
         );
     }
 
+    /**
+     * Return this server's total memory from /proc/meminfo.
+     *
+     * @return int Memory in MB, or 0 when unknown.
+     */
     static function MemoryMB()
     {
         $m = @file_get_contents('/proc/meminfo');
         return ($m && preg_match('/MemTotal:\s+(\d+)/', $m, $x)) ? (int) round($x[1] / 1024) : 0;
     }
 
-    /** the settings rows (made with their defaults when missing) */
+    /**
+     * Create the settings rows (with their defaults) and the SpamAV tables when missing.
+     *
+     * Runs once per request.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return void
+     */
     static function Ensure()
     {
         global $zdbh;
@@ -126,6 +149,12 @@ class sys_spamav
             PRIMARY KEY (dd_day, dd_acc_fk, dd_mailbox_vc)) DEFAULT CHARSET=utf8");
     }
 
+    /**
+     * Return an administrator's setting, or its default when not set.
+     *
+     * @param string $name The setting name (a key of Definitions()).
+     * @return string The value ('' for an unknown setting).
+     */
     static function Get($name)
     {
         self::Ensure();
@@ -134,12 +163,24 @@ class sys_spamav
         return ($v === false || $v === null) ? (isset($defs[$name]) ? $defs[$name][3] : '') : (string) $v;
     }
 
+    /**
+     * Check whether a yes/no setting is on.
+     *
+     * @param string $name The setting name.
+     * @return bool True when the value is 'true'.
+     */
     static function On($name)
     {
         return strtolower(self::Get($name)) === 'true';
     }
 
-    /** an administrator's value checked against its definition: array(ok, clean value or error) */
+    /**
+     * Check an administrator's value against its definition.
+     *
+     * @param string $name The setting name.
+     * @param mixed $value The submitted value (anything but a string counts as '').
+     * @return array{0: bool, 1: string} array(true, clean value) or array(false, error message).
+     */
     static function Clean($name, $value)
     {
         $defs = self::Definitions();
@@ -192,19 +233,35 @@ class sys_spamav
         return array(false, 'unknown type');
     }
 
-    /** an address or pattern for allowed / blocked senders: bob@example.com, *@example.com, *.example.com */
+    /**
+     * Check an address or pattern for allowed / blocked senders: bob@example.com, *@example.com, *.example.com.
+     *
+     * @param mixed $p The pattern (only strings pass).
+     * @return bool True when valid.
+     */
     static function ValidSenderPattern($p)
     {
         return is_string($p) && strlen($p) <= 200 && preg_match('/^[A-Za-z0-9.*?_+=-]*@[A-Za-z0-9*?-]+(\.[A-Za-z0-9*?-]+)+$/', $p) === 1;
     }
 
-    /** "example.com" means everyone at example.com */
+    /**
+     * Normalise a sender pattern: "example.com" means everyone at example.com.
+     *
+     * @param string $p The pattern as entered.
+     * @return string Lower-case pattern; a bare domain becomes '*@domain'.
+     */
     static function NormalSender($p)
     {
         $p = strtolower(trim((string) $p));
         return (strpos($p, '@') === false && preg_match('/^[a-z0-9*?-]+(\.[a-z0-9*?-]+)+$/', $p)) ? '*@' . $p : $p;
     }
 
+    /**
+     * Check a network for trusted_networks: an IP address with an optional /prefix.
+     *
+     * @param string $n The network, e.g. '192.0.2.0/24'.
+     * @return bool True when valid.
+     */
     static function ValidNetwork($n)
     {
         if (!preg_match('#^([0-9a-fA-F:.]+)(/(\d{1,3}))?$#', $n, $m) || filter_var($m[1], FILTER_VALIDATE_IP) === false) {
@@ -214,7 +271,13 @@ class sys_spamav
         return !isset($m[3]) || (int) $m[3] <= $max;
     }
 
-    /** a mailbox's settings (with the server's defaults where it has none) */
+    /**
+     * Return a mailbox's settings (with the server's defaults where it has none).
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param string $mailbox The mail address.
+     * @return array{enabled: bool, score: string, action: string, delete_high: bool, allow: string, block: string, saved: bool} 'saved' is false when the mailbox has no row.
+     */
     static function Prefs($mailbox)
     {
         global $zdbh;
@@ -227,7 +290,11 @@ class sys_spamav
             'allow' => $r ? (string) $r['sp_allow_tx'] : '', 'block' => $r ? (string) $r['sp_block_tx'] : '', 'saved' => (bool) $r);
     }
 
-    /** the sensitivity choices offered to users: score => label */
+    /**
+     * Return the sensitivity choices offered to users.
+     *
+     * @return array<string, string> Score => label ('' is the server default).
+     */
     static function Sensitivities()
     {
         return array('' => 'Server default (' . self::Get('sa_required_score') . ')', '3' => 'Strict (3)', '4' => 'Fairly strict (4)', '5' => 'Normal (5)',
@@ -236,11 +303,22 @@ class sys_spamav
 
     // --- the configuration files (written by the daemon) -------------------------------------
 
+    /**
+     * Return a yes/no setting as 'yes' or 'no'.
+     *
+     * @param string $name The setting name.
+     * @return string 'yes' or 'no'.
+     */
     static function YesNo($name)
     {
         return self::On($name) ? 'yes' : 'no';
     }
 
+    /**
+     * Build /etc/clamav/clamd.conf from the settings.
+     *
+     * @return string The file's contents.
+     */
     static function ClamdConf()
     {
         return "# Written by Sentora (Admin > SpamAV Admin): changes here are replaced\n"
@@ -258,6 +336,11 @@ class sys_spamav
             . "DatabaseDirectory /var/lib/clamav\nOfficialDatabaseOnly false\nBytecode true\nBytecodeSecurity TrustSigned\nBytecodeTimeout 60000\n";
     }
 
+    /**
+     * Build /etc/clamav/clamav-milter.conf from the settings.
+     *
+     * @return string The file's contents.
+     */
     static function MilterConf()
     {
         return "# Written by Sentora (Admin > SpamAV Admin): changes here are replaced\n"
@@ -270,6 +353,11 @@ class sys_spamav
             . "LogSyslog true\nLogFacility LOG_MAIL\nLogInfected Full\nLogClean Off\nLogVerbose false\n";
     }
 
+    /**
+     * Build /etc/clamav/freshclam.conf from the settings.
+     *
+     * @return string The file's contents.
+     */
     static function FreshclamConf()
     {
         return "# Written by Sentora (Admin > SpamAV Admin): changes here are replaced\n"
@@ -279,7 +367,12 @@ class sys_spamav
             . "NotifyClamd /etc/clamav/clamd.conf\nChecks " . (int) self::Get('clam_db_checks') . "\nDatabaseMirror database.clamav.net\n";
     }
 
-    /** /etc/spamassassin/60_sentora.cf (with the per-mailbox settings database) */
+    /**
+     * Build /etc/spamassassin/60_sentora.cf (with the per-mailbox settings database).
+     *
+     * @param string $dbPass Password of the sentora_spamav database user.
+     * @return string The file's contents.
+     */
     static function SaConf($dbPass)
     {
         $c = "# Written by Sentora (Admin > SpamAV Admin): changes here are replaced\n"
@@ -307,6 +400,11 @@ class sys_spamav
         return $c;
     }
 
+    /**
+     * Build /etc/default/spamd (spamd's options) from the settings.
+     *
+     * @return string The file's contents.
+     */
     static function SpamdDefaults()
     {
         return "# Written by Sentora (Admin > SpamAV Admin)\n"
@@ -314,6 +412,11 @@ class sys_spamav
             . "PIDFILE=\"/run/spamd.pid\"\n";
     }
 
+    /**
+     * Build /etc/default/spamass-milter from the settings.
+     *
+     * @return string The file's contents.
+     */
     static function MilterDefaults()
     {
         $opt = "-u spamass-milter -i 127.0.0.1 " . (self::On('sa_skip_outgoing') ? '-I ' : '') . "-e " . (gethostname() ?: 'localhost');
@@ -325,7 +428,12 @@ class sys_spamav
             . "SOCKET=\"/var/spool/postfix/spamass/spamass.sock\"\nSOCKETOWNER=\"spamass-milter:postfix\"\nSOCKETMODE=\"0660\"\n";
     }
 
-    /** the per-mailbox Sieve script: run before the user's own filters */
+    /**
+     * Build the per-mailbox Sieve script: run before the user's own filters.
+     *
+     * @param string $mailbox The mail address.
+     * @return string The Sieve script.
+     */
     static function SieveScript($mailbox)
     {
         $p = self::Prefs($mailbox);
@@ -343,7 +451,12 @@ class sys_spamav
         return $s . "}\n";
     }
 
-    /** rows for spamd's userpref table: only these preferences are given to users */
+    /**
+     * Return rows for spamd's userpref table: only these preferences are given to users.
+     *
+     * @param string $mailbox The mail address.
+     * @return array<int, array{0: string, 1: string}> array(preference, value) pairs.
+     */
     static function UserPrefRows($mailbox)
     {
         $p = self::Prefs($mailbox);
@@ -366,7 +479,15 @@ class sys_spamav
 
     // --- the mail log: events for each account ----------------------------------------------
 
-    /** the account a mail address belongs to: by mailbox, else by its domain */
+    /**
+     * Find the account a mail address belongs to: by mailbox, else by its domain.
+     *
+     * Mailboxes and domains are read once per request.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param string $address The mail address (may be in angle brackets).
+     * @return int The account ID, or 0 when none.
+     */
     static function AccountFor($address)
     {
         global $zdbh;
@@ -384,10 +505,15 @@ class sys_spamav
     }
 
     /**
-     * Turn log lines into events. $lines: array of array(time, program, message).
+     * Turn log lines into events.
+     *
      * $state carries mail still in progress between runs (queue id => what is known).
-     * Returns array(events, scanned counts, updates): updates are changes to events
-     * stored by an earlier run (queue id => fields), for lines that came later.
+     * Updates are changes to events stored by an earlier run (queue id => fields), for
+     * lines that came later.
+     *
+     * @param array<int,array{0:int,1:string,2:string}> $lines Log lines: array(time, program, message).
+     * @param array<string,mixed> &$state In/out: 'midqid' and 'qid' maps kept between runs.
+     * @return array{0: array<int, array<string, mixed>>, 1: array<string, array<string, int>>, 2: array<string, array<string, mixed>>} array(events, scanned counts by day and mailbox, updates by queue id).
      */
     static function ParseLog(array $lines, array &$state)
     {
@@ -464,7 +590,15 @@ class sys_spamav
         return array($events, $scanned, $updates);
     }
 
-    /** store what ParseLog found: new events, changes to earlier ones, daily counts */
+    /**
+     * Store what ParseLog found: new events, changes to earlier ones, daily counts.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param array<int,array<string,mixed>> $events New events from ParseLog().
+     * @param array<string,array<string,int>> $scanned Scanned counts: day => mailbox => count.
+     * @param array<string,array<string,mixed>> $updates Changes to earlier events: queue id => fields.
+     * @return void
+     */
     static function Store(array $events, array $scanned, array $updates)
     {
         global $zdbh;
@@ -515,6 +649,13 @@ class sys_spamav
         }
     }
 
+    /**
+     * Check whether an event in the list has this queue id.
+     *
+     * @param array<int,array<string,mixed>> $events Events from this run.
+     * @param string $qid The Postfix queue id.
+     * @return bool True when one has it.
+     */
     static function EventForQid(array $events, $qid)
     {
         foreach ($events as $e) {

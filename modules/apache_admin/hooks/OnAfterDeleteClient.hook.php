@@ -1,8 +1,23 @@
 <?php
+/**
+ * Apache admin module hook (OnAfterDeleteClient): clean up after deleted clients.
+ *
+ * Flags the Apache config for rewriting and removes the home folders of deleted
+ * accounts whose user name is not used by an active account.
+ *
+ * @package Sentora
+ * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
+ */
 
 SetWriteApacheConfigTrue();
 DeleteApacheClientFiles();
 
+/**
+ * Set the apache_changed setting to 'true' so the daemon rewrites the Apache config.
+ *
+ * @global db_driver $zdbh The panel's database connection.
+ * @return void
+ */
 function SetWriteApacheConfigTrue() {
     global $zdbh;
     $sql = $zdbh->prepare("UPDATE x_settings
@@ -11,6 +26,12 @@ function SetWriteApacheConfigTrue() {
     $sql->execute();
 }
 
+/**
+ * Remove the hosted_dir folder of every deleted account (unless an active account has the same user name).
+ *
+ * @global db_driver $zdbh The panel's database connection.
+ * @return void
+ */
 function DeleteApacheClientFiles()
 {
     global $zdbh;

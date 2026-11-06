@@ -20,7 +20,7 @@ class ctrl_options {
      * @author Bobby Allen (ballen@bobbyallen.me)
      * @global db_driver $zdbh The ZPX database handle.
      * @param string $name The name of the system option (eg. sentora_root)
-     * @return string The system option value.
+     * @return string|false The system option value, or false when the option does not exist.
      */
     static function GetSystemOption($name) {
         global $zdbh;
@@ -39,7 +39,7 @@ class ctrl_options {
      * An alias of 'GetSystemOption' to 'fix' the recent refactor of the sentora code, this was affecting third-party modules which relied on this old function name.
      * @author Bobby Allen <ballen@bobbyallen.me>
      * @param string $name The name of the system option.
-     * @return string The system option value.
+     * @return string|false The system option value, or false when the option does not exist.
      * @deprecated since version 10.0.1
      */
     static function GetOption($name) {
@@ -53,7 +53,7 @@ class ctrl_options {
      * @param string $name The name of the system option (eg. Sentora_root)
      * @param string $value The value to set.
      * @param bool $create Instead of update the system option, create it instead?
-     * @return bool
+     * @return bool True in practice: bindQuery() returns the statement (or dies on error).
      */
     static function SetSystemOption($name, $value, $create = false) {
         global $zdbh;
@@ -86,7 +86,7 @@ class ctrl_options {
      * @author Bobby Allen (ballen@bobbyallen.me)
      * @global db_driver $zdbh The ZPX database handle.
      * @param int $id The user account ID. 
-     * @return mixed If the user exists it will return an array containing the account details for the user otherwise if the user doesn't exist will return 'false'.
+     * @return array<string, mixed>|false If the user exists it will return an array containing the account details for the user otherwise if the user doesn't exist will return 'false'.
      */
     static function GetUserInfo($id) {
         global $zdbh;
@@ -107,7 +107,7 @@ class ctrl_options {
      * @author Bobby Allen (ballen@bobbyallen.me)
      * @global db_driver $zdbh The ZPX database handle.
      * @param int $id The user account ID.
-     * @return mixed If the user and package details exist it will return an array containing the user's package details otherwise will return 'false'. 
+     * @return array<int|string, mixed>|false If the user and package details exist it will return an array containing the user's package details otherwise will return 'false'. 
      */
     static function GetPackageInfo($id) {
         global $zdbh;
@@ -135,7 +135,7 @@ class ctrl_options {
      * Checks for predefined avaliable options to choose from.
      * @author Bobby Allen (ballen@bobbyallen.me)
      * @param string $dval The list of predefined values (seperated with a '|' pipe charater!)
-     * @return boolean 
+     * @return bool False when $dval is empty.
      */
     public static function CheckForPredefinedOptions($dval) {
         if ($dval == "")

@@ -11,6 +11,10 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  */
+
+/**
+ * Core module (ZPX core): no page of its own, only the daemon hooks.
+ */
 class module_controller extends ctrl_module
 {
     

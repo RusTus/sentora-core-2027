@@ -1,6 +1,15 @@
 <?php
 
 /**
+ * Core class: per-account Linux users, PHP-FPM pools and cron jobs.
+ *
+ * Run by the daemon to keep hosting accounts isolated from each other.
+ *
+ * @package Sentora
+ * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
+ */
+
+/**
  * One Linux user and one PHP-FPM pool per hosting account.
  *
  * Every account's PHP runs as its own user (web<account id>), so one hosted
@@ -21,17 +30,36 @@ class sys_accountphp
     const PANEL_SOCKET = '/run/php/sentora-panel.sock';
     const STATE_DIR = '/var/lib/sentora/accounts/';
 
+    /**
+     * Return the Linux user name of an account (web<account id>).
+     *
+     * @param int|string $accountId The account ID (cast to int).
+     * @return string The user name, e.g. 'web12'.
+     */
     static function UserName($accountId)
     {
         return 'web' . (int) $accountId;
     }
 
+    /**
+     * Return the system PHP version (the version of the panel's own PHP).
+     *
+     * @return string Version as 'major.minor', e.g. '8.5'.
+     */
     static function DefaultVersion()
     {
         return sys_phpversions::DefaultVersion();
     }
 
-    /** where a version's pools live and which service runs them */
+    /**
+     * Return the folder that holds a PHP version's pool files.
+     *
+     * The system version uses /etc/php/<version>/fpm/pool.d/, extra versions their
+     * own folder under sys_phpversions::BASE_DIR.
+     *
+     * @param string $version PHP version, e.g. '8.3'.
+     * @return string Folder path with a trailing slash.
+     */
     static function PoolDir($version)
     {
         return ($version === self::DefaultVersion())
@@ -39,11 +67,24 @@ class sys_accountphp
             : sys_phpversions::BASE_DIR . $version . '/etc/php-fpm.d/';
     }
 
+    /**
+     * Return the systemd service that runs a PHP version's pools.
+     *
+     * @param string $version PHP version, e.g. '8.3'.
+     * @return string Service name, e.g. 'php8.5-fpm' or 'sentora-php8.3-fpm'.
+     */
     static function ServiceName($version)
     {
         return ($version === self::DefaultVersion()) ? 'php' . $version . '-fpm' : sys_phpversions::Service($version);
     }
 
+    /**
+     * Return the path of an account's PHP-FPM socket for a PHP version.
+     *
+     * @param int|string $accountId The account ID.
+     * @param string $version PHP version, e.g. '8.3'.
+     * @return string Full socket path.
+     */
     static function Socket($accountId, $version)
     {
         return ($version === self::DefaultVersion())
@@ -51,14 +92,28 @@ class sys_accountphp
             : sys_phpversions::SOCKET_DIR . self::UserName($accountId) . '.sock';
     }
 
+    /**
+     * Return an account's hosting folder.
+     *
+     * @param string $username The account's panel user name.
+     * @return string Folder path (hosted_dir setting + user name) with a trailing slash.
+     */
     static function HomeDir($username)
     {
         return ctrl_options::GetSystemOption('hosted_dir') . $username . '/';
     }
 
     /**
-     * Apache lines that send a domain's PHP to its account's pool, with the
-     * domain's open_basedir and the account's own temp folder.
+     * Build the Apache lines that send a domain's PHP to its account's pool.
+     *
+     * Includes the domain's open_basedir, the account's own temp folder and the
+     * ApacheGuard() block.
+     *
+     * @param int|string $accountId The account ID.
+     * @param string $username The account's panel user name.
+     * @param string $version PHP version the domain runs, e.g. '8.3'.
+     * @param string $openBasedir The open_basedir value, or '' for none.
+     * @return string Apache configuration lines, each ending in a new line.
      */
     static function ApacheHandler($accountId, $username, $version, $openBasedir)
     {
@@ -81,6 +136,8 @@ class sys_accountphp
     }
 
     /**
+     * Build the <Location> block that keeps a site's PHP in its own account's pool.
+     *
      * A site's .htaccess can choose a request's handler late (RewriteRule [H=...]),
      * after every check Apache can make before the handler runs. These lines act when
      * the request is actually handed over: <Location> is merged after .htaccess, so a
@@ -89,6 +146,9 @@ class sys_accountphp
      *    none of the PHP settings (PHP-FPM keeps settings sent with a request in that
      *    worker, so they must never reach the panel's or another account's pool)
      *  - server-status / server-info: blanked by sentora-guard.lua's output filter
+     *
+     * @param int|string $accountId The account ID (cast to int).
+     * @return string Apache configuration lines, each ending in a new line.
      */
     static function ApacheGuard($accountId)
     {
@@ -106,13 +166,25 @@ class sys_accountphp
             . '</Location>' . $nl;
     }
 
-    /** the panel's own static pages (suspended, over quota, parked domains) */
+    /**
+     * Build the Apache lines for the panel's own static pages (suspended, over quota, parked domains).
+     *
+     * @return string Apache <FilesMatch> block sending .php to the panel's own socket.
+     */
     static function PanelHandler()
     {
         $nl = fs_filehandler::NewLine();
         return '<FilesMatch "\\.php$">' . $nl . '    SetHandler "proxy:unix:' . self::PANEL_SOCKET . '|fcgi://localhost/"' . $nl . '</FilesMatch>' . $nl;
     }
 
+    /**
+     * Build the PHP-FPM pool file for an account and a PHP version.
+     *
+     * @param int|string $accountId The account ID.
+     * @param string $username The account's panel user name.
+     * @param string $version PHP version, e.g. '8.3'.
+     * @return string Contents of the pool .conf file.
+     */
     static function PoolConfig($accountId, $username, $version)
     {
         $user = self::UserName($accountId);
@@ -141,13 +213,29 @@ class sys_accountphp
             . "php_admin_value[sys_temp_dir] = " . $home . "tmp/\n";
     }
 
+    /**
+     * Run a shell command (stderr merged into the output, which is discarded).
+     *
+     * @param string $cmd The command line, already escaped.
+     * @return bool True when the command exited with code 0.
+     */
     private static function Run($cmd)
     {
         exec($cmd . ' 2>&1', $out, $rc);
         return $rc === 0;
     }
 
-    /** create the account's Linux user and set up its folder (once) */
+    /**
+     * Create the account's Linux user and set up its folder (once).
+     *
+     * Makes the user and group when missing, creates the account folders and sets
+     * owner and access lists the first time (a marker file in STATE_DIR records it).
+     * Prints progress for the daemon log.
+     *
+     * @param int|string $accountId The account ID.
+     * @param string $username The account's panel user name.
+     * @return bool False when the user name is invalid or the user could not be created, else true.
+     */
     static function EnsureUser($accountId, $username)
     {
         $user = self::UserName($accountId);
@@ -192,8 +280,14 @@ class sys_accountphp
     }
 
     /**
-     * The account's folder: its user owns it, the panel may read and write,
-     * Apache may read, nobody else; new files and folders inherit the same.
+     * Give the account's folder its owner and access lists.
+     *
+     * Its user owns it, the panel may read and write, Apache may read, nobody else;
+     * new files and folders inherit the same.
+     *
+     * @param string $user The account's Linux user (web<id>).
+     * @param string $home The account's folder, without a trailing slash.
+     * @return void
      */
     static function SetPermissions($user, $home)
     {
@@ -210,11 +304,17 @@ class sys_accountphp
     }
 
     /**
-     * Give everything in the account's folder to the account's own user: what the
-     * panel (File Manager, new domain folders), root (daemon, backups) or the old
-     * shared web server user made. The access lists keep the panel and Apache
-     * working either way; owning its files lets the site's PHP chmod them, and FTP
-     * shows the right owner.
+     * Give everything in the account's folder to the account's own user.
+     *
+     * Covers what the panel (File Manager, new domain folders), root (daemon, backups)
+     * or the old shared web server user made. The access lists keep the panel and
+     * Apache working either way; owning its files lets the site's PHP chmod them, and
+     * FTP shows the right owner.
+     *
+     * @param string $user The account's Linux user (web<id>).
+     * @param string $home The account's folder, without a trailing slash.
+     * @param bool $quick Optional. Only the folder and its first two levels. Default false.
+     * @return int Number of files and folders whose owner was changed.
      */
     static function FixOwnership($user, $home, $quick = false)
     {
@@ -228,12 +328,18 @@ class sys_accountphp
     }
 
     /**
-     * Hourly safeguard: whatever a site, an app or the File Manager changed, the
-     * account's own folder and its public_html stay closed to everyone else (they
-     * are the doors between accounts), with the access lists for the account, the
-     * panel and Apache in place; and the access-list ceiling ("mask") a chmod lowers
-     * is put back, so the panel's File Manager can edit files an app set to 644.
-     * The files' own permissions are not changed.
+     * Hourly safeguard for an account's folder.
+     *
+     * Whatever a site, an app or the File Manager changed, the account's own folder
+     * and its public_html stay closed to everyone else (they are the doors between
+     * accounts), with the access lists for the account, the panel and Apache in place;
+     * and the access-list ceiling ("mask") a chmod lowers is put back, so the panel's
+     * File Manager can edit files an app set to 644. The files' own permissions are
+     * not changed.
+     *
+     * @param string $user The account's Linux user (web<id>).
+     * @param string $home The account's folder, without a trailing slash.
+     * @return void
      */
     static function Safeguard($user, $home)
     {
@@ -250,11 +356,16 @@ class sys_accountphp
     }
 
     /**
+     * Lock the shared folders under /var/sentora against the hosted sites.
+     *
      * The shared folders under /var/sentora belong to root and can not be changed by
      * the hosted sites (the installer once made the whole tree world-writable): a
      * site could otherwise swap its log file for a link to a root-owned file, which
      * Apache (opening logs as root) would then write to, or rename folders the root
      * jobs work in. Domain logs are readable by root and the panel only. Every run.
+     * Also runs LockWorldWritable() and ReplacePublicApiKey().
+     *
+     * @return void
      */
     static function LockSharedFolders()
     {
@@ -296,7 +407,14 @@ class sys_accountphp
         self::ReplacePublicApiKey();
     }
 
-    /** a server still using the public default API key (or a short one) gets its own random key */
+    /**
+     * Replace the public default (or a short) web service API key with a random one.
+     *
+     * Writes the new key to x_settings and prints a note for the daemon log.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return void
+     */
     static function ReplacePublicApiKey()
     {
         global $zdbh;
@@ -311,6 +429,8 @@ class sys_accountphp
     }
 
     /**
+     * Remove the world-writable bit from everything in /etc/sentora and /var/sentora.
+     *
      * Nothing in /etc/sentora or /var/sentora may be writable by everyone: every hosted
      * site runs as its own Linux user, and Apache and BIND read the configuration as
      * root (a site that could change Apache's site settings or the folder holding them
@@ -318,7 +438,9 @@ class sys_accountphp
      * /etc/sentora, its configuration, the DNS zones and Apache's site settings that
      * way. Left out: the hosting folders and the mail store (their own rules), and the
      * two shared scratch folders, which are meant to be (sticky: nobody can remove or
-     * rename another user's files there).
+     * rename another user's files there). Also fixes the owner and mode of the panel log.
+     *
+     * @return void
      */
     static function LockWorldWritable()
     {
@@ -348,7 +470,12 @@ class sys_accountphp
         }
     }
 
-    /** accounts with their PHP versions: id => (username, versions) */
+    /**
+     * List the live accounts with the PHP versions their domains use.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return array<int,array{username:string,versions:array<string,bool>}> Account ID => user name and the set of versions (version => true), always including the default.
+     */
     static function Wanted()
     {
         global $zdbh;
@@ -373,6 +500,17 @@ class sys_accountphp
         return $wanted;
     }
 
+    /**
+     * Create and update account users, PHP-FPM pools, FTP owners and cron jobs.
+     *
+     * Makes missing domain folders, ensures every account's Linux user, writes the
+     * pool files of every PHP version, removes pools no longer needed, protects the
+     * panel's own pool and reloads the PHP-FPM services whose pools changed. Then runs
+     * SyncFtpOwners(), SyncCron() and LockSharedFolders(). Run by the daemon (root).
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return void
+     */
     static function Sync()
     {
         $wanted = self::Wanted();
@@ -455,7 +593,16 @@ class sys_accountphp
         self::LockSharedFolders();
     }
 
-    /** FTP logins write files as the account's own user */
+    /**
+     * Make FTP logins write files as the account's own user.
+     *
+     * Sets uid/gid of each FTP account in sentora_proftpd.ftpuser to the account's
+     * Linux user. Stops quietly when that table can not be updated.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param array<int,array{username:string,versions:array<string,bool>}> $wanted Accounts from Wanted() (not used).
+     * @return void
+     */
     static function SyncFtpOwners($wanted)
     {
         global $zdbh;
@@ -479,8 +626,15 @@ class sys_accountphp
         }
     }
 
-    /** cron jobs run as the account's own user (/etc/cron.d/sentora-accounts) */
-    /** Sentora Config settings for scheduled tasks (made with their defaults when missing) */
+    /**
+     * Return the Sentora Config settings for scheduled tasks.
+     *
+     * Creates the settings with their defaults when missing; a value that is not one
+     * of the allowed choices reads as the default.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return array<string, int> 'cron_min_interval' and 'cron_max_runtime', both in minutes.
+     */
     static function CronSettings()
     {
         global $zdbh;
@@ -503,7 +657,12 @@ class sys_accountphp
         return $out;
     }
 
-    /** how many minutes apart a timing runs (for the shortest interval); 1440 for daily and longer */
+    /**
+     * Return how many minutes apart a cron timing runs (for the shortest interval).
+     *
+     * @param string $timing Five-field cron timing, e.g. '0 3 * * *'.
+     * @return int Minutes between runs: 1440 for daily and longer.
+     */
     static function CronEvery($timing)
     {
         $f = explode(' ', (string) $timing);
@@ -525,13 +684,33 @@ class sys_accountphp
         return isset($f[1]) && $f[1] === '*' ? 60 : 1440;
     }
 
-    /** the script still is a real file in the account's public_html (no link anywhere in its path) */
+    /**
+     * Check that a cron script still is a real file in the account's public_html.
+     *
+     * No link anywhere in its path.
+     *
+     * @param string $home The account's folder, with a trailing slash.
+     * @param string $script Full path of the script.
+     * @return bool True when the script may run.
+     */
     static function CronScriptOk($home, $script)
     {
         clearstatcache(true, $script);
         return strpos($script, $home . 'public_html/') === 0 && is_file($script) && !is_link($script) && realpath($script) === $script;
     }
 
+    /**
+     * Write the cron jobs of all accounts to /etc/cron.d/sentora-accounts.
+     *
+     * Cron jobs run as the account's own user, with the PHP version of the domain the
+     * script is in, a time limit and low priority. Jobs of disabled accounts and jobs
+     * whose script is missing, a link or outside public_html are left out. The file is
+     * only rewritten when it changes.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param array<int,array{username:string,versions:array<string,bool>}> $wanted Accounts from Wanted().
+     * @return void
+     */
     static function SyncCron($wanted)
     {
         global $zdbh;

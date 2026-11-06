@@ -17,10 +17,11 @@ class sys_monitoring {
 
     /**
      * Reports on whether a TCP or UDP port is listening for connections.
+     * Runs the OnPortStatusUp or OnPortStatusDown hook.
      * @author Bobby Allen (ballen@bobbyallen.me)
      * @param int $port The port number of which to check (eg. 25 for SMTP).
-     * @param boolean $udp Port is a UDP port as opposed to a TCP port.
-     * @return boolean 
+     * @param bool $udp Optional. Port is a UDP port as opposed to a TCP port. Default false.
+     * @return bool True when a connection could be opened.
      * @change P.Peyremorte
      * - added port close if open successes
      */
@@ -41,13 +42,13 @@ class sys_monitoring {
      * Reports on whether a TCP port is listening for connections.
      * @author Pascal peyremorte
      * @param int $port The port number of which to check (eg. 25 for SMTP).
-     * @return boolean
+     * @return bool True when a connection to 127.0.0.1 could be opened.
      */
     static function LocalPortStatus($port) {
         $timeout = ctrl_options::GetSystemOption('servicechk_to');
         $fp = @fsockopen('127.0.0.1', $port, $errno, $errstr, $timeout);
         if ($fp !== false) {
-            fclose($fp); #do not leave the port open.
+            fclose($fp); //do not leave the port open.
             return true;
         }
         return false; 
@@ -56,6 +57,7 @@ class sys_monitoring {
 
     /**
      * Returns a nice human readable copy of the server uptime.
+     * E.g. '3 days, 1 hour, 12 minutes', or 'Unsupported OS'.
      * @author Bobby Allen (ballen@bobbyallen.me)
      * @return string Human readable server uptime.
      */
@@ -147,7 +149,7 @@ class sys_monitoring {
      * Checks that an IP address is valid, can be public or private subnet (IPv6 and IPv4).
      * @author Bobby Allen (ballen@bobbyallen.me) 
      * @param string $ip The IP address of which to check.
-     * @return boolean 
+     * @return bool True when valid.
      */
     static function IsAnyValidIP($ip) {
         if (filter_var($ip, FILTER_VALIDATE_IP)) {
@@ -158,10 +160,10 @@ class sys_monitoring {
     }
 
     /**
-     * Checks that an IP address is valid (IPv6 and IPv4).
+     * Checks that an IP address is valid and public, not a private or reserved range (IPv6 and IPv4).
      * @author Bobby Allen (ballen@bobbyallen.me) 
      * @param string $ip The IP address of which to check.
-     * @return boolean 
+     * @return bool True when valid.
      */
     static function IsValidIP($ip) {
         if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
@@ -172,10 +174,10 @@ class sys_monitoring {
     }
 
     /**
-     * Checks that an IPv4 address is valid.
+     * Checks that an IPv4 address is valid and public, not a private or reserved range.
      * @author Bobby Allen (ballen@bobbyallen.me) 
      * @param string $ip The IP address of which to check.
-     * @return boolean 
+     * @return bool True when valid.
      */
     static function IsValidIPv4($ip) {
         if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4 | FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
@@ -186,10 +188,10 @@ class sys_monitoring {
     }
 
     /**
-     * Checks that an IPv6 address is valid.
+     * Checks that an IPv6 address is valid and public, not a private or reserved range.
      * @author Bobby Allen (ballen@bobbyallen.me) 
      * @param string $ip The IP address of which to check.
-     * @return boolean 
+     * @return bool True when valid.
      */
     static function IsValidIPv6($ip) {
         if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6 | FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {

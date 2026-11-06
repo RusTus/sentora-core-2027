@@ -26,20 +26,40 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
  */
+
+/**
+ * Sub-domains module: list, create and delete the account's subdomains and choose their PHP version.
+ */
 class module_controller extends ctrl_module
 {
 
+    /** @var bool|null Not used. */
     static $complete;
+    /** @var bool|null True when the subdomain started with 'www.' (shown by getResult()). */
     static $error;
+    /** @var bool|null True when the vhost file could not be written (shown by getResult(); never set here). */
     static $writeerror;
+    /** @var bool|null Not used. */
     static $nosub;
+    /** @var bool|null True when the domain already exists on this server (shown by getResult()). */
     static $alreadyexists;
+    /** @var bool|null True when the domain name is not valid (shown by getResult()). */
     static $badname;
+    /** @var bool|null True when no domain name was entered (shown by getResult()). */
     static $blank;
+    /** @var bool|null True when the last change was saved (shown by getResult()). */
     static $ok;
 
     /**
      * The 'worker' methods.
+     */
+
+    /**
+     * List an account's live subdomains, by name.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $uid The account ID.
+     * @return array<int, array<string, mixed>>|false Rows with 'subname', 'subdirectory', 'subactive', 'subphp', 'subid'; false when there are none.
      */
     static function ListSubDomains($uid)
     {
@@ -67,6 +87,13 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * List an account's live domains (type 1), by name.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $uid The account ID.
+     * @return array<int, array<string, mixed>>|false Rows with 'name', 'directory', 'active', 'id'; false when there are none.
+     */
     static function ListDomains($uid)
     {
         global $zdbh;
@@ -92,6 +119,13 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * List the folders in an account's public_html (except _errorpages).
+     *
+     * @global runtime_controller $controller The request controller (not used).
+     * @param int|string $uid The account ID.
+     * @return array<int, array<string, string>> Rows with 'domains' (the folder name); empty when the folder can not be opened.
+     */
     static function ListDomainDirs($uid)
     {
         global $controller;
@@ -100,7 +134,7 @@ class module_controller extends ctrl_module
         $handle = @opendir(ctrl_options::GetSystemOption('hosted_dir') . $currentuser['username'] . "/public_html");
         $chkdir = ctrl_options::GetSystemOption('hosted_dir') . $currentuser['username'] . "/public_html/";
         if (!$handle) {
-            # Log an error as the folder cannot be opened...
+            // Log an error as the folder cannot be opened...
         } else {
             while ($file = @readdir($handle)) {
                 if ($file != "." && $file != ".." && $file != "_errorpages") {
@@ -114,6 +148,16 @@ class module_controller extends ctrl_module
         return $res;
     }
 
+    /**
+     * Mark a subdomain as deleted and flag the Apache configuration for rewriting.
+     *
+     * Runs the OnBeforeDeleteSubDomain and OnAfterDeleteSubDomain hooks. Does not
+     * check who owns the subdomain.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $id The x_vhosts ID.
+     * @return bool Always true.
+     */
     static function ExecuteDeleteSubDomain($id)
     {
         global $zdbh;
@@ -132,6 +176,20 @@ class module_controller extends ctrl_module
         return $retval;
     }
 
+    /**
+     * Create a subdomain: its folder, error pages, welcome page and x_vhosts record.
+     *
+     * Runs the OnBeforeAddSubDomain and OnAfterAddSubDomain hooks and flags the
+     * Apache configuration for rewriting.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $uid The account ID.
+     * @param string $domain The full subdomain name (spaces removed, lower-cased).
+     * @param string $destination An existing folder in public_html (ignored with $autohome).
+     * @param int|string $autohome 1 to make a new folder named after the subdomain.
+     * @param string $phpversion Optional. PHP version ('' for the default). Default ''.
+     * @return bool|null True when created; false when the folder is not valid; null when CheckCreateForErrors() failed.
+     */
     static function ExecuteAddSubDomain($uid, $domain, $destination, $autohome, $phpversion = '')
     {
         global $zdbh;
@@ -199,10 +257,10 @@ class module_controller extends ctrl_module
             $time = time();
             $sql->bindParam(':time', $time);
             $sql->execute();
-            # Only run if the Server platform is Windows.
+            // Only run if the Server platform is Windows.
             if (sys_versions::ShowOSPlatformVersion() == 'Windows') {
                 if (ctrl_options::GetSystemOption('disable_hostsen') == 'false') {
-                    # Lets add the hostname to the HOSTS file so that the server can view the domain immediately...
+                    // Lets add the hostname to the HOSTS file so that the server can view the domain immediately...
                     @exec("C:/Sentora/bin/zpss/setroute.exe " . $domain . "");
                 }
             }
@@ -213,6 +271,13 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Check a new subdomain name; sets $blank, $badname, $error or $alreadyexists on failure.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param string $domain The full subdomain name.
+     * @return bool True when it can be created.
+     */
     static function CheckCreateForErrors($domain)
     {
         global $zdbh;
@@ -247,6 +312,12 @@ class module_controller extends ctrl_module
         return TRUE;
     }
 
+    /**
+     * Check whether a number is an HTTP status code that may have an error page.
+     *
+     * @param int|string $error The status code (from the file name).
+     * @return bool True when it is in the list.
+     */
     static function CheckErrorDocument($error)
     {
         $errordocs = array(100, 101, 102, 200, 201, 202, 203, 204, 205, 206, 207,
@@ -258,6 +329,12 @@ class module_controller extends ctrl_module
         return in_array($error, $errordocs);
     }
 
+    /**
+     * Check that a domain name has at least two valid labels.
+     *
+     * @param string $a The domain name.
+     * @return bool True when valid.
+     */
     static function IsValidDomainName($a)
     {
         if (stristr($a, '.')) {
@@ -273,11 +350,23 @@ class module_controller extends ctrl_module
         return true;
     }
 
+    /**
+     * Check that an email address looks valid.
+     *
+     * @param string $email The email address.
+     * @return bool True when valid.
+     */
     static function IsValidEmail($email)
     {
         return preg_match('/^[a-z0-9]+([_\\.-][a-z0-9]+)*@([a-z0-9]+([\.-][a-z0-9]+)*)+\\.[a-z]{2,}$/i', $email) == 1;
     }
 
+    /**
+     * Flag the Apache configuration for rewriting by the daemon (apache_changed = true).
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return void
+     */
     static function SetWriteApacheConfigTrue()
     {
         global $zdbh;
@@ -293,6 +382,12 @@ class module_controller extends ctrl_module
 
     /**
      * Webinterface sudo methods.
+     */
+
+    /**
+     * List the current user's subdomains for the page (<% loop SubDomainList %>).
+     *
+     * @return array<int, array<string, mixed>>|false Rows with 'subname', 'subdirectory', 'subactive', 'substatus' (HTML), 'subphp' (HTML label), 'subid'; false when there are none.
      */
     static function getSubDomainList()
     {
@@ -315,6 +410,11 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * List the current user's domains, to pick the parent domain (<% loop DomainList %>).
+     *
+     * @return array<int, array<string, mixed>>|false Rows with 'name', 'directory', 'active', 'id'; false when there are none.
+     */
     static function getDomainList()
     {
         $currentuser = ctrl_users::GetUserDetail();
@@ -326,6 +426,11 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Check whether the current user may add another subdomain (<% if CreateSubDomain %>).
+     *
+     * @return bool True when the quota is unlimited (-1) or not used up.
+     */
     static function getCreateSubDomain()
     {
         $currentuser = ctrl_users::GetUserDetail();
@@ -333,6 +438,13 @@ class module_controller extends ctrl_module
                 ($currentuser['subdomainquota'] > ctrl_users::GetQuotaUsages('subdomains', $currentuser['userid']));
     }
 
+    /**
+     * List the folders in the current user's public_html (<% loop SubDomainDirsList %>).
+     *
+     * @global db_driver $zdbh The panel's database connection (not used).
+     * @global runtime_controller $controller The request controller (not used).
+     * @return array<int, array<string, string>>|false Rows with 'domains'; false when there are none.
+     */
     static function getSubDomainDirsList()
     {
         global $zdbh;
@@ -346,6 +458,12 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Create the subdomain posted on the form for the current user.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return bool True when created.
+     */
     static function doCreateSubDomain()
     {
         global $controller;
@@ -361,6 +479,12 @@ class module_controller extends ctrl_module
         return;
     }
 
+    /**
+     * Delete the subdomain confirmed on the form, when it belongs to the current user.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return bool True when deleted.
+     */
     static function doDeleteSubDomain()
     {
         global $controller;
@@ -380,6 +504,12 @@ class module_controller extends ctrl_module
         return false;
     }
 
+    /**
+     * Handle a delete button: redirect to the confirmation page for that subdomain and exit.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return false When no delete button of the user's subdomains was pressed; otherwise it redirects and exits.
+     */
     static function doConfirmDeleteSubDomain()
     {
         global $controller;
@@ -395,6 +525,14 @@ class module_controller extends ctrl_module
         return false;
     }
 	
+    /**
+     * Check whether the delete confirmation is shown for a subdomain of the user (<% if isDeleteDomain %>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string|null $uid Optional. The account ID; null for the logged-in user. Default null.
+     * @return bool|null Null when the subdomain in the URL is not the user's, else whether show=Delete.
+     */
     static function getisDeleteDomain($uid = null)
     {
         global $controller;
@@ -420,6 +558,12 @@ class module_controller extends ctrl_module
         return (isset($urlvars['show'])) && ($urlvars['show'] == "Delete");
     }
 
+    /**
+     * Return the subdomain ID from the URL ('id') (<@ CurrentID @>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return mixed The URL value, or '' when none.
+     */
     static function getCurrentID()
     {
         global $controller;
@@ -427,6 +571,12 @@ class module_controller extends ctrl_module
         return ($id) ? $id : '';
     }
 
+    /**
+     * Return the subdomain name from the URL ('domain') (<@ CurrentDomain @>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return mixed The URL value, or '' when none.
+     */
     static function getCurrentDomain()
     {
         global $controller;
@@ -434,6 +584,11 @@ class module_controller extends ctrl_module
         return ($domain) ? $domain : '';
     }
 
+    /**
+     * Build the subdomain quota chart (<@ SubDomainUsagepChart @>).
+     *
+     * @return string HTML <img> (a pie chart, or the unlimited image).
+     */
     static function getSubDomainUsagepChart()
     {
         $currentuser = ctrl_users::GetUserDetail();
@@ -450,6 +605,14 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Build the status cells of a subdomain: Live, or Pending with a help icon.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @param int|string $int The vh_active_in value (1 = live).
+     * @param int|string $id The subdomain ID.
+     * @return string HTML: two <td> cells.
+     */
     static function getSubDomainStatusHTML($int, $id)
     {
         global $controller;
@@ -464,11 +627,21 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Build the PHP version <option> list for the create form (<@ PhpVersionOptions @>).
+     *
+     * @return string HTML <option> elements.
+     */
     static function getPhpVersionOptions()
     {
         return sys_phpversions::SelectOptions('');
     }
 
+    /**
+     * Check whether any extra PHP version is enabled (<% if HasPhpVersions %>).
+     *
+     * @return bool True when there is a choice.
+     */
     static function getHasPhpVersions()
     {
         return count(sys_phpversions::Enabled()) > 0;
@@ -476,6 +649,12 @@ class module_controller extends ctrl_module
 
     /**
      * Change the PHP version of one of the current user's subdomains.
+     *
+     * Flags the Apache configuration for rewriting.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @global db_driver $zdbh The panel's database connection.
+     * @return bool False when no subdomain was posted, else true.
      */
     static function doSetPhpVersion()
     {
@@ -499,6 +678,11 @@ class module_controller extends ctrl_module
         return true;
     }
 
+    /**
+     * Return the message for the last action (<@ Result @>).
+     *
+     * @return string|null HTML message, or null when there is none.
+     */
     static function getResult()
     {
         if (!fs_director::CheckForEmptyValue(self::$blank)) {

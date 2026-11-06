@@ -11,11 +11,16 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  */
+
+/**
+ * Password Assistant web service: password reset for other programs (XMWS API).
+ */
 class webservice extends ws_xmws {
 
     /**
      * Resets a user's Sentora account password. Requires <uid> and <newpassword> tags.
-     * @return type 
+     *
+     * @return array<string, string> The response data object: 'response' and 'content' (<uid> and <reset> true or false).
      */
     function ResetUserPassword() {
         $contenttags = $this->XMLDataToArray($this->wsdata);

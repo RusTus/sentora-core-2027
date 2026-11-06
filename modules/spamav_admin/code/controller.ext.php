@@ -1,28 +1,63 @@
 <?php
 
 /**
+ * SpamAV Admin module: controller.
+ *
+ * @package Sentora
+ * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
+ */
+
+/**
  * SpamAV Admin (administrators): ClamAV and SpamAssassin settings, status, updates.
  * Settings are saved here and applied by the daemon (modules/spamav_admin/hooks).
  */
 class module_controller extends ctrl_module
 {
+    /** @var array<int, array{0: string, 1: string}> Messages for getResult(): array('ok' or 'error', English text). */
     static $msg = array();
 
+    /**
+     * Escape a value for HTML.
+     *
+     * @param mixed $s The value (cast to string).
+     * @return string The escaped text.
+     */
     static function h($s)
     {
         return htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
     }
 
+    /**
+     * Translate a text.
+     *
+     * @param string $s The English text.
+     * @return string The translation.
+     */
     static function t($s)
     {
         return ui_language::translate($s);
     }
 
+    /**
+     * Check whether the current user is an administrator.
+     *
+     * @return bool True for the Administrators group (ID 1).
+     */
     static function IsAdmin()
     {
         return (int) ctrl_users::GetUserDetail()['usergroupid'] === 1;
     }
 
+    /**
+     * Save the posted settings of one section (ClamAV or SpamAssassin) to x_settings.
+     *
+     * Every value is checked with sys_spamav::Clean(); nothing is saved when one is
+     * wrong. The daemon applies the settings.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller.
+     * @return void
+     */
     static function doSave()
     {
         global $zdbh, $controller;
@@ -62,6 +97,14 @@ class module_controller extends ctrl_module
         self::$msg[] = array('ok', ($section === 'clamav' ? 'ClamAV' : 'SpamAssassin') . ' settings saved. The daemon applies them within 5 minutes.');
     }
 
+    /**
+     * Queue an action for the daemon: update signatures, update rules or restart the scanners.
+     *
+     * Writes sys_spamav::REQUEST as JSON.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return void
+     */
     static function doRequest()
     {
         global $controller;
@@ -77,6 +120,13 @@ class module_controller extends ctrl_module
         self::$msg[] = array('ok', array('signatures' => 'Virus signature update', 'rules' => 'Spam rule update', 'restart' => 'Restart of the scanners')[$what] . ' queued: it starts within 5 minutes.');
     }
 
+    /**
+     * Build the form field for one setting.
+     *
+     * @param string $name The setting name.
+     * @param array<int,mixed> $d The setting's definition from sys_spamav::Definitions().
+     * @return string HTML input, select or textarea ('' for an unknown type).
+     */
     static function Field($name, $d)
     {
         $v = sys_spamav::Get($name);
@@ -101,6 +151,14 @@ class module_controller extends ctrl_module
         return '';
     }
 
+    /**
+     * Build the settings form of one section.
+     *
+     * @param string $key Section key: 'clamav' or 'spamassassin'.
+     * @param string $title Heading.
+     * @param string $intro Introduction (translated here).
+     * @return string HTML heading and form.
+     */
     static function Section($key, $title, $intro)
     {
         $rows = '';
@@ -115,6 +173,11 @@ class module_controller extends ctrl_module
             . '<button class="btn btn-primary" type="submit">' . self::t('Save Changes') . '</button></form>';
     }
 
+    /**
+     * Build the status of the scanners from the daemon's status file, with the action buttons.
+     *
+     * @return string HTML.
+     */
     static function StatusBlock()
     {
         $s = @json_decode((string) @file_get_contents(sys_spamav::STATUS), true);
@@ -177,6 +240,12 @@ class module_controller extends ctrl_module
             . '<span class="text-muted">' . self::t('Checked') . ' ' . self::h(date('H:i', (int) $s['time'])) . '</span></p>' . $last;
     }
 
+    /**
+     * Build the table of mail checked, spam, viruses and rejections (today, 7 and 30 days).
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return string HTML table, with the most common viruses when there are any.
+     */
     static function Totals()
     {
         global $zdbh;
@@ -200,6 +269,11 @@ class module_controller extends ctrl_module
         return $out;
     }
 
+    /**
+     * Build the whole page (<@ Page @>): status, totals and both settings forms.
+     *
+     * @return string HTML (a short note for anyone but administrators).
+     */
     static function getPage()
     {
         if (!self::IsAdmin()) {
@@ -217,6 +291,11 @@ class module_controller extends ctrl_module
             . self::Section('spamassassin', 'SpamAssassin', 'Spam filtering for incoming mail. Users can fine-tune it for their own mailboxes in Mail > SpamAV if you allow it.');
     }
 
+    /**
+     * Return the messages for the last action (<@ Result @>).
+     *
+     * @return string HTML messages ('' when none).
+     */
     static function getResult()
     {
         $out = '';

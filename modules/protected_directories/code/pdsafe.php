@@ -1,6 +1,13 @@
 <?php
 
 /**
+ * Protected Directories module: path and file safety helper (pd_safe).
+ *
+ * @package Sentora
+ * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
+ */
+
+/**
  * Protected Directories: path and file safety, shared by the module and its folder
  * tree (folders.php).
  *
@@ -12,21 +19,37 @@
  */
 class pd_safe
 {
-    /** the account's hosting folder, without a trailing slash */
+    /**
+     * Return the account's hosting folder, without a trailing slash.
+     *
+     * @param string $username The account's panel user name.
+     * @return string The folder path.
+     */
     static function Home($username)
     {
         return rtrim((string) ctrl_options::GetSystemOption('hosted_dir'), '/') . '/' . $username;
     }
 
+    /**
+     * Return the account's public_html folder, without a trailing slash.
+     *
+     * @param string $username The account's panel user name.
+     * @return string The folder path.
+     */
     static function PublicRoot($username)
     {
         return self::Home($username) . '/public_html';
     }
 
     /**
-     * A folder inside the account's public_html, given relative to it ('' = public_html
-     * itself): its full path, or false. Every part must be a real folder (no links), no
-     * part may be hidden (.name), "..", or contain control characters.
+     * Resolve a folder inside the account's public_html, given relative to it ('' = public_html itself).
+     *
+     * Every part must be a real folder (no links), no part may be hidden (.name),
+     * "..", or contain control characters.
+     *
+     * @param string $username The account's panel user name.
+     * @param mixed $rel The relative path (cast to string).
+     * @return string|false Its full path, or false.
      */
     static function ResolveDir($username, $rel)
     {
@@ -64,7 +87,13 @@ class pd_safe
         return $path;
     }
 
-    /** the path relative to public_html of a full folder path ('' for public_html), or false */
+    /**
+     * Return the path relative to public_html of a full folder path.
+     *
+     * @param string $username The account's panel user name.
+     * @param string $full The folder's full path.
+     * @return string|false The relative path ('' for public_html), or false when it is outside.
+     */
     static function RelPath($username, $full)
     {
         $root = self::PublicRoot($username);
@@ -74,7 +103,12 @@ class pd_safe
         return (strpos($full, $root . '/') === 0) ? substr($full, strlen($root) + 1) : false;
     }
 
-    /** the folder for the account's password files (outside public_html), made if needed */
+    /**
+     * Return the folder for the account's password files (outside public_html), made if needed.
+     *
+     * @param string $username The account's panel user name.
+     * @return string|false The folder path, or false when it is a link or can not be made.
+     */
     static function PasswdDir($username)
     {
         $home = self::Home($username);
@@ -89,13 +123,24 @@ class pd_safe
         return (!is_link($dir) && is_dir($dir) && realpath($dir) === $dir) ? $dir : false;
     }
 
-    /** the password file of a protected folder */
+    /**
+     * Return the password file of a protected folder.
+     *
+     * @param string $username The account's panel user name.
+     * @param string $target The protected folder's full path.
+     * @return string Full path of the password file.
+     */
     static function PasswdFile($username, $target)
     {
         return self::Home($username) . '/htpasswd/htpasswd-' . md5($target);
     }
 
-    /** a file's contents, never through a link; '' when it does not exist, false when refused */
+    /**
+     * Read a file's contents, never through a link.
+     *
+     * @param string $file Full path of the file.
+     * @return string|false The contents, '' when it does not exist, false when refused (link, not a plain file, over 1 MB).
+     */
     static function Read($file)
     {
         clearstatcache(true, $file);
@@ -113,9 +158,17 @@ class pd_safe
     }
 
     /**
-     * Write a file in a folder that was checked: a new temporary file (O_EXCL, never an
-     * existing file or link), then renamed over the target (a link there is replaced,
-     * not followed). The folder is checked again right before.
+     * Write a file in a folder that was checked.
+     *
+     * A new temporary file (O_EXCL, never an existing file or link), then renamed
+     * over the target (a link there is replaced, not followed). The folder is
+     * checked again right before.
+     *
+     * @param string $dir The folder's full path, without a trailing slash.
+     * @param string $name The file name (no slashes).
+     * @param string $content The contents.
+     * @param int $mode Permissions, e.g. 0644.
+     * @return bool True when written.
      */
     static function Write($dir, $name, $content, $mode)
     {
@@ -143,7 +196,12 @@ class pd_safe
         return true;
     }
 
-    /** remove a file, never through a link (a link of that name is removed itself) */
+    /**
+     * Remove a file, never through a link (a link of that name is removed itself).
+     *
+     * @param string $file Full path of the file.
+     * @return bool True when removed or not there.
+     */
     static function Remove($file)
     {
         clearstatcache(true, $file);

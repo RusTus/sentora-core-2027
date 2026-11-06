@@ -19,8 +19,8 @@ class ctrl_system
     /**
      * Safely run an escaped system() command.
      * @param string $command The command of which to be executed.
-     * @param array or string $args Any arguments seperated by a space should be in a seperate array value.
-     * @return string
+     * @param string[]|string $args Any arguments seperated by a space should be in a seperate array value.
+     * @return int The command's exit status.
      */
     static function systemCommand($command, $args)
     {

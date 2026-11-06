@@ -17,10 +17,13 @@ class ctrl_twofactor
     const PENDING_SECONDS = 300;
 
     /**
+     * Return the two-factor mode set in Sentora Config.
+     *
      * Sentora Config > Two-factor login: disabled, enabled (each account decides in My
      * Account) or enabled-forced (every account must use it: one that has not set it up
      * does so right after its password, before it can use the panel). Older values:
      * true = enabled, false = disabled.
+     * @return string 'disabled', 'enabled' or 'enabled-forced'.
      */
     static function Mode()
     {
@@ -31,17 +34,29 @@ class ctrl_twofactor
         return ($v === 'enabled-forced') ? 'enabled-forced' : 'disabled';
     }
 
+    /**
+     * Is two-factor login switched on for the panel (enabled or enabled-forced)?
+     * @return bool
+     */
     static function Enabled()
     {
         return self::Mode() !== 'disabled';
     }
 
+    /**
+     * Must every account use two-factor login (enabled-forced)?
+     * @return bool
+     */
     static function Forced()
     {
         return self::Mode() === 'enabled-forced';
     }
 
-    /** the setting's three choices (servers that still have true|false get them here) */
+    /**
+     * Give the setting its three choices (servers that still have true|false get them here).
+     * @global db_driver $zdbh The panel's database connection.
+     * @return void
+     */
     static function EnsureSetting()
     {
         global $zdbh;
@@ -51,6 +66,11 @@ class ctrl_twofactor
             WHERE so_name_vc = 'twofactor_enabled' AND so_defvalues_tx <> 'disabled|enabled|enabled-forced'");
     }
 
+    /**
+     * Create the x_twofactor and x_twofactor_recovery tables if missing (once per request).
+     * @global db_driver $zdbh The panel's database connection.
+     * @return void
+     */
     static function Ensure()
     {
         global $zdbh;
@@ -68,6 +88,12 @@ class ctrl_twofactor
         }
     }
 
+    /**
+     * Return the account's x_twofactor row.
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $uid The account ID.
+     * @return array<int|string, mixed>|false The row (PDO default fetch: by name and by number), or false when there is none.
+     */
     static function Row($uid)
     {
         global $zdbh;
@@ -77,7 +103,11 @@ class ctrl_twofactor
         return $sql->fetch();
     }
 
-    /** must this account enter a code at login? */
+    /**
+     * Must this account enter a code at login?
+     * @param int|string $uid The account ID.
+     * @return bool
+     */
     static function Required($uid)
     {
         if (!self::Enabled()) {
@@ -87,6 +117,11 @@ class ctrl_twofactor
         return $row && (int) $row['tf_enabled_in'] === 1;
     }
 
+    /**
+     * Encode binary data as base32 (RFC 4648 alphabet, no padding).
+     * @param string $bin The binary data.
+     * @return string
+     */
     static function Base32Encode($bin)
     {
         $alpha = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
@@ -101,6 +136,11 @@ class ctrl_twofactor
         return $out;
     }
 
+    /**
+     * Decode a base32 string (characters outside the alphabet are ignored).
+     * @param string $b32 The base32 text.
+     * @return string The binary data.
+     */
     static function Base32Decode($b32)
     {
         $alpha = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
@@ -118,6 +158,12 @@ class ctrl_twofactor
         return $out;
     }
 
+    /**
+     * Return the TOTP/HOTP code for a secret and time step.
+     * @param string $secret The base32 secret.
+     * @param int $counter The time step (unix time / PERIOD).
+     * @return string The 6-digit code, zero-padded.
+     */
     static function Code($secret, $counter)
     {
         $hash = hash_hmac('sha1', pack('J', $counter), self::Base32Decode($secret), true);
@@ -129,6 +175,13 @@ class ctrl_twofactor
     /**
      * Check a code for an account (one step of clock drift either way). A code
      * that was already used can not be used again.
+     *
+     * A good code is stored as the last used time step.
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $uid The account ID.
+     * @param string $code The code the user typed (spaces are ignored).
+     * @param bool $requireEnabled Optional. Only accept when two-factor is already active for the account (false while setting it up). Default true.
+     * @return bool
      */
     static function Verify($uid, $code, $requireEnabled = true)
     {
@@ -148,7 +201,12 @@ class ctrl_twofactor
         return false;
     }
 
-    /** start setting up: a new secret, not active until a code from it is entered */
+    /**
+     * Start setting up: a new secret, not active until a code from it is entered.
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $uid The account ID.
+     * @return string The new base32 secret.
+     */
     static function Begin($uid)
     {
         global $zdbh;
@@ -159,6 +217,12 @@ class ctrl_twofactor
         return $secret;
     }
 
+    /**
+     * Turn two-factor login on for the account and remove its "Remember me" tokens.
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $uid The account ID.
+     * @return void
+     */
     static function Activate($uid)
     {
         global $zdbh;
@@ -168,6 +232,12 @@ class ctrl_twofactor
         $zdbh->prepare("DELETE FROM x_remember_tokens WHERE rt_acc_fk = :a")->execute(array(':a' => (int) $uid));
     }
 
+    /**
+     * Turn two-factor login off for the account (deletes its secret and recovery codes).
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $uid The account ID.
+     * @return void
+     */
     static function Disable($uid)
     {
         global $zdbh;
@@ -181,7 +251,12 @@ class ctrl_twofactor
     const RECOVERY_COUNT = 10;
     const RECOVERY_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // no 0/O, 1/I/L
 
-    /** ten new one-time codes (the old ones stop working); shown once, stored hashed */
+    /**
+     * Create ten new one-time codes (the old ones stop working); shown once, stored hashed.
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $uid The account ID.
+     * @return string[] The codes as XXXXX-XXXXX.
+     */
     static function NewRecoveryCodes($uid)
     {
         global $zdbh;
@@ -201,6 +276,12 @@ class ctrl_twofactor
         return $codes;
     }
 
+    /**
+     * Count the account's unused recovery codes.
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $uid The account ID.
+     * @return int
+     */
     static function RecoveryLeft($uid)
     {
         global $zdbh;
@@ -210,7 +291,13 @@ class ctrl_twofactor
         return (int) $q->fetchColumn();
     }
 
-    /** a recovery code instead of the app's code: true once, then that code is used up */
+    /**
+     * Accept a recovery code instead of the app's code: true once, then that code is used up.
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $uid The account ID.
+     * @param string $code The code the user typed (dashes and spaces ignored).
+     * @return bool
+     */
     static function UseRecoveryCode($uid, $code)
     {
         global $zdbh;
@@ -238,6 +325,10 @@ class ctrl_twofactor
      * An administrator or reseller resets a client's two-factor login (lost phone and
      * codes): it is removed with its recovery codes and "Remember me" logins. With
      * enabled-forced the client sets it up again at the next login.
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $uid The client's account ID.
+     * @param string $byUsername User name of the administrator or reseller (for the log).
+     * @return void
      */
     static function ResetBy($uid, $byUsername)
     {
@@ -249,7 +340,11 @@ class ctrl_twofactor
         self::Log((string) $byUsername . ' reset the two-factor login of ' . ($u ? $u['username'] : 'account ' . (int) $uid));
     }
 
-    /** /var/lib/sentora/twofactor.log: recovery codes used, resets */
+    /**
+     * Append a line to /var/lib/sentora/twofactor.log (recovery codes used, resets).
+     * @param string $text The message.
+     * @return void
+     */
     static function Log($text)
     {
         $ip = isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : '-';
@@ -257,6 +352,12 @@ class ctrl_twofactor
         @chmod('/var/lib/sentora/twofactor.log', 0640);
     }
 
+    /**
+     * Return the otpauth:// link an authenticator app adds the account from.
+     * @param string $secret The base32 secret.
+     * @param string $username The account's user name.
+     * @return string
+     */
     static function OtpauthUri($secret, $username)
     {
         $issuer = 'Sentora ' . ctrl_options::GetSystemOption('sentora_domain');
@@ -268,6 +369,9 @@ class ctrl_twofactor
      * server with the bundled qrcode-generator (etc/lib/qrcode): an authenticator app
      * scans it to add the account. Medium error correction and a 4-module quiet zone,
      * as phone cameras expect; dark modules are drawn as horizontal runs.
+     * @param string $text The text to encode.
+     * @param int $pixels Optional. Width and height of the image. Default 220.
+     * @return string The <svg> element.
      */
     static function QrSvg($text, $pixels = 220)
     {

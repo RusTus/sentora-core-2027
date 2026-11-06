@@ -6,33 +6,61 @@
  *
  */
  
+/**
+ * AutoIP module: controller.
+ *
+ * Lets an administrator set how the server's public IP is detected (an http(s)
+ * "what is my IP" address), the script and emails run on a change, and switch it on
+ * or off. The daemon hook does the update.
+ */
 class module_controller {
 
+	/** @var bool|null True when the settings were saved (shown by getResult()). */
 	static $ok;
+	/** @var bool|null True when a setting was not valid and nothing was saved. */
 	static $bad;
 
 	/**
+	 * Is the logged-in user an administrator (group 1)?
+	 *
 	 * AutoIP rewrites the server's IP and every customer's DNS records, and the daemon
 	 * (root) runs its script: administrators only, whatever the module's permissions say
+	 * @return bool
 	 */
 	static function IsAdmin() {
 		$user = ctrl_users::GetUserDetail();
 		return $user && (int) $user['usergroupid'] === 1;
 	}
 
-	/** an http(s) address for the "what is my IP" service */
+	/**
+	 * Is $url an http(s) address for the "what is my IP" service?
+	 *
+	 * @param mixed $url The address from the form or the database.
+	 * @return bool
+	 */
 	static function ValidCommand($url) {
 		$url = trim((string) $url);
 		return $url !== '' && strlen($url) <= 255 && filter_var($url, FILTER_VALIDATE_URL)
 			&& preg_match('#^https?://[^\s\'"<>]+$#i', $url);
 	}
 
-	/** the script: empty, or the full path of a file (no arguments, no shell characters) */
+	/**
+	 * Is $path a valid script: empty, or the full path of a file (no arguments, no shell characters)?
+	 *
+	 * @param mixed $path The path from the form.
+	 * @return bool
+	 */
 	static function ValidScript($path) {
 		$path = trim((string) $path);
 		return $path === '' || (strlen($path) <= 255 && preg_match('#^/[A-Za-z0-9._/-]+$#', $path) && strpos($path, '..') === false);
 	}
 
+    /**
+     * Return the AutoIP settings row for the template.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return array<int, array<string, mixed>>|false One row: 'ai_script_vc', 'ai_email_vc', 'ai_command_vc', 'ai_newip_vc', 'ai_oldip_vc' (the current server_ip), 'ai_enabled_in', 'ischecked' ('CHECKED' or ''), 'ai_lastupdate_ts' (formatted date or 'NEVER'); false for non-administrators or when there is no row.
+     */
     static function ListAutoIPSettings() {
         global $zdbh;
         if (!self::IsAdmin()) {
@@ -70,6 +98,17 @@ class module_controller {
         }
     }
 
+    /**
+     * Save the AutoIP settings (row 1 of x_autoip) after checking them.
+     *
+     * Sets $bad when a value is not valid, $ok when saved.
+     * @global db_driver $zdbh The panel's database connection.
+     * @param string $inScript Full path of the script to run on an IP change, or ''.
+     * @param string $inEmail Comma separated email addresses, or ''.
+     * @param string $inCommand The http(s) address that reports the public IP.
+     * @param int|bool $inEnabled Truthy to switch AutoIP on.
+     * @return bool True when saved.
+     */
     static function ExecuteUpdateAutoIP($inScript, $inEmail, $inCommand, $inEnabled) {
         global $zdbh;
         if (!self::IsAdmin()) {
@@ -100,6 +139,12 @@ class module_controller {
         return true;
     }
 
+    /**
+     * Is $email a valid email address?
+     *
+     * @param string $email The address.
+     * @return bool
+     */
     static function IsValidEmail($email) {
         if (!preg_match('/^[a-z0-9]+([_\\.-][a-z0-9]+)*@([a-z0-9]+([\.-][a-z0-9]+)*)+\\.[a-z]{2,}$/i', $email)) {
             return false;
@@ -107,6 +152,13 @@ class module_controller {
         return true;
     }
 
+    /**
+     * Create the x_autoip table with its default row if it does not exist (template: <@ InstallDatabase @>).
+     *
+     * Reads $dbname from cnf/db.php.
+     * @global db_driver $zdbh The panel's database connection.
+     * @return void Prints nothing; called only for its side effect.
+     */
     static function getInstallDatabase() {
 		global $zdbh;
 		include(ctrl_options::GetOption('sentora_root') . '/cnf/db.php');
@@ -133,6 +185,11 @@ class module_controller {
 		}
     }
 
+    /**
+     * Return the settings for <% if/loop AutoIPSettings %>.
+     *
+     * @return array<int, array<string, mixed>>|false See ListAutoIPSettings().
+     */
     static function getAutoIPSettings() {
         $settings = self::ListAutoIPSettings();
         if (!fs_director::CheckForEmptyValue($settings)) {
@@ -142,6 +199,12 @@ class module_controller {
         }
     }
 	
+    /**
+     * Ask the configured address for this server's public IP (template: <@ DetectedIP @>).
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return string The detected public IPv4 address, an "IP NOT DETECTED" HTML message, or '' for non-administrators.
+     */
     static function getDetectedIP() {
 		global $zdbh;
 		$error = "<font color=\"red\">IP NOT DETECTED</font>";
@@ -174,6 +237,13 @@ class module_controller {
 		}
     }
 
+    /**
+     * Return the status icon (template: <@ StatusIcon @>).
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller. Declared but not used.
+     * @return string Icon HTML (enabled and in sync, check the settings, disabled), or '' for non-administrators.
+     */
     static function getStatusIcon() {
 		global $zdbh;
 		if (!self::IsAdmin()) {
@@ -202,6 +272,13 @@ class module_controller {
 		}
     }
 
+    /**
+     * Return the status message (template: <@ StatusMessage @>).
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller. Declared but not used.
+     * @return string HTML message, or '' for non-administrators.
+     */
     static function getStatusMessage() {
 		global $zdbh;
 		if (!self::IsAdmin()) {
@@ -231,6 +308,13 @@ class module_controller {
 		}
     }
 
+    /**
+     * Handle the settings form (POST, inUpdate): save the settings.
+     *
+     * Checks the CSFR token (dies when it is wrong).
+     * @global runtime_controller $controller The request controller.
+     * @return false|null False when not an administrator or inUpdate is missing; null after a save attempt (see $ok/$bad).
+     */
     static function doupdateautoip() {
 		global $controller;
 		runtime_csfr::Protect();
@@ -250,21 +334,42 @@ class module_controller {
 		}
     }
 			
+	/**
+	 * Return the module description (template: <@ Description @>).
+	 *
+	 * @return string
+	 */
 	static function getDescription() {
 			return ui_module::GetModuleDescription();
     }
 
+	/**
+	 * Return the module name (template: <@ ModuleName @>).
+	 *
+	 * @return string
+	 */
 	static function getModuleName() {
 		$module_name = ui_module::GetModuleName();
         return $module_name;
     }
 
+	/**
+	 * Return the module's icon URL (template: <@ ModuleIcon @>).
+	 *
+	 * @global runtime_controller $controller The request controller.
+	 * @return string An absolute path: /modules/<module>/assets/icon.png.
+	 */
 	static function getModuleIcon() {
 		global $controller;
 		$module_icon = "/modules/" . $controller->GetControllerRequest('URL', 'module') . "/assets/icon.png";
         return $module_icon;
     }
 
+    /**
+     * Return the message for the last action (template: <@ Result @>).
+     *
+     * @return string|null The HTML message, or null when there is none.
+     */
     static function getResult() {
         if (!self::IsAdmin()) {
             return ui_sysmessage::shout(ui_language::translate("Only administrators can see or change the AutoIP settings."), "zannounceerror");

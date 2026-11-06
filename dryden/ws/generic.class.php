@@ -19,7 +19,7 @@ class ws_generic {
      * Provides very basic way of retrieving a result as a string from a given URL (RAW) this does not need to be a 'true' web service.
      * @author Bobby Allen (ballen@bobbyallen.me)
      * @param string $requestURL The URL to the resource.
-     * @return mixed If the request was successful it will return the contents of the requested URL otherwise will return 'false'.
+     * @return string|false If the request was successful it will return the contents of the requested URL otherwise will return 'false'.
      */
     static function ReadURLRequestResult($requestURL) {
         ob_start();
@@ -40,8 +40,8 @@ class ws_generic {
      * @author Bobby Allen (ballen@bobbyallen.me)
      * @param string $url The URL of which to POST the data too.
      * @param string $data The data content of which to send.
-     * @param string $optional_headers Option headers if you require to send them.
-     * @return string The response recieved. 
+     * @param string|null $optional_headers Option headers if you require to send them.
+     * @return string|false The response recieved, or false when the URL could not be opened or read.
      */
     static function DoPostRequest($url, $data, $optional_headers = null) {
 //$ws_log = new debug_logger();
@@ -72,7 +72,7 @@ class ws_generic {
     /**
      * Captures the RAW POST data passed to this script.
      * @author Bobby Allen (ballen@bobbyallen.me)
-     * @return string The raw request data.
+     * @return string|false The raw request data, or false when there is none.
      */
     static function ProcessRawRequest() {
         $xml_raw_data = fs_filehandler::ReadFileContents('php://input');
@@ -84,7 +84,7 @@ class ws_generic {
      * @author Bobby Allen (ballen@bobbyallen.me)
      * @param string $tagname The name of the tag of which to retrieve the value from.
      * @param string $xml The XML string
-     * @return string The XML tag value. 
+     * @return string|null The XML tag value, or null (with a warning) when the tag is not found.
      */
     static function GetTagValue($tagname, $xml) {
         $matches = array();
@@ -97,9 +97,9 @@ class ws_generic {
      * Takes an XML string and converts it into a usable PHP array.
      * @author Bobby Allen (ballen@bobbyallen.me)
      * @param string $contents The XML content to convert to a PHP array.
-     * @param int $get_arrtibutes Retieve the tag attrubtes too (1 = yes, 0 =no)?
-     * @param string $priotiry What should take priority? tag or attributes?
-     * @return array Associated array of the XML tag data.
+     * @param int $get_attributes Retieve the tag attrubtes too (1 = yes, 0 =no)?
+     * @param string $priority What should take priority? 'tag' or attributes?
+     * @return array<string, mixed>|null Associated array of the XML tag data (nested); null when the XML could not be parsed.
      */
     static function XMLToArray($contents, $get_attributes = 1, $priority = 'tag') {
         if (!function_exists('xml_parser_create')) {
@@ -207,7 +207,7 @@ class ws_generic {
     /**
      * Takes an JSON string and converts it into a usable PHP array.
      * @param string $content The JSON string of which to decode.
-     * @return array Associated array of the JSON tag data.
+     * @return mixed Associated array of the JSON tag data (whatever json_decode() gives: null on invalid JSON, a scalar for scalar JSON).
      */
     static function JSONToArray($content) {
         return json_decode($content, true);

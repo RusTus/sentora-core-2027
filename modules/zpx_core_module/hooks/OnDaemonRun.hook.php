@@ -1,5 +1,15 @@
 <?php
 
+/**
+ * Core module daemon hook: disk and bandwidth usage of every client account.
+ *
+ * Stores each account's disk usage and adds the bandwidth from each domain's
+ * bandwidth log to this month's x_bandwidth row, setting the over-quota flags.
+ *
+ * @package Sentora
+ * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
+ */
+
 global $zdbh;
 
 /*
@@ -10,8 +20,8 @@ echo fs_filehandler::NewLine() . "START Calculating disk Usage for all client ac
 while ($userdir = $userssql->fetch()) {
     $homedirectory = ctrl_options::GetSystemOption('hosted_dir') . $userdir['ac_user_vc'];
     if (fs_director::CheckFolderExists($homedirectory)) {
-		# START - tg - Include vmail folder size in total disk space used
-		# https://github.com/sentora/sentora-core/pull/308
+		// START - tg - Include vmail folder size in total disk space used
+		// https://github.com/sentora/sentora-core/pull/308
         $sumzero = 0;
         $idmail = $userdir['ac_id_pk'];
         $usersmail = $zdbh->prepare("SELECT DISTINCT vh_acc_fk,vh_name_vc FROM x_vhosts WHERE vh_acc_fk=:idmail");
@@ -23,7 +33,7 @@ while ($userdir = $userssql->fetch()) {
             $sumzero = $sumzero + fs_director::GetDirectorySize($maildirectory);
           }
         };
-		# END
+		// END
         $size = fs_director::GetDirectorySize($homedirectory);
     } else {
         $size = 0;

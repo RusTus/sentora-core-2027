@@ -26,12 +26,28 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
  */
+
+/**
+ * Password Assistant module: lets users change their own panel password.
+ */
 class module_controller extends ctrl_module
 {
 
+    /** @var string|null Result of the last change: 'ok', 'nomatch' or 'error' (shown by getResult()). */
     static $error;
+    /** @var bool|null True when the new password was too short (shown by getResult()). */
     static $badpassword;
 
+    /**
+     * Change the current user's password from the posted form.
+     *
+     * Checks the current password and that the new one matches its confirmation and
+     * has the minimum length; sets $error or $badpassword for getResult().
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller.
+     * @return false|null False when the new password is too short, otherwise nothing.
+     */
     static function doUpdatePassword()
     {
         global $zdbh;
@@ -84,6 +100,11 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Return the message for the last password change (<@ Result @>).
+     *
+     * @return string|null HTML message, or null when there is none.
+     */
     static function getResult()
     {
         if (!fs_director::CheckForEmptyValue(self::$error)) {
@@ -104,6 +125,16 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Set an account's password (new random salt), without any checks.
+     *
+     * Used by the web service (ResetUserPassword).
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $uid The account ID.
+     * @param string $password The new password in plain text.
+     * @return bool Always true.
+     */
     static function UpdatePassword($uid, $password)
     {
         global $zdbh;

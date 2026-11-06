@@ -1,5 +1,12 @@
 <?php
 
+/**
+ * GoAccess module: controller for the web traffic reports page.
+ *
+ * @package Sentora
+ * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
+ */
+
 require_once dirname(__FILE__) . '/goaccess.php';
 
 /**
@@ -10,31 +17,62 @@ require_once dirname(__FILE__) . '/goaccess.php';
 class module_controller extends ctrl_module
 {
 
+    /**
+     * Escape a value for HTML.
+     *
+     * @param mixed $s The value (cast to string).
+     * @return string The escaped text.
+     */
     static function h($s)
     {
         return htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
     }
 
+    /**
+     * Check whether GoAccess is installed (<% if IsInstalled %>).
+     *
+     * @return bool True when the GoAccess binary exists and can run.
+     */
     static function getIsInstalled()
     {
         return goaccess_helper::Installed();
     }
 
+    /**
+     * Check whether GoAccess is missing (<% if IsNotInstalled %>).
+     *
+     * @return bool True when the GoAccess binary is missing.
+     */
     static function getIsNotInstalled()
     {
         return !goaccess_helper::Installed();
     }
 
+    /**
+     * Check whether the current user may see any report (<% if HasReports %>).
+     *
+     * @return bool True when there is at least one report.
+     */
     static function getHasReports()
     {
         return count(goaccess_helper::ReportsFor(ctrl_users::GetUserDetail())) > 0;
     }
 
+    /**
+     * Check whether the current user has no reports (<% if HasNoReports %>).
+     *
+     * @return bool True when there are none.
+     */
     static function getHasNoReports()
     {
         return !self::getHasReports();
     }
 
+    /**
+     * Check whether the current user is an administrator (<% if IsAdmin %>).
+     *
+     * @return bool True for the Administrators group (ID 1).
+     */
     static function getIsAdmin()
     {
         $u = ctrl_users::GetUserDetail();
@@ -42,8 +80,14 @@ class module_controller extends ctrl_module
     }
 
     /**
-     * The report shown: the one chosen, otherwise the all-domains report for
-     * administrators and the first domain for everyone else
+     * Return the key of the report shown.
+     *
+     * The one chosen (URL 'show'), otherwise the all-domains report for
+     * administrators and the first domain for everyone else.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @param array<string,array{0:string,1:string[],2:int}> $reports Reports from goaccess_helper::ReportsFor().
+     * @return string The report key, or '' when no report has been made yet.
      */
     static function CurrentKey($reports)
     {
@@ -64,8 +108,12 @@ class module_controller extends ctrl_module
     }
 
     /**
+     * Build the report drop-down (<@ ReportPicker @>).
+     *
      * One drop-down for every report (there may be hundreds of domains): grouped by
-     * account for administrators, each with the time it was last updated
+     * account for administrators, each with the time it was last updated.
+     *
+     * @return string HTML form.
      */
     static function getReportPicker()
     {
@@ -130,6 +178,12 @@ class module_controller extends ctrl_module
         return $html;
     }
 
+    /**
+     * Build the frame that shows the chosen report (<@ Frame @>).
+     *
+     * @global runtime_controller $controller The request controller (not used).
+     * @return string HTML heading and iframe, or '' when no report is ready.
+     */
     static function getFrame()
     {
         global $controller;

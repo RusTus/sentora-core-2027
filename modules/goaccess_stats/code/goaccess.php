@@ -1,6 +1,13 @@
 <?php
 
 /**
+ * GoAccess module: shared helper for the panel page, the report viewer and the hourly job.
+ *
+ * @package Sentora
+ * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
+ */
+
+/**
  * GoAccess for Sentora (Server Admin): shared code for the panel page, the report
  * viewer and the hourly job.
  *
@@ -18,23 +25,45 @@ class goaccess_helper
     // GoAccess runs as this user, which can read nothing else on the server
     const USER = ctrl_statsdomains::STATS_USER;
 
+    /**
+     * Check whether GoAccess is installed.
+     *
+     * @return bool True when the binary exists and is executable.
+     */
     static function Installed()
     {
         return is_file(self::BIN) && is_executable(self::BIN);
     }
 
+    /**
+     * Check that a report key is safe: 'all', 'panel' or a domain name.
+     *
+     * @param mixed $key The key (cast to string).
+     * @return bool True when valid.
+     */
     static function ValidKey($key)
     {
         $key = (string) $key;
         return $key === 'all' || $key === 'panel' || (preg_match('/^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$/', $key) && strpos($key, '..') === false);
     }
 
+    /**
+     * Return the HTML file of a report.
+     *
+     * @param string $key The report key.
+     * @return string|false Full path, or false for an invalid key.
+     */
     static function ReportFile($key)
     {
         return self::ValidKey($key) ? self::DIR . $key . '/report.html' : false;
     }
 
-    /** report key => [title, [log files], owning account id (0: administrators only)] */
+    /**
+     * List every report.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return array<string, array{0: string, 1: string[], 2: int}> Report key => array(title, log files, owning account ID (0: administrators only)); 'all' and 'panel' first.
+     */
     static function Reports()
     {
         global $zdbh;
@@ -63,9 +92,13 @@ class goaccess_helper
     }
 
     /**
-     * The reports an account may see: administrators all of them (including the panel
-     * and all-domains reports, which cover every account); everyone else the reports
-     * of their own domains only.
+     * List the reports an account may see.
+     *
+     * Administrators all of them (including the panel and all-domains reports, which
+     * cover every account); everyone else the reports of their own domains only.
+     *
+     * @param array<string,string>|false|null $user User details from ctrl_users::GetUserDetail().
+     * @return array<string, array{0: string, 1: string[], 2: int}> Report key => array(title, log files, owning account ID).
      */
     static function ReportsFor($user)
     {

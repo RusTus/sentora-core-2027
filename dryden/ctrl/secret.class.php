@@ -15,7 +15,13 @@ class ctrl_secret
     const PREFIX = 'enc1:';
     const LOG = '/var/lib/sentora/password-reveal.log';
 
-    /** the encryption key, or false when this server has no secret set up */
+    /**
+     * Return the encryption key, or false when this server has no secret set up.
+     *
+     * Loads cnf/security.php when $security is not set yet; the result is cached.
+     * @global array<string, mixed> $security Server secrets from cnf/security.php.
+     * @return string|false The raw 32-byte key, or false.
+     */
     private static function Key()
     {
         static $key = null;
@@ -35,7 +41,11 @@ class ctrl_secret
         return $key = sodium_crypto_generichash('sentora stored passwords|' . $secret, '', SODIUM_CRYPTO_SECRETBOX_KEYBYTES);
     }
 
-    /** the stored form of a password, or '' when it can not be encrypted here */
+    /**
+     * Return the stored form of a password, or '' when it can not be encrypted here.
+     * @param string $plain The plain-text password.
+     * @return string "enc1:" + base64(nonce + ciphertext), or '' (no key, or empty password).
+     */
     static function Encrypt($plain)
     {
         $key = self::Key();
@@ -46,7 +56,11 @@ class ctrl_secret
         return self::PREFIX . base64_encode($nonce . sodium_crypto_secretbox((string) $plain, $nonce, $key));
     }
 
-    /** the password, or false (not stored, not encrypted here, or tampered with) */
+    /**
+     * Return the password, or false (not stored, not encrypted here, or tampered with).
+     * @param mixed $stored The stored value (a string from the database, or null).
+     * @return string|false The plain-text password, or false.
+     */
     static function Decrypt($stored)
     {
         $key = self::Key();
@@ -62,6 +76,11 @@ class ctrl_secret
         return ($plain === false) ? false : $plain;
     }
 
+    /**
+     * Is $stored a value made by Encrypt() (starts with "enc1:")?
+     * @param mixed $stored The stored value.
+     * @return bool
+     */
     static function IsEncrypted($stored)
     {
         return is_string($stored) && strncmp($stored, self::PREFIX, strlen(self::PREFIX)) === 0;
@@ -72,6 +91,10 @@ class ctrl_secret
      * "Confirm panel password to show passwords"; off by default).
      * Returns true when the password may be shown, false when it was wrong, or null
      * when it still has to be asked for.
+     *
+     * A wrong password is written to the reveal log.
+     * @global db_driver $zdbh The panel's database connection.
+     * @return bool|null
      */
     static function ConfirmGate()
     {
@@ -100,7 +123,13 @@ class ctrl_secret
         return $ok;
     }
 
-    /** the small form that asks for the panel password before showing one */
+    /**
+     * Return the small form that asks for the panel password before showing one.
+     * @param string $action The URL the form posts to.
+     * @param string $field Name of the hidden field (set to 1) that repeats the "show" request.
+     * @param string $what What is being shown (e.g. the FTP account name), shown to the user.
+     * @return string The HTML form, with the CSFR token.
+     */
     static function ConfirmForm($action, $field, $what)
     {
         $h = function ($s) { return htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8'); };
@@ -113,7 +142,12 @@ class ctrl_secret
             . ' <button class="btn btn-primary btn-sm" type="submit">' . ui_language::translate('Show password') . '</button></form>';
     }
 
-    /** a line in the reveal log: who looked at which password, from where */
+    /**
+     * Write a line in the reveal log: who looked at which password, from where.
+     * @param string $what What was looked at (e.g. "FTP account bob").
+     * @param string $did Optional. What the user did. Default 'viewed the password of'.
+     * @return void
+     */
     static function LogReveal($what, $did = 'viewed the password of')
     {
         $u = ctrl_users::GetUserDetail();

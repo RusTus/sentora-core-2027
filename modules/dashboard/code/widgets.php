@@ -1,6 +1,12 @@
 <?php
 
 /**
+ * Dashboard module: the widget registry (class dashboard_widgets).
+ *
+ * @package Sentora
+ * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
+ */
+/**
  * Dashboard widgets. Each widget is an id, a title, who may add it (everyone, or
  * administrators) and a function that draws it for the logged-in account only.
  * Links go only to modules the account may open.
@@ -9,7 +15,11 @@ class dashboard_widgets
 {
     const UPLOADED_DIR = 'etc/dashboard-widgets/';
 
-    /** the built-in widgets: id => array(title, description, admin only, on by default) */
+    /**
+     * Return the built-in widgets: id => array(title, description, admin only, on by default).
+     *
+     * @return array<string, array{0: string, 1: string, 2: bool, 3: bool}>
+     */
     static function BuiltIn()
     {
         return array(
@@ -26,6 +36,9 @@ class dashboard_widgets
     /**
      * Widgets uploaded through Widget Admin (installed by the daemon into
      * etc/dashboard-widgets/<id>/): id => widget.xml's fields
+     *
+     * Only widgets whose folder has a valid widget.xml (same id) and a widget.php. Cached per request.
+     * @return array<string, array<string, mixed>> id => ReadXml() fields plus 'dir' (the folder, ending in /).
      */
     static function Uploaded()
     {
@@ -45,7 +58,12 @@ class dashboard_widgets
         return $list;
     }
 
-    /** a widget.xml's fields, or false (read without external entities) */
+    /**
+     * Return a widget.xml's fields, or false (read without external entities).
+     *
+     * @param string $text The contents of widget.xml.
+     * @return array<string, mixed>|false 'id', 'name', 'description', 'version', 'author' (strings), 'default' (bool), 'groups' (int[] of group IDs); false when not valid.
+     */
     static function ReadXml($text)
     {
         if ($text === '' || strlen($text) > 65536 || stripos($text, '<!DOCTYPE') !== false || stripos($text, '<!ENTITY') !== false) {
@@ -73,7 +91,11 @@ class dashboard_widgets
             'default' => strtolower(trim((string) $x->default)) === 'true', 'groups' => $groups ? $groups : array(1, 2, 3));
     }
 
-    /** every widget: id => array(title, description, admin only, on by default, source, version) */
+    /**
+     * Return every widget: id => array(title, description, admin only, on by default, source, version).
+     *
+     * @return array<string, array{0: string, 1: string, 2: bool, 3: bool, 4: string, 5: string}> Source is 'built-in' or 'uploaded'.
+     */
     static function All()
     {
         $all = array();
@@ -91,6 +113,10 @@ class dashboard_widgets
     /**
      * Widget Admin's settings for every widget (x_dashboard_widgets): id => array(enabled,
      * default, order, groups); new widgets get theirs from the built-in list or widget.xml
+     *
+     * Creates the table if it is missing and stores settings for new widgets. Cached per request.
+     * @global db_driver $zdbh The panel's database connection.
+     * @return array<string, array{enabled: bool, default: bool, order: int, groups: int[]}>
      */
     static function Settings()
     {
@@ -124,6 +150,12 @@ class dashboard_widgets
         return $set;
     }
 
+    /**
+     * Return the widgets a new (or reset) dashboard starts with, in Widget Admin's order.
+     *
+     * @param array<string,string>|null $user Optional. The account (only widgets it may have), or null for all widgets. Default null.
+     * @return string[] Widget IDs.
+     */
     static function Defaults($user = null)
     {
         $set = self::Settings();
@@ -138,7 +170,12 @@ class dashboard_widgets
         return array_keys($ids);
     }
 
-    /** the widgets this account may have: switched on, and allowed for its group */
+    /**
+     * Return the widgets this account may have: switched on, and allowed for its group.
+     *
+     * @param array<string,string> $user The logged-in account (ctrl_users::GetUserDetail()).
+     * @return array<string, array{0: string, 1: string, 2: bool, 3: bool, 4: string, 5: string}> Same shape as All().
+     */
     static function Available($user)
     {
         $set = self::Settings();
@@ -156,6 +193,9 @@ class dashboard_widgets
      * A widget package: exactly widget.xml + widget.php (+ widget.css), no folders,
      * 1 MB unpacked at most, a valid widget.xml whose id is not a built-in widget.
      * Returns widget.xml's fields, or why it can not be used. (Widget Admin and the daemon.)
+     *
+     * @param string $zipFile Path of the uploaded zip file.
+     * @return array<string, mixed>|string The ReadXml() fields, or the reason (a sentence) it was refused.
      */
     static function CheckPackage($zipFile)
     {
@@ -199,17 +239,36 @@ class dashboard_widgets
         return $info;
     }
 
+    /**
+     * Escape text for HTML (UTF-8, quotes too).
+     *
+     * @param mixed $s The text.
+     * @return string
+     */
     static function h($s)
     {
         return htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
     }
 
+    /**
+     * Translate a text into the user's language.
+     *
+     * @param string $s The English text.
+     * @return string
+     */
     static function t($s)
     {
         return ui_language::translate($s);
     }
 
-    /** may this account open that module (enabled, and allowed for its group)? */
+    /**
+     * May this account open that module (enabled, and allowed for its group)?
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param array<string,string> $user The logged-in account (ctrl_users::GetUserDetail()).
+     * @param string $folder The module folder name.
+     * @return bool
+     */
     static function CanOpen($user, $folder)
     {
         global $zdbh;
@@ -223,6 +282,14 @@ class dashboard_widgets
         return isset($ids[$folder]) && ctrl_groups::CheckGroupModulePermissions($user['usergroupid'], $ids[$folder]);
     }
 
+    /**
+     * Run a COUNT(*) query for one account.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param string $sql The query, with the account ID as :u.
+     * @param int|string $uid The account ID.
+     * @return int
+     */
     static function Count($sql, $uid)
     {
         global $zdbh;
@@ -231,6 +298,16 @@ class dashboard_widgets
         return (int) $q->fetchColumn();
     }
 
+    /**
+     * Draw one widget for the account.
+     *
+     * A built-in widget is drawn by its W<Id>() method, an uploaded one by its class
+     * dashboard_widget_<id>::Render(); an uploaded widget that throws shows a short message
+     * instead (and is logged).
+     * @param string $id The widget ID.
+     * @param array<string,string> $user The logged-in account (ctrl_users::GetUserDetail()).
+     * @return string The widget's HTML ('' for an unknown widget).
+     */
     static function Render($id, $user)
     {
         $f = 'W' . str_replace('_', '', ucwords($id, '_'));
@@ -257,7 +334,12 @@ class dashboard_widgets
         }
     }
 
-    /** the stylesheets of uploaded widgets on this dashboard (widget.css) */
+    /**
+     * Return the stylesheets of uploaded widgets on this dashboard (widget.css).
+     *
+     * @param string[] $ids The widget IDs on the dashboard.
+     * @return string <link> tags.
+     */
     static function Styles(array $ids)
     {
         $up = self::Uploaded();
@@ -272,6 +354,12 @@ class dashboard_widgets
 
     // --- the widgets ----------------------------------------------------------------------
 
+    /**
+     * Draw the "Getting started" widget: the steps to a running website, ticked off when done.
+     *
+     * @param array<string,string> $user The logged-in account (ctrl_users::GetUserDetail()).
+     * @return string HTML.
+     */
     static function WGettingStarted($user)
     {
         $uid = (int) $user['userid'];
@@ -322,6 +410,12 @@ class dashboard_widgets
         return $bar . '<ol class="dw-steps">' . $items . '</ol>';
     }
 
+    /**
+     * Draw the "Account usage" widget: usage against the package's quotas.
+     *
+     * @param array<string,string> $user The logged-in account (ctrl_users::GetUserDetail()).
+     * @return string HTML table.
+     */
     static function WUsage($user)
     {
         $rows = array(
@@ -347,6 +441,13 @@ class dashboard_widgets
         return $out . '</table>';
     }
 
+    /**
+     * Draw the "Your domains" widget: the account's domains and subdomains with quick links.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param array<string,string> $user The logged-in account (ctrl_users::GetUserDetail()).
+     * @return string HTML.
+     */
     static function WDomains($user)
     {
         global $zdbh;
@@ -371,6 +472,12 @@ class dashboard_widgets
         return $out;
     }
 
+    /**
+     * Draw the "Security" widget: two-factor login and recovery codes.
+     *
+     * @param array<string,string> $user The logged-in account (ctrl_users::GetUserDetail()).
+     * @return string HTML.
+     */
     static function WSecurity($user)
     {
         $uid = (int) $user['userid'];
@@ -390,6 +497,12 @@ class dashboard_widgets
         return $out;
     }
 
+    /**
+     * Draw the "Backups" widget: the latest backup and the FTP backup.
+     *
+     * @param array<string,string> $user The logged-in account (ctrl_users::GetUserDetail()).
+     * @return string HTML.
+     */
     static function WBackups($user)
     {
         $files = sys_backup::ListFiles($user['username']);
@@ -415,6 +528,13 @@ class dashboard_widgets
         return $out;
     }
 
+    /**
+     * Draw the "Spam and viruses" widget: what filtering caught (administrators also see the whole server and the scanners).
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param array<string,string> $user The logged-in account (ctrl_users::GetUserDetail()).
+     * @return string HTML.
+     */
     static function WSpamav($user)
     {
         global $zdbh;
@@ -491,6 +611,12 @@ class dashboard_widgets
         return $out . $links;
     }
 
+    /**
+     * Draw the "Server status" widget (administrators): services, disk, load and open alerts.
+     *
+     * @param array<string,string> $user The logged-in account (ctrl_users::GetUserDetail()).
+     * @return string HTML, or '' for non-administrators.
+     */
     static function WServer($user)
     {
         if ((int) $user['usergroupid'] !== 1) {

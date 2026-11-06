@@ -12,12 +12,18 @@
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  */
 
+/**
+ * Sub-domains web service: list, create and delete subdomains for other programs (XMWS API).
+ */
 class webservice extends ws_xmws {
 
     /**
      * Get the list of subdomains for a given user.
-     * @global type $zdbh
-     * @return type 
+     *
+     * The request content is the account ID.
+     *
+     * @global db_driver $zdbh The panel's database connection (not used).
+     * @return array<string, string> The response data object: 'response' and 'content' (one <subdomain> section per subdomain).
      */
     public function GetSubDomainsForUser() {
         global $zdbh;
@@ -44,7 +50,12 @@ class webservice extends ws_xmws {
 
     /**
      * Enables an authenticated user to create a sub-domain.
-     * @return type 
+     *
+     * Reads the <subname>, <subdirectory>, <uid> and <autohome> tags; the response
+     * echoes them (it does not say whether the subdomain was made).
+     *
+     * @global db_driver $zdbh The panel's database connection (not used).
+     * @return array<string, string> The response data object: 'response' and 'content' (a <subdomain> section).
      */
     public function CreateSubDomain() {
         global $zdbh;
@@ -74,7 +85,9 @@ class webservice extends ws_xmws {
 
     /**
      * Delete a specified sub-domain using the content <domainid> tag.
-     * @return type 
+     *
+     * @global db_driver $zdbh The panel's database connection (not used).
+     * @return array<string, string> The response data object: 'response' and 'content' (<domainid> and <deleted> true or false).
      */
     public function DeleteSubDomain() {
         global $zdbh;

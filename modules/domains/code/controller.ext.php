@@ -26,20 +26,41 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
  */
+/**
+ * Domains module: controller.
+ *
+ * Lists, creates and deletes the account's domains (x_vhosts type 1), sets their PHP
+ * version, and flags the Apache config for rewriting by the daemon.
+ */
 class module_controller extends ctrl_module
 {
 
+    /** @var bool|null Not used. */
     static $complete;
+    /** @var bool|null True when the domain started with 'www.'. */
     static $error;
+    /** @var bool|null True when the vhost file could not be written (never set at present). */
     static $writeerror;
+    /** @var bool|null True when the name looks like a subdomain of an existing domain. */
     static $nosub;
+    /** @var bool|null True when the domain already exists on the server. */
     static $alreadyexists;
+    /** @var bool|null True when the domain name is not valid. */
     static $badname;
+    /** @var bool|null True when the domain name was blank. */
     static $blank;
+    /** @var bool|null True when the last change was saved (shown by getResult()). */
     static $ok;
 
     /**
      * The 'worker' methods.
+     */
+    /**
+     * List domains (type 1) of one account, or of every account.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $uid Optional. The account ID, or 0 for all accounts. Default 0.
+     * @return array<int, array<string, mixed>>|false One row per domain: 'uid', 'name', 'directory', 'active', 'id', 'php' (version or ''); false when there are none.
      */
     static function ListDomains($uid = 0)
     {
@@ -79,6 +100,13 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * List the folders in the account's public_html (except _errorpages).
+     *
+     * @global runtime_controller $controller The request controller. Declared but not used.
+     * @param int|string $uid The account ID.
+     * @return array<int, array<string, string>> One row per folder: 'domains' (the folder name); empty when public_html can not be opened.
+     */
     static function ListDomainDirs($uid)
     {
         global $controller;
@@ -87,7 +115,7 @@ class module_controller extends ctrl_module
         $handle = @opendir(ctrl_options::GetSystemOption('hosted_dir') . $currentuser['username'] . "/public_html");
         $chkdir = ctrl_options::GetSystemOption('hosted_dir') . $currentuser['username'] . "/public_html/";
         if (!$handle) {
-            # Log an error as the folder cannot be opened...
+            // Log an error as the folder cannot be opened...
         } else {
             while ($file = @readdir($handle)) {
                 if ($file != "." && $file != ".." && $file != "_errorpages") {
@@ -101,6 +129,15 @@ class module_controller extends ctrl_module
         return $res;
     }
 
+    /**
+     * Delete a domain (sets vh_deleted_ts) and flag the Apache config for rewriting.
+     *
+     * Runs the OnBeforeDeleteDomain/OnAfterDeleteDomain hooks. The caller must have
+     * checked ownership.
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $id The domain ID (vh_id_pk).
+     * @return bool Always true.
+     */
     static function ExecuteDeleteDomain($id)
     {
         global $zdbh;
@@ -122,6 +159,20 @@ class module_controller extends ctrl_module
 	
 	
 	
+    /**
+     * Create a domain for an account after checking it (CheckCreateForErrors()).
+     *
+     * Creates (or uses an existing) folder in public_html, copies the error pages and the
+     * welcome page, inserts the x_vhosts row and flags the Apache config for rewriting.
+     * Runs the OnBeforeAddDomain/OnAfterAddDomain hooks.
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $uid The account ID.
+     * @param string $domain The domain name (spaces removed, lowercased).
+     * @param string $destination An existing folder in public_html (used when $autohome is not 1).
+     * @param int|string $autohome 1 to create a new folder named after the domain.
+     * @param string $phpversion Optional. PHP version for the domain ('' = the default). Default ''.
+     * @return bool|null True when created; false when the existing folder is not allowed; null when the name failed the checks (see the static flags).
+     */
     static function ExecuteAddDomain($uid, $domain, $destination, $autohome, $phpversion = '')
     {
         global $zdbh;
@@ -205,6 +256,15 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Check a new domain name and set the matching error flag.
+     *
+     * Refuses a blank or invalid name, a name starting with www., an existing domain,
+     * and what looks like a subdomain of another account's domain.
+     * @global db_driver $zdbh The panel's database connection.
+     * @param string $domain The domain name.
+     * @return bool True when there are no errors.
+     */
     static function CheckCreateForErrors($domain)
     {
         global $zdbh;
@@ -272,6 +332,12 @@ class module_controller extends ctrl_module
         return TRUE;
     }
 
+    /**
+     * Is $error an HTTP status code an error page can be set for?
+     *
+     * @param int|string $error The status code (from an error page file name).
+     * @return bool
+     */
     static function CheckErrorDocument($error)
     {
         $errordocs = array(100, 101, 102, 200, 201, 202, 203, 204, 205, 206, 207,
@@ -283,6 +349,12 @@ class module_controller extends ctrl_module
         return in_array($error, $errordocs);
     }
 
+    /**
+     * Is $a a valid domain name (at least one dot, valid labels)?
+     *
+     * @param string $a The domain name.
+     * @return bool
+     */
     static function IsValidDomainName($a)
     {
         if (stristr($a, '.')) {
@@ -298,11 +370,23 @@ class module_controller extends ctrl_module
         return true;
     }
 
+    /**
+     * Is $email a valid email address?
+     *
+     * @param string $email The address.
+     * @return bool
+     */
     static function IsValidEmail($email)
     {
         return preg_match('/^[a-z0-9]+([_\\.-][a-z0-9]+)*@([a-z0-9]+([\.-][a-z0-9]+)*)+\\.[a-z]{2,}$/i', $email) == 1;
     }
 
+    /**
+     * Set the apache_changed setting to 'true' so the daemon rewrites the Apache config.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return void
+     */
     static function SetWriteApacheConfigTrue()
     {
         global $zdbh;
@@ -312,6 +396,14 @@ class module_controller extends ctrl_module
         $sql->execute();
     }
 
+    /**
+     * Does $ip look like an IPv4 address?
+     *
+     * The pattern uses ^ as its delimiter, so it is not anchored and also matches
+     * longer text containing an address.
+     * @param string $ip The address.
+     * @return bool
+     */
     static function IsvalidIP($ip)
     {
         return preg_match("^([1-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])(\.([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])){3}^", $ip) == 1;
@@ -323,6 +415,11 @@ class module_controller extends ctrl_module
 
     /**
      * Webinterface sudo methods.
+     */
+    /**
+     * List the logged-in account's domains (template: <% loop DomainList %>).
+     *
+     * @return array<int, array<string, mixed>>|false One row per domain: 'name', 'directory', 'active', 'status' (HTML), 'php' (HTML label), 'id'; false when there are none.
      */
     static function getDomainList()
     {
@@ -345,6 +442,11 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * May the account create another domain (template: <% if CreateDomain %>)?
+     *
+     * @return bool True when the quota is unlimited (-1) or not yet reached.
+     */
     static function getCreateDomain()
     {
         $currentuser = ctrl_users::GetUserDetail();
@@ -352,6 +454,11 @@ class module_controller extends ctrl_module
                 ($currentuser['domainquota'] > ctrl_users::GetQuotaUsages('domains', $currentuser['userid']));
     }
 
+    /**
+     * List the folders in the account's public_html (template: <% loop DomainDirsList %>).
+     *
+     * @return array<int, array<string, string>>|false See ListDomainDirs(); false when there are none.
+     */
     static function getDomainDirsList()
     {
         $currentuser = ctrl_users::GetUserDetail();
@@ -363,6 +470,14 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Handle the create domain form (POST).
+     *
+     * Checks the CSFR token (dies when it is wrong) and creates the domain from inDomain,
+     * inDestination, inAutoHome and inPhpVersion.
+     * @global runtime_controller $controller The request controller.
+     * @return bool True when created.
+     */
     static function doCreateDomain()
     {
         global $controller;
@@ -378,6 +493,13 @@ class module_controller extends ctrl_module
         return;
     }
 
+    /**
+     * Handle the confirm delete form (POST): delete the domain in inDelete.
+     *
+     * Checks the CSFR token and that the domain belongs to the logged-in account.
+     * @global runtime_controller $controller The request controller.
+     * @return bool True when deleted.
+     */
     static function doDeleteDomain()
     {
         global $controller;
@@ -396,6 +518,13 @@ class module_controller extends ctrl_module
         return false;
     }
 
+    /**
+     * Handle a Delete button in the domain list (POST): redirect to the confirmation view and exit.
+     *
+     * Checks the CSFR token (dies when it is wrong).
+     * @global runtime_controller $controller The request controller.
+     * @return false False when no Delete button of the account's domains was pressed (otherwise the request exits).
+     */
     static function doConfirmDeleteDomain()
     {
         global $controller;
@@ -411,6 +540,14 @@ class module_controller extends ctrl_module
         return false;
     }
 
+    /**
+     * Is the page showing the delete confirmation for a domain of this account (template: <% if isDeleteDomain %>)?
+     *
+     * @global runtime_controller $controller The request controller.
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string|null $uid Optional. The account ID. Default null (the logged-in user).
+     * @return bool|null Null when the domain in ?domain= is not the account's.
+     */
     static function getisDeleteDomain($uid = null)
     {
         global $controller;
@@ -436,6 +573,12 @@ class module_controller extends ctrl_module
         return (isset($urlvars['show'])) && ($urlvars['show'] == "Delete");
     }
 
+    /**
+     * Return the domain ID in ?id= (template: <@ CurrentID @>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return string|int The ID, or ''.
+     */
     static function getCurrentID()
     {
         global $controller;
@@ -443,6 +586,13 @@ class module_controller extends ctrl_module
         return ($id) ? $id : '';
     }
 
+    /**
+     * Return the domain name in ?domain= (template: <@ CurrentDomain @>).
+     *
+     * Note: the value is returned as is, not HTML-escaped.
+     * @global runtime_controller $controller The request controller.
+     * @return string The domain, or ''.
+     */
     static function getCurrentDomain()
     {
         global $controller;
@@ -450,6 +600,11 @@ class module_controller extends ctrl_module
         return ($domain) ? $domain : '';
     }
 
+    /**
+     * Return the domain quota pie chart (template: <@ DomainUsagepChart @>).
+     *
+     * @return string An <img> tag: the "unlimited" image, or the pChart pie of free/used.
+     */
     static function getDomainUsagepChart()
     {
         $currentuser = ctrl_users::GetUserDetail();
@@ -466,6 +621,14 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Return the status cells for a domain row: Live, or Pending with a help icon.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @param int|string $int The domain's vh_active_in value (1 = live).
+     * @param int|string $id The domain ID (for the help icon's id).
+     * @return string Two <td> cells of HTML.
+     */
     static function getDomainStatusHTML($int, $id)
     {
         global $controller;
@@ -482,6 +645,9 @@ class module_controller extends ctrl_module
 
     /**
      * PHP version choices (default first, then enabled extra versions).
+     *
+     * Template: <@ PhpVersionOptions @>.
+     * @return string HTML <option> elements.
      */
     static function getPhpVersionOptions()
     {
@@ -490,6 +656,9 @@ class module_controller extends ctrl_module
 
     /**
      * Show the PHP version controls only when extra versions are enabled.
+     *
+     * Template: <% if HasPhpVersions %>.
+     * @return bool
      */
     static function getHasPhpVersions()
     {
@@ -498,6 +667,13 @@ class module_controller extends ctrl_module
 
     /**
      * Change the PHP version of one of the current user's domains.
+     *
+     * Handles the PHP version form (POST: inDomainId, inPhpVersion). Checks the CSFR token
+     * (dies when it is wrong); only the user's own domains (type 1) are changed. Flags the
+     * Apache config for rewriting.
+     * @global runtime_controller $controller The request controller.
+     * @global db_driver $zdbh The panel's database connection.
+     * @return bool False when inDomainId is missing, else true.
      */
     static function doSetPhpVersion()
     {
@@ -521,6 +697,11 @@ class module_controller extends ctrl_module
         return true;
     }
 
+    /**
+     * Return the message for the last action (template: <@ Result @>).
+     *
+     * @return string|null The HTML message, or null when there is none.
+     */
     static function getResult()
     {
         if (!fs_director::CheckForEmptyValue(self::$blank)) {

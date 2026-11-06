@@ -15,7 +15,13 @@
  */
 class ctrl_users {
 
-    /** an existing theme folder name, or '' (the caller then uses the reseller's or the default) */
+    /**
+     * Return an existing theme folder name, or '' (the caller then uses the reseller's or the default).
+     *
+     * Maps renamed themes to their new names; an unknown or unsafe name gives 'Modern'.
+     * @param mixed $theme The stored theme name (string or null from the database).
+     * @return string
+     */
     static function SafeTheme($theme)
     {
         $theme = (string) $theme;
@@ -36,8 +42,8 @@ class ctrl_users {
      * Returns an array of infomation for the account details, package, groups and quota limits for a given UID.
      * @author Bobby Allen (ballen@bobbyallen.me)
      * @global db_driver $zdbh The ZPX database handle.
-     * @param int $uid The Sentora user account ID.
-     * @return array
+     * @param int|string $uid Optional. The Sentora user account ID. Default '' (the logged-in user).
+     * @return array<string, string> Keys: 'username', 'userid', 'password', 'email', 'resellerid', 'packageid', 'enabled', 'usertheme', 'usercss', 'lastlogon', 'fullname', 'packagename', 'usergroup', 'usergroupid', 'address', 'postcode', 'phone', 'language', the '*quota' limits and 'catorder' (all values as strings; '' when the account does not exist).
      */
     static function GetUserDetail($uid = "") {
         global $zdbh;
@@ -93,9 +99,10 @@ class ctrl_users {
     /**
      * Returns the current usage of a particular resource.
      * @author Bobby Allen (ballen@bobbyallen.me)
-     * @param string $resource What time of quota should we be checking? (domains, subdomains, parkeddomains, mailboxes, distlists etc.)
+     * @global db_driver $zdbh The ZPX database handle.
+     * @param string $resource What time of quota should we be checking? (domains, subdomains, parkeddomains, mailboxes, forwarders, distlists, ftpaccounts, mysql, diskspace, bandwidth)
      * @param int $acc_key The user ID of which to check the quota status for.
-     * @return array Database table array of the quota infomation.
+     * @return int|string|null The count (or bytes for diskspace/bandwidth) as returned by PDO; null when there is no x_bandwidth row this month. An unknown $resource leaves the result undefined (null).
      */
     static function GetQuotaUsages($resource, $acc_key = 0) {
         global $zdbh;
@@ -173,6 +180,13 @@ class ctrl_users {
     }
 
     /**
+     * Count the account's domains of one type (1 domain, 2 subdomain, 3 parked).
+     *
+     * Broken: it calls execute() on an undefined $sql, so it fails before counting.
+     * @global db_driver $zdbh The ZPX database handle.
+     * @param int $userid The account ID.
+     * @param int|string $type Optional. The vh_type_in value. Default "1".
+     * @return int
      * @todo Does this still need to be here as this is now managed under a module and not seen as 'core' but template still relies on this at present! - Bobby Allen
      */
     static function GetUserDomains($userid, $type = "1") {
@@ -196,7 +210,7 @@ class ctrl_users {
      * @author Bobby Allen (ballen@bobbyallen.me)
      * @global db_driver $zdbh The ZPX database handle.
      * @param int $uid The Sentora user account ID.
-     * @return boolean
+     * @return bool
      */
     static function CheckUserEnabled($uid) {
         global $zdbh;
@@ -216,9 +230,9 @@ class ctrl_users {
     /**
      * Checks that a specified email address is unique in the user accounts table.
      * @author Bobby Allen (ballen@bobbyallen.me)
-     * @global db_driver The ZPX database handle.
-     * @param type $email The email address to check.
-     * @return boolean
+     * @global db_driver $zdbh The ZPX database handle.
+     * @param string $email The email address to check.
+     * @return bool True when no (not deleted) account uses the address.
      */
     static function CheckUserEmailIsUnique($email) {
         global $zdbh;

@@ -1,14 +1,28 @@
 <?php
 
 /**
+ * PHP Versions module: controller.
+ *
+ * @package Sentora
+ * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
+ */
+/**
  * PHP Versions: choose which extra PHP versions domains may use.
  * The versions themselves are installed by the installer in /opt/sentora-php/.
  */
 class module_controller extends ctrl_module
 {
 
+    /** @var bool|null True when the choice was saved (shown by getResult()). */
     static $ok;
 
+    /**
+     * Return the table rows of PHP versions (template: <@ VersionRows @>).
+     *
+     * The default version first, then each installed extra version with its enable
+     * checkbox, whether it runs, its support note and how many domains use it.
+     * @return string HTML <tr> rows.
+     */
     static function getVersionRows()
     {
         $nl = fs_filehandler::NewLine();
@@ -43,6 +57,15 @@ class module_controller extends ctrl_module
         return $html;
     }
 
+    /**
+     * Handle the PHP versions form (POST): save which extra versions are enabled.
+     *
+     * Checks the CSFR token (dies when it is wrong), stores php_versions_enabled and sets
+     * apache_changed so the daemon rewrites the vhosts and starts/stops PHP-FPM.
+     * @global runtime_controller $controller The request controller.
+     * @global db_driver $zdbh The panel's database connection.
+     * @return bool Always true.
+     */
     static function doSaveVersions()
     {
         global $controller, $zdbh;
@@ -66,6 +89,11 @@ class module_controller extends ctrl_module
         return true;
     }
 
+    /**
+     * Return the message for the last action (template: <@ Result @>).
+     *
+     * @return string|null The HTML message, or null when nothing was saved.
+     */
     static function getResult()
     {
         if (!fs_director::CheckForEmptyValue(self::$ok)) {

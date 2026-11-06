@@ -19,7 +19,17 @@ if (ui_module::CheckModuleEnabled('GoAccess') && goaccess_helper::Installed()) {
 }
 echo "END GoAccess reports." . fs_filehandler::NewLine();
 
-/** The new lines of one log since $state (inode, offset), written to $out; returns the new state */
+/**
+ * Append the new lines of one log since $state to $out and return the new state.
+ *
+ * A rotated log's last lines are read from <log>.1 first; only whole lines are
+ * copied (a line still being written waits for the next run).
+ *
+ * @param string $log Full path of the access log.
+ * @param array<string,int> $state Last position: 'inode' and 'offset' (empty for a new log).
+ * @param string $out File the new lines are appended to.
+ * @return array<string, int> The new 'inode' and 'offset' (or $state unchanged when the log can not be read).
+ */
 function GoAccessNewLines($log, $state, $out)
 {
     $chunks = array();
@@ -68,6 +78,14 @@ function GoAccessNewLines($log, $state, $out)
     return array('inode' => $inode, 'offset' => $newOffset);
 }
 
+/**
+ * Build or update every GoAccess report from the new log lines (run as root).
+ *
+ * Feeds each report's new lines to GoAccess (as the stats user), removes reports
+ * of domains that are gone and saves the log positions.
+ *
+ * @return void
+ */
 function GoAccessBuildReports()
 {
     $base = goaccess_helper::DIR;

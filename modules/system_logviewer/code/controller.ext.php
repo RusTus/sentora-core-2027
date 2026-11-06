@@ -1,4 +1,10 @@
 <?php
+/**
+ * System Log Viewer module: controller.
+ *
+ * @package Sentora
+ * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
+ */
 
 require_once dirname(__FILE__) . '/logs.php';
 
@@ -8,6 +14,11 @@ require_once dirname(__FILE__) . '/logs.php';
 class module_controller extends ctrl_module
 {
 
+    /**
+     * List the log files for the page (template: <% loop LogList %>).
+     *
+     * @return array<int, array<string, string>>|false One row per log: 'id', 'group', 'path' (HTML-escaped), 'size' (human readable), 'changed' (date or ''), 'readable' (translated yes/no); false when no log was found.
+     */
     static function getLogList()
     {
         $rows = array();

@@ -26,19 +26,40 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
  */
+/**
+ * Aliases module: controller.
+ *
+ * Lists, creates and deletes mail aliases (x_aliases) for the logged-in account; the
+ * mail server specific work is in the file named by the mailserver_php setting.
+ */
 class module_controller extends ctrl_module
 {
 
+    /** @var bool|null True when the last change was saved (shown by getResult()). */
     static $ok;
+    /** @var bool|null True when the address is already used by a mailbox, alias, forwarder or list. */
     static $alreadyexists;
+    /** @var bool|null True when the address was not valid (the name is inverted). */
     static $validemail;
+    /** @var bool|null True when the chosen domain is not one of the account's active domains. */
     static $validdomain;
+    /** @var bool|null True when the address was left blank. */
     static $noaddress;
+    /** @var bool|null Set while an alias is deleted (read by the mail server include). */
     static $delete;
+    /** @var bool|null Set while an alias is created (read by the mail server include). */
     static $create;
 
     /**
      * The 'worker' methods.
+     */
+    /**
+     * List the aliases of an account.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller. Declared but not used.
+     * @param int|string $uid The account ID.
+     * @return array<int, array<string, mixed>>|false One row per alias: 'address', 'destination', 'id'; false when there are none.
      */
     static function ListAliases($uid)
     {
@@ -66,6 +87,14 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Return one alias of the logged-in account as a one-row list.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller. Declared but not used.
+     * @param int|string $aid The alias ID (from ?other= or the form).
+     * @return array<int, array<string, mixed>>|false One row: 'address', 'destination', 'id'; false when it is not the account's or does not exist.
+     */
     static function ListCurrentAlias($aid)
     {
         // Only this account's own records (the id comes from ?other= or the form)
@@ -95,6 +124,14 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * List the mailboxes of an account (template: <% loop MailboxList %>).
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller.
+     * @param int|string|null $uid Optional. The account ID. Default null (the logged-in user).
+     * @return array<int, array<string, mixed>>|false One row per mailbox: 'address', 'id'; false when there are none.
+     */
     static function getMailboxList($uid = null)
     {
         global $zdbh;
@@ -124,10 +161,12 @@ class module_controller extends ctrl_module
     }
     
     /**
-     * Produces a list of domain names only.
-     * @global db_driver $zdbh
-     * @param int $uid
-     * @return boolean
+     * Produces a list of domain names only (template: <% loop DomainList %>).
+     *
+     * Only the account's enabled domains are listed.
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string|null $uid Optional. The account ID. Default null (the logged-in user).
+     * @return array<int, array<string, string>>|false One row per domain: 'domain'; false when there are none.
      */
     static function getDomainList($uid = null)
     {
@@ -151,6 +190,19 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Create an alias after checking it (CheckCreateForErrors()).
+     *
+     * Runs the OnBeforeCreateAlias/OnAfterCreateAlias hooks, includes the mail server
+     * specific file and inserts the x_aliases row.
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller.
+     * @param int|string $uid The account ID.
+     * @param string $address The part before the @ ('*' is removed).
+     * @param string $domain The domain name.
+     * @param string $destination The address mail is delivered to (spaces removed, lowercased).
+     * @return bool True when the alias was created.
+     */
     static function ExecuteCreateAlias($uid, $address, $domain, $destination)
     {
         global $zdbh;
@@ -190,6 +242,16 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Delete an alias (sets al_deleted_ts) and run the mail server specific delete.
+     *
+     * The caller must have checked ownership. Note: returns nothing, so
+     * doConfirmDeleteAlias() always reports false.
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller.
+     * @param int|string $al_id_pk The alias ID.
+     * @return void
+     */
     static function ExecuteDeleteAlias($al_id_pk)
     {
         global $zdbh;
@@ -216,6 +278,18 @@ class module_controller extends ctrl_module
         self::$ok = true;
     }
 
+    /**
+     * Check a new alias and set the matching error flag.
+     *
+     * Checks the address is not blank, is valid, the domain is the account's, and that no
+     * mailbox, forwarder, distribution list or alias already uses it.
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller. Declared but not used.
+     * @param string $address The part before the @.
+     * @param string $domain The domain name.
+     * @param string $destination The destination address (not checked).
+     * @return bool True when there are no errors.
+     */
     static function CheckCreateForErrors($address, $domain, $destination)
     {
         global $zdbh;
@@ -282,6 +356,12 @@ class module_controller extends ctrl_module
         return true;
     }
 
+    /**
+     * Is $email a valid address (a '*' catch-all local part is allowed)?
+     *
+     * @param string $email The full address.
+     * @return bool
+     */
     static function IsValidEmail($email)
     {
         if (!preg_match('/^([\*]|[a-z0-9]+([_\\.-][a-z0-9]+)*)@([a-z0-9]+([\.-][a-z0-9]+)*)+\\.[a-z]{2,}$/i', $email)) {
@@ -290,6 +370,12 @@ class module_controller extends ctrl_module
         return true;
     }
     
+    /**
+     * Is $domain one of the logged-in account's enabled domains?
+     *
+     * @param string $domain The domain name.
+     * @return bool
+     */
     static function IsValidDomain($domain)
     {
          foreach(self::getDomainList() as $key => $checkDomain){
@@ -307,6 +393,14 @@ class module_controller extends ctrl_module
     /**
      * Webinterface sudo methods.
      */
+    /**
+     * Handle the create alias form (POST).
+     *
+     * Checks the CSFR token (dies when it is wrong) and creates the alias from inAddress,
+     * inDomain and inDestination; errors are left in the static flags.
+     * @global runtime_controller $controller The request controller.
+     * @return bool Always true.
+     */
     static function doCreateAlias()
     {
         global $controller;
@@ -318,6 +412,14 @@ class module_controller extends ctrl_module
         return true;
     }
 
+    /**
+     * Handle the Delete/Edit buttons of the alias list (POST).
+     *
+     * Checks the CSFR token, then redirects to the Delete or Edit view of the chosen
+     * alias and exits.
+     * @global runtime_controller $controller The request controller.
+     * @return void
+     */
     static function doDeleteAlias()
     {
         global $controller;
@@ -337,6 +439,13 @@ class module_controller extends ctrl_module
         return;
     }
 
+    /**
+     * Handle the confirm delete form (POST): delete the alias in inDelete.
+     *
+     * Checks the CSFR token and that the alias belongs to the logged-in account.
+     * @global runtime_controller $controller The request controller.
+     * @return bool False when not allowed; also false after a delete because ExecuteDeleteAlias() returns nothing.
+     */
     static function doConfirmDeleteAlias()
     {
         global $controller;
@@ -351,6 +460,12 @@ class module_controller extends ctrl_module
         return false;
     }
 
+    /**
+     * Return the address of the alias in ?other= (template: <@ EditCurrentAliasName @>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return string The address, or '' when there is no ?other=.
+     */
     static function getEditCurrentAliasName()
     {
         global $controller;
@@ -362,6 +477,12 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * List the logged-in account's aliases (template: <% loop AliasList %>).
+     *
+     * @global runtime_controller $controller The request controller. Declared but not used.
+     * @return array<int, array<string, mixed>>|false See ListAliases().
+     */
     static function getAliasList()
     {
         global $controller;
@@ -369,6 +490,14 @@ class module_controller extends ctrl_module
         return self::ListAliases($currentuser['userid']);
     }
 
+    /**
+     * Return the alias list for ?other=.
+     *
+     * Broken: calls self::ListCurrentMailboxes(), which this class does not define (fatal
+     * error if called). Not used by the template.
+     * @global runtime_controller $controller The request controller.
+     * @return mixed
+     */
     static function getCurrentAliasList()
     {
         global $controller;
@@ -376,6 +505,12 @@ class module_controller extends ctrl_module
         return self::ListCurrentMailboxes($controller->GetControllerRequest('URL', 'other'));
     }
 
+    /**
+     * Is the page in its default (create) view, i.e. no ?show=?
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return bool
+     */
     static function getisCreateAlias()
     {
         global $controller;
@@ -385,6 +520,14 @@ class module_controller extends ctrl_module
         return false;
     }
 
+    /**
+     * Is the page showing the delete confirmation for an alias of this account (template: <% if isDeleteAlias %>)?
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller.
+     * @param int|string|null $uid Optional. The account ID. Default null (the logged-in user).
+     * @return bool|null Null when the alias in ?other= is not the account's.
+     */
     static function getisDeleteAlias($uid = null)
     {
         global $controller;
@@ -410,6 +553,12 @@ class module_controller extends ctrl_module
         return (isset($urlvars['show'])) && ($urlvars['show'] == "Delete");
     }
 
+    /**
+     * Return the ID of the alias in ?other= (template: <@ EditCurrentAliasID @>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return int|string The alias ID, or '' when there is no ?other=.
+     */
     static function getEditCurrentAliasID()
     {
         global $controller;
@@ -421,6 +570,13 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Read a mail setting from x_mail_settings.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @param string $name The setting name (mbs_name_vc).
+     * @return string|false The value, or false when the setting does not exist.
+     */
     static function GetMailOption($name)
     {
         global $zdbh;
@@ -436,6 +592,12 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Return the forwarder quota pie chart (template: <@ ForwardUsagepChart @>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return string An <img> tag: the "unlimited" image, or the pChart pie of free/used.
+     */
     static function getForwardUsagepChart()
     {
         global $controller;
@@ -457,6 +619,11 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * May the account create another forwarder (template: <% if QuotaLimit %>)?
+     *
+     * @return bool True when the quota is unlimited (-1) or not yet reached.
+     */
     static function getQuotaLimit()
     {
         $currentuser = ctrl_users::GetUserDetail();
@@ -464,6 +631,11 @@ class module_controller extends ctrl_module
                 ($currentuser['forwardersquota'] > ctrl_users::GetQuotaUsages('forwarders', $currentuser['userid']));
     }
 
+    /**
+     * Return the message for the last action (template: <@ Result @>).
+     *
+     * @return string|null The HTML message, or null when there is none.
+     */
     static function getResult()
     {
         if (!fs_director::CheckForEmptyValue(self::$alreadyexists)) {

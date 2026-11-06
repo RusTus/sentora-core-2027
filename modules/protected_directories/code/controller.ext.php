@@ -19,19 +19,35 @@
  */
 require_once dirname(__FILE__) . '/pdsafe.php';
 
+/**
+ * Protected Directories module: password-protect folders of the account's website.
+ */
 class module_controller extends ctrl_module
 {
     const BEGIN = '# BEGIN Sentora protected directory (managed by the panel: do not edit this block)';
     const END = '# END Sentora protected directory';
 
+    /** @var string[] Success messages for getResult(). */
     static $messages = array();
+    /** @var string[] Error messages for getResult() (translated and escaped when shown). */
     static $errors = array();
 
+    /**
+     * Escape a value for HTML.
+     *
+     * @param mixed $s The value (cast to string).
+     * @return string The escaped text.
+     */
     static function h($s)
     {
         return htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
     }
 
+    /**
+     * Return the logged-in user's details (read once per request).
+     *
+     * @return array<string, string> User details from ctrl_users::GetUserDetail().
+     */
     static function Me()
     {
         static $me = null;
@@ -41,13 +57,24 @@ class module_controller extends ctrl_module
         return $me;
     }
 
+    /**
+     * Add an error message for getResult().
+     *
+     * @param string $text The message (English; translated when shown).
+     * @return false Always false, so callers can return it.
+     */
     static function Fail($text)
     {
         self::$errors[] = $text;
         return false;
     }
 
-    /** the message shown in the login box: plain characters only, never a quote or a line break */
+    /**
+     * Clean the message shown in the login box: plain characters only, never a quote or a line break.
+     *
+     * @param mixed $m The submitted message (cast to string).
+     * @return string|false The message ('Protected area' when empty), or false when it has other characters or is too long.
+     */
     static function CleanMessage($m)
     {
         $m = trim(preg_replace('/\s+/', ' ', (string) $m));
@@ -60,11 +87,23 @@ class module_controller extends ctrl_module
         return $m;
     }
 
+    /**
+     * Check a username for a protected folder: 1 to 32 letters, digits, '.', '_' or '-'.
+     *
+     * @param mixed $u The username (only strings pass).
+     * @return bool True when valid.
+     */
     static function ValidUsername($u)
     {
         return is_string($u) && preg_match('/^[A-Za-z0-9._-]{1,32}$/', $u) === 1;
     }
 
+    /**
+     * Check a password: 8 to 128 characters, no control characters.
+     *
+     * @param mixed $p The password (only strings pass).
+     * @return bool True when valid.
+     */
     static function ValidPassword($p)
     {
         return is_string($p) && strlen($p) >= 8 && strlen($p) <= 128 && !preg_match('/[\x00-\x1f\x7f]/', $p);
@@ -72,7 +111,13 @@ class module_controller extends ctrl_module
 
     // --- records (always the account's own) ----------------------------------------------
 
-    /** a protected folder of this account, or false */
+    /**
+     * Return a protected folder of this account.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $id The x_htpasswd_file ID (cast to int).
+     * @return array<int|string, mixed>|false The x_htpasswd_file row, or false when not found.
+     */
     static function Protection($id)
     {
         global $zdbh;
@@ -82,7 +127,13 @@ class module_controller extends ctrl_module
         return $row ? $row : false;
     }
 
-    /** the users of a protected folder of this account */
+    /**
+     * List the users of a protected folder of this account.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $fileId The x_htpasswd_file ID (cast to int).
+     * @return array<int, array<int|string, mixed>> x_htpasswd_user rows, by username.
+     */
     static function Users($fileId)
     {
         global $zdbh;
@@ -96,7 +147,12 @@ class module_controller extends ctrl_module
 
     // --- the files ------------------------------------------------------------------------
 
-    /** the folder of a record, checked again (it may have been replaced by a link since) */
+    /**
+     * Return the folder of a record, checked again (it may have been replaced by a link since).
+     *
+     * @param array<int|string,mixed> $row The x_htpasswd_file row.
+     * @return string|false The folder's full path, or false when it is no longer a plain folder of the website.
+     */
     static function TargetDir($row)
     {
         $rel = pd_safe::RelPath(self::Me()['username'], (string) $row['x_htpasswd_file_target']);
@@ -104,7 +160,13 @@ class module_controller extends ctrl_module
         return ($dir !== false && $dir === $row['x_htpasswd_file_target']) ? $dir : false;
     }
 
-    /** .htaccess without this panel's block (and without the block older versions wrote) */
+    /**
+     * Remove this panel's block from .htaccess contents (and the block older versions wrote).
+     *
+     * @param string $htaccess The current .htaccess contents.
+     * @param string $passwdFile Full path of the folder's password file.
+     * @return string The rest of the file ('' when nothing else is left).
+     */
     static function StripBlock($htaccess, $passwdFile)
     {
         // the block, and the blank line written after it
@@ -113,6 +175,17 @@ class module_controller extends ctrl_module
         return trim($s) === '' ? '' : ltrim(rtrim($s), "\r\n") . "\n";
     }
 
+    /**
+     * Write a folder's .htaccess with or without the protection block.
+     *
+     * Removes the file when nothing else is left in it.
+     *
+     * @param string $dir The folder's full path (checked).
+     * @param string $passwdFile Full path of the folder's password file.
+     * @param string $message The login box message (already cleaned).
+     * @param bool $protect True to add the block, false to only remove it.
+     * @return bool True when written (or nothing to change); false with an error added.
+     */
     static function WriteHtaccess($dir, $passwdFile, $message, $protect)
     {
         $current = pd_safe::Read($dir . '/.htaccess');
@@ -133,6 +206,12 @@ class module_controller extends ctrl_module
         return pd_safe::Write($dir, '.htaccess', $new, 0644) ? true : self::Fail('Could not write the .htaccess file.');
     }
 
+    /**
+     * Write a protected folder's password file from its users.
+     *
+     * @param array<int|string,mixed> $row The x_htpasswd_file row.
+     * @return bool True when written; false with an error added.
+     */
     static function WritePasswd($row)
     {
         $pdir = pd_safe::PasswdDir(self::Me()['username']);
@@ -151,6 +230,15 @@ class module_controller extends ctrl_module
 
     // --- actions (POST, with the CSRF token) -------------------------------------------------------
 
+    /**
+     * Protect the chosen folder: empty password file, .htaccess block and a record.
+     *
+     * Redirects to the folder's edit page and exits on success.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @global db_driver $zdbh The panel's database connection.
+     * @return false On failure (with an error added); otherwise it redirects and exits.
+     */
     static function doCreateProtection()
     {
         global $controller, $zdbh;
@@ -184,6 +272,13 @@ class module_controller extends ctrl_module
         exit;
     }
 
+    /**
+     * Change the login box message of a protected folder.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @global db_driver $zdbh The panel's database connection.
+     * @return false|null False on failure (with an error added), null when changed.
+     */
     static function doUpdateMessage()
     {
         global $controller, $zdbh;
@@ -209,6 +304,15 @@ class module_controller extends ctrl_module
         self::$messages[] = 'The message has been changed.';
     }
 
+    /**
+     * Remove the protection from a folder: .htaccess block, password file and records.
+     *
+     * Redirects to the list and exits on success.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @global db_driver $zdbh The panel's database connection.
+     * @return false On failure (with an error added); otherwise it redirects and exits.
+     */
     static function doDeleteProtection()
     {
         global $controller, $zdbh;
@@ -235,6 +339,13 @@ class module_controller extends ctrl_module
         exit;
     }
 
+    /**
+     * Add a user (bcrypt password) to a protected folder and rewrite its password file.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @global db_driver $zdbh The panel's database connection.
+     * @return false|null False on failure (with an error added), else null.
+     */
     static function doAddUser()
     {
         global $controller, $zdbh;
@@ -267,6 +378,13 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Return one user of a protected folder.
+     *
+     * @param array<int|string,mixed> $row The x_htpasswd_file row.
+     * @param int|string $userId The x_htpasswd_user ID.
+     * @return array<int|string, mixed>|false The user row, or false when not found.
+     */
     static function UserOfProtection($row, $userId)
     {
         foreach (self::Users($row['x_htpasswd_file_id']) as $u) {
@@ -277,6 +395,13 @@ class module_controller extends ctrl_module
         return false;
     }
 
+    /**
+     * Set a new password for a user of a protected folder and rewrite its password file.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @global db_driver $zdbh The panel's database connection.
+     * @return false|null False on failure (with an error added), else null.
+     */
     static function doSetPassword()
     {
         global $controller, $zdbh;
@@ -298,6 +423,13 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Remove a user from a protected folder and rewrite its password file.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @global db_driver $zdbh The panel's database connection.
+     * @return false|null False on failure (with an error added), else null.
+     */
     static function doDeleteUser()
     {
         global $controller, $zdbh;
@@ -317,23 +449,46 @@ class module_controller extends ctrl_module
 
     // --- the page ----------------------------------------------------------------------------
 
+    /**
+     * Return the protected folder ID from the URL ('id').
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return int The ID (0 when none).
+     */
     static function CurrentId()
     {
         global $controller;
         return (int) $controller->GetControllerRequest('URL', 'id');
     }
 
+    /**
+     * Check whether the edit page of one of the account's folders is shown (<% if IsEdit %>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return bool True for control=Edit with a valid ID.
+     */
     static function getIsEdit()
     {
         global $controller;
         return $controller->GetControllerRequest('URL', 'control') === 'Edit' && self::Protection(self::CurrentId()) !== false;
     }
 
+    /**
+     * Check whether the list page is shown (<% if IsIndex %>).
+     *
+     * @return bool True when not editing.
+     */
     static function getIsIndex()
     {
         return !self::getIsEdit();
     }
 
+    /**
+     * Return the messages for the last action (<@ Result @>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return string HTML messages ('' when none).
+     */
     static function getResult()
     {
         global $controller;
@@ -353,6 +508,12 @@ class module_controller extends ctrl_module
         return $out;
     }
 
+    /**
+     * Build the table rows of the account's protected folders (<@ ProtectionRows @>).
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return string HTML <tr> rows.
+     */
     static function getProtectionRows()
     {
         global $zdbh;
@@ -373,11 +534,21 @@ class module_controller extends ctrl_module
         return $html === '' ? '<tr><td colspan="4" class="text-muted">' . ui_language::translate('No folder is protected yet.') . '</td></tr>' : $html;
     }
 
+    /**
+     * Return the account's public_html path, HTML-escaped.
+     *
+     * @return string The escaped path.
+     */
     static function getPublicRoot()
     {
         return self::h(pd_safe::PublicRoot(self::Me()['username']));
     }
 
+    /**
+     * Return the edited folder as 'public_html/...', HTML-escaped (<@ EditPath @>).
+     *
+     * @return string The escaped path.
+     */
     static function getEditPath()
     {
         $row = self::Protection(self::CurrentId());
@@ -385,17 +556,32 @@ class module_controller extends ctrl_module
         return self::h('public_html/' . $rel);
     }
 
+    /**
+     * Return the edited folder's login box message, HTML-escaped (<@ EditMessage @>).
+     *
+     * @return string The escaped message ('' when not found).
+     */
     static function getEditMessage()
     {
         $row = self::Protection(self::CurrentId());
         return $row ? self::h($row['x_htpasswd_file_message']) : '';
     }
 
+    /**
+     * Return the edited folder's ID (<@ EditId @>).
+     *
+     * @return int The ID.
+     */
     static function getEditId()
     {
         return self::CurrentId();
     }
 
+    /**
+     * Build the table rows of the edited folder's users (<@ UserRows @>).
+     *
+     * @return string HTML <tr> rows ('' when the folder is not found).
+     */
     static function getUserRows()
     {
         $row = self::Protection(self::CurrentId());
@@ -419,6 +605,11 @@ class module_controller extends ctrl_module
         return $html === '' ? '<tr><td colspan="3" class="text-muted">' . ui_language::translate('No users yet: nobody can open the folder until you add one.') . '</td></tr>' : $html;
     }
 
+    /**
+     * Return the module's assets folder (<@ Assets @>).
+     *
+     * @return string Relative URL path with a trailing slash.
+     */
     static function getAssets()
     {
         return 'modules/protected_directories/assets/';

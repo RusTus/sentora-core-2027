@@ -19,8 +19,14 @@ require_once __DIR__ . '/../../etc/lib/PHPMailer/src/Exception.php';
 require_once __DIR__ . '/../../etc/lib/PHPMailer/src/PHPMailer.php';
 require_once __DIR__ . '/../../etc/lib/PHPMailer/src/SMTP.php';
 
+/**
+ * PHPMailer with the panel's mail settings (Sentora Config) applied when sending.
+ */
 class sys_email extends \PHPMailer\PHPMailer\PHPMailer {
 
+    /**
+     * Create a mailer without exceptions, UTF-8 and with no X-Mailer header.
+     */
     public function __construct() {
         parent::__construct(false);
         $this->CharSet = 'UTF-8';
@@ -30,7 +36,9 @@ class sys_email extends \PHPMailer\PHPMailer\PHPMailer {
     /**
      * Sends the email with the contents of the object (Body etc. set using the parant calls in phpMailer!)
      * @author Bobby Allen (ballen@bobbyallen.me)
-     * @return boolean 
+     * Uses the mailer, sender and SMTP settings from Sentora Config, runs the
+     * OnSuccessfulSendEmail or OnFailedSendEmail hook and logs failures.
+     * @return bool True when the email was sent.
      */
     public function SendEmail() {
         $this->Mailer = ctrl_options::GetSystemOption('mailer_type');

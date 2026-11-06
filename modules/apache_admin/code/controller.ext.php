@@ -28,12 +28,25 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
  */
+/**
+ * Apache admin module: controller.
+ *
+ * Edits the module's Apache settings (x_settings) and per-vhost overrides (x_vhosts),
+ * and flags the Apache config for rewriting by the daemon.
+ */
 class module_controller extends ctrl_module
 {
 
+    /** @var bool|null True when the last save worked (shown by getResult()). */
     static $ok;
+    /** @var bool|null True after a vhost was chosen: getApacheConfig() then shows its override form. */
     static $showvhost;
 
+    /**
+     * Return the main panel of the page (template: <@ ApacheConfig @>).
+     *
+     * @return string HTML: the vhost override form after a vhost was chosen, else the Apache settings form.
+     */
     static function getApacheConfig()
     {
         if (!fs_director::CheckForEmptyValue(self::$showvhost)) {
@@ -44,24 +57,45 @@ class module_controller extends ctrl_module
         return $display;
     }
 
+    /**
+     * Return the vhost chooser form (template: <@ VhostConfig @>).
+     *
+     * @return string HTML form.
+     */
     static function getVhostConfig()
     {
         $display = self::DisplayVhostConfig();
         return $display;
     }
 
+    /**
+     * Return the chooser form for disabled vhosts (template: <@ DisabledVhostConfig @>).
+     *
+     * @return string HTML form.
+     */
     static function getDisabledVhostConfig()
     {
         $display = self::DisplayDisabledVhostConfig();
         return $display;
     }
 
+    /**
+     * Return the chooser form for vhosts with overrides (template: <@ DisplayVhostOverrides @>).
+     *
+     * @return string HTML form.
+     */
     static function getDisplayVhostOverrides()
     {
         $display = self::DisplayVhostOverrides();
         return $display;
     }
 
+    /**
+     * Build the form for the module's user-editable settings in x_settings.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return string HTML form (posts to UpdateApacheConfig).
+     */
     static function DisplayApacheConfig()
     {
         global $zdbh;
@@ -99,6 +133,12 @@ class module_controller extends ctrl_module
         return $line;
     }
 
+    /**
+     * Build the form to choose an enabled vhost to override.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return string HTML form (posts to DisplayVhost).
+     */
     static function DisplayVhostConfig()
     {
         global $zdbh;
@@ -130,6 +170,12 @@ class module_controller extends ctrl_module
         return $line;
     }
 
+    /**
+     * Are there disabled vhosts (template: <% if IsDisplayDisabledVhostConfig %>)?
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return bool
+     */
     static function getIsDisplayDisabledVhostConfig()
     {
         global $zdbh;
@@ -142,6 +188,12 @@ class module_controller extends ctrl_module
         return false;
     }
 
+    /**
+     * Build the form to choose one of the vhosts that have overrides set.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return string HTML form (posts to DisplayVhost).
+     */
     static function DisplayVhostOverrides()
     {
         global $zdbh;
@@ -183,6 +235,12 @@ class module_controller extends ctrl_module
         return $line;
     }
 
+    /**
+     * Does any vhost have overrides set (template: <% if IsDisplayVhostOverrides %>)?
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return bool
+     */
     static function getIsDisplayVhostOverrides()
     {
         global $zdbh;
@@ -210,6 +268,12 @@ class module_controller extends ctrl_module
         return false;
     }
 
+    /**
+     * Build the form to choose a disabled vhost.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return string HTML form (posts to DisplayVhost).
+     */
     static function DisplayDisabledVhostConfig()
     {
         global $zdbh;
@@ -242,6 +306,13 @@ class module_controller extends ctrl_module
         return $line;
     }
 
+    /**
+     * Build the override form for the vhost posted in inVhost.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller.
+     * @return string HTML form (posts to SaveVhost).
+     */
     static function DisplayApacheVhost()
     {
         global $zdbh;
@@ -288,6 +359,14 @@ class module_controller extends ctrl_module
         return $line;
     }
 
+    /**
+     * Handle the vhost chooser form (POST): show the chosen vhost's override form.
+     *
+     * Checks the CSFR token (dies when it is wrong) and sets $showvhost.
+     * @global db_driver $zdbh The panel's database connection. Declared but not used.
+     * @global runtime_controller $controller The request controller. Declared but not used.
+     * @return void
+     */
     static function doDisplayVhost()
     {
         global $zdbh;
@@ -296,6 +375,14 @@ class module_controller extends ctrl_module
         self::$showvhost = TRUE;
     }
 
+    /**
+     * Handle the Apache settings form (POST): save every user-editable setting of the module.
+     *
+     * Checks the CSFR token and flags the Apache config for rewriting.
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller.
+     * @return void
+     */
     static function doUpdateApacheConfig()
     {
         global $zdbh;
@@ -329,6 +416,15 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Handle the vhost override form (POST): save the overrides of vhost vh_id_pk.
+     *
+     * Checks the CSFR token, updates x_vhosts (empty fields become NULL) and flags the
+     * Apache config for rewriting.
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller.
+     * @return bool Always true.
+     */
     static function doSaveVhost()
     {
         global $zdbh;
@@ -417,6 +513,11 @@ class module_controller extends ctrl_module
         return true;
     }
 
+    /**
+     * Return the message for the last action (template: <@ Result @>).
+     *
+     * @return string The "saved" message, or the module description when nothing was saved.
+     */
     static function getResult()
     {
         if (!fs_director::CheckForEmptyValue(self::$ok)) {
@@ -427,6 +528,12 @@ class module_controller extends ctrl_module
         return;
     }
 
+    /**
+     * Set the apache_changed setting to 'true' so the daemon rewrites the Apache config.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return void
+     */
     static function SetWriteApacheConfigTrue()
     {
         global $zdbh;

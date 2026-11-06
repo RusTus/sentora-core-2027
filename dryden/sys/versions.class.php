@@ -46,7 +46,8 @@ class sys_versions {
     /**
      * Returns the MySQL server version number.
      * @author Bobby Allen (ballen@bobbyallen.me)
-     * @return string MySQL version number 
+     * @global db_driver $zdbh The panel's database connection.
+     * @return string MySQL version number
      */
     static function ShowMySQLVersion() {
         global $zdbh;
@@ -58,7 +59,7 @@ class sys_versions {
      * Returns a human readable copy of the Kernal version number running on the server.
      * @author Bobby Allen (ballen@bobbyallen.me)
      * @param string $platform The OS Platform (eg. Linux or Windows)
-     * @return string *NIX kernal version. - Will return 'N/A' for Microsoft Windows.
+     * @return string|false *NIX kernal version (false if uname could not run). - Will return 'N/A' for any platform but Linux.
      */
     static function ShowOSKernalVersion($platform) {
         if ($platform == 'Linux') {
@@ -141,13 +142,16 @@ class sys_versions {
     /**
      * Returns the Sentora version (based on the DB version number.)
      * @author Bobby Allen (ballen@bobbyallen.me)
-     * @return string Sentora DB Version
+     * @return string|false Sentora DB Version, or false when the setting is missing.
      */
     static function ShowSentoraVersion() {
         return ctrl_options::GetSystemOption('dbversion');
     }
 
-    /** the release's full name, as shown to people: Sentora-2027 */
+    /**
+     * Returns the release's full name, as shown to people: Sentora-2027.
+     * @return string 'Sentora-<version>', or 'Sentora' when the version is unknown.
+     */
     static function ShowSentoraName() {
         $v = (string) self::ShowSentoraVersion();
         return ($v === '') ? 'Sentora' : 'Sentora-' . $v;
