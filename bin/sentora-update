@@ -270,10 +270,37 @@ retire_theme() {
         fi
     fi
 }
-# Sentora_Default was replaced by Modern (Light, Dark, Auto)
+# Sentora_Default was replaced by Modern (Light, Dark, Auto); Kerf, renamed Legacy, was
+# then removed too: accounts on any of them move to Modern, Light
 retire_theme Sentora_Default Modern light
-# Kerf was renamed Legacy (same look, one variation)
-retire_theme Kerf Legacy ""
+retire_theme Kerf Modern light
+retire_theme Legacy Modern light
+
+# Modules taken out of the core: unregistered (the module and its group permissions; a
+# user's own dashboard order simply skips it), then their folders removed. rsync copies the
+# new core over the old one but never deletes, so without this they would stay installed.
+#   retire_module <module folder> [<bundled app folder under etc/apps>]
+retire_module() {
+    local mod="$1" app="$2"
+    if [ -d "$PANEL/modules/$mod" ] && [ ! -d "$SRC/modules/$mod" ]; then
+        say "Removing the $mod module (no longer part of the core)"
+        if ( cd "$PANEL" && php -r '
+            chdir($argv[1]); require "dryden/loader.inc.php"; require "cnf/db.php"; require "inc/dbc.inc.php";
+            $q = $zdbh->prepare("SELECT mo_id_pk FROM x_modules WHERE mo_folder_vc = :m");
+            $q->execute(array(":m" => $argv[2]));
+            foreach ($q->fetchAll(PDO::FETCH_COLUMN) as $id) {
+                $zdbh->prepare("DELETE FROM x_permissions WHERE pe_module_fk = :id")->execute(array(":id" => $id));
+                $zdbh->prepare("DELETE FROM x_modules WHERE mo_id_pk = :id")->execute(array(":id" => $id));
+            }
+        ' "$PANEL" "$mod" ); then
+            rm -rf -- "${PANEL:?}/modules/$mod"
+            [ -n "$app" ] && [ ! -d "$SRC/etc/apps/$app" ] && rm -rf -- "${PANEL:?}/etc/apps/$app"
+        else
+            warn "could not unregister the $mod module (left in place)"
+        fi
+    fi
+}
+retire_module phpsysinfo phpsysinfo
 # Theme and module files are revalidated by the browser after each update (the panel's
 # vhost sends Cache-Control: no-cache for them; that needs mod_headers): rewrite the vhost
 if [ ! -e /etc/apache2/mods-enabled/headers.load ]; then

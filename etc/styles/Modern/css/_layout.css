@@ -799,7 +799,6 @@ li.highlight {
 
 .icon-moduleadmin:before
 .icon-phpinfo:before
-.icon-phpsysinfo:before
 .icon-shadowing:before
 .icon-updates:before
 .icon-sentoraconfig:before
@@ -876,7 +875,6 @@ li.highlight {
 .icon-cog-alt:before { content: '\26ef'; }
 
 .icon-phpinfo:before,
-.icon-phpsysinfo:before,
 .icon-client-notices:before,
 .icon-attention:before { content: '\26a0'; }
 

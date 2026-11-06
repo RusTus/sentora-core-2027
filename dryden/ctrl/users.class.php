@@ -26,7 +26,7 @@ class ctrl_users {
     {
         $theme = (string) $theme;
         // Renamed and retired themes, until sentora-update has moved the accounts
-        $renamed = array('Kerf' => 'Legacy', 'Sentora_Default' => 'Modern');
+        $renamed = array('Kerf' => 'Modern', 'Legacy' => 'Modern', 'Sentora_Default' => 'Modern');
         if (isset($renamed[$theme])) {
             $theme = $renamed[$theme];
         }

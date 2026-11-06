@@ -130,7 +130,7 @@ class repo_browser_helper
             'distlists', 'dns_admin', 'dns_manager', 'domains', 'faqs', 'forwarders', 'ftp_admin',
             'ftp_management', 'mail_admin', 'mailboxes', 'manage_clients', 'manage_groups', 'moduleadmin',
             'my_account', 'mysql_databases', 'mysql_users', 'packages', 'parked_domains', 'password_assistant',
-            'php_versions', 'phpinfo', 'phpmyadmin', 'phpsysinfo', 'protected_directories', 'repo_browser',
+            'php_versions', 'phpinfo', 'phpmyadmin', 'protected_directories', 'repo_browser',
             'sencrypt', 'sentoraconfig', 'services', 'shadowing', 'sub_domains', 'theme_manager',
             'usage_viewer', 'user_logviewer', 'webmail', 'zpx_core_module',
             // ZPanel names of the same modules
