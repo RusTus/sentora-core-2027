@@ -68,9 +68,7 @@ class module_controller extends ctrl_module
     /** @var bool|null True when the panel password given for Show password was wrong. */
     static $wrongpw = null;
 
-    /**
-     * The 'worker' methods.
-     */
+    // The 'worker' methods.
 	// tg - Set user name input max characters minus prefix
     /**
      * Template value <@ MaxCharAllowed @>: how many characters the user name may have.
@@ -820,9 +818,7 @@ class module_controller extends ctrl_module
     }
 	
 
-    /**
-     * End 'worker' methods.
-     */
+    // End 'worker' methods.
 
     /**
      * Handle the create user form (start of the web interface methods).
@@ -1248,7 +1244,5 @@ class module_controller extends ctrl_module
         return;
     }
 
-    /**
-     * Webinterface sudo methods.
-     */
+    // Webinterface sudo methods.
 }

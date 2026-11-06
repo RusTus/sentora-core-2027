@@ -52,9 +52,7 @@ class module_controller extends ctrl_module
     /** @var bool|null True while/after a mailbox is created. */
     static $create;
 
-    /**
-     * The 'worker' methods.
-     */
+    // The 'worker' methods.
     /**
      * List the account's mailboxes.
      *
@@ -454,13 +452,9 @@ class module_controller extends ctrl_module
 		return $retval;
     }
 	
-    /**
-     * End 'worker' methods.
-     */
+    // End 'worker' methods.
 
-    /**
-     * Webinterface sudo methods.
-     */
+    // Webinterface sudo methods.
     /**
      * Handle the new mailbox form POST for the logged-in account.
      *
@@ -793,7 +787,5 @@ class module_controller extends ctrl_module
         return;
     }
 
-    /**
-     * Webinterface sudo methods.
-     */
+    // Webinterface sudo methods.
 }

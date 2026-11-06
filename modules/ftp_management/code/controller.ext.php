@@ -517,9 +517,7 @@ class module_controller extends ctrl_module
         return $retval;
     }
 
-    /**
-     * End 'worker' methods.
-     */
+    // End 'worker' methods.
 
     // Webinterface sudo methods.
 
@@ -893,7 +891,5 @@ class module_controller extends ctrl_module
         return;
     }
 
-    /**
-     * Webinterface sudo methods.
-     */
+    // Webinterface sudo methods.
 }

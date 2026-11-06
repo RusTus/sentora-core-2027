@@ -47,9 +47,7 @@ class module_controller extends ctrl_module
     /** @var bool|null True when a package's clients were to be moved to the package being deleted (shown by getResult()). */
     static $samepackage;
 
-    /**
-     * The 'worker' methods.
-     */
+    // The 'worker' methods.
 	// get package quotas - tgates
 	/**
 	 * Formats a package's quotas as readable HTML lines ("Domains = 5<br>...").
@@ -538,13 +536,9 @@ class module_controller extends ctrl_module
         }
     }
 
-    /**
-     * End 'worker' methods.
-     */
+    // End 'worker' methods.
 
-    /**
-     * Webinterface sudo methods.
-     */
+    // Webinterface sudo methods.
 
     /**
      * Creates a package from the form (POST action=CreatePackage).
@@ -985,7 +979,5 @@ class module_controller extends ctrl_module
         return;
     }
 
-    /**
-     * Webinterface sudo methods.
-     */
+    // Webinterface sudo methods.
 }

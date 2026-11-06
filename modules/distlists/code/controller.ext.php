@@ -536,12 +536,8 @@ class module_controller extends ctrl_module
         return false;
     }
 
-    /**
-     * End 'worker' methods.
-     */
-    /**
-     * Webinterface sudo methods.
-     */
+    // End 'worker' methods.
+    // Webinterface sudo methods.
 
     /**
      * Handle the list page's Edit/Delete buttons (start of the web interface methods).

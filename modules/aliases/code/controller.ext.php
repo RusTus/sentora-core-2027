@@ -50,9 +50,7 @@ class module_controller extends ctrl_module
     /** @var bool|null Set while an alias is created (read by the mail server include). */
     static $create;
 
-    /**
-     * The 'worker' methods.
-     */
+    // The 'worker' methods.
     /**
      * List the aliases of an account.
      *
@@ -386,13 +384,9 @@ class module_controller extends ctrl_module
         return false;
     }
 
-    /**
-     * End 'worker' methods.
-     */
+    // End 'worker' methods.
 
-    /**
-     * Webinterface sudo methods.
-     */
+    // Webinterface sudo methods.
     /**
      * Handle the create alias form (POST).
      *
@@ -658,7 +652,5 @@ class module_controller extends ctrl_module
         return;
     }
 
-    /**
-     * Webinterface sudo methods.
-     */
+    // Webinterface sudo methods.
 }

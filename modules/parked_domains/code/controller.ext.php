@@ -46,9 +46,7 @@ class module_controller extends ctrl_module
     /** @var bool|null True after a parked domain change was saved (shown by getResult()). */
     static $ok;
 
-    /**
-     * The 'worker' methods.
-     */
+    // The 'worker' methods.
     /**
      * List the account's parked domains.
      *
@@ -328,13 +326,9 @@ class module_controller extends ctrl_module
         $sql->execute();
     }
 
-    /**
-     * End 'worker' methods.
-     */
+    // End 'worker' methods.
 
-    /**
-     * Webinterface sudo methods.
-     */
+    // Webinterface sudo methods.
     /**
      * Template loop: the logged-in account's parked domains.
      *
@@ -571,7 +565,5 @@ class module_controller extends ctrl_module
         return;
     }
 
-    /**
-     * Webinterface sudo methods.
-     */
+    // Webinterface sudo methods.
 }

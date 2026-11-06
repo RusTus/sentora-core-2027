@@ -41,9 +41,7 @@ class module_controller extends ctrl_module
     /** @var bool|null True after a database was created or deleted (shown by getResult()). */
     static $ok;
 
-    /**
-     * The 'worker' methods.
-     */
+    // The 'worker' methods.
 	// tg - Set user name input max characters minus prefix
     /**
      * Returns how many characters the database name may have (<@ MaxCharAllowed @>).
@@ -284,13 +282,9 @@ class module_controller extends ctrl_module
         return true;
     }
 
-    /**
-     * End 'worker' methods.
-     */
+    // End 'worker' methods.
 
-    /**
-     * Webinterface sudo methods.
-     */
+    // Webinterface sudo methods.
 
     /**
      * Creates a database from the form (POST action=CreateDatabase, field inDatabase).
@@ -508,7 +502,5 @@ class module_controller extends ctrl_module
         return;
     }
 
-    /**
-     * Webinterface sudo methods.
-     */
+    // Webinterface sudo methods.
 }

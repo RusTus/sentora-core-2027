@@ -50,9 +50,7 @@ class module_controller extends ctrl_module
     /** @var bool|null True when the last change was saved (shown by getResult()). */
     static $ok;
 
-    /**
-     * The 'worker' methods.
-     */
+    // The 'worker' methods.
 
     /**
      * List an account's live subdomains, by name.
@@ -376,13 +374,9 @@ class module_controller extends ctrl_module
         $sql->execute();
     }
 
-    /**
-     * End 'worker' methods.
-     */
+    // End 'worker' methods.
 
-    /**
-     * Webinterface sudo methods.
-     */
+    // Webinterface sudo methods.
 
     /**
      * List the current user's subdomains for the page (<% loop SubDomainList %>).
@@ -706,7 +700,5 @@ class module_controller extends ctrl_module
         return;
     }
 
-    /**
-     * Webinterface sudo methods.
-     */
+    // Webinterface sudo methods.
 }

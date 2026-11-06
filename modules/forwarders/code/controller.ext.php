@@ -311,9 +311,7 @@ class module_controller extends ctrl_module
         return false;
     }
 
-    /**
-     * End 'worker' methods.
-     */
+    // End 'worker' methods.
 
     /**
      * Handle the create form (start of the web interface methods).
@@ -555,7 +553,5 @@ class module_controller extends ctrl_module
         return;
     }
 
-    /**
-     * Webinterface sudo methods.
-     */
+    // Webinterface sudo methods.
 }

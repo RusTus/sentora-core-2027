@@ -52,9 +52,7 @@ class module_controller extends ctrl_module
     /** @var bool|null True when the last change was saved (shown by getResult()). */
     static $ok;
 
-    /**
-     * The 'worker' methods.
-     */
+    // The 'worker' methods.
     /**
      * List domains (type 1) of one account, or of every account.
      *
@@ -409,13 +407,9 @@ class module_controller extends ctrl_module
         return preg_match("^([1-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])(\.([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])){3}^", $ip) == 1;
     }
 
-    /**
-     * End 'worker' methods.
-     */
+    // End 'worker' methods.
 
-    /**
-     * Webinterface sudo methods.
-     */
+    // Webinterface sudo methods.
     /**
      * List the logged-in account's domains (template: <% loop DomainList %>).
      *
@@ -728,9 +722,7 @@ class module_controller extends ctrl_module
         return;
     }
 
-    /**
-     * Webinterface sudo methods.
-     */
+    // Webinterface sudo methods.
 	 
 
 	 

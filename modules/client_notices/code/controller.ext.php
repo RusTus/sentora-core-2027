@@ -103,9 +103,7 @@ class module_controller extends ctrl_module
         }
     }
 
-    /**
-     * End 'worker' methods.
-     */
+    // End 'worker' methods.
 
     /**
      * Return the notice of the current user's reseller (<@ CurrentNoticeText @>).
@@ -137,7 +135,5 @@ class module_controller extends ctrl_module
         exit;
     }
 
-    /**
-     * Webinterface sudo methods.
-     */
+    // Webinterface sudo methods.
 }

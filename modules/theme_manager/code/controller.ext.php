@@ -142,9 +142,7 @@ class module_controller extends ctrl_module
         return ui_template::ListAvaliableCSS(self::ExecuteShowCurrentTheme($currentuser['userid']));
     }
 
-    /**
-     * End 'worker' methods.
-     */
+    // End 'worker' methods.
 
     /**
      * The logged-in user's theme (start of the web interface methods).
@@ -294,7 +292,5 @@ class module_controller extends ctrl_module
         return false;
     }
 
-    /**
-     * Webinterface sudo methods.
-     */
+    // Webinterface sudo methods.
 }

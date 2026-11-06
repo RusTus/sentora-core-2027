@@ -26,9 +26,7 @@ class module_controller extends ctrl_module
 	static $pbuffer;
 	/** @var int How many lines of a log the preview shows. */
 	static $preview_lines = 50;
-	/**
-	* The 'worker' methods.
-	*/
+	// The 'worker' methods.
 	/**
 	 * Send a file as a download and exit.
 	 *
@@ -88,12 +86,8 @@ class module_controller extends ctrl_module
 			return false;
 		}
 	}
-	/**
-	* End 'worker' methods.
-	*/
-	/**
-	* Webinterface sudo methods.
-	*/
+	// End 'worker' methods.
+	// Webinterface sudo methods.
 
 	//-- Some Tail-like function from lorenzos
 	/**
@@ -298,7 +292,5 @@ class module_controller extends ctrl_module
 		}
 		return;
 	}
-	/**
-	* Webinterface sudo methods.
-	*/
+	// Webinterface sudo methods.
 }
