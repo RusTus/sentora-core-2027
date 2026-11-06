@@ -17,7 +17,7 @@ require_once dirname(__FILE__) . '/repohelper.php';
  * (install, remove, upgrade, repo add/remove) for the daemon, which runs them as root.
  */
  
-class module_controller {
+class module_controller extends ctrl_module {
 
     /**
      * The warning icon in the page (ui_status, no image file) (template <@ WarnIcon @>).
@@ -63,9 +63,9 @@ class module_controller {
     static function ListRepositories() {
 		$h = function ($s) { return repo_browser_helper::h($s); };
 		$label = function ($class, $text, $title) use ($h) {
-			return '<a href="javascript:void(0)" title="' . $h($title) . '"><span class="label ' . $class . '">' . $h($text) . '</span></a>';
+			return '<span class="label ' . $class . '" title="' . $h($title) . '">' . $h($text) . '</span>';
 		};
-		$queuedButton = '<button class="btn btn-default disabled" type="button" disabled="disabled" title="'
+		$queuedButton = '<button class="btn btn-default btn-sm" type="button" disabled="disabled" title="'
 			. $h(ui_language::translate("Waiting for the daemon (this can take up to 5 minutes).")) . '">' . ui_language::translate("Queued") . '</button>';
 		$jobs = repo_browser_helper::RepoJobs();
 		$res = array();
@@ -79,9 +79,9 @@ class module_controller {
 				$status = $label('label-warning', 'QUEUED', ui_language::translate('Removal queued (this can take up to 5 minutes).'));
 				$buttons = $queuedButton;
 			} else {
-				$status = '<div class="controls" item_id="R:::' . $h($repo) . '"><img src="modules/repo_browser/assets/ajax-loader.gif" alt="loading..." /></div>';
-				$buttons = '<button class="button-loader btn btn-primary retry-repo" type="submit" name="inRetryRepo" value="' . $h($repo) . '" style="display:none">' . ui_language::translate('Retry') . '</button> '
-					. '<button class="button-loader delete btn btn-danger" type="submit" name="inDeleteRepo" value="' . $h($repo) . '">' . ui_language::translate('Remove') . '</button>';
+				$status = '<div class="controls" item_id="R:::' . $h($repo) . '"><span class="rb-wait" aria-label="loading"></span></div>';
+				$buttons = '<button class="btn btn-default btn-sm retry-repo" type="submit" name="inRetryRepo" value="' . $h($repo) . '" style="display:none">' . ui_language::translate('Retry') . '</button> '
+					. '<button class="btn btn-default btn-sm rb-del" type="submit" name="inDeleteRepo" value="' . $h($repo) . '">' . ui_language::translate('Remove') . '</button>';
 			}
 			$res[$repo] = array('line' => $h($repo), 'statushtml' => $status, 'buttonshtml' => $buttons);
 		}
@@ -94,8 +94,8 @@ class module_controller {
 				$buttons = $queuedButton;
 			} else {
 				$status = $label('label-danger', 'FAILED', ui_language::translate('The daemon could not add this repository; see Recent ZPPY commands.'));
-				$buttons = '<button class="button-loader btn btn-primary" type="submit" name="inRetryRepo" value="' . $h($repo) . '">' . ui_language::translate('Retry') . '</button> '
-					. '<button class="button-loader delete btn btn-danger" type="submit" name="inDismissRepo" value="' . $h($repo) . '">' . ui_language::translate('Remove') . '</button>';
+				$buttons = '<button class="btn btn-default btn-sm" type="submit" name="inRetryRepo" value="' . $h($repo) . '">' . ui_language::translate('Retry') . '</button> '
+					. '<button class="btn btn-default btn-sm rb-del" type="submit" name="inDismissRepo" value="' . $h($repo) . '">' . ui_language::translate('Remove') . '</button>';
 			}
 			$res[$repo] = array('line' => $h($repo), 'statushtml' => $status, 'buttonshtml' => $buttons);
 		}
@@ -138,8 +138,8 @@ class module_controller {
 								$authoremail = $info['authoremail'];
 								$authorname = $info['authorname'];
 								$buttonaction = "Remove";
-								$buttoncss = "button-loader delete btn btn-danger fg-button ui-state-default ui-corner-all";
-								$installedhtml = "<a href=\"./?module=" . $content[0] . "\" title=\"Launch module\">" . $content[0] . "</a>";						
+								$buttoncss = "btn btn-default btn-sm rb-del";
+								$installedhtml = "<a href=\"./?module=" . $content[0] . "\" title=\"Open the module\">" . $content[0] . "</a>";						
 							} else {
 								$installed = "notinstalled";
 								$title = "To install this module, click: INSTALL";
@@ -149,7 +149,7 @@ class module_controller {
 								$authoremail = "not available";
 								$authorname = "not available";
 								$buttonaction = "Install";
-								$buttoncss = "button-loader btn btn-primary fg-button ui-state-default ui-corner-all";
+								$buttoncss = "btn btn-primary btn-sm";
 								$installedhtml = $content[0];
 							} 
 							// A job for this module is waiting for the daemon: no second one
@@ -157,7 +157,7 @@ class module_controller {
 							$pending = repo_browser_helper::Pending($content[0]);
 							if ($pending !== false) {
 								$buttonaction = "Queued";
-								$buttoncss = "btn btn-default disabled";
+								$buttoncss = "btn btn-default btn-sm";
 								$buttonattr = 'disabled="disabled"';
 								$title = ($pending === 'remove' ? 'Removal' : ($pending === 'upgrade' ? 'Upgrade' : 'Installation')) . " queued: the daemon runs it within 5 minutes.";
 							}
@@ -921,57 +921,10 @@ class module_controller {
 		return ctrl_auth::CurrentUserID();
     }
 
-	/**
-	 * The module's description (template <@ ModuleDesc @>).
-	 *
-	 * @return string|null
-	 */
-	static function getModuleDesc() {
-			return ui_module::GetModuleDescription();
-    }
 
-    /**
-     * The module's folder, "modules/<module>/" (template <@ ModulePath @>).
-     *
-     * @global runtime_controller $controller The request controller.
-     * @return string
-     */
-    static function getModulePath() {
-        global $controller;
-        $module_path = "modules/" . $controller->GetControllerRequest('URL', 'module') . "/";
-        return $module_path;
-    }
 
-	/**
-	 * The module's name (template <@ ModuleName @>).
-	 *
-	 * @return string|null
-	 */
-	static function getModuleName() {
-		$module_name = ui_module::GetModuleName();
-        return $module_name;
-    }
 
-	/**
-	 * The path of the module's icon (template <@ ModuleIcon @>).
-	 *
-	 * @global runtime_controller $controller The request controller.
-	 * @return string
-	 */
-	static function getModuleIcon() {
-		global $controller;
-		$module_icon = "/modules/" . $controller->GetControllerRequest('URL', 'module') . "/assets/icon.png";
-        return $module_icon;
-    }
 
-    /**
-     * The CSRF token field for the module's forms (template <@ CSFR_Tag @>).
-     *
-     * @return string The hidden input HTML.
-     */
-    static function getCSFR_Tag() {
-        return runtime_csfr::Token();
-    }
 
 	/**
 	 * Whether a URL answers 200 (see repo_browser_helper::UrlExists()).
@@ -1043,10 +996,13 @@ class module_controller {
 		$rows = '';
 		foreach (repo_browser_helper::Recent(10) as $r) {
 			$args = json_decode((string) $r['zq_args_tx'], true);
-			$rows .= '<tr><td>' . date('Y-m-d H:i', (int) $r['zq_created_in']) . '</td><td><code>zppy ' . repo_browser_helper::h(implode(' ', (array) $args)) . '</code></td><td>'
-				. repo_browser_helper::h($r['zq_status_vc']) . '</td><td><pre style="white-space: pre-wrap; margin: 0">' . repo_browser_helper::h((string) $r['zq_output_tx']) . '</pre></td></tr>';
+			$st = (string) $r['zq_status_vc'];
+			$cls = $st === 'done' || $st === 'ok' ? 'label-success' : ($st === 'failed' || $st === 'error' ? 'label-danger' : 'label-warning');
+			$output = trim((string) $r['zq_output_tx']);
+			$rows .= '<tr><td class="rb-when">' . date('Y-m-d H:i', (int) $r['zq_created_in']) . '</td><td><code>zppy ' . repo_browser_helper::h(implode(' ', (array) $args)) . '</code></td><td><span class="label ' . $cls . '">'
+				. repo_browser_helper::h($st) . '</span></td><td>' . ($output !== '' ? '<details><summary>' . ui_language::translate('Output') . '</summary><pre class="rb-out">' . repo_browser_helper::h($output) . '</pre></details>' : '<span class="rb-sub">–</span>') . '</td></tr>';
 		}
-		return $rows === '' ? '<tr><td colspan="4">' . ui_language::translate('No commands yet.') . '</td></tr>' : $rows;
+		return $rows === '' ? '<tr><td colspan="4" class="rb-empty">' . ui_language::translate('No commands yet.') . '</td></tr>' : $rows;
 	}
 
 
@@ -1103,7 +1059,7 @@ class module_controller {
 			$out = self::$zppyout1 . "<br>" . self::$zppyout2;
 		}
         if (!fs_director::CheckForEmptyValue($out)) {
-            return "<div class=\"zdebug alert alert-block alert-danger\"><button class=\"close\" data-dismiss=\"alert\" type=\"button\">&times</button><strong>" . ui_language::translate("ZPPY COMMAND OUTPUT") . ":</strong><br><br>" . $out . "</div>";
+            return "<div class=\"rb-debug\"><strong>" . ui_language::translate("ZPPY command output") . "</strong><div>" . $out . "</div></div>";
         }
         return;
     }

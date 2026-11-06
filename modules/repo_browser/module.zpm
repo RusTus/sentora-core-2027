@@ -1,379 +1,223 @@
 <div class="zmodule_content panel" id="zmodule_header_<@ ModuleName @>">
     <div class="panel-heading">
         <img src="<@ ModuleIcon @>" width="35" height="35" border="0" alt="<@ ModuleName @>">
-
-        <div class="zmodule_title">
-            <@ ModuleName @>
-        </div>
-
+        <div class="zmodule_title"><@ ModuleName @></div>
         <div class="zmodule_desc" id="zmodule_desc_<@ ModuleName @>"><@ ModuleDesc @></div>
-
     </div>
-	<@ result @>
-	<@ ZppyOut @>
-	
+    <@ result @>
+    <link rel="stylesheet" href="modules/repo_browser/assets/repo.css">
 
-	
+    <div class="rb" id="rb" data-queued="<: Queued :>" data-installed="<: Installed :>" data-not="<: Not installed :>" data-remove="<: Remove it? :>">
+    <@ ZppyOut @>
+
     <% if isConfirmDeleteRepo %>
-    <div class="zform_wrapper panel">
-        <div class="panel-heading"><h2><: Remove Repository :>: <@ CurrentRepo @> ?</h2></div>
-        <p><: Please confirm that you want to remove this repository from this server. :></p>
-		<p><strong>NOTE:</strong> Removing the repository will not uninstall any modules, but you will no longer be able to view then in Repo Browser.  Use Module Admin instead.</p>
-        <form action="./?module=repo_browser&action=ConfirmDeleteRepo" method="post">
-            <table class="none" cellpadding="0" cellspacing="0">
-                <tr>
-                    <td colspan="2" align="right">
-                        <input type="hidden" name="inDelete" value="<@ CurrentRepo @>">
-                        <button class="button-loader delete btn btn-danger fg-button ui-state-default ui-corner-all" type="submit" ><: Remove :></button>
-                        <button class="button-loader btn btn-primary fg-button ui-state-default ui-corner-all" type="button" onclick="window.location.href='./?module=repo_browser';return false;"><: Cancel :></button>&nbsp;
-						<input type="checkbox" name="inDebugZPPY" value="1"> <: Debug ZPPY Client output :>?
-                    </td>
-                </tr>
-            </table>
-            <@ CSFR_Tag @>
-        </form>
-    </div>
+    <form class="rb-confirm danger" action="./?module=repo_browser&amp;action=ConfirmDeleteRepo" method="post">
+        <h4><: Remove the repository :> <code><@ CurrentRepo @></code>?</h4>
+        <p><: Modules already installed from it stay installed, but they are no longer listed here: manage them in Module Admin. :></p>
+        <label class="rb-check"><input type="checkbox" name="inDebugZPPY" value="1"> <: Show the ZPPY client's output :></label>
+        <div class="rb-confirm-foot"><input type="hidden" name="inDelete" value="<@ CurrentRepo @>">
+            <button class="btn btn-danger" type="submit"><: Remove :></button> <a class="btn btn-default" href="./?module=repo_browser"><: Cancel :></a></div>
+        <@ CSFR_Tag @>
+    </form>
     <% endif %>
-	
+
     <% if isConfirmAddRepo %>
-    <div class="zform_wrapper alert alert-block alert-info">
-        <@ WarnIcon @>
-		<h2><: Validation failed for repository :>: <@ CurrentRepo @></h2>
-        <p><: The repository you are trying to add does not appear to be a valid module repository, or the repository may be offline. You can choose to ignore this and add the repository anyway.  :></p>
-        <form action="./?module=repo_browser&action=ConfirmAddRepo" method="post">
-            <table class="none" cellpadding="0" cellspacing="0">
-                <tr>
-                    <td colspan="2" align="right">
-                        <input type="hidden" name="inConfirmAddRepo" value="<@ CurrentRepo @>">
-                        <button class="button-loader btn btn-primary fg-button ui-state-default ui-corner-all" type="submit" ><: Add Anyway :></button>
-                        <button class="button-loader btn btn-primary fg-button ui-state-default ui-corner-all" type="button" onclick="window.location.href='./?module=repo_browser';return false;"><: Cancel :></button>&nbsp;
-						<input type="checkbox" name="inDebugZPPY" value="1"> <: Debug ZPPY Client output :>?
-                    </td>
-                </tr>
-            </table>
-            <@ CSFR_Tag @>
-        </form>
-    </div>
+    <form class="rb-confirm warn" action="./?module=repo_browser&amp;action=ConfirmAddRepo" method="post">
+        <h4><: The repository could not be checked: :> <code><@ CurrentRepo @></code></h4>
+        <p><: It does not look like a module repository, or it is offline right now. You can add it anyway and try again later. :></p>
+        <label class="rb-check"><input type="checkbox" name="inDebugZPPY" value="1"> <: Show the ZPPY client's output :></label>
+        <div class="rb-confirm-foot"><input type="hidden" name="inConfirmAddRepo" value="<@ CurrentRepo @>">
+            <button class="btn btn-primary" type="submit"><: Add it anyway :></button> <a class="btn btn-default" href="./?module=repo_browser"><: Cancel :></a></div>
+        <@ CSFR_Tag @>
+    </form>
     <% endif %>
-	
+
     <% if isConfirmDeleteModule %>
-    <div class="zform_wrapper panel">
-        <div class="panel-heading"><h2><: Remove Module :>: <@ CurrentModuleName @> ?</h2></div>
-        <p><: Please confirm that you want to remove this module from this server. :></p>
-        <form action="./?module=repo_browser&action=ConfirmDeleteModule" method="post">
-            <table class="none" cellpadding="0" cellspacing="0">
-                <tr>
-                    <td colspan="2" align="right">
-                        <input type="hidden" name="inDelete" value="<@ CurrentModuleFull @>">
-                        <button class="button-loader delete btn btn-danger fg-button ui-state-default ui-corner-all" type="submit" ><: Remove :></button>
-                        <button class="button-loader btn btn-primary fg-button ui-state-default ui-corner-all" type="button" onclick="window.location.href='./?module=repo_browser';return false;"><: Cancel :></button>&nbsp;
-						<input type="checkbox" name="inDebugZPPY" value="1"> <: Debug ZPPY Client output :>?
-                    </td>
-                </tr>
-            </table>
+    <form class="rb-confirm danger" action="./?module=repo_browser&amp;action=ConfirmDeleteModule" method="post">
+        <h4><: Remove the module :> <code><@ CurrentModuleName @></code>?</h4>
+        <p><: The module is removed from this server, with its files. :></p>
+        <label class="rb-check"><input type="checkbox" name="inDebugZPPY" value="1"> <: Show the ZPPY client's output :></label>
+        <div class="rb-confirm-foot"><input type="hidden" name="inDelete" value="<@ CurrentModuleFull @>">
+            <button class="btn btn-danger" type="submit"><: Remove :></button> <a class="btn btn-default" href="./?module=repo_browser"><: Cancel :></a></div>
+        <@ CSFR_Tag @>
+    </form>
+    <% endif %>
+
+    <% if isConfirmInstallModule %>
+    <form class="rb-confirm" action="./?module=repo_browser&amp;action=ConfirmInstallModule" method="post">
+        <h4><: Install the module :> <code><@ CurrentModuleName @></code>?</h4>
+        <p><: The daemon downloads and installs it within 5 minutes; when the repository has a SHA256SUMS file the download is checked against it first. :></p>
+        <label class="rb-check"><input type="checkbox" name="inDebugZPPY" value="1"> <: Show the ZPPY client's output :></label>
+        <div class="rb-confirm-foot"><input type="hidden" name="inInstall" value="<@ CurrentModuleFull @>">
+            <button class="btn btn-primary" type="submit"><: Install :></button> <a class="btn btn-default" href="./?module=repo_browser"><: Cancel :></a></div>
+        <@ CSFR_Tag @>
+    </form>
+    <% endif %>
+
+    <% if isConfirmUpdateVersionDB %>
+    <form class="rb-confirm" action="./?module=repo_browser&amp;action=ConfirmUpdateVersionDB" method="post">
+        <h4><: Correct the version number of :> <code><@ CurrentModuleName @></code>?</h4>
+        <p><: The panel's database says version :> <b><@ CurrentModuleInstalledVersion @></b>; <: the module's own file says :> <b><@ CurrentModuleVersion @></b>. <: The database is set to the module's number. :></p>
+        <div class="rb-confirm-foot"><input type="hidden" name="inUpdate" value="<@ CurrentModuleName @>"><input type="hidden" name="inVersion" value="<@ CurrentModuleVersion @>">
+            <button class="btn btn-primary" type="submit"><: Correct it :></button> <a class="btn btn-default" href="./?module=repo_browser"><: Cancel :></a></div>
+        <@ CSFR_Tag @>
+    </form>
+    <% endif %>
+
+    <% if isConfirmUpdateModule %>
+    <form class="rb-confirm" action="./?module=repo_browser&amp;action=ConfirmUpdateModule" method="post">
+        <h4><: Update the module :> <code><@ CurrentModuleName @></code>?</h4>
+        <p><: The daemon installs the repository's newer version within 5 minutes. :></p>
+        <label class="rb-check"><input type="checkbox" name="inDebugZPPY" value="1"> <: Show the ZPPY client's output :></label>
+        <div class="rb-confirm-foot"><input type="hidden" name="inUpdate" value="<@ CurrentModuleFull @>">
+            <button class="btn btn-primary" type="submit"><: Update :></button> <a class="btn btn-default" href="./?module=repo_browser"><: Cancel :></a></div>
+        <@ CSFR_Tag @>
+    </form>
+    <% endif %>
+
+    <% if isMain %>
+    <!-- Modules -->
+    <div class="rb-card">
+        <div class="rb-head"><div><h4><: Available modules :></h4>
+            <p class="rb-sub"><% if TotalPackages %><b><@ totalpackages @></b> <: modules in your repositories. :><% endif %> <: Changes are made by the daemon within 5 minutes. :></p></div>
+            <input type="search" class="form-control rb-find" placeholder="<: Find a module :>" aria-label="<: Find a module :>"></div>
+        <% if ModuleList %>
+        <form action="./?module=repo_browser&amp;action=DeleteModule" method="post">
+            <div class="rb-mods">
+            <% loop ModuleList %>
+            <div class="rb-mod is-<& installed &>" data-s="<& modulename &> <& reponame &>">
+                <div class="rb-mod-head">
+                    <div class="rb-mod-name"><b><& installedhtml &></b><span class="rb-state"></span></div>
+                    <button class="<& buttoncss &>" type="submit" <& buttonattr &> title="<& title &>" name="in<& buttonaction &>Module" value="<& reponame &>:::<& modulename &>"><& buttonaction &></button>
+                </div>
+                <div class="modinfo" item_id="<& reponame &>:::<& modulename &>"><span class="rb-wait wide"></span><span class="rb-wait"></span></div>
+                <div class="update" item_id="<& reponame &>:::<& modulename &>"></div>
+                <div class="rb-mod-foot">
+                    <span class="controls" item_id="M:::<& url &>"><span class="rb-wait short"></span></span>
+                    <span class="repostats" item_id="<& reponame &>:::<& modulename &>"></span>
+                    <span class="rb-repo" title="<: Repository :>"><& reponame &></span>
+                    <a class="rb-dl" href="<& url &>" title="<: Download the package :>">.zpp &darr;</a>
+                </div>
+            </div>
+            <% endloop %>
+            </div>
+            <@ CSFR_Tag @>
+        </form>
+        <% else %>
+        <p class="rb-empty"><: No modules to show yet: add a repository below, then wait a few minutes for its list. :></p>
+        <% endif %>
+    </div>
+
+    <!-- Repositories -->
+    <div class="rb-card">
+        <div class="rb-head"><div><h4><: Repositories :></h4>
+            <p class="rb-sub"><: Where modules come from. A repository is written as https://host/path, or host[:port][/path] for plain http on your own network. :></p></div></div>
+        <% if RepoList %>
+        <form action="./?module=repo_browser&amp;action=DeleteRepo" method="post">
+            <div class="rb-repos">
+            <% loop RepoList %>
+            <div class="rb-repo-row"><span class="rb-repo-state"><& statushtml &></span><code><& line &></code><span class="rb-repo-act"><& buttonshtml &></span></div>
+            <% endloop %>
+            </div>
+            <@ CSFR_Tag @>
+        </form>
+        <% else %>
+        <p class="rb-empty"><: You have no repositories yet. :></p>
+        <% endif %>
+        <form class="rb-add" action="./?module=repo_browser&amp;action=AddRepo" method="post">
+            <input class="form-control" name="inAddRepo" type="text" id="inAddRepo" placeholder="https://raw.githubusercontent.com/RusTus/sentora-installers-2027/master2027/sentora-repo" autocomplete="off">
+            <button class="btn btn-primary" type="submit" name="inSubmit" value=""><: Add repository :></button>
             <@ CSFR_Tag @>
         </form>
     </div>
-    <% endif %>
 
-	<% if isConfirmInstallModule %>
-    <div class="zform_wrapper panel">
-        <div class="panel-heading"><h2><: Install Module :>: <@ CurrentModuleName @> ?</h2></div>
-        <p><: Please confirm that you want to install this module on this server. :></p>
-        <form action="./?module=repo_browser&action=ConfirmInstallModule" method="post">
-            <table class="none" cellpadding="0" cellspacing="0">
-                <tr>
-                    <td colspan="2" align="right">
-                        <input type="hidden" name="inInstall" value="<@ CurrentModuleFull @>">
-                        <button class="button-loader btn btn-primary fg-button ui-state-default ui-corner-all" type="submit" ><: Install :></button>
-                        <button class="button-loader btn btn-primary fg-button ui-state-default ui-corner-all" type="button" onclick="window.location.href='./?module=repo_browser';return false;"><: Cancel :></button>&nbsp;
-						<input type="checkbox" name="inDebugZPPY" value="1"> <: Debug ZPPY Client output :>?
-                    </td>
-                </tr>
-            </table>
+    <!-- Recent commands -->
+    <div class="rb-card">
+        <div class="rb-head"><div><h4><: Recent ZPPY commands :></h4>
+            <p class="rb-sub"><: Modules are installed and removed by root, not by the panel: each change is queued and the daemon runs it within 5 minutes. Reload the page to see the result. :></p></div>
+            <a class="btn btn-default btn-sm" href="./?module=repo_browser"><: Reload :></a></div>
+        <div class="rb-scroll"><table class="rb-table"><thead><tr><th><: Queued :></th><th><: Command :></th><th><: Status :></th><th><: Output :></th></tr></thead><tbody><@ QueueRows @></tbody></table></div>
+    </div>
+
+    <!-- ZPPY client -->
+    <div class="rb-card">
+        <div class="rb-head"><div><h4><: ZPPY client :></h4><p class="rb-sub"><: Run a ZPPY command by hand. :></p></div></div>
+        <form class="rb-zppy" action="./?module=repo_browser&amp;action=RunZPPYCommand" method="post">
+            <span class="rb-prompt">zppy</span><input class="form-control" name="inRunZPPYCommand" type="text" id="inRunZPPYCommand" placeholder="install modulename" autocomplete="off">
+            <button class="btn btn-primary" type="submit" name="inSubmit" value=""><: Run :></button>
             <@ CSFR_Tag @>
         </form>
+        <dl class="rb-usage">
+            <dt>install <i>module</i></dt><dd><: Install a module. :></dd>
+            <dt>upgrade <i>module</i></dt><dd><: Update a module. :></dd>
+            <dt>remove <i>module</i></dt><dd><: Remove a module. :></dd>
+            <dt>update</dt><dd><: Read the module lists of the repositories again. :></dd>
+            <dt>repo add <i>address</i></dt><dd><: Add a repository. :></dd>
+            <dt>repo remove <i>address</i></dt><dd><: Remove a repository. :></dd>
+            <dt>repo list</dt><dd><: List the repositories. :></dd>
+            <dt>checkperms</dt><dd><: Check the permissions of the cache files. :></dd>
+            <dt>--version</dt><dd><: Show the version. :></dd>
+            <dt>--help</dt><dd><: Show the help. :></dd>
+        </dl>
     </div>
-    <% endif %>
 
-	<% if isConfirmUpdateVersionDB %>
-    <div class="zform_wrapper panel">
-        <div class="panel-heading"><h2><: Update Module Database Version Number :>: <@ CurrentModuleName @> ?</h2></div>
-        <p><: You are about to manually update the version number that the panel is reporting with the version number that is actually reported by your module file. :></p>
-		<p><: Panel database version :>: <strong><@ CurrentModuleInstalledVersion @></strong><br><: Will be set to version :>: <strong><@ CurrentModuleVersion @></strong>
-        <form action="./?module=repo_browser&action=ConfirmUpdateVersionDB" method="post">
-            <table class="none" cellpadding="0" cellspacing="0">
-                <tr>
-                    <td colspan="2" align="right">
-                        <input type="hidden" name="inUpdate" value="<@ CurrentModuleName @>">
-						<input type="hidden" name="inVersion" value="<@ CurrentModuleVersion @>">
-                        <button class="button-loader btn btn-primary fg-button ui-state-default ui-corner-all" type="submit" ><: Update :></button>
-                        <button class="button-loader btn btn-primary fg-button ui-state-default ui-corner-all" type="button" onclick="window.location.href='./?module=repo_browser';return false;"><: Cancel :></button>&nbsp;
-                    </td>
-                </tr>
-            </table>
-            <@ CSFR_Tag @>
-        </form>
+    <!-- Developer notes -->
+    <details class="rb-card rb-notes">
+        <summary><: Notes for module developers :></summary>
+        <ul>
+            <li><: A module with the same folder name as one of the panel's own modules is not listed, and can not be installed over, updated or removed from here. This is by design. :></li>
+            <li><: A repository is a web folder holding packages.txt (one module folder name per line), for each module name.zpp (a zip of the module folder) and optionally name.xml, and SHA256SUMS: when it is there, every download is checked against it and a module that does not match is not installed. The Sentora-2027 add-ons are at https://raw.githubusercontent.com/RusTus/sentora-installers-2027/master2027/sentora-repo. :></li>
+            <li><: Download counts show when the repository also serves repostatslist (lines of: module count) or repostats.php?json=true. :></li>
+            <li><: A module that is not installed yet is described from name.xml in the repository, with the same tags as module.xml: :></li>
+        </ul>
+<pre class="rb-out">&lt;updateserver&gt;
+    &lt;latestversion&gt;100&lt;/latestversion&gt;
+    &lt;downloadurl&gt;https://example.com/repo/my_module.zpp&lt;/downloadurl&gt;
+    &lt;desc&gt;What the module does.&lt;/desc&gt;
+    &lt;updatedesc&gt;What changed in this version.&lt;/updatedesc&gt;
+    &lt;ostype&gt;all&lt;/ostype&gt;              (win, lin or all)
+    &lt;authorname&gt;Your name&lt;/authorname&gt;
+    &lt;authoremail&gt;you@example.com&lt;/authoremail&gt;
+    &lt;authorurl&gt;https://example.com&lt;/authorurl&gt;
+&lt;/updateserver&gt;</pre>
+    </details>
+    <% endif %>
     </div>
-    <% endif %>
-	
-	<% if isConfirmUpdateModule %>
-    <div class="zform_wrapper panel">
-        <div class="panel-heading"><h2><: Update Module :>: <@ CurrentModuleName @> ?</h2></div>
-        <p><: Please confirm that you want to install this module on this server. :></p>
-        <form action="./?module=repo_browser&action=ConfirmUpdateModule" method="post">
-            <table class="none" cellpadding="0" cellspacing="0">
-                <tr>
-                    <td colspan="2" align="right">
-                        <input type="hidden" name="inUpdate" value="<@ CurrentModuleFull @>">
-                        <button class="button-loader btn btn-primary fg-button ui-state-default ui-corner-all" type="submit" ><: Update :></button>
-                        <button class="button-loader btn btn-primary fg-button ui-state-default ui-corner-all" type="button" onclick="window.location.href='./?module=repo_browser';return false;"><: Cancel :></button>&nbsp;
-						<input type="checkbox" name="inDebugZPPY" value="1"> <: Debug ZPPY Client output :>?
-                    </td>
-                </tr>
-            </table>
-            <@ CSFR_Tag @>
-        </form>
-    </div>
-    <% endif %>
-
-
-	<% if isMain %>
-	<div class="zform_wrapper panel">
-		<div class="panel-heading"><h2><: Available Modules :></h2></div>
-		<% if TotalPackages %>
-		<p><strong><@ totalpackages @></strong> <: total modules :>.</p>
-		<% endif %>
-		<% if ModuleList %>
-			<form action="./?module=repo_browser&action=DeleteModule" method="post">
-			<table class="zgrid table table-striped">
-				<tr>
-					<th><: Module :></th><th colspan="2"><: Status :></th><th><: Module Information :></th><th>&nbsp;</th><th>&nbsp;</th>
-				</tr>
-				<% loop ModuleList %>
-				<tr valign="top">
-					<td>
-						<strong><& installedhtml &></strong>
-						<div id="repostats" class="repostats" item_id="<& reponame &>:::<& modulename &>"><img src='<@ ModulePath @>assets/ajax-loader-bar-small.gif' alt='loading...' /></div>
-					</td>
-					<td nowrap><a href="<& url &>" title="Download <& modulename &>">&dArr;</a></td>
-					<td nowrap><div id="controls" class="controls" item_id="M:::<& url &>"><img src='<@ ModulePath @>assets/ajax-loader.gif' alt='loading...' /></div></td>
-					<td><div id="modinfo" class="modinfo" item_id="<& reponame &>:::<& modulename &>"><img src='<@ ModulePath @>assets/ajax-loader-bar.gif' alt='loading...' /></div>
-						<br>
-						<div id="update" class="update" item_id="<& reponame &>:::<& modulename &>"></div>
-					</td>					
-					
-					
-					<td><button class="<& buttoncss &>" type="submit" <& buttonattr &> title="<& title &>" name="in<& buttonaction &>Module" id="in<& buttonaction &>Module" value="<& reponame &>:::<& modulename &>"><& buttonaction &></button></td>
-				</tr>
-				<% endloop %>
-			</table>
-			<@ CSFR_Tag @>
-			</form>
-		<% else %>
-			<p><: No modules available for download. :></p>
-		<% endif %>	
-	</div>
-
-		<div class="zform_wrapper panel">
-		<div class="panel-heading"><h2><: Repositories :></h2></div>
-		<% if RepoList %>
-			<form action="./?module=repo_browser&action=DeleteRepo" method="post">
-			<table class="zgrid table table-striped">
-				<tr>
-				<th>Status</th><th>Repo Address</th><th>Remove Repo</th>
-				</tr>
-				<% loop RepoList %>
-				<tr>
-					<td style="width:70px;"><& statushtml &></td>
-					<td nowrap>( <strong>http://</strong> ) &nbsp;<& line &></td>
-					<td nowrap><& buttonshtml &></td>
-				</tr>
-				<% endloop %>
-			</table>
-		<@ CSFR_Tag @>
-		</form>
-		<% else %>
-			<p><: You currently do not have any repositories configured. :></p>
-		<% endif %>
-		<form action="./?module=repo_browser&action=AddRepo" method="post">
-		<table class="none">
-			<tr>
-				<td><strong>http://</strong></td><td><input name="inAddRepo" type="text" id="inAddRepo" size="60" value=""/></td><td><button class="button-loader btn btn-primary fg-button ui-state-default ui-corner-all" type="submit" name="inSubmit" id="inSubmit" value=""><: Add :></button></td>
-			</tr>
-		</table>
-		<@ CSFR_Tag @>
-		</form>	
-	</div>
-	
-	<div class="panel panel-default">
-		<div class="panel-heading"><h2><: Recent ZPPY commands :></h2></div>
-		<div class="panel-body">
-			<p><: Module changes are made by root, not by the panel: commands are queued and run by the daemon within 5 minutes. Reload this page to see the result. :></p>
-			<table class="table table-striped"><tr><th><: Queued :></th><th><: Command :></th><th><: Status :></th><th><: Output :></th></tr>
-			<@ QueueRows @>
-			</table>
-		</div>
-	</div>
-	<div class="zform_wrapper panel">
-		<div class="panel-heading"><h2><: ZPPY Client :></h2></div>
-		<p><: Manually run a ZPPY client command. :></p>
-		<form action="./?module=repo_browser&action=RunZPPYCommand" method="post">
-		<table class="none">
-			<tr>
-				<td nowrap>zppy</td><td><input name="inRunZPPYCommand" type="text" id="inRunZPPYCommand" size="60" value=""/></td><td><button class="button-loader btn btn-primary fg-button ui-state-default ui-corner-all" type="submit" name="inSubmit" id="inSubmit" value=""><: Run Command :></button></td>
-			</tr>
-		</table>
-					<table class="none">
-						<tr>
-							<td colspan="2">
-							<strong>Usage:</strong> zppy [action] [modulename]<br><br>
-							<strong>Actions:</strong>
-							<td>
-						</tr>
-						<tr>
-							<td width="50px" nowrap>install [modulename]</td>
-							<td>- Install a named module.</td>
-						</tr>
-						<tr>
-							<td nowrap>upgrade [modulename]</td>
-							<td>- Updates a named module.</td>
-						</tr>
-						<tr>
-							<td nowrap>update</td>
-							<td>- Updates local avaliable package list.</td>
-						</tr>
-						<tr>
-							<td nowrap>remove [modulename]</td>
-							<td>- Remove a named module.</td>
-						</tr>
-						<tr>
-							<td nowrap>repo add [fqdn]</td>
-							<td>- Adds a package repository.</td>
-						</tr>
-						<tr>
-							<td nowrap>repo remove [fqdn]</td>
-							<td>- Removes a package repository.</td>
-						</tr>
-						<tr>
-							<td nowrap>repo list</td>
-							<td>- Displays all your current avaliable package repositories.</td>
-						</tr>
-						<tr>
-							<td nowrap>checkperms</td>
-							<td>- Checks permissions on the cache files.</td>
-						</tr>
-						<tr>
-							<td nowrap>--version</td>
-							<td>- Displays the Zpanel version.</td>
-						</tr>
-						<tr>
-							<td nowrap>--help</td>
-							<td>- Displays this text.</td>
-						</tr>
-					</table>
-		<@ CSFR_Tag @>
-		</form>
-	</div>
-
-        <h2><: Module Developer Notes :></h2>
-		<a href="#" id="devnotes_1_a" onclick="toggle_visibility('1')"><strong>Open Developer Notes</strong></a>
-		<div class="zform_wrapper" id="devnotes_1" style="display:none;">
-            <table class="none">
-                <tr valign="top">
-                    <td>
-						<p><img src="<@ ModulePath @>assets/item.png" width="16" height="16">
-						Modules with the same folder name as a module that ships with this panel will not appear in the Repo Browser, and can not be installed over, upgraded or removed from here. This is by design.
-						</p>
-						<p><img src="<@ ModulePath @>assets/item.png" width="16" height="16">
-						A repository is written as <strong>https://host/path</strong> (for example the Sentora-2027 add-ons on GitHub, <strong>https://raw.githubusercontent.com/RusTus/sentora-installers-2027/master2027/sentora-repo</strong>), or as host[:port][/path] for plain http on your own network. It is a web folder holding <strong>packages.txt</strong> (one module folder name per line), for each module <strong>name.zpp</strong> (a zip of the module folder) and optionally <strong>name.xml</strong>, and <strong>SHA256SUMS</strong>: when it is there, every download is checked against it and a module that does not match is not installed.
-						</p>
-						<p><img src="<@ ModulePath @>assets/item.png" width="16" height="16">
-						Download counts show up if your repository also serves <strong>repostatslist</strong> (lines of: module count) or <strong>repostats.php?json=true</strong>.
-						</p>
-						<p><img src="<@ ModulePath @>assets/item.png" width="16" height="16">
-						Normally if a package is not installed, then there is no way to get any information about it.  If you would like information to show up about a module that has not been installed yet, then Repo Browser will take advantage of the modules update.xml file in your repository. Repo Browser will look for additional XML Tags in that file to display the information.  Adding the extra XML Tags will not hurt the modules normal operation.</p>
-						<p>
-						The extra XML tags are the same tags that are found in the module's normal module.xml file: <desc></desc><authorname></authorname><authoremail></authoremail><authorurl></authorurl>. An example of Repo Browsers update.xml file is found below.  Once the XML Tags are in place then if someone has not yet installed your module they will still be able to get the same information about it.<br><br>
-						<strong>SAMPLE UPDATE.XML IN REPOSITORY:</strong> rustus.txt-clan.com/repo_browser.xml<br>
-	<xmp>
-	<updateserver>
-	<latestversion>100</latestversion>
-	<downloadurl>http://rustus.txt-clan.com/repo_browser.zpp</downloadurl>
-	<desc>Repo Browser allows you to manage your custom module repositories.</desc>
-	<updatedesc>Information can be posted here about your update revisions.</updatedesc>
-	<ostype>all</ostype> NOTE: win=windows only. lin=linux only. all=all operating systems.
-	<zpversion>10.0.2:10.1.0</zpversion>
-	<authorname>RusTus</authorname>
-	<authoremail>rustus@zpanelcp.com</authoremail>
-	<authorurl>http://rustus.txt-clan.com</authorurl>
-	</updateserver>
-	</xmp>
-						</p>
-						<br><br>
-						
-					</td>
-                </tr>      
-            </table>
-			</div>
-                <script type="text/javascript">
-                    $(document).ready(function() { 
-                        $("#devnotes_1").hide();
-                        $("#devnotes_1_a").click(function(){
-                            if ($("#devnotes_1").is(":visible")) {
-                                $("#devnotes_1").slideUp("fast");
-                                $(this).addClass("active");
-                                return false;
-                            } else {
-                                $("#devnotes_1").slideDown("fast");
-                                $(this).removeClass("active");
-                                return false;
-                            }
-                        }); 
-                    })
-                </script>
-	<% endif %>
 </div>
-
-<script type="text/javascript">
-    $(document).ready(function() {
-        $('.controls').each(function(i) {
-            var itemId = $(this).attr('item_id');
-            //$(this).load('ajax.php?request=controls&item_id=' + encodeURIComponent(itemId))
-			$(this).load('modules/repo_browser/code/ajax.php?id=<@ ZPanelID @>&request=' + encodeURIComponent(itemId), function () {
-				// a repository that can not be reached: offer Retry next to Remove
-				if ($(this).find('.label-danger').length) { $(this).closest('tr').find('.retry-repo').show(); }
-			})
+<script>
+(function ($) {
+    'use strict';
+    var id = '<@ ZPanelID @>', base = 'modules/repo_browser/code/ajax.php?id=' + encodeURIComponent(id);
+    var load = function (sel, param, done) {
+        $(sel).each(function () {
+            var el = $(this);
+            el.load(base + '&' + param + '=' + encodeURIComponent(el.attr('item_id')), function () { if (done) { done(el); } });
         });
+    };
+    load('.controls', 'request', function (el) {
+        // a repository that can not be reached: offer Retry beside Remove
+        if (el.find('.label-danger').length) { el.closest('.rb-repo-row').find('.retry-repo').show(); }
     });
-    $(document).ready(function() {
-        $('.modinfo').each(function(i) {
-            var itemId = $(this).attr('item_id');
-
-			$(this).load('modules/repo_browser/code/ajax.php?id=<@ ZPanelID @>&modinfo=' + encodeURIComponent(itemId))
-        });
+    load('.modinfo', 'modinfo');
+    load('.update', 'update');
+    load('.repostats', 'repostat');
+    // the module's state beside its name
+    $('.rb-mod').each(function () {
+        var m = $(this), b = m.find('button[type=submit]').first(), s = m.find('.rb-state');
+        if (b.is(':disabled')) { s.text($('#rb').attr('data-queued')).addClass('label label-warning'); }
+        else if (m.hasClass('is-installed')) { s.text($('#rb').attr('data-installed')).addClass('label label-success'); }
+        else { s.text($('#rb').attr('data-not')).addClass('label label-default'); }
     });
-    $(document).ready(function() {
-        $('.update').each(function(i) {
-            var itemId = $(this).attr('item_id');
-			$(this).load('modules/repo_browser/code/ajax.php?id=<@ ZPanelID @>&update=' + encodeURIComponent(itemId))
-        });
+    // find a module
+    $('.rb-find').on('input', function () {
+        var q = $.trim($(this).val()).toLowerCase();
+        $('.rb-mod').each(function () { $(this).toggle(q === '' || ($(this).attr('data-s') || '').toLowerCase().indexOf(q) >= 0); });
     });
-    $(document).ready(function() {
-        $('.repostats').each(function(i) {
-            var itemId = $(this).attr('item_id');
-			$(this).load('modules/repo_browser/code/ajax.php?id=<@ ZPanelID @>&repostat=' + encodeURIComponent(itemId))
-        });
+    // removing asks first; the panel's "working" overlay while a form is sent
+    $('#rb form').on('submit', function (e) {
+        var btn = $(document.activeElement);
+        if (btn.hasClass('rb-del') && !window.confirm($('#rb').attr('data-remove'))) { e.preventDefault(); return; }
+        if (window.Sentora && Sentora.loader) { Sentora.loader.showLoader(); }
     });
-</script>
-<script type="text/javascript">
-    <!--
-    function toggle_visibility(id) {
-        var e = document.getElementById(id);
-        if(e.style.display == 'none')
-            e.style.display = 'block';
-        else
-            e.style.display = 'none';
-    }
-    //-->
+})(jQuery);
 </script>

@@ -123,3 +123,17 @@ modules/backupmgr/assets/delete_small.png
 modules/backupmgr/assets/backup_icon.png
 # Usage Viewer: the picture its old page showed for "unlimited"
 modules/usage_viewer/assets/unlimited.png
+# Repo Browser: the old loader animations, OS pictures and buttons, now drawn in CSS
+modules/repo_browser/assets/ajax-loader-bar-small.gif
+modules/repo_browser/assets/ajax-loader-bar.gif
+modules/repo_browser/assets/ajax-loader-bar2.gif
+modules/repo_browser/assets/ajax-loader.gif
+modules/repo_browser/assets/ajax-loader1.gif
+modules/repo_browser/assets/all.png
+modules/repo_browser/assets/download.png
+modules/repo_browser/assets/installed.png
+modules/repo_browser/assets/item.png
+modules/repo_browser/assets/lin.png
+modules/repo_browser/assets/notinstalled.png
+modules/repo_browser/assets/update.png
+modules/repo_browser/assets/win.png

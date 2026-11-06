@@ -1,0 +1,98 @@
+/* Repo Browser in the panel's style. Colours come from the theme's shared --sn-* variables
+   (etc/styles/THEMES.md), with these as the fallback, so it follows Light, Dark and Auto. */
+.rb { --rb-ink: var(--sn-ink, #1f2933); --rb-muted: var(--sn-muted, #6b7785); --rb-line: var(--sn-line, #e6e9ee);
+      --rb-card: var(--sn-card, #ffffff); --rb-bg: var(--sn-soft, #f4f6f9); --rb-field-line: var(--sn-line-strong, #cfd6de);
+      --rb-hover: var(--sn-hover, #f4f6f9); --rb-accent: var(--sn-accent, #447fb3);
+      color: var(--rb-ink); background: var(--rb-bg); border-radius: 8px; padding: 18px; margin-top: 10px; }
+.rb * { box-sizing: border-box; }
+.rb a:not(.btn) { color: var(--rb-accent); }
+.rb code { background: var(--rb-bg); color: var(--rb-ink); border: 1px solid var(--rb-line); border-radius: 4px; padding: 1px 6px; font-size: 12px; }
+.rb-sub { color: var(--rb-muted); font-size: 13px; }
+.rb-empty { color: var(--rb-muted); margin: 0; text-align: center; padding: 16px 0 6px; }
+.rb-card { background: var(--rb-card); border-radius: 6px; box-shadow: 0 1px 3px rgba(20,30,40,0.08); padding: 16px 18px; margin-bottom: 14px; }
+.rb-card h4 { margin: 0 0 2px; font-size: 15px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; }
+.rb-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.rb-head p { margin: 0; }
+.rb-find { max-width: 260px; }
+
+/* pills (also in the fragments ajax.php sends) */
+.rb .label { display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 8px; border-radius: 10px; border: 1px solid; line-height: 1.5;
+    background: var(--rb-bg); color: var(--rb-muted); border-color: var(--rb-line); white-space: nowrap; }
+.rb .label-success { background: var(--sn-ok-soft, #e3f4ea); color: var(--sn-ok, #1e8a4c); border-color: var(--sn-ok-line, #a9dcbd); }
+.rb .label-warning { background: var(--sn-warn-soft, #fff4d6); color: var(--sn-warn, #8f5b00); border-color: var(--sn-warn-line, #f2cf7a); }
+.rb .label-danger { background: var(--sn-bad-soft, #fdeaea); color: var(--sn-bad, #b42b27); border-color: var(--sn-bad-line, #f0a9a7); }
+.rb .label-info { background: var(--sn-info-soft, #e4f1f8); color: var(--sn-info, #2a5f80); border-color: var(--sn-info-line, #b3d5e8); }
+
+/* loading placeholders (the parts ajax.php fills in) */
+.rb-wait { display: block; height: 10px; width: 70%; margin: 6px 0; border-radius: 5px;
+    background: linear-gradient(90deg, var(--rb-line) 25%, var(--rb-bg) 50%, var(--rb-line) 75%); background-size: 200% 100%; animation: rb-shine 1.2s linear infinite; }
+.rb-wait.wide { width: 95%; }
+.rb-wait.short { display: inline-block; width: 36px; margin: 0; vertical-align: middle; }
+@keyframes rb-shine { to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { .rb-wait { animation: none; } }
+
+/* modules */
+.rb-mods { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
+.rb-mod { display: flex; flex-direction: column; gap: 6px; border: 1px solid var(--rb-line); border-radius: 6px; padding: 12px 14px; border-left: 4px solid var(--rb-field-line); }
+.rb-mod.is-installed { border-left-color: var(--sn-ok, #2db87d); }
+.rb-mod-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.rb-mod-name b { font-size: 15px; font-family: SFMono-Regular, Menlo, Consolas, monospace; margin-right: 6px; }
+.rb-mod-name a { color: var(--rb-ink) !important; }
+.rb-mod-name a:hover { color: var(--rb-accent) !important; }
+.rb-desc { margin: 0; font-size: 13px; line-height: 1.45; }
+.rb-meta { margin: 4px 0 0; font-size: 12px; color: var(--rb-muted); }
+.rb-os.bad { margin: 4px 0 0; font-size: 12px; color: var(--sn-bad, #b42b27); font-weight: 600; }
+.rb-notice { margin-top: 6px; padding: 8px 10px; border-radius: 5px; font-size: 13px; background: var(--sn-info-soft, #e4f1f8); border: 1px solid var(--sn-info-line, #b3d5e8); color: var(--sn-info, #2a5f80); }
+.rb-notice b { display: block; }
+.rb-notice p { margin: 4px 0 6px; }
+.rb-mod-foot { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: auto; padding-top: 8px; border-top: 1px solid var(--rb-line); font-size: 12px; color: var(--rb-muted); }
+.rb-repo { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 170px; }
+.rb-dl { margin-left: auto; white-space: nowrap; }
+.rb-del:hover { color: var(--sn-bad, #b42b27) !important; border-color: var(--sn-bad-line, #f0a9a7) !important; }
+
+/* repositories */
+.rb-repos { display: grid; gap: 6px; margin-bottom: 12px; }
+.rb-repo-row { display: grid; grid-template-columns: 80px 1fr auto; gap: 10px; align-items: center; padding: 8px 10px; border: 1px solid var(--rb-line); border-radius: 6px; }
+.rb-repo-row code { overflow-wrap: anywhere; border: 0; background: none; padding: 0; font-size: 13px; }
+.rb-add { display: flex; gap: 8px; margin: 0; }
+.rb-add .form-control { flex: 1; }
+
+/* recent commands */
+.rb-scroll { overflow-x: auto; }
+.rb-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.rb-table th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--rb-muted); border-bottom: 2px solid var(--rb-line); padding: 6px 8px; }
+.rb-table td { padding: 7px 8px; border-bottom: 1px solid var(--rb-line); vertical-align: top; }
+.rb-table tr:last-child td { border-bottom: 0; }
+.rb-when { white-space: nowrap; color: var(--rb-muted); }
+.rb-table summary { cursor: pointer; color: var(--rb-accent); }
+.rb-out { background: var(--rb-bg); color: var(--rb-ink); border: 1px solid var(--rb-line); border-radius: 4px; padding: 8px 10px; font-size: 12px; white-space: pre-wrap; margin: 6px 0 0; max-height: 260px; overflow: auto; }
+
+/* ZPPY client */
+.rb-zppy { display: flex; align-items: stretch; gap: 0; margin: 0 0 12px; }
+.rb-prompt { display: flex; align-items: center; padding: 0 12px; font-family: SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; color: var(--rb-muted);
+    background: var(--rb-bg); border: 1px solid var(--rb-field-line); border-right: 0; border-radius: 4px 0 0 4px; }
+.rb-zppy .form-control { border-radius: 0; font-family: SFMono-Regular, Menlo, Consolas, monospace; }
+.rb-zppy .btn { border-radius: 0 4px 4px 0; }
+.rb-usage { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 0; font-size: 12px; }
+.rb-usage dt { font-family: SFMono-Regular, Menlo, Consolas, monospace; font-weight: 600; }
+.rb-usage dt i { color: var(--rb-muted); font-weight: normal; }
+.rb-usage dd { margin: 0; color: var(--rb-muted); }
+.rb-check { display: flex; align-items: center; gap: 6px; font-weight: normal; font-size: 13px; color: var(--rb-muted); margin: 0 0 12px; }
+.rb-check input { margin: 0; }
+
+/* developer notes */
+.rb-notes summary { cursor: pointer; font-size: 15px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; }
+.rb-notes ul { margin: 12px 0 8px; padding-left: 20px; }
+.rb-notes li { margin-bottom: 8px; line-height: 1.45; font-size: 13px; overflow-wrap: anywhere; }
+
+/* confirmations and the ZPPY output */
+.rb-confirm { background: var(--rb-card); border-radius: 6px; box-shadow: 0 1px 3px rgba(20,30,40,0.08); padding: 16px 18px; margin: 0 0 14px; border-left: 4px solid var(--rb-accent); }
+.rb-confirm.danger { border-left-color: var(--sn-bad, #b42b27); }
+.rb-confirm.warn { border-left-color: #f5a623; }
+.rb-confirm h4 { margin: 0 0 8px; font-size: 17px; font-weight: 700; }
+.rb-confirm p { margin: 0 0 12px; line-height: 1.5; }
+.rb-confirm-foot { display: flex; gap: 8px; padding-top: 12px; border-top: 1px solid var(--rb-line); }
+.rb-debug { background: var(--rb-card); border-left: 4px solid var(--sn-bad, #b42b27); border-radius: 6px; padding: 12px 14px; margin-bottom: 14px; font-size: 12px; }
+.rb-debug div { font-family: SFMono-Regular, Menlo, Consolas, monospace; margin-top: 6px; white-space: pre-wrap; }
+
+@media (max-width: 640px) { .rb { padding: 12px; } .rb-repo-row { grid-template-columns: 1fr; } .rb-mods { grid-template-columns: 1fr; } }

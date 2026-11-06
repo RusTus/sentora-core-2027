@@ -118,33 +118,39 @@ function AjaxReturnModInfo($full)
     $modinfo = InstalledModule($module);
     if ($modinfo) {
         $info = (array) ModuleXMLTags('modules/' . $module . '/module.xml');
-        echo '<span class="label label-success">Module Installed.</span><p>' . $h($modinfo['mo_desc_tx']) . '</p>Version '
-            . $h($modinfo['mo_version_in']) . ' | By ' . MailLink($info) . ' | ' . SiteLink($info) . '<br>Repo: ' . $h($repo);
+        echo '<p class="rb-desc">' . $h($modinfo['mo_desc_tx']) . '</p><p class="rb-meta">Version ' . $h($modinfo['mo_version_in']) . ' · By ' . MailLink($info)
+            . (SiteLink($info) !== '' ? ' · ' . SiteLink($info) : '') . '</p>';
         return;
     }
     $info = ModuleXMLTags(null, repo_browser_helper::Fetch(repo_browser_helper::Base($repo) . '/' . $module . '.xml'));
     if (!$info) {
-        echo '<span class="label label-danger">Module not installed. No information available.</span><br>Repo: ' . $h($repo);
+        echo '<p class="rb-desc rb-sub">No description in the repository.</p>';
         return;
     }
     $ostype = '';
     switch (strtoupper(isset($info['ostype']) ? $info['ostype'] : '')) {
         case 'WIN':
-            $ostype = '<br><img src="modules/repo_browser/assets/win.png" width="16" height="16"> This module is for Windows operating systems ONLY!';
+            $ostype = '<p class="rb-os bad">For Windows servers only: it will not work here.</p>';
             break;
         case 'LIN':
-            $ostype = '<br><img src="modules/repo_browser/assets/lin.png" width="16" height="16"> This module is for Linux operating systems ONLY!';
+            $ostype = '';
             break;
         case 'ALL':
-            $ostype = '<br><img src="modules/repo_browser/assets/all.png" width="16" height="16"> This module is for all operating systems.';
+            $ostype = '';
             break;
     }
-    echo '<span class="label label-danger">Module not installed.</span><br>'
-        . $h(isset($info['name']) ? $info['name'] : '')
-        . (isset($info['desc']) ? '<p>' . $h($info['desc']) . '</p>' : '')
-        . (isset($info['latestversion']) ? 'Version ' . $h($info['latestversion']) . ' | ' : '')
-        . (isset($info['authorname']) ? 'By ' . MailLink($info) . ' | ' : '')
-        . SiteLink($info) . '<br>Repo: ' . $h($repo) . $ostype;
+    $meta = array();
+    if (isset($info['latestversion'])) {
+        $meta[] = 'Version ' . $h($info['latestversion']);
+    }
+    if (isset($info['authorname'])) {
+        $meta[] = 'By ' . MailLink($info);
+    }
+    if (SiteLink($info) !== '') {
+        $meta[] = SiteLink($info);
+    }
+    echo (isset($info['desc']) ? '<p class="rb-desc">' . $h($info['desc']) . '</p>' : '<p class="rb-desc rb-sub">No description in the repository.</p>')
+        . ($meta ? '<p class="rb-meta">' . implode(' · ', $meta) . '</p>' : '') . $ostype;
 }
 
 /**
@@ -179,15 +185,14 @@ function AjaxReturnUpdate($full)
     $line = '';
     $local = (array) ModuleXMLTags('modules/' . $module . '/module.xml');
     if (isset($local['version']) && (string) $local['version'] === $latest) {
-        $line .= '<div class="znotice alert alert-block alert-info"><h2>' . ui_status::Warn('Warning') . ' Version Mismatch!</h2>'
+        $line .= '<div class="rb-notice"><b>Version number out of step</b>'
             . '<p>Sentora thinks that ' . $h($module) . ' is version <b>' . $h($installed) . '</b>, but the installed module file says it is version <b>' . $h($local['version']) . '</b>.</p>'
             . '<p>This usually means the module developer did not update the version number in the database when the module was updated. If you just upgraded this module, Repo Browser can correct the number.</p>'
-            . '<p><button class="button-loader btn btn-primary" type="submit" name="inUpdateVersionDB" value="' . $h($local['version'] . ':::' . $module . ':::' . $installed) . '">FIX VERSION NUMBER</button></p></div>';
+            . '<p><button class="btn btn-default btn-sm" type="submit" name="inUpdateVersionDB" value="' . $h($local['version'] . ':::' . $module . ':::' . $installed) . '">Fix the version number</button></p></div>';
     }
-    $line .= '<div class="znotice alert alert-block alert-info">' . ui_status::Warn('Warning') . ' <b>There is a new version available for '
-        . $h($module) . ': version ' . $h($latest) . '</b><br>'
-        . (isset($info['updatedesc']) ? '<br><strong>Update Information:</strong><br>' . $h($info['updatedesc']) . '<br>' : '')
-        . '<br><button class="button-loader btn btn-primary" type="submit" name="inUpdateModule" value="' . $h($repo . ':::' . $module) . '">Update Module</button></div>';
+    $line .= '<div class="rb-notice"><b>Version ' . $h($latest) . ' is available</b>'
+        . (isset($info['updatedesc']) ? '<p>' . $h($info['updatedesc']) . '</p>' : '')
+        . '<button class="btn btn-primary btn-sm" type="submit" name="inUpdateModule" value="' . $h($repo . ':::' . $module) . '">Update</button></div>';
     echo $line;
 }
 
