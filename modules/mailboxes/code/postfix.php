@@ -1,5 +1,15 @@
 <?php
 
+/**
+ * Mailboxes module: Postfix/Dovecot mail server include file.
+ *
+ * Included by module_controller::ExecuteAddMailbox(), ExecuteDeleteMailbox() and
+ * ExecuteUpdateMailbox() (the mailserver_php option); writes the mail server's
+ * database according to the controller's $create, $delete and $update flags.
+ *
+ * @package Sentora
+ * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
+ */
 /*
  * Mailbox passwords are stored as {SHA512-CRYPT} hashes (salted SHA-512 crypt,
  * 50,000 rounds), the scheme named in front as Dovecot expects. Dovecot, SOGo and
@@ -7,6 +17,12 @@
  * old {PLAIN-MD5} keep working until their password is next changed.
  */
 if (!function_exists('sentora_mailbox_hash')) {
+    /**
+     * Hash a mailbox password for Dovecot as {SHA512-CRYPT} with a random salt.
+     *
+     * @param string $password The plain password.
+     * @return string The hash, prefixed with "{SHA512-CRYPT}".
+     */
     function sentora_mailbox_hash($password)
     {
         $salt = substr(strtr(base64_encode(random_bytes(12)), '+', '.'), 0, 16);

@@ -12,9 +12,17 @@
 class matomo_helper
 {
 
+    /** Where Matomo is installed. */
     const APP_DIR = '/etc/sentora/panel/etc/apps/matomo/';
+    /** Folder for the files the daemon hands to Matomo (sync spec, log chunks, token). */
     const SPEC_DIR = '/var/lib/sentora/matomo/';
 
+    /**
+     * Create the module's tables if they do not exist (once per request).
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return void
+     */
     static function Ensure()
     {
         global $zdbh;
@@ -31,22 +39,46 @@ class matomo_helper
         $done = true;
     }
 
+    /**
+     * Check that Matomo and its SentoraSync plugin are installed.
+     *
+     * @return bool
+     */
     static function Installed()
     {
         return is_file(self::APP_DIR . 'config/config.ini.php') && is_dir(self::APP_DIR . 'plugins/SentoraSync');
     }
 
+    /**
+     * Get the Matomo address on the panel's domain.
+     *
+     * @return string The URL, ending with a slash.
+     */
     static function Url()
     {
         return 'https://' . ctrl_options::GetSystemOption('sentora_domain') . '/etc/apps/matomo/';
     }
 
+    /**
+     * Get the Matomo login name of a panel account.
+     *
+     * @param string $username The panel username.
+     * @return string
+     */
     static function Login($username)
     {
         return 'sentora_' . $username;
     }
 
-    /** this account's domains with their Matomo site and source */
+    /**
+     * List an account's domains with their Matomo site and source.
+     *
+     * Includes the panel's own domain for the panel owner.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int $uid The account ID.
+     * @return array<int, array<string, mixed>> One row per domain: 'domain' (string), 'idsite' (int, 0 while not set up), 'source' ('log' or 'js').
+     */
     static function Domains($uid)
     {
         global $zdbh;
@@ -71,6 +103,13 @@ class matomo_helper
         return $out;
     }
 
+    /**
+     * Get the Matomo token of an account's view-only user.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int $uid The account ID.
+     * @return string|false The token, or false when there is none (or it looks wrong).
+     */
     static function Token($uid)
     {
         global $zdbh;
@@ -81,6 +120,12 @@ class matomo_helper
         return ($t && preg_match('/^[0-9a-f]{32,64}$/', $t)) ? $t : false;
     }
 
+    /**
+     * Build Matomo's JavaScript tracking snippet for a site.
+     *
+     * @param int $idsite The Matomo site ID.
+     * @return string The HTML snippet.
+     */
     static function TrackingCode($idsite)
     {
         $u = self::Url();
@@ -89,7 +134,12 @@ class matomo_helper
             . "    var d=document, g=d.createElement('script'), s=d.getElementsByTagName('script')[0];\n    g.async=true; g.src=u+'matomo.js'; s.parentNode.insertBefore(g,s);\n  })();\n</script>\n<!-- End Matomo Code -->";
     }
 
-    /** run a Matomo console command as the panel user; returns [exit code, output] */
+    /**
+     * Run a Matomo console command as the panel user.
+     *
+     * @param string[] $args The command and its arguments (each is shell-escaped).
+     * @return array{0: int, 1: string} The exit code and the output.
+     */
     static function Console($args)
     {
         $cmd = 'cd ' . escapeshellarg(self::APP_DIR) . ' && setpriv --reuid=sentora --regid=sentora --init-groups --reset-env /usr/bin/php' . sys_phpversions::DefaultVersion() . ' console';

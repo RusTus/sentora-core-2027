@@ -1,7 +1,19 @@
 <?php
 
+/**
+ * Parked domains module hook (OnAfterDeleteClient): delete the parked domains of deleted accounts.
+ *
+ * @package Sentora
+ * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
+ */
 DeleteParkedDomainsForDeletedClient();
 
+/**
+ * Mark the parked domains of all deleted accounts deleted and remove those accounts' hosted folders.
+ *
+ * @global db_driver $zdbh The panel's database connection.
+ * @return void
+ */
 function DeleteParkedDomainsForDeletedClient() {
     global $zdbh;
     $deletedclients = array();

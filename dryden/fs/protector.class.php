@@ -18,7 +18,7 @@ class fs_protector {
     /**
      * Returns a safe file system string (to stop reverse iteration of the file system by removing full-stops and slashes (file system seperators etc. in theory, jailing them.)
      * @author Bobby Allen (ballen@bobbyallen.me) 
-     * @param $foldername The single name of the folder.
+     * @param string $foldername The single name of the folder.
      * @return string The sanitised module folder name. 
      */
     public static function SanitiseFolderName($foldername) {
@@ -28,7 +28,8 @@ class fs_protector {
     /**
      * Checks module folder name from URL, checks with the database that a module is installed and therefore legit.
      * @author Bobby Allen (ballen@bobbyallen.me) 
-     * @return string The sanitised module folder name. 
+     * @global db_driver $zdbh The ZPX database handle.
+     * @return string|false The sanitised module folder name, or false when no such module is installed.
      */
     public static function ModuleRequest() {
         global $zdbh;

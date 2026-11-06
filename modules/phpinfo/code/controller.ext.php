@@ -29,6 +29,11 @@
 class module_controller extends ctrl_module
 {
 
+    /**
+     * Template HTML: the general section of phpinfo(), restyled for the panel.
+     *
+     * @return string HTML.
+     */
     static function getPHPInfo()
     {
         ob_start();

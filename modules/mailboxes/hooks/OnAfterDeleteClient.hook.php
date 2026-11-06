@@ -1,7 +1,19 @@
 <?php
 
+/**
+ * Mailboxes module hook (OnAfterDeleteClient): delete the mailboxes of deleted accounts.
+ *
+ * @package Sentora
+ * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
+ */
 DeleteMailboxesForDeletedClient();
 
+/**
+ * Mark the mailboxes of all deleted accounts deleted, after running the mail server's hook include file.
+ *
+ * @global db_driver $zdbh The panel's database connection.
+ * @return void
+ */
 function DeleteMailboxesForDeletedClient() {
     global $zdbh;
     $deletedclients = array();

@@ -29,20 +29,39 @@
 class module_controller extends ctrl_module
 {
 
+    /** @var bool|null True after a mailbox change was saved (shown by getResult()). */
     static $ok;
+    /** @var bool|null True when the password was left blank. */
     static $password;
+	/** @var bool|null True when the password is not strong enough. */
 	static $badpass;
+	/** @var bool|null True when the password is shorter than password_minlength. */
 	static $badpasswordlength;
+    /** @var bool|null True when a mailbox, forwarder, distribution list or alias already has the address. */
     static $alreadyexists;
+    /** @var bool|null True when the address is not a valid email address. */
     static $validemail;
+    /** @var bool|null True when the address was left blank. */
     static $noaddress;
+    /** @var bool|null Not used in this module. */
     static $editmailbox;
+    /** @var bool|null True after a mailbox was updated. */
     static $update;
+    /** @var bool|null True after a mailbox was deleted. */
     static $delete;
+    /** @var bool|null True while/after a mailbox is created. */
     static $create;
 
     /**
      * The 'worker' methods.
+     */
+    /**
+     * List the account's mailboxes.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller (unused).
+     * @param int $uid The account ID.
+     * @return array<int, array<string, mixed>>|false One row per mailbox: 'address', 'created', 'status' (HTML), 'id'; false when there are none.
      */
     static function ListMailboxes($uid)
     {
@@ -77,6 +96,13 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Get one mailbox of the logged-in account (for the edit and delete forms).
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $mid The mailbox ID (from ?other= or the form).
+     * @return array<int, array<string, mixed>>|false One row: 'address', 'created', 'ischeck' ("CHECKED" or null), 'id'; false when not found or not owned.
+     */
     static function ListCurrentMailboxes($mid)
     {
         // Only this account's own records (the id comes from ?other= or the form)
@@ -111,6 +137,13 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * List the account's enabled domains (for the new mailbox form).
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int $uid The account ID.
+     * @return array<int, array<string, string>>|false One row per domain: 'domain'; false when there are none.
+     */
     static function ListDomains($uid)
     {
         global $zdbh;
@@ -134,6 +167,20 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Create a mailbox after checking the input.
+     *
+     * Runs the mail server's include file (mailserver_php option), inserts the
+     * x_mailboxes row and runs the create hooks.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller.
+     * @param int $uid The account ID.
+     * @param string $address The local part of the address (before the @).
+     * @param string $domain The domain part of the address.
+     * @param string $password The mailbox password.
+     * @return bool True when created, false when the input failed a check.
+     */
     static function ExecuteAddMailbox($uid, $address, $domain, $password)
     {
         global $zdbh;
@@ -168,6 +215,14 @@ class module_controller extends ctrl_module
         return true;
     }
 
+    /**
+     * Delete a mailbox (mail server include file, then mark the row deleted).
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller.
+     * @param int|string $mid The mailbox ID.
+     * @return void
+     */
     static function ExecuteDeleteMailbox($mid)
     {
         global $zdbh;
@@ -194,6 +249,16 @@ class module_controller extends ctrl_module
         self::$ok = true;
     }
 
+    /**
+     * Update a mailbox: enable or disable it and pass the password to the mail server include file.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller.
+     * @param int|string $mid The mailbox ID.
+     * @param string $password The new password ('' keeps the old one in the include file).
+     * @param int|string $enabled Non-zero to enable the mailbox, 0 to disable it.
+     * @return false|null Null when updated, false when the password failed a check.
+     */
     static function ExecuteUpdateMailbox($mid, $password, $enabled)
     {
         global $zdbh;
@@ -226,6 +291,13 @@ class module_controller extends ctrl_module
 		
     }
 
+    /**
+     * Enable a mailbox.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $mid The mailbox ID.
+     * @return true Always true.
+     */
     static function ExecuteEnableMailbox($mid)
     {
         global $zdbh;
@@ -238,6 +310,13 @@ class module_controller extends ctrl_module
         return $retval;
     }
 
+    /**
+     * Disable a mailbox.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $mid The mailbox ID.
+     * @return true Always true.
+     */
     static function ExecuteDisableMailbox($mid)
     {
         global $zdbh;
@@ -250,6 +329,15 @@ class module_controller extends ctrl_module
         return $retval;
     }
 
+    /**
+     * Check the new mailbox input; sets the matching error flag on the first problem.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param string $address The local part of the address.
+     * @param string $domain The domain part of the address.
+     * @param string $password The mailbox password.
+     * @return bool True when the input is fine, false on an error.
+     */
     static function CheckCreateForErrors($address, $domain, $password)
     {
         global $zdbh;
@@ -311,17 +399,38 @@ class module_controller extends ctrl_module
         return true;
     }
 
-	# These to help with weak passwords
+	// These to help with weak passwords
+    /**
+     * Check that a string is a valid email address.
+     *
+     * @param string $email The full email address.
+     * @return bool
+     */
     static function IsValidEmail($email)
     {
         return preg_match('/^[a-z0-9]+([_\\.-][a-z0-9]+)*@([a-z0-9]+([\.-][a-z0-9]+)*)+\\.[a-z]{2,}$/i', $email) == 1;
     }
+	/**
+	 * Check password strength: a digit, a lowercase and an uppercase letter, or ending in "-".
+	 *
+	 * @param string $password The password.
+	 * @return bool
+	 */
 	static function IsValidPassword($password)
     {
         //return preg_match('/(?=.*\d)(?=.*[a-z])(?=.*[A-Z]).{17,}/', $password) || preg_match('/-$/', $password) == 1;
 		return preg_match('/(?=.*\d)(?=.*[a-z])(?=.*[A-Z])/', $password) || preg_match('/-$/', $password) == 1;
     }
 	
+	/**
+	 * Check a new password; sets the matching error flag.
+	 *
+	 * Note the inverted meaning: true means there is an error.
+	 *
+	 * @global db_driver $zdbh The panel's database connection (unused).
+	 * @param string $password The password.
+	 * @return bool True when there is an error, false otherwise (also false when it is too short).
+	 */
 	static function CheckPasswordForErrors($password)
     {
         global $zdbh;
@@ -352,6 +461,12 @@ class module_controller extends ctrl_module
     /**
      * Webinterface sudo methods.
      */
+    /**
+     * Handle the new mailbox form POST for the logged-in account.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return true Always true.
+     */
     static function doAddMailbox()
     {
         global $controller;
@@ -363,6 +478,12 @@ class module_controller extends ctrl_module
         return true;
     }
 
+    /**
+     * Handle the mailbox list POST: redirect to the delete or edit view and exit.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return true True when no edit or delete button was sent (otherwise it exits).
+     */
     static function doEditMailbox()
     {
         global $controller;
@@ -382,6 +503,12 @@ class module_controller extends ctrl_module
         return true;
     }
 
+    /**
+     * Handle the edit mailbox form POST.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return bool False when the mailbox is not the account's own, else true.
+     */
     static function doUpdateMailbox()
     {
         global $controller;
@@ -398,6 +525,12 @@ class module_controller extends ctrl_module
         return true;
     }
 
+    /**
+     * Handle the delete confirmation POST.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return false|null False when the mailbox is not the account's own, else null (ExecuteDeleteMailbox() returns nothing).
+     */
     static function doConfirmDeleteMailbox()
     {
         global $controller;
@@ -410,24 +543,47 @@ class module_controller extends ctrl_module
         return self::ExecuteDeleteMailbox($formvars['inDelete']);
     }
 
+    /**
+     * Template loop: the logged-in account's mailboxes.
+     *
+     * @return array<int, array<string, mixed>>|false Rows from ListMailboxes(), or false when there are none.
+     */
     static function getMailboxList()
     {
         $currentuser = ctrl_users::GetUserDetail();
         return self::ListMailboxes($currentuser['userid']);
     }
 
+    /**
+     * Template loop: the logged-in account's domains.
+     *
+     * @return array<int, array<string, string>>|false Rows from ListDomains(), or false when there are none.
+     */
     static function getDomainList()
     {
         $currentuser = ctrl_users::GetUserDetail();
         return self::ListDomains($currentuser['userid']);
     }
 
+    /**
+     * Template loop: the mailbox named by ?other=.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return array<int, array<string, mixed>>|false Rows from ListCurrentMailboxes().
+     */
     static function getCurrentMailboxList()
     {
         global $controller;
         return self::ListCurrentMailboxes($controller->GetControllerRequest('URL', 'other'));
     }
 
+    /**
+     * Read a value from x_mail_settings.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param string $name The setting name (mbs_name_vc).
+     * @return string|false The value, or false when not found.
+     */
     static function GetMailOption($name)
     {
         global $zdbh;
@@ -438,6 +594,12 @@ class module_controller extends ctrl_module
         return ($result) ? $result['mbs_value_tx'] : false;
     }
 
+    /**
+     * Template flag: show the create form (no ?show= in the URL).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return bool
+     */
     static function getisCreateMailbox()
     {
         global $controller;
@@ -445,6 +607,14 @@ class module_controller extends ctrl_module
         return !isset($urlvars['show']);
     }
 
+    /**
+     * Template flag: show the delete view for an own mailbox (?show=Delete&other=<id>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|null $uid Optional. The account ID; null for the logged-in account. Default null.
+     * @return bool|null Null when the mailbox is not the account's own.
+     */
     static function getisDeleteMailbox($uid = null)
     {
         global $controller;
@@ -470,6 +640,14 @@ class module_controller extends ctrl_module
         return (isset($urlvars['show'])) && ($urlvars['show'] == "Delete");
     }
 
+    /**
+     * Template flag: show the edit view for an own mailbox (?show=Edit&other=<id>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|null $uid Optional. The account ID; null for the logged-in account. Default null.
+     * @return bool|null Null when the mailbox is not the account's own.
+     */
     static function getisEditMailbox($uid = null)
     {
 		
@@ -497,6 +675,12 @@ class module_controller extends ctrl_module
     }
 
 
+    /**
+     * Template value: the address of the mailbox named by ?other=.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return string|null The address, '' without ?other=, null when not found.
+     */
     static function getEditCurrentMailboxName()
     {
         global $controller;
@@ -508,6 +692,12 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Template value: the ID of the mailbox named by ?other=.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return int|string|null The ID, '' without ?other=, null when not found.
+     */
     static function getEditCurrentMailboxID()
     {
         global $controller;
@@ -519,6 +709,11 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Template flag: the account may create another mailbox (unlimited or under quota).
+     *
+     * @return bool
+     */
     static function getQuotaLimit()
     {
         $currentuser = ctrl_users::GetUserDetail();
@@ -526,6 +721,11 @@ class module_controller extends ctrl_module
                 ($currentuser['mailboxquota'] > ctrl_users::GetQuotaUsages('mailboxes', $currentuser['userid']));
     }
 
+    /**
+     * Template HTML: the mailbox quota pie chart, or the "unlimited" image.
+     *
+     * @return string HTML img tag.
+     */
     static function getEmailUsagepChart()
     {
         $currentuser = ctrl_users::GetUserDetail();
@@ -542,6 +742,11 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Template value: the password length to suggest (at least 9, or password_minlength when higher).
+     *
+     * @return int|string
+     */
     static function getMinPassLength()
     {
         $minpasswordlength = ctrl_options::GetSystemOption('password_minlength');
@@ -557,6 +762,11 @@ class module_controller extends ctrl_module
 
 
 
+    /**
+     * Template HTML: the error or success message of the last action.
+     *
+     * @return string|null HTML message, or null when there is nothing to show.
+     */
     static function getResult()
     {
         if (!fs_director::CheckForEmptyValue(self::$alreadyexists)) {

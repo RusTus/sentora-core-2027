@@ -29,10 +29,19 @@
 class module_controller extends ctrl_module
 {
 
+    /** @var bool|null True after a backup was deleted (shown by getResult()). */
     static $deleteok;
+    /** @var bool|null True after doBackup() ran (shown by getResult()). */
     static $backupok;
+    /** @var bool|null Set when a backup could not be saved (never set in this module; read by getResult()). */
     static $filenotexist;
 
+    /**
+     * List the account's backup archives.
+     *
+     * @param int $userid The account ID.
+     * @return array<int, array<string, string>> One row per backup: 'backupfile' (name without .zip), 'created', 'filesize'.
+     */
     static function ListBackUps($userid)
     {
         // real backup files only (sys_backup::ListFiles: no links, backup names only)
@@ -46,6 +55,14 @@ class module_controller extends ctrl_module
         return $res;
     }
 
+    /**
+     * Sort a list of rows in place by one column.
+     *
+     * @param array<array-key,array<string,mixed>> &$arr The rows to sort (changed in place).
+     * @param string $col The column key to sort by.
+     * @param int $dir Optional. SORT_ASC or SORT_DESC. Default SORT_ASC.
+     * @return void
+     */
     static function array_sort_by_column(&$arr, $col, $dir = SORT_ASC)
     {
         $sort_col = array();
@@ -55,6 +72,12 @@ class module_controller extends ctrl_module
         array_multisort($sort_col, $dir, $arr);
     }
 
+    /**
+     * Check whether the account's public_html folder has any files in it.
+     *
+     * @param int $userid The account ID.
+     * @return bool True when public_html is not empty.
+     */
     static function CheckHasData($userid)
     {
         $currentuser = ctrl_users::GetUserDetail($userid);
@@ -75,6 +98,18 @@ class module_controller extends ctrl_module
         return false;
     }
 
+    /**
+     * Run the before/after backup hooks.
+     *
+     * The backup itself is made in the background by doBackupNow(); this only fires
+     * the OnBeforeCreateBackup and OnAfterCreateBackup hooks.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller.
+     * @param int $userid The account ID.
+     * @param mixed $download Optional. The form's inDownLoad value (unused). Default 0.
+     * @return void
+     */
     static function ExecuteBackup($userid, $download = 0)
     {
         global $zdbh;
@@ -85,6 +120,12 @@ class module_controller extends ctrl_module
         runtime_hook::Execute('OnAfterCreateBackup');
     }
 
+    /**
+     * Print a file to the output in 1 MB chunks.
+     *
+     * @param string $filename The full path of the file to send.
+     * @return bool False when the file cannot be opened, else the result of fclose().
+     */
     static function readfile_chunked($filename)
     {
         $chunksize = 1 * (1024 * 1024);
@@ -100,6 +141,13 @@ class module_controller extends ctrl_module
         return fclose($handle);
     }
 
+    /**
+     * Delete one of the account's backups and run the delete hooks.
+     *
+     * @param string $username The account's username.
+     * @param string $file The backup name without the .zip extension.
+     * @return void
+     */
     static function ExecuteDeleteBackup($username, $file)
     {
         runtime_hook::Execute('OnBeforeDeleteBackup');
@@ -108,6 +156,12 @@ class module_controller extends ctrl_module
         runtime_hook::Execute('OnAfterDeleteBackup');
     }
 
+    /**
+     * Create the account's backups folder if it does not exist.
+     *
+     * @param string $username The account's username.
+     * @return void
+     */
     static function ExecuteCreateBackupDirectory($username)
     {
         $backupdir = ctrl_options::GetSystemOption('hosted_dir') . $username . "/backups/";
@@ -116,6 +170,11 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Get the number of days after which backups are purged.
+     *
+     * @return string|false The purge_date option when purging is on, else false.
+     */
     static function CheckPurgeDate()
     {
         if (strtolower(ctrl_options::GetSystemOption('purge_bu')) == "true") {
@@ -125,6 +184,15 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Handle the backup form POST for the logged-in account.
+     *
+     * Checks the CSRF token, runs ExecuteBackup() and sets $backupok.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller.
+     * @return void
+     */
     static function doBackup()
     {
         global $zdbh;
@@ -137,6 +205,13 @@ class module_controller extends ctrl_module
         self::$backupok = true;
     }
 
+    /**
+     * Handle the delete form POST: delete each backup whose inDelete_ button was sent.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller.
+     * @return void
+     */
     static function doDeleteBackup()
     {
         global $zdbh;
@@ -157,6 +232,12 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Template flag: the logged-in account has files in public_html.
+     *
+     * @global runtime_controller $controller The request controller (unused).
+     * @return bool
+     */
     static function GetHasData()
     {
         global $controller;
@@ -164,6 +245,12 @@ class module_controller extends ctrl_module
         return self::CheckHasData($currentuser['userid']);
     }
 
+    /**
+     * Template loop: the logged-in account's backups.
+     *
+     * @global runtime_controller $controller The request controller (unused).
+     * @return array<int, array<string, string>> One row per backup: 'backupfile', 'created', 'filesize'.
+     */
     static function GetBackUpList()
     {
         global $controller;
@@ -171,6 +258,12 @@ class module_controller extends ctrl_module
         return self::ListBackUps($currentuser['userid']);
     }
 
+    /**
+     * Get the backups folder of the logged-in account, relative to the hosted dir.
+     *
+     * @global runtime_controller $controller The request controller (unused).
+     * @return string For example "username/backups/".
+     */
     static function GetFileLocation()
     {
         global $controller;
@@ -179,6 +272,12 @@ class module_controller extends ctrl_module
         return $filelocation;
     }
 
+    /**
+     * Get the logged-in account's ID (used in the download link).
+     *
+     * @global runtime_controller $controller The request controller (unused).
+     * @return int|string The account ID as read from the database.
+     */
     static function getUserID()
     {
         global $controller;
@@ -187,6 +286,12 @@ class module_controller extends ctrl_module
         return $userid;
     }
 
+    /**
+     * Template flag: backups may be kept on the server's disk (disk_bu option).
+     *
+     * @global runtime_controller $controller The request controller (unused).
+     * @return bool
+     */
     static function GetDiskAllowed()
     {
         global $controller;
@@ -195,11 +300,23 @@ class module_controller extends ctrl_module
         return false;
     }
 
+    /**
+     * Template value: days after which backups are purged.
+     *
+     * @return string|false The purge_date option, or false when purging is off.
+     */
     static function GetPurgeDate()
     {
         return self::CheckPurgeDate();
     }
 
+    /**
+     * Create the logged-in account's backups folder if it is missing.
+     *
+     * ExecuteCreateBackupDirectory() returns nothing, so this always returns false.
+     *
+     * @return bool Always false in practice (the template echoes nothing).
+     */
     static function getCreateBackupDirectory()
     {
         $currentuser = ctrl_users::GetUserDetail();
@@ -208,6 +325,13 @@ class module_controller extends ctrl_module
         return false;
     }
 
+    /**
+     * Read a value from x_backup_settings.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param string $name The setting name (bus_name_vc).
+     * @return string|false The setting value, or false when not found.
+     */
     static function GetBUOption($name)
     {
         global $zdbh;
@@ -225,8 +349,14 @@ class module_controller extends ctrl_module
 
     // --- Back up now: in the background, with its progress on this page ------------------------
 
+    /** @var string Result of sys_backup::StartBackground(): '', 'started', 'running', 'recent' or 'failed'. */
     static $startResult = '';
 
+    /**
+     * Handle the "Back up now" POST: start a background backup for the logged-in account.
+     *
+     * @return void
+     */
     static function doBackupNow()
     {
         runtime_csfr::Protect();
@@ -234,6 +364,11 @@ class module_controller extends ctrl_module
         self::$startResult = sys_backup::StartBackground($me['userid']);
     }
 
+    /**
+     * Template HTML: the progress box while a backup runs, else the "Back up now" form.
+     *
+     * @return string HTML.
+     */
     static function getBackupNow()
     {
         $me = ctrl_users::GetUserDetail();
@@ -253,6 +388,12 @@ class module_controller extends ctrl_module
             . '</tr></table>' . runtime_csfr::Token() . '</form>';
     }
 
+    /**
+     * Template HTML: a message about starting or finishing the background backup.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return string HTML message, or '' when there is nothing to say.
+     */
     static function getProgressMessage()
     {
         global $controller;
@@ -283,15 +424,32 @@ class module_controller extends ctrl_module
 
     // --- copy to the client's own FTP server (sys_clientftp; uploads run by the daemon) ----------
 
+    /** @var string[] Errors from the FTP settings form (untranslated). */
     static $ftpErrors = array();
+    /** @var bool True after the FTP settings were saved. */
     static $ftpSaved = false;
+    /** @var string The FTP job queued for the daemon: '', 'check' or 'now'. */
     static $ftpQueued = '';
 
+    /**
+     * Template flag: copying backups to the client's own FTP server is allowed.
+     *
+     * @return bool
+     */
     static function getFtpAllowed()
     {
         return sys_clientftp::Allowed();
     }
 
+    /**
+     * Handle the FTP settings form POST: validate and save the settings.
+     *
+     * Sets $ftpErrors on a problem or $ftpSaved on success. The password is stored
+     * encrypted and only replaced when a new one was entered.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return void
+     */
     static function doFtpSave()
     {
         global $controller;
@@ -341,6 +499,14 @@ class module_controller extends ctrl_module
         self::$ftpSaved = true;
     }
 
+    /**
+     * Queue an FTP job for the daemon for the logged-in account.
+     *
+     * Checks the CSRF token; sets $ftpQueued, or $ftpErrors when no FTP server is saved.
+     *
+     * @param string $what The job: 'check' (test connection) or 'now' (upload now).
+     * @return void
+     */
     static function FtpQueue($what)
     {
         runtime_csfr::Protect();
@@ -354,16 +520,31 @@ class module_controller extends ctrl_module
         self::$ftpQueued = $what;
     }
 
+    /**
+     * Handle the "Test connection" POST.
+     *
+     * @return void
+     */
     static function doFtpCheck()
     {
         self::FtpQueue('check');
     }
 
+    /**
+     * Handle the "Upload now" POST.
+     *
+     * @return void
+     */
     static function doFtpNow()
     {
         self::FtpQueue('now');
     }
 
+    /**
+     * Template HTML: the FTP settings form and the test/upload buttons.
+     *
+     * @return string HTML.
+     */
     static function getFtpForm()
     {
         $me = ctrl_users::GetUserDetail();
@@ -396,6 +577,11 @@ class module_controller extends ctrl_module
             . '<form method="post" action="./?module=backupmgr&amp;action=FtpNow" style="display:inline">' . runtime_csfr::Token() . '<button class="btn btn-default" type="submit">' . $t('Upload now') . '</button></form>';
     }
 
+    /**
+     * Template HTML: queued job and the last test, upload and good copy times.
+     *
+     * @return string HTML table.
+     */
     static function getFtpStatus()
     {
         $me = ctrl_users::GetUserDetail();
@@ -418,6 +604,11 @@ class module_controller extends ctrl_module
         return $out . '</table>';
     }
 
+    /**
+     * Template HTML: the result message of the last form action.
+     *
+     * @return string|null HTML message, or null when there is nothing to show.
+     */
     static function getResult()
     {
         foreach (self::$ftpErrors as $e) {

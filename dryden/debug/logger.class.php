@@ -16,25 +16,28 @@
 class debug_logger {
 
     /**
-     * @var type The type of method to use to store the debug infomation (screen, file, email or database).
+     * @var string The type of method to use to store the debug infomation (screen, file, email or database).
      */
     var $method;
 
     /**
-     * @var type Any additonal (longer) infomation such as full exception code or error stack.
+     * @var mixed Any additonal (longer) infomation such as full exception code or error stack (string, Exception or null).
      */
     var $mextra;
 
     /**
-     * @var type The general description of the error.
+     * @var string|null The general description of the error.
      */
     var $detail;
 
     /**
-     * @var string A log code eg. (ERR4433) 
+     * @var string|int A log code eg. (ERR4433), 0 when unset.
      */
     var $logcode;
 
+    /**
+     * Set up the logger with the file method and empty log details.
+     */
     function __construct() {
         $this->method = "file";
         $this->mextra = null;
@@ -45,8 +48,9 @@ class debug_logger {
     /**
      * Writes the log infomation out to a predefined logging medium (from $this->method)
      * @author Bobby Allen (ballen@bobbyallen.me)
+     * Method "screen" dies with the message; "db" returns true; all other methods return null.
      * @global db_driver $zdbh The ZPX database handle.
-     * @return boolean 
+     * @return true|null True after a database write, null otherwise.
      */
     function writeLog() {
         global $zdbh;
@@ -104,7 +108,7 @@ class debug_logger {
     /**
      * Checks if there is infomation in the object to be reported on (If some debug/error message is pending).
      * @author Bobby Allen (ballen@bobbyallen.me)
-     * @return boolean 
+     * @return bool 
      */
     function hasInfo() {
         if ($this->detail != null)

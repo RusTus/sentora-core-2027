@@ -29,6 +29,11 @@
 class module_controller extends ctrl_module
 {
 
+    /**
+     * Template value: the translated "Launch Webmail" label.
+     *
+     * @return string
+     */
     static function getLaunchWebMail()
     {
         $message = ui_language::translate("Launch Webmail");
@@ -36,11 +41,21 @@ class module_controller extends ctrl_module
     }
 
 
+    /**
+     * Template flag: SOGo is installed on the server.
+     *
+     * @return bool
+     */
     static function getHasSOGo()
     {
         return is_file('/usr/sbin/sogod');
     }
 
+    /**
+     * Template value: the panel's domain (where SOGo runs), HTML-escaped.
+     *
+     * @return string
+     */
     static function getSOGoServer()
     {
         return htmlspecialchars((string) ctrl_options::GetSystemOption('sentora_domain'), ENT_QUOTES, 'UTF-8');

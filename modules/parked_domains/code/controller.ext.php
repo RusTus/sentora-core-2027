@@ -29,17 +29,32 @@
 class module_controller extends ctrl_module
 {
 
+    /** @var bool|null Not used in this module. */
     static $complete;
+    /** @var bool|null True when the domain starts with www. */
     static $error;
+    /** @var bool|null True when the vhost file could not be written (never set in this module). */
     static $writeerror;
+    /** @var bool|null True when the domain looks like a subdomain of an existing domain. */
     static $nosub;
+    /** @var bool|null True when the domain already exists on the server. */
     static $alreadyexists;
+    /** @var bool|null True when the domain name is not valid. */
     static $badname;
+    /** @var bool|null True when the domain was left blank. */
     static $blank;
+    /** @var bool|null True after a parked domain change was saved (shown by getResult()). */
     static $ok;
 
     /**
      * The 'worker' methods.
+     */
+    /**
+     * List the account's parked domains.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int $uid The account ID.
+     * @return array<int, array<string, mixed>>|false One row per domain: 'name', 'directory', 'active', 'created' (timestamp), 'id'; false when there are none.
      */
     static function ListParkedDomains($uid)
     {
@@ -67,6 +82,13 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * List all of the account's vhosts (domains, subdomains and parked domains).
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int $uid The account ID.
+     * @return array<int, array<string, mixed>>|false One row per vhost: 'name', 'directory', 'active', 'created', 'id'; false when there are none.
+     */
     static function ListCurrentDomain($uid)
     {
         global $zdbh;
@@ -93,6 +115,13 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Mark a parked domain deleted and flag the Apache config for rewriting.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $id The vhost ID.
+     * @return true Always true.
+     */
     static function ExecuteDeleteParkedDomain($id)
     {
         global $zdbh;
@@ -111,6 +140,16 @@ class module_controller extends ctrl_module
         return $retval;
     }
 
+    /**
+     * Add a parked domain after checking it.
+     *
+     * Inserts the x_vhosts row (type 3) and flags the Apache config for rewriting.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int $uid The account ID.
+     * @param string $domain The domain name (spaces are removed, lowercased).
+     * @return true|null True when added, null when a check failed.
+     */
     static function ExecuteAddParkedDomain($uid, $domain)
     {
         global $zdbh;
@@ -135,10 +174,10 @@ class module_controller extends ctrl_module
             $time = time();
             $sql->bindParam(':time', $time);
             $sql->execute();
-            # Only run if the Server platform is Windows.
+            // Only run if the Server platform is Windows.
             if (sys_versions::ShowOSPlatformVersion() == 'Windows') {
                 if (ctrl_options::GetSystemOption('disable_hostsen') == 'false') {
-                    # Lets add the hostname to the HOSTS file so that the server can view the domain immediately...
+                    // Lets add the hostname to the HOSTS file so that the server can view the domain immediately...
                     @exec("C:/Sentora/bin/zpss/setroute.exe " . $domain . "");
                     @exec("C:/Sentora/bin/zpss/setroute.exe www." . $domain . "");
                 }
@@ -150,6 +189,13 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Check a new parked domain; sets the matching error flag on the first problem.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param string $domain The domain name.
+     * @return bool True when the domain can be added.
+     */
     static function CheckCreateForErrors($domain)
     {
         global $zdbh;
@@ -218,6 +264,12 @@ class module_controller extends ctrl_module
         return TRUE;
     }
 
+    /**
+     * Check whether a number is a known HTTP status code.
+     *
+     * @param int|string $error The status code.
+     * @return bool
+     */
     static function CheckErrorDocument($error)
     {
         $errordocs = array(100, 101, 102, 200, 201, 202, 203, 204, 205, 206, 207,
@@ -229,6 +281,12 @@ class module_controller extends ctrl_module
         return in_array($error, $errordocs);
     }
 
+    /**
+     * Check that a string is a valid domain name (at least one dot, valid labels).
+     *
+     * @param string $a The domain name.
+     * @return bool
+     */
     static function IsValidDomainName($a)
     {
         if (stristr($a, '.')) {
@@ -244,11 +302,23 @@ class module_controller extends ctrl_module
         return true;
     }
 
+    /**
+     * Check that a string is a valid email address.
+     *
+     * @param string $email The email address.
+     * @return bool
+     */
     static function IsValidEmail($email)
     {
         return preg_match('/^[a-z0-9]+([_\\.-][a-z0-9]+)*@([a-z0-9]+([\.-][a-z0-9]+)*)+\\.[a-z]{2,}$/i', $email) == 1;
     }
 
+    /**
+     * Flag the Apache config for rewriting by the daemon (apache_changed option).
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return void
+     */
     static function SetWriteApacheConfigTrue()
     {
         global $zdbh;
@@ -264,6 +334,11 @@ class module_controller extends ctrl_module
 
     /**
      * Webinterface sudo methods.
+     */
+    /**
+     * Template loop: the logged-in account's parked domains.
+     *
+     * @return array<int, array<string, mixed>>|false One row per domain: 'name', 'directory', 'active', 'status' (HTML), 'created' (formatted date), 'id'; false when there are none.
      */
     static function getParkedDomainList()
     {
@@ -287,6 +362,11 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Template flag: the account may add another parked domain (unlimited or under quota).
+     *
+     * @return bool
+     */
     static function getCreateParkedDomain()
     {
         $currentuser = ctrl_users::GetUserDetail();
@@ -294,6 +374,12 @@ class module_controller extends ctrl_module
                 ($currentuser['parkeddomainquota'] > ctrl_users::GetQuotaUsages('parkeddomains', $currentuser['userid']));
     }
 
+    /**
+     * Handle the add parked domain form POST.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return bool True when the domain was added.
+     */
     static function doCreateParkedDomain()
     {
         global $controller;
@@ -309,6 +395,12 @@ class module_controller extends ctrl_module
         return;
     }
 
+    /**
+     * Handle the delete confirmation POST for one of the account's parked domains.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return bool True when the domain was deleted.
+     */
     static function doDeleteParkedDomain()
     {
         global $controller;
@@ -328,6 +420,12 @@ class module_controller extends ctrl_module
         return false;
     }
 
+    /**
+     * Handle the list POST: redirect to the delete confirmation and exit.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return false False when no delete button was sent (otherwise it exits).
+     */
     static function doConfirmDeleteParkedDomain()
     {
         global $controller;
@@ -343,6 +441,14 @@ class module_controller extends ctrl_module
         return false;
     }
 
+    /**
+     * Template flag: show the delete confirmation for an own vhost (?show=Delete&id=<id>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|null $uid Optional. The account ID; null for the logged-in account. Default null.
+     * @return bool|null Null when the vhost is not the account's own.
+     */
     static function getisDeleteDomain($uid = null)
     {
         global $controller;
@@ -368,6 +474,12 @@ class module_controller extends ctrl_module
         return (isset($urlvars['show'])) && ($urlvars['show'] == "Delete");
     }
 
+    /**
+     * Template value: the ?id= of the URL.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return string The ID, or ''.
+     */
     static function getCurrentID()
     {
         global $controller;
@@ -375,6 +487,12 @@ class module_controller extends ctrl_module
         return ($id) ? $id : '';
     }
 
+    /**
+     * Template value: the ?domain= of the URL.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return string The domain, or ''.
+     */
     static function getCurrentDomain()
     {
         global $controller;
@@ -382,6 +500,11 @@ class module_controller extends ctrl_module
         return ($domain) ? $domain : '';
     }
 
+    /**
+     * Template HTML: the parked domain quota pie chart, or the "unlimited" image.
+     *
+     * @return string HTML img tag.
+     */
     static function getParkedDomainUsagepChart()
     {
         $currentuser = ctrl_users::GetUserDetail();
@@ -398,6 +521,14 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Build the two status table cells (Live or Pending with a help icon) of a parked domain.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @param int|string $int The vh_active_in value (1 = live).
+     * @param int|string $id The vhost ID.
+     * @return string HTML (two td cells).
+     */
     static function getParkedDomainStatusHTML($int, $id)
     {
         global $controller;
@@ -412,6 +543,11 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Template HTML: the error or success message of the last action.
+     *
+     * @return string|null HTML message, or null when there is nothing to show.
+     */
     static function getResult()
     {
         if (!fs_director::CheckForEmptyValue(self::$blank)) {

@@ -20,8 +20,18 @@
 // to relicence this code under the open source licence of their choice.
  
 
-# for LEscript you can use any logger according to Psr\Log\LoggerInterface
+// for LEscript you can use any logger according to Psr\Log\LoggerInterface
+/**
+ * Minimal logger for Lescript: echoes every call as a timestamped line.
+ */
 class Logger {
+	/**
+	 * Echo a log line for any method name (info, error, ...).
+	 *
+	 * @param string $name The called method, used as the log level.
+	 * @param array<int,mixed> $arguments The arguments; the first is the message.
+	 * @return void
+	 */
 	function __call($name, $arguments) {
 		echo date('Y-m-d H:i:s')." [$name] {$arguments[0]}\n";
 	}
@@ -40,19 +50,19 @@ if (ui_module::CheckModuleEnabled('Sencrypt SSL')) {
 	} elseif ( ctrl_options::GetSystemOption('panel_ssl_tx') != null) {
 		
 		echo fs_filehandler::NewLine() . "RENEWING Control Panel certificates..." . fs_filehandler::NewLine();
-			# Run renew panel cert function
+			// Run renew panel cert function
 			renewPanelCertificates();
 			
 		echo fs_filehandler::NewLine()."RENEWING Control Panel certificates completed." . fs_filehandler::NewLine();
 	}
 	
 	echo fs_filehandler::NewLine() . "RENEWING client certificates..." . fs_filehandler::NewLine();
-		# Run renew cert function
+		// Run renew cert function
 		renewCertificates();
 		
 	echo "RENEWING client certificates completed." . fs_filehandler::NewLine();
 	
-	# Restart Apache service
+	// Restart Apache service
 	RestartHttpdServicesForSSL();
 
 } else {
@@ -62,7 +72,16 @@ if (ui_module::CheckModuleEnabled('Sencrypt SSL')) {
 
 echo "END Sencrypt Manager SSL Renewal Hook." . fs_filehandler::NewLine();
 
-# Start functions here
+// Start functions here
+/**
+ * Renew the Let's Encrypt certificates of all SSL vhosts that expire within 30 days.
+ *
+ * Skips domains whose DNS does not point to this server. Exits the daemon run with code 1 when a renewal fails.
+ *
+ * @global db_driver $zdbh The panel's database connection.
+ * @global runtime_controller $controller The request controller (unused).
+ * @return void
+ */
 function renewCertificates() {
 	global $zdbh, $controller;
 	$logger = new Logger();
@@ -88,10 +107,10 @@ function renewCertificates() {
 			$webroot = $domainPath;
 			
 			$accountDir = ctrl_options::GetSystemOption('hosted_dir') . $vhostOwner['username'] . "/ssl/sencrypt/letsencrypt/";
-			# Changed to help with backup and compability
+			// Changed to help with backup and compability
 			$certlocation = ctrl_options::GetSystemOption('hosted_dir') . $vhostOwner['username'] . "/ssl/sencrypt/letsencrypt/" . $sslVhost['vh_name_vc'] . "/";
 			
-			# Require Lescript for renewal of SSL certs
+			// Require Lescript for renewal of SSL certs
 			require_once 'modules/sencrypt/code/Lescript.php';
 			
 			// Always use UTC
@@ -100,7 +119,7 @@ function renewCertificates() {
 			// Do we need to create or upgrade our cert? Assume no to start with.
 			$needsgen = false;
 			
-			# Set country/state - tg & Jettaman	
+			// Set country/state - tg & Jettaman	
 			$user_ip = ctrl_options::GetSystemOption('server_ip');
 			$ip_response = file_get_contents('http://ip-api.com/json/'.$user_ip);
 			$ip_array = json_decode($ip_response);
@@ -109,13 +128,13 @@ function renewCertificates() {
 			$ipStatus = $ip_array->status;
 			$querydata = $ip_array->query;
 			
-			# Default if API failed
+			// Default if API failed
 			//$countryCode = "US";
 			//$state = "NM";
 			//$ipStatus = "sucess";
 			
-			# Check if Domain is LIVE and Pointing to this server
-			# Check DNS before continuing
+			// Check if Domain is LIVE and Pointing to this server
+			// Check DNS before continuing
 			if (checkDNSIsLive($domain, $ipStatus, $querydata, $user_ip) == false) {
 				//$dnsInvalid = true;
 				//return false;
@@ -148,20 +167,20 @@ function renewCertificates() {
 			if ($needsgen) {
 				try {
 					//$le = new Analogic\ACME\Lescript($accountDir, $certlocation, $webroot, $logger);
-					# or without logger:
+					// or without logger:
 					// Pass the logger itself: "$logger = NULL" here set $logger to null, so the
 					// catch block below crashed with a fatal error and stopped the whole daemon run
 					$le = new Analogic\ACME\Lescript($accountDir, $certlocation, $webroot, $logger, $countryCode, $state);
 					$le->initAccount();
 
-					# Check if domain is a subdomain
+					// Check if domain is a subdomain
 					$sql = "SELECT vh_type_in FROM x_vhosts WHERE vh_acc_fk=:userid AND vh_name_vc=:domain AND vh_enabled_in = '1' AND vh_deleted_ts IS NULL";
 					$query = $zdbh->prepare($sql);
 					$query->bindParam(':userid', $sslVhost['vh_acc_fk']);
 					$query->bindParam(':domain', $domain);
 					$query->execute();
 				
-					# Get domain type
+					// Get domain type
 					$domainType = $query->fetchColumn();
 											
 					if ($domainType == 2 ) {
@@ -178,7 +197,7 @@ function renewCertificates() {
 					$logger->error($e->getMessage());
 					$logger->error($e->getTraceAsString());
 					$errorCatahed = $e->getMessage();
-					# Throw error and log to file
+					// Throw error and log to file
 					error_log( date('Y-m-d H:i:s') . " - DOMAIN: "  . fs_filehandler::NewLine() . $errorCatahed . fs_filehandler::NewLine(), 3, ctrl_options::GetSystemOption('sentora_root') . 'modules/sencrypt/sencrypt.log');
 					// Exit with an error code, something went wrong.
 					exit(1);
@@ -191,6 +210,15 @@ function renewCertificates() {
 	
 }
 
+/**
+ * Renew the panel domain's Let's Encrypt certificate when it expires within 30 days.
+ *
+ * Only when the panel has SSL settings and runs on port 443. Exits the daemon run with code 1 when the renewal fails.
+ *
+ * @global db_driver $zdbh The panel's database connection (unused).
+ * @global runtime_controller $controller The request controller (unused).
+ * @return void
+ */
 function renewPanelCertificates() {
 	global $zdbh, $controller;
 	$logger = new Logger();
@@ -199,10 +227,10 @@ function renewPanelCertificates() {
 	
 		if ((ctrl_options::GetSystemOption('panel_ssl_tx') != NULL) && (ctrl_options::GetSystemOption('sentora_port' ) == 443 )) {
 			
-			# Other panel subomains to include - BETA DONT NOT ENABLE
+			// Other panel subomains to include - BETA DONT NOT ENABLE
 			//$otherSubDomains = "ftp, webmail, mail, smtp, imap, pop";
 			
-			# Renew values
+			// Renew values
 			$panelOwner = "zadmin";
 			$domainPath = ctrl_options::GetSystemOption('sentora_root');
 			echo "Checking certificate for Control Panel Domain: " . ctrl_options::GetSystemOption('sentora_domain') . fs_filehandler::NewLine();
@@ -215,10 +243,10 @@ function renewPanelCertificates() {
 			$webroot = $domainPath;
 			
 			$accountDir = ctrl_options::GetSystemOption('hosted_dir') . $panelOwner . "/ssl/sencrypt/letsencrypt/";
-			# Changed to help with backup and compability
+			// Changed to help with backup and compability
 			$certlocation = ctrl_options::GetSystemOption('hosted_dir') . $panelOwner . "/ssl/sencrypt/letsencrypt/" . $domain . "/";
 			
-			# Require Lescript for renewal of SSL certs
+			// Require Lescript for renewal of SSL certs
 			require_once 'modules/sencrypt/code/Lescript.php';
 			
 			// Always use UTC
@@ -227,7 +255,7 @@ function renewPanelCertificates() {
 			// Do we need to create or upgrade our cert? Assume no to start with.
 			$needsgen = false;
 			
-			# Set country/state - tg & Jettaman	
+			// Set country/state - tg & Jettaman	
 			$user_ip = ctrl_options::GetSystemOption('server_ip');
 			$ip_response = file_get_contents('http://ip-api.com/json/'.$user_ip);
 			$ip_array = json_decode($ip_response);
@@ -236,13 +264,13 @@ function renewPanelCertificates() {
 			$ipStatus = $ip_array->status;
 			$querydata = $ip_array->query;
 			
-			# Default if API failed
+			// Default if API failed
 			//$countryCode = "US";
 			//$state = "NM";
 			//$ipStatus = "sucess";
 			
-			# Check if Domain is LIVE and Pointing to this server
-			# Check DNS before continuing
+			// Check if Domain is LIVE and Pointing to this server
+			// Check DNS before continuing
 			if (checkDNSIsLive($domain, $ipStatus, $querydata, $user_ip) == false) {
 				//$dnsInvalid = true;
 				//return false;
@@ -273,13 +301,13 @@ function renewPanelCertificates() {
 			if ($needsgen) {
 				try {
 					//$le = new Analogic\ACME\Lescript($accountDir, $certlocation, $webroot, $logger);
-					# or without logger:
+					// or without logger:
 					// Pass the logger itself: "$logger = NULL" here set $logger to null, so the
 					// catch block below crashed with a fatal error and stopped the whole daemon run
 					$le = new Analogic\ACME\Lescript($accountDir, $certlocation, $webroot, $logger, $countryCode, $state);
 					$le->initAccount();
 									
-					# Create panel SSL if no other sub domains are listed
+					// Create panel SSL if no other sub domains are listed
 					//if ($otherSubDomain == NULL ) {
 						
 						// Create panel domain cart
@@ -333,7 +361,7 @@ function renewPanelCertificates() {
 					$logger->error($e->getMessage());
 					$logger->error($e->getTraceAsString());
 					$errorCatahed = $e->getMessage();
-					# Throw error and log to file
+					// Throw error and log to file
 					error_log( date('Y-m-d H:i:s') . " - PANEL DOMAIN: "  . fs_filehandler::NewLine() . $errorCatahed . fs_filehandler::NewLine(), 3, ctrl_options::GetSystemOption('sentora_root') . 'modules/sencrypt/sencrypt.log');
 					// Exit with an error code, something went wrong. Disable because it stops Daemon from completing.
 					exit(1);
@@ -345,11 +373,17 @@ function renewPanelCertificates() {
 		
 }
 
+/**
+ * Reload Apache so renewed certificates are used.
+ *
+ * @global db_driver $zdbh The panel's database connection (unused).
+ * @return void
+ */
 function RestartHttpdServicesForSSL() {
 	   
     global $zdbh;
    
-	# Restart Apache after SSL renewal	
+	// Restart Apache after SSL renewal	
 	echo "Finished Renewing Sencrypt SSL's... Now reloading Apache..." . fs_filehandler::NewLine();
 
 	$returnValue = 0;
@@ -370,13 +404,22 @@ function RestartHttpdServicesForSSL() {
 
 }
 
+/**
+ * Check that a domain has an A record and that ip-api.com saw this server's IP.
+ *
+ * @param string $domain The domain name.
+ * @param string $ipStatus The ip-api.com 'status' value.
+ * @param string $querydata The ip-api.com 'query' value (the IP it looked up).
+ * @param string $server_ip The server's IP (server_ip option).
+ * @return bool|null True when live, false without an A record, null when the IP check fails.
+ */
 function checkDNSIsLive ($domain, $ipStatus, $querydata, $server_ip) {
 	 
-	# Check DNS for domain is live and public before continuing
-	# Pull IP from Sentora DB
+	// Check DNS for domain is live and public before continuing
+	// Pull IP from Sentora DB
 	ctrl_options::GetSystemOption('server_ip');
 	
-	# Check Ip's match
+	// Check Ip's match
 	if(checkdnsrr($domain,"A")) {
 		if (($ipStatus == "success") && ($querydata == $server_ip)) {
 			return true;		

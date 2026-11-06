@@ -1,5 +1,11 @@
 <?php
 
+/**
+ * Sencrypt module hook (OnDaemonRun): copy the panel's Sencrypt certificate to the mail and FTP services.
+ *
+ * @package Sentora
+ * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
+ */
 /*
  * Keep the mail and FTP services on the panel's Sencrypt certificate.
  *
@@ -15,6 +21,14 @@ echo fs_filehandler::NewLine() . "START Sencrypt service certificate sync." . fs
 SyncPanelCertificateToServices();
 echo "END Sencrypt service certificate sync." . fs_filehandler::NewLine();
 
+/**
+ * Install the panel's Sencrypt certificate for Postfix, Dovecot and ProFTPD when it is new or renewed.
+ *
+ * Copies fullchain.pem, private.pem and chain.pem to /etc/sentora/configs/ssl/ (keeping the installer's
+ * self-signed pair once as selfsigned.*) and reloads those services. Needs root.
+ *
+ * @return void
+ */
 function SyncPanelCertificateToServices()
 {
     $panelSSL = (string) ctrl_options::GetSystemOption('panel_ssl_tx');

@@ -18,7 +18,8 @@ class debug_phperrors {
     /**
      * Sets PHP error reporting to ON and displays ALL errors if set to 'dev' otherwise will disable all errors.
      * @author Bobby Allen (ballen@bobbyallen.me)
-     * @param str $mode Either 'dev' or 'prod', is left blank 'prod' is used by default.
+     * @param string $mode Either 'dev' or 'prod', is left blank 'prod' is used by default.
+     * @return void
      */
     static function SetMode($mode = '') {
         if ($mode == 'dev') {

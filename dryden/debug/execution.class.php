@@ -35,7 +35,7 @@ class debug_execution {
     /**
      * Gets a list of all the currently loaded classes.
      * @author Bobby Allen (ballen@bobbyallen.me)
-     * @return array List of the classes that are currently loaded.
+     * @return string[] List of the classes that are currently loaded.
      */
     static function GetLoadedClasses() {
         $classes_loaded = get_declared_classes();

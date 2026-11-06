@@ -14,6 +14,15 @@ if (ui_module::CheckModuleEnabled('Matomo') && matomo_helper::Installed()) {
 }
 echo "END Matomo sync." . fs_filehandler::NewLine();
 
+/**
+ * Bring Matomo's sites, users and access in step with the panel's domains and accounts.
+ *
+ * Writes a JSON spec, runs the sentora:sync console command and stores the site IDs
+ * and tokens it returns. Skips Matomo when nothing changed since the last run.
+ *
+ * @global db_driver $zdbh The panel's database connection.
+ * @return void
+ */
 function MatomoSync()
 {
     global $zdbh;

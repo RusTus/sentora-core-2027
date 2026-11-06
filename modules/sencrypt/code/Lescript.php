@@ -1,36 +1,72 @@
 <?php
  
+/**
+ * Sencrypt module: Lescript, a small ACME v2 (Let's Encrypt) client.
+ *
+ * Based on analogic/lescript, changed for Sentora (country code and state in the
+ * CSR, account email update, certificate revocation).
+ *
+ * @package Sentora
+ * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
+ */
 namespace Analogic\ACME;
 
 use \RuntimeException;
 use \Psr\Log\LoggerInterface;
 
+/**
+ * ACME v2 client: registers the account, proves domain control with http-01 and fetches certificates.
+ */
 class Lescript
 {
+    /** @var string ACME server base URL (production). */
     public $ca = 'https://acme-v02.api.letsencrypt.org'; // PRODUCTION ONLY
     //public $ca = 'https://acme-staging-v02.api.letsencrypt.org'; // TESTING ONLY!!!!!
+    /** @var string Country code (C) for the CSR. */
     public $countryCode;
+    /** @var string State or province (ST) for the CSR. */
     public $state;
-    public $challenge = 'http-01'; # http-01 challange only
-    public $contact = array(); # optional
+    /** @var string The challenge type to use (only http-01 is supported). */
+    public $challenge = 'http-01'; // http-01 challange only
+    /** @var string[] Account contact URIs, e.g. 'mailto:me@example.com'. */
+    public $contact = array(); // optional
 
+	/** @var string User-Agent sent to the ACME server. */
 	public $clientUserAgent = "analogic-lescript/0.3.0";
 	
+    /** @var string Folder where the keys, CSR and certificates are written. */
     protected $certificatesDir;
+    /** @var string Web root of the domain; the challenge token goes in .well-known/acme-challenge. */
     protected $webRootDir;
 
     /** @var LoggerInterface */
     protected $logger;
     /** @var ClientInterface */
     protected $client;
+    /** @var string Path of the account's private key (private.pem). */
     protected $accountKeyPath;
 
+    /** @var string The account URL (kid), '' until known. */
     protected $accountId = '';
+    /** @var string The newAccount URL from the ACME directory. */
     protected $urlNewAccount = '';
+    /** @var string The newNonce URL from the ACME directory. */
     protected $urlNewNonce = '';
+    /** @var string The newOrder URL from the ACME directory. */
     protected $urlNewOrder = '';
 	
-	# NEW CODE - tg - Added counntry code and state
+	// NEW CODE - tg - Added counntry code and state
+    /**
+     * Set up the client with its folders, logger and CSR details.
+     *
+     * @param string $accountDir Folder of the account; the key is read from <accountDir>_account/private.pem.
+     * @param string $certificatesDir Folder where the domain key, CSR and certificates are written.
+     * @param string $webRootDir Web root of the domain (for the http-01 token).
+     * @param object|null $logger Anything with an info() method (the module's Logger); null echoes the messages.
+     * @param string $countryCode Country code (C) for the CSR.
+     * @param string $state State or province (ST) for the CSR.
+     * @param ClientInterface|null $client Optional. The HTTP client; null makes a Client for $ca. Default null.
+     */
     public function __construct($accountDir, $certificatesDir, $webRootDir, $logger, $countryCode, $state, ?ClientInterface $client = null)
     {
 		$this->accountDir = $accountDir;
@@ -43,14 +79,20 @@ class Lescript
         $this->accountKeyPath = $accountDir . '_account/private.pem';
     }
 
+    /**
+     * Load the ACME directory and register the account (or look up its ID when the key exists).
+     *
+     * @return void
+     * @throws RuntimeException When no account ID is returned.
+     */
     public function initAccount()
     {
         $this->initCommunication();
 
         if (!is_file($this->accountKeyPath)) {
 
-            # generate and save new private key for account
-            # ---------------------------------------------
+            // generate and save new private key for account
+            // ---------------------------------------------
             $this->log('Starting new account registration');
             $this->generateKey(dirname($this->accountKeyPath));
             $this->postNewReg();
@@ -68,6 +110,12 @@ class Lescript
         $this->log("Account: " . $this->accountId);
     }
 
+    /**
+     * Read the ACME directory URLs and get a first nonce.
+     *
+     * @return void
+     * @throws RuntimeException When the directory lacks a needed URL.
+     */
     public function initCommunication()
     {
 		$this->log('ACME Client: '.$this->clientUserAgent);
@@ -87,6 +135,16 @@ class Lescript
         $this->client->get($this->urlNewNonce);
     }
 
+    /**
+     * Order, validate (http-01) and download a certificate for the domains.
+     *
+     * Writes private.pem, last.csr, fullchain.pem, cert.pem and chain.pem to the certificates folder.
+     *
+     * @param string[] $domains The domain names; the first is the certificate's CN.
+     * @param bool $reuseCsr Optional. Reuse last.csr when it exists. Default false.
+     * @return void
+     * @throws RuntimeException On any ACME or file error.
+     */
     public function signDomains(array $domains, $reuseCsr = false)
     {
         $this->log('Starting certificate generation process for domains');
@@ -94,8 +152,8 @@ class Lescript
         $privateAccountKey = $this->readPrivateKey($this->accountKeyPath);
         $accountKeyDetails = openssl_pkey_get_details($privateAccountKey);
 
-        # start domains authentication
-        # ----------------------------
+        // start domains authentication
+        // ----------------------------
         $this->log("Requesting challenge for ".join(', ', $domains));
         $response = $this->signedRequest(
             $this->urlNewOrder,
@@ -110,8 +168,8 @@ class Lescript
         $finalizeUrl = $response['finalize'];
 
         foreach ($response['authorizations'] as $authz) {
-            # 1. getting authentication requirements
-            # --------------------------------------
+            // 1. getting authentication requirements
+            // --------------------------------------
             $response = $this->signedRequest($authz, "");
             $domain = $response['identifier']['value'];
             if (empty($response['challenges'])) {
@@ -126,8 +184,8 @@ class Lescript
 
             $this->log("Got challenge token for $domain");
 
-            # 2. saving authentication token for web verification
-            # ---------------------------------------------------
+            // 2. saving authentication token for web verification
+            // ---------------------------------------------------
             $directory = $this->webRootDir . '/.well-known/acme-challenge';
             $tokenPath = $directory . '/' . $challenge['token'];
 
@@ -136,7 +194,7 @@ class Lescript
             }
 
             $header = array(
-                # need to be in precise order!
+                // need to be in precise order!
                 "e" => Base64UrlSafeEncoder::encode($accountKeyDetails["rsa"]["e"]),
                 "kty" => "RSA",
                 "n" => Base64UrlSafeEncoder::encode($accountKeyDetails["rsa"]["n"])
@@ -147,15 +205,15 @@ class Lescript
             file_put_contents($tokenPath, $payload);
             chmod($tokenPath, 0644);
 
-            # 3. verification process itself
-            # -------------------------------
+            // 3. verification process itself
+            // -------------------------------
             $uri = "http://{$domain}/.well-known/acme-challenge/{$challenge['token']}";
 
             $this->log("Token for $domain saved at $tokenPath and should be available at $uri");
 
             $this->log("Sending request to challenge");
                 
-            # send request to challenge
+            // send request to challenge
             $maxAllowedLoops = 6;
             $loopCount = 1;
             $result = null;
@@ -189,16 +247,16 @@ class Lescript
             @unlink($tokenPath);
         } 
 
-        # requesting certificate
-        # ----------------------
+        // requesting certificate
+        // ----------------------
         $domainPath = $this->getDomainPath(reset($domains));
 
-        # generate private key for domain if not exist
+        // generate private key for domain if not exist
         if (!is_dir($domainPath) || !is_file($domainPath . '/private.pem')) {
             $this->generateKey($domainPath);
         }
 
-        # load domain key
+        // load domain key
         $privateDomainKey = $this->readPrivateKey($domainPath . '/private.pem');
 
         $this->client->getLastLinks();
@@ -244,7 +302,7 @@ class Lescript
             throw new RuntimeException("Certificate generation processing timed out (Status not 'valid')");
         }
 
-        # waiting loop
+        // waiting loop
         $certificates = array();
         while (1) {
             $this->client->getLastLinks();
@@ -261,7 +319,7 @@ class Lescript
                 $this->log("Got certificate! YAY!");
                 $serverCert = $this->parseFirstPemFromBody($result);
                 $certificates[] = $serverCert;
-                $certificates[] = substr($result, strlen($serverCert)); # rest of ca certs
+                $certificates[] = substr($result, strlen($serverCert)); // rest of ca certs
 
                 break;
             } else {
@@ -285,6 +343,13 @@ class Lescript
         $this->log("Done !!§§!");
     }
 
+    /**
+     * Load a private key from a PEM file.
+     *
+     * @param string $path The path of the PEM file.
+     * @return \OpenSSLAsymmetricKey
+     * @throws RuntimeException When the key cannot be read.
+     */
     protected function readPrivateKey($path)
     {
         if (($key = openssl_pkey_get_private('file://' . $path)) === FALSE) {
@@ -294,6 +359,12 @@ class Lescript
         return $key;
     }
 
+    /**
+     * Get the first certificate from a PEM chain.
+     *
+     * @param string $body The PEM chain.
+     * @return string The first certificate block.
+     */
     protected function parseFirstPemFromBody($body)
     {
         preg_match('~(-----BEGIN.*?END CERTIFICATE-----)~s', $body, $matches);
@@ -301,17 +372,33 @@ class Lescript
         return $matches[1];
     }
 
+    /**
+     * Get the folder for a domain's files (always the certificates folder in Sentora).
+     *
+     * @param string $domain The domain name (unused).
+     * @return string
+     */
     protected function getDomainPath($domain)
     {
         //tg return $this->certificatesDir . '/' . $domain . '/';
 		return $this->certificatesDir;
     }
 
+    /**
+     * Look up the account ID by registering again with the existing key.
+     *
+     * @return array<string, mixed>|string The ACME response.
+     */
     protected function getAccountId()
     {
         return $this->postNewReg();
     }
 
+    /**
+     * Send the newAccount request and keep the account URL from the Location header.
+     *
+     * @return array<string, mixed>|string The ACME response.
+     */
     protected function postNewReg()
     {
         $data = array(
@@ -335,6 +422,14 @@ class Lescript
         return $response;
     }
 
+    /**
+     * Make a CSR for the domains (all of them as subjectAltName) and save it as last.csr.
+     *
+     * @param \OpenSSLAsymmetricKey $privateKey The domain's private key.
+     * @param string[] $domains The domain names; the first is the CN.
+     * @return string The CSR in base64url DER form.
+     * @throws RuntimeException When the CSR cannot be made.
+     */
     protected function generateCSR($privateKey, array $domains)
     {
         $domain = reset($domains);
@@ -345,7 +440,7 @@ class Lescript
         $tmpConfMeta = stream_get_meta_data($tmpConf);
         $tmpConfPath = $tmpConfMeta["uri"];
 
-        # workaround to get SAN working
+        // workaround to get SAN working
         fwrite($tmpConf,
             'HOME = .
 RANDFILE = $ENV::HOME/.rnd
@@ -386,6 +481,12 @@ keyUsage = nonRepudiation, digitalSignature, keyEncipherment');
         return $this->getCsrContent($csrPath);
     }
 
+    /**
+     * Read a PEM CSR file and convert it to base64url DER for the finalize request.
+     *
+     * @param string $csrPath The path of the CSR file.
+     * @return string
+     */
     protected function getCsrContent($csrPath) {
         $csr = file_get_contents($csrPath);
 
@@ -394,6 +495,13 @@ keyUsage = nonRepudiation, digitalSignature, keyEncipherment');
         return trim(Base64UrlSafeEncoder::encode(base64_decode($matches[1])));
     }
 
+    /**
+     * Make a 4096-bit RSA key pair and save it as private.pem and public.pem.
+     *
+     * @param string $outputDirectory The folder to write to (made when missing).
+     * @return void
+     * @throws RuntimeException When the key or folder cannot be made.
+     */
     protected function generateKey($outputDirectory)
     {
         $res = openssl_pkey_new(array(
@@ -414,6 +522,14 @@ keyUsage = nonRepudiation, digitalSignature, keyEncipherment');
         file_put_contents($outputDirectory . '/public.pem', $details['key']);
     }
 
+    /**
+     * Send a JWS-signed POST to the ACME server (kid when the account is known, else jwk).
+     *
+     * @param string $uri The URL.
+     * @param array<string,mixed>|string $payload The payload; '' for a POST-as-GET.
+     * @param string|null $nonce Optional. The nonce; null uses the last one. Default null.
+     * @return array<string, mixed>|string The parsed JSON response, or the raw body.
+     */
     protected function signedRequest($uri, $payload, $nonce = null)
     {
         $privateKey = $this->readPrivateKey($this->accountKeyPath);
@@ -453,6 +569,12 @@ keyUsage = nonRepudiation, digitalSignature, keyEncipherment');
         return $this->client->post($uri, json_encode($data));
     }
 
+    /**
+     * Write a message to the logger, or echo it when there is none.
+     *
+     * @param string $message The message.
+     * @return void
+     */
     protected function log($message)
     {
         if ($this->logger) {
@@ -462,9 +584,14 @@ keyUsage = nonRepudiation, digitalSignature, keyEncipherment');
         }
     }
 	
-	################################################################### 
+	//################################################################## 
 	
 	
+	/**
+	 * Update the account's contact addresses to $contact.
+	 *
+	 * @return array<string, mixed>|string The ACME response.
+	 */
 	public function postUpdateRegEmail()
     {
 
@@ -485,6 +612,14 @@ keyUsage = nonRepudiation, digitalSignature, keyEncipherment');
         return $response;
     }
 
+    /**
+     * Send a signed account update request (kid is the account URL).
+     *
+     * @param string $uri The account URL.
+     * @param array<string,mixed>|string $payload The payload.
+     * @param string|null $nonce Optional. The nonce; null uses the last one. Default null.
+     * @return array<string, mixed>|string The parsed JSON response, or the raw body.
+     */
     public function updateRequest($uri, $payload, $nonce = null)
     {
         $privateKey = $this->readPrivateKey($this->accountKeyPath);
@@ -519,7 +654,7 @@ keyUsage = nonRepudiation, digitalSignature, keyEncipherment');
             'signature' => $signed64
         );
 
-		#FOR TESTING
+		//FOR TESTING
 		//$sendDATA = array(
 			//"URL" => $uri,
 			//"payload" => $payload,
@@ -527,7 +662,7 @@ keyUsage = nonRepudiation, digitalSignature, keyEncipherment');
 		//);
 
 		$this->log("Sending request to update account email...");
-		# TESTING ONLY
+		// TESTING ONLY
 		//echo print_r($sendDATA);
 		
         return $this->client->post($uri, json_encode($data));
@@ -537,6 +672,12 @@ keyUsage = nonRepudiation, digitalSignature, keyEncipherment');
     }
 	
 	
+	/**
+	 * Revoke a certificate.
+	 *
+	 * @param string $certData The certificate in base64url DER form.
+	 * @return array<string, mixed>|string The ACME response.
+	 */
 	function postRevoke($certData) {
 		
 		$reason = "1";
@@ -560,6 +701,14 @@ keyUsage = nonRepudiation, digitalSignature, keyEncipherment');
     }
 	
 	
+	/**
+	 * Send a signed revokeCert request.
+	 *
+	 * @param string $uri The revokeCert URL.
+	 * @param array<string,mixed>|string $payload The payload.
+	 * @param string|null $nonce Optional. The nonce; null uses the last one. Default null.
+	 * @return array<string, mixed>|string The parsed JSON response, or the raw body.
+	 */
 	function revokeRequest($uri, $payload, $nonce = null) {
         $privateKey = $this->readPrivateKey($this->accountKeyPath);
         $details = openssl_pkey_get_details($privateKey);
@@ -600,6 +749,9 @@ keyUsage = nonRepudiation, digitalSignature, keyEncipherment');
 		
 }
 
+/**
+ * HTTP client used by Lescript to talk to the ACME server.
+ */
 interface ClientInterface
 {
     /**
@@ -613,13 +765,15 @@ interface ClientInterface
      * Send a POST request
      *
      * @param string $url URL to post to
-     * @param array $data fields to sent via post
-     * @return array|string the parsed JSON response, raw response on error
+     * @param string $data the JSON body to send (Lescript posts a JSON-encoded JWS)
+     * @return array<string, mixed>|string the parsed JSON response, raw response on error
      */
     public function post($url, $data);
     /**
+     * Send a GET request
+     *
      * @param string $url URL to request via get
-     * @return array|string the parsed JSON response, raw response on error
+     * @return array<string, mixed>|string the parsed JSON response, raw response on error
      */
     public function get($url);
     /**
@@ -628,7 +782,7 @@ interface ClientInterface
      * if no request has been made, yet. A GET on $base/directory is done and the
      * resulting nonce returned
      *
-     * @return mixed
+     * @return string
      */
     public function getLastNonce();
     /**
@@ -642,7 +796,7 @@ interface ClientInterface
     /**
      * Return the HTTP status code of the last request
      *
-     * @return int
+     * @return int|null
      */
     public function getLastCode();
     /**
@@ -653,20 +807,42 @@ interface ClientInterface
     public function getLastLinks();
 }
 
+/**
+ * cURL implementation of ClientInterface.
+ */
 class Client implements ClientInterface
 {
+    /** @var int|null HTTP status code of the last request. */
     protected $lastCode;
+    /** @var string|null Response headers of the last request. */
     protected $lastHeader;
 
+    /** @var string ACME API base URL for relative requests. */
     protected $base;
+	/** @var string User-Agent header value. */
 	protected $userAgent;
 
+    /**
+     * Set up the client.
+     *
+     * @param string $base The ACME API base all relative requests are sent to.
+     * @param string $userAgent The User-Agent header value.
+     */
     public function __construct($base, $userAgent)
     {
         $this->base = $base;
 		$this->userAgent = $userAgent;
     }
 
+    /**
+     * Send a request with cURL and keep its headers and status code.
+     *
+     * @param string $method 'GET' or 'POST'.
+     * @param string $url An absolute URL, or a path relative to $base.
+     * @param string|null $data Optional. The POST body. Default null.
+     * @return array<string, mixed>|string The parsed JSON response, or the raw body.
+     * @throws RuntimeException On a cURL error or an HTTP 4xx/5xx answer.
+     */
     protected function curl($method, $url, $data = null)
     {
         $headers = array('Accept: application/json', 'Content-Type: application/jose+json');
@@ -677,7 +853,7 @@ class Client implements ClientInterface
         curl_setopt($handle, CURLOPT_HEADER, true);
 		curl_setopt($handle, CURLOPT_USERAGENT, $this->userAgent);
 
-        # DO NOT DO THAT!
+        // DO NOT DO THAT!
         // curl_setopt($handle, CURLOPT_SSL_VERIFYHOST, false);
         // curl_setopt($handle, CURLOPT_SSL_VERIFYPEER, false);
 
@@ -711,16 +887,35 @@ class Client implements ClientInterface
         return $data === null ? $body : $data;
     }
 
+    /**
+     * Send a POST request.
+     *
+     * @param string $url The URL.
+     * @param string $data The JSON body.
+     * @return array<string, mixed>|string The parsed JSON response, or the raw body.
+     */
     public function post($url, $data)
     {
         return $this->curl('POST', $url, $data);
     }
 
+    /**
+     * Send a GET request.
+     *
+     * @param string $url The URL.
+     * @return array<string, mixed>|string The parsed JSON response, or the raw body.
+     */
     public function get($url)
     {
         return $this->curl('GET', $url);
     }
 
+    /**
+     * Get the Replay-Nonce header of the last request.
+     *
+     * @return string
+     * @throws RuntimeException When there is none.
+     */
     public function getLastNonce()
     {
         if (preg_match('~Replay-Nonce: (.+)~i', $this->lastHeader, $matches)) {
@@ -730,6 +925,11 @@ class Client implements ClientInterface
         throw new RuntimeException("We don't have nonce");
     }
 
+    /**
+     * Get the Location header of the last request.
+     *
+     * @return string|null Null when there was none.
+     */
     public function getLastLocation()
     {
         if (preg_match('~Location: (.+)~i', $this->lastHeader, $matches)) {
@@ -738,11 +938,21 @@ class Client implements ClientInterface
         return null;
     }
 
+    /**
+     * Get the HTTP status code of the last request.
+     *
+     * @return int|null
+     */
     public function getLastCode()
     {
         return $this->lastCode;
     }
 
+    /**
+     * Get the rel="up" Link headers of the last request.
+     *
+     * @return string[]
+     */
     public function getLastLinks()
     {
         preg_match_all('~Link: <(.+)>;rel="up"~', $this->lastHeader, $matches);
@@ -750,13 +960,28 @@ class Client implements ClientInterface
     }
 }
 
+/**
+ * Base64url encoding without padding (RFC 4648 section 5), as JWS uses.
+ */
 class Base64UrlSafeEncoder
 {
+    /**
+     * Encode to base64url without padding.
+     *
+     * @param string $input The raw bytes.
+     * @return string
+     */
     public static function encode($input)
     {
         return str_replace('=', '', strtr(base64_encode($input), '+/', '-_'));
     }
 
+    /**
+     * Decode base64url (padding optional).
+     *
+     * @param string $input The base64url text.
+     * @return string|false The raw bytes, or false on invalid input.
+     */
     public static function decode($input)
     {
         $remainder = strlen($input) % 4;

@@ -1,5 +1,15 @@
 <?php
 
+/**
+ * Backup manager: download one of the logged-in account's backup archives.
+ *
+ * Called as downloadbackup.php?id=<account id>&file=<name>.zip. Sends the zip when
+ * the id is the session's own account and the file is one of its backups, else
+ * answers 404 or 403.
+ *
+ * @package Sentora
+ * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
+ */
 include($_SERVER["DOCUMENT_ROOT"] . 'cnf/db.php');
 include($_SERVER["DOCUMENT_ROOT"] . 'dryden/db/driver.class.php');
 include($_SERVER["DOCUMENT_ROOT"] . 'dryden/debug/logger.class.php');
@@ -29,8 +39,8 @@ session_start();
 if (!empty($_SESSION['zpuid']) && ctype_digit((string) $userid) && (int) $_SESSION['zpuid'] === (int) $userid) {
 	$currentuser = ctrl_users::GetUserDetail($userid);
 	$username = $currentuser['username'];
-	# One of this account's own backups: a real file with a backup name, never a link
-	# (sys_backup::OpenFile checks the file it opens is the one it checked)
+	// One of this account's own backups: a real file with a backup name, never a link
+	// (sys_backup::OpenFile checks the file it opens is the one it checked)
 	$input = isset($_GET["file"]) ? (string) $_GET["file"] : '';
 	$opened = sys_backup::OpenFile($username, $input);
 	if ($opened !== false) {

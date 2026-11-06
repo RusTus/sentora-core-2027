@@ -10,18 +10,31 @@
 //--
 class module_controller extends ctrl_module
 {
+	/** @var bool|null True when the requested domain is not the account's own. */
 	static $notmine;
+	/** @var bool|null True when the requested log file does not exist. */
 	static $notfile;
 
+	/** @var string|null File name of the log being previewed. */
 	static $CurrentLogFile;
+	/** @var string|false|null The last lines of the log being previewed (false when it could not be read). */
 	static $PreviewBuffer;
 
+	/** @var bool|null True when a log preview is shown. */
 	static $preview;
+	/** @var mixed Not used in this module. */
 	static $pbuffer;
+	/** @var int How many lines of a log the preview shows. */
 	static $preview_lines = 50;
 	/**
 	* The 'worker' methods.
 	*/
+	/**
+	 * Send a file as a download and exit.
+	 *
+	 * @param string $filepath The full path of the file.
+	 * @return void Never returns (ends with die()).
+	 */
 	static function downloadFile($filepath){
 		header('Content-Type: application/octet-stream');
 		header('Content-Disposition: attachment; filename='.basename($filepath));
@@ -32,6 +45,13 @@ class module_controller extends ctrl_module
 		readfile($filepath);
 		die();
 	}
+	/**
+	 * List vhosts: all domains when $uid is 0, else all of the account's vhosts.
+	 *
+	 * @global db_driver $zdbh The panel's database connection.
+	 * @param int $uid Optional. The account ID, or 0 for every account's domains. Default 0.
+	 * @return array<int, array<string, mixed>>|false One row per vhost: 'uid', 'name', 'directory', 'active', 'id'; false when there are none.
+	 */
 	static function ListVhosts($uid = 0)
 	{
 		global $zdbh;
@@ -76,6 +96,14 @@ class module_controller extends ctrl_module
 	*/
 
 	//-- Some Tail-like function from lorenzos
+	/**
+	 * Read the last lines of a file, like tail.
+	 *
+	 * @param string $filepath The full path of the file.
+	 * @param int $lines Optional. How many lines to return. Default 1.
+	 * @param bool $adaptive Optional. Pick the read buffer size from the number of lines. Default true.
+	 * @return string|false The lines (trimmed), or false when the file cannot be opened.
+	 */
 	static function tailCustom($filepath, $lines = 1, $adaptive = true) {
 		$f = @fopen($filepath, "rb");
 		if ($f === false) return false;
@@ -98,6 +126,11 @@ class module_controller extends ctrl_module
 		fclose($f);
 		return trim($output);
 	} 
+	/**
+	 * Template loop: the logged-in account's domains with their access log.
+	 *
+	 * @return array<int, array<string, mixed>>|false One row per vhost: 'name', 'directory', 'active', 'filepath' (file name), 'fsize', 'id'; false when there are none.
+	 */
 	static function getLogAccessList()
 	{
 		$currentuser = ctrl_users::GetUserDetail();
@@ -126,6 +159,11 @@ class module_controller extends ctrl_module
 		return false;
 		}
 	}
+	/**
+	 * Template loop: the logged-in account's domains with their error log.
+	 *
+	 * @return array<int, array<string, mixed>>|false One row per vhost: 'name', 'directory', 'active', 'filepath' (file name), 'fsize', 'id'; false when there are none.
+	 */
 	static function getLogErrorList()
 	{
 		$currentuser = ctrl_users::GetUserDetail();
@@ -154,16 +192,41 @@ class module_controller extends ctrl_module
 		return false;
 		}
 	}
+	/**
+	 * Template flag: a log preview is shown.
+	 *
+	 * @return bool
+	 */
 	static function getisPreviewLog(){
 		return !fs_director::CheckForEmptyValue(self::$preview);
 	}
+	/**
+	 * Template value: the file name of the log being previewed.
+	 *
+	 * @return string|null
+	 */
 	static function getCurrentLogFile(){
 		return self::$CurrentLogFile;
 	}
+	/**
+	 * Template value: the previewed log lines, HTML-escaped.
+	 *
+	 * @return string
+	 */
 	static function getPreviewBuffer(){
 		// Log lines contain whatever visitors sent (URLs, user agents): shown as text
 		return htmlspecialchars((string) self::$PreviewBuffer, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 	}
+	/**
+	 * Preview or download an access or error log of one of the account's vhosts.
+	 *
+	 * The vhost ID comes from the inPreview or inDownload form field. A download sends the file and exits.
+	 *
+	 * @global runtime_controller $controller The request controller.
+	 * @global db_driver $zdbh The panel's database connection.
+	 * @param string $mode 'access' for the access log; anything else for the error log.
+	 * @return void
+	 */
 	static function ActionProcess($mode){
 		$currentuser = ctrl_users::GetUserDetail();
 		global $controller;
@@ -204,12 +267,27 @@ class module_controller extends ctrl_module
 			self::$notmine = true;
 		}
 	}
+	/**
+	 * Handle the error log form POST (preview or download).
+	 *
+	 * @return void
+	 */
 	static function doErrorLogActions(){
 		self::ActionProcess('error');
 	}
+	/**
+	 * Handle the access log form POST (preview or download).
+	 *
+	 * @return void
+	 */
 	static function doAccessLogActions(){
 		self::ActionProcess('access');
 	}
+	/**
+	 * Template HTML: the error message of the last action.
+	 *
+	 * @return string|null HTML message, or null when there is nothing to show.
+	 */
 	static function getResult()
 	{
 		if (!fs_director::CheckForEmptyValue(self::$notmine)) {

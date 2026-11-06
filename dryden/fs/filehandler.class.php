@@ -19,6 +19,7 @@ class fs_filehandler {
      * Clear all text in a file.
      * @author Russell Skinner (rskinner@zpanelcp.com)
      * @param string $file The full path to the file.
+     * @return void
      */
     static function ResetFile($file) {
         $new_file = "";
@@ -36,7 +37,8 @@ class fs_filehandler {
      * Copies without overwritting an existing file, adding permissions for Linux.
      * @author Russell Skinner (rskinner@zpanelcp.com)
      * @param string $src The full path to the source file (the file to copy)
-     * @param string $desc The full path to the new file (where to copy the file too) 
+     * @param string $dest The full path to the new file (where to copy the file too) 
+     * @return void
      */
     static function CopyFileSafe($src, $dest) {
         if (!file_exists($dest)) {
@@ -51,7 +53,8 @@ class fs_filehandler {
      * Copies and overwrites existing file, adding permissions for Linux.
      * @author Russell Skinner (rskinner@zpanelcp.com)
      * @param string $src The full path to the source file (the file to copy)
-     * @param string dest The full path to the new file (where to copy the file too) 
+     * @param string $dest The full path to the new file (where to copy the file too) 
+     * @return void
      */
     static function CopyFile($src, $dest) {
         @copy($src, $dest);
@@ -65,6 +68,7 @@ class fs_filehandler {
 	 * @author VJ Patel (meetthevj@gmail.com - VJftw @ ZPanel Forums)
 	 * @param string $src The full path to the source directory (the directory who's contents to copy)
 	 * @param string $dest The full path to the destination directory (the directory to put the subfolders and files in)
+	 * @return void
 	 */
 	 static function CopyDirectoryContents($src, $dest) { 
 		$src = fs_director::ConvertSlashes($src);
@@ -91,6 +95,7 @@ class fs_filehandler {
 	 * Removes a Directory's contents (without removing the directory itself)
 	 * @author VJ Patel (meetthevj@gmail.com - VJftw @ZPanel Forums)
 	 * @param string $dir The full path to the directory who's contents to remove
+	 * @return void
 	*/
 	static function RemoveDirectoryContents($dir) {
 		$dir = fs_director::ConvertSlashes($dir);
@@ -115,6 +120,7 @@ class fs_filehandler {
 	 * Removes a Directory and its contents
 	 * @author VJ Patel (meetthevj@gmail.com - VJftw @ZPanel Forums)
 	 * @param string $dir The full path to the directory to remove
+	 * @return void
 	*/
 	static function RemoveDirectory($dir) {
 		$dir = fs_director::ConvertSlashes($dir);
@@ -128,8 +134,9 @@ class fs_filehandler {
      * Create blank or populated file with permissions, including the path.
      * @author Russell Skinner (rskinner@zpanelcp.com)
      * @param string $path Path and filename to the file to create.
-     * @param string $chmod Permissions mode to use for the new file. (eg. 0777)
+     * @param int $chmod Permissions mode to use for the new file. (eg. 0777)
      * @param string $string The contents to write into the new file.
+     * @return false|null False when the directory could not be created, otherwise null.
      */
     static function CreateFile($path, $chmod = 0777, $string = "") {
         if (!is_file($path)) {
@@ -169,7 +176,7 @@ class fs_filehandler {
      * Returns the contents of a file in a string.
      * @author Bobby Allen (ballen@bobbyallen.me)
      * @param string $file The path and file name to the file.
-     * @return string The contents of the file. 
+     * @return string|false The contents of the file, or false when it cannot be read or is empty.
      */
     static function ReadFileContents($file) {
         $retval = @file_get_contents($file);
@@ -184,9 +191,9 @@ class fs_filehandler {
      * Updates an existing file and will chmod it too if required.
      * @author Bobby Allen (ballen@bobbyallen.me)
      * @param string $path The path and file name to the file to update.
-     * @param string $chmod Permissions mode to use for the new file. (eg. 0777)
-     * @param string $sting The content to update the file with.
-     * @return boolean 
+     * @param int $chmod Permissions mode to use for the new file. (eg. 0777)
+     * @param string $string The content to update the file with.
+     * @return true Always true.
      */
     static function UpdateFile($path, $chmod = 0777, $string = "") {
         if (!file_exists($path))
@@ -207,6 +214,7 @@ class fs_filehandler {
      * @param string $file The system path to the file.
      * @param string $content The content to add to the file.
      * @param int $pos Where to add the text. (0 = At the start, 1 = At the end of the file)
+     * @return void
      */
     static function AddTextToFile($file, $content, $pos) {
         $current_version = @fs_filehandler::ReadFileContents($file);

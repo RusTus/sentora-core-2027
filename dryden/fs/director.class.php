@@ -53,7 +53,7 @@ class fs_director {
     /**
      * Remove double slashes.
      * @author Bobby Allen (ballen@bobbyallen.me)
-     * @param string $string The string to that of which to convert the slashes in.
+     * @param string $var The string to that of which to convert the slashes in.
      * @return string
      */
     static function RemoveDoubleSlash($var) {
@@ -84,7 +84,7 @@ class fs_director {
      * Creates a directory if it doesn't already exist!
      * @author Bobby Allen (ballen@bobbyallen.me)
      * @param string $path The full path of the folder to create.
-     * @return boolean
+     * @return bool
      */
     static function CreateDirectory($path) {
         if (!file_exists($path)) {
@@ -103,7 +103,7 @@ class fs_director {
      * Removes (Deletes) a directory and all folders/file within it.
      * @author Bobby Allen (ballen@bobbyallen.me)
      * @param string $path The full path of the folder to delete.
-     * @return boolean
+     * @return bool
      */
     static function RemoveDirectory($path) {
         if (!$dh = @opendir($path))
@@ -126,7 +126,7 @@ class fs_director {
      * @author Bobby Allen (ballen@bobbyallen.me)
      * @param string $path The full path of the file or folder on which to set the permissions on.
      * @param int $mode The UNIX permissions octal (eg. 0777 or 777)
-     * @return boolean 
+     * @return bool 
      */
     static function SetFileSystemPermissions($path, $mode) {
         if (file_exists($path)) {
@@ -159,10 +159,10 @@ class fs_director {
     /**
      * Checks and converts a given value if the value is of a certain state. (designed to be used with HTML checkboxes).
      * @author Bobby Allen (ballen@bobbyallen.me) 
-     * @param string $value The value to check on which is null.
-     * @param string $true If the result is 'true' return this.
-     * @param string $false If the result is 'false' return this.
-     * @return boolean 
+     * @param mixed $value The value to check (loosely compared with 0; callers pass a bool).
+     * @param mixed $true If the result is 'true' return this.
+     * @param mixed $false If the result is 'false' return this.
+     * @return mixed The $true or $false argument.
      */
     static function CheckForNullValue($value, $true, $false) {
         if ($value == 0) {
@@ -175,8 +175,8 @@ class fs_director {
     /**
      * Check for an empty value.
      * @author Bobby Allen (ballen@bobbyallen.me) 
-     * @param string $value The value of which to check if its empty.
-     * @return boolean 
+     * @param mixed $value The value of which to check if its empty.
+     * @return bool True when the value is empty().
      */
     static function CheckForEmptyValue($value) {
         if (!empty($value)) {
@@ -206,7 +206,7 @@ class fs_director {
      * Checks the value of a checkbox and returns string "CHECKED" if ticked and NULL if not ticked.
      * @author Bobby Allen (ballen@bobbyallen.me) 
      * @param string $value The value of which to check.
-     * @return string  Returns 'CHECKED' if the checkbox is ticked and 'NULL' if the text box is unticked.
+     * @return string|null  Returns 'CHECKED' if the checkbox is ticked and NULL if the text box is unticked.
      */
     static function IsChecked($value) {
         if ($value == 1) {
@@ -249,7 +249,7 @@ class fs_director {
      * Checks that an email address is of a valid format.
      * @author Bobby Allen (ballen@bobbyallen.me) 
      * @param string $email The email address of which to check.
-     * @return boolean 
+     * @return bool 
      */
     static function IsValidEmail($email) {
         if (!preg_match('/^[a-z0-9]+([_\\.-][a-z0-9]+)*@([a-z0-9]+([\.-][a-z0-9]+)*)+\\.[a-z]{2,}$/i', $email))
@@ -261,7 +261,7 @@ class fs_director {
      * Checks that a domain name is of a valid format.
      * @author Bobby Allen (ballen@bobbyallen.me) 
      * @param string $domainname The domain name of which to check.
-     * @return boolean 
+     * @return bool 
      */
     static function IsValidDomainName($domainname) {
         if (stristr($domainname, '.')) {
@@ -281,7 +281,7 @@ class fs_director {
      * Checks that a user name is of a valid format.
      * @author Bobby Allen (ballen@bobbyallen.me) 
      * @param string $username The user name of which to check.
-     * @return boolean 
+     * @return bool 
      */
     static function IsValidUserName($username) {
         if (!preg_match('/^[a-z\d][a-z\d-]{0,62}$/i', $username) || preg_match('/-$/', $username))
@@ -293,7 +293,7 @@ class fs_director {
      * Checks if a file exists or not.
      * @author Bobby Allen (ballen@bobbyallen.me)
      * @param string $path The path to the file of which to check.
-     * @return boolean 
+     * @return bool 
      */
     static function CheckFileExists($path) {
         if (file_exists($path)) {
@@ -308,7 +308,7 @@ class fs_director {
      * Checks that a folder exists or not.
      * @author Bobby Allen (ballen@bobbyallen.me)
      * @param string $path The path to the folder of which to check.
-     * @return boolean 
+     * @return bool|null True for a folder, false for a file, null when nothing exists at the path.
      */
     static function CheckFolderExists($path) {
         if (file_exists($path)) {
@@ -342,7 +342,7 @@ class fs_director {
      * Returns the full size of a directory and all child objects.
      * @author Bobby Allen (ballen@bobbyallen.me)
      * @param string $directory The filesystem path to the directory
-     * @return int The directory size in bytes.
+     * @return int|false The directory size in bytes, -1 when it (or a subfolder) cannot be read, false when it cannot be opened.
      */
     static function GetDirectorySize($directory) {
         $size = 0;
@@ -381,7 +381,7 @@ class fs_director {
      * @author Bobby Allen (ballen@bobbyallen.me)
      * @param string $source The full filesystem path of the file to rename.
      * @param string $target The full filesystem path of the new file (name).
-     * @return boolean If the rename was successful or not. 
+     * @return bool If the rename was successful or not. 
      */
     static function RenameFileFolder($source, $target) {
         if (rename($source, $target))

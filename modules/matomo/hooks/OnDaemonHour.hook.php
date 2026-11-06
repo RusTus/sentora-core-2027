@@ -14,6 +14,14 @@ if (ui_module::CheckModuleEnabled('Matomo') && matomo_helper::Installed()) {
 }
 echo "END Matomo log import." . fs_filehandler::NewLine();
 
+/**
+ * Import the new access log lines of each domain that uses log import, then build the reports.
+ *
+ * Keeps each log's offset and inode in x_matomo_sites so only new complete lines are sent.
+ *
+ * @global db_driver $zdbh The panel's database connection.
+ * @return void
+ */
 function MatomoImportLogs()
 {
     global $zdbh;
@@ -117,7 +125,10 @@ function MatomoImportLogs()
 
 /**
  * A line for the daemon log and for /var/sentora/logs/matomo-import.log, which
- * keeps the hourly results (the daemon log is replaced every 5 minutes)
+ * keeps the hourly results (the daemon log is replaced every 5 minutes).
+ *
+ * @param string $line The message (without a line ending).
+ * @return void
  */
 function MatomoReport($line)
 {

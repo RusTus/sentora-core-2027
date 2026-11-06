@@ -29,11 +29,21 @@
 class module_controller extends ctrl_module
 {
 
+    /** @var bool|null True when the last action failed. */
     static $error;
+    /** @var bool|null True after doEditModule() saved the module settings. */
     static $ok;
+    /** @var string|null The module folder queued for installation by doInstallModule(). */
     static $uploadqueued = null;
+    /** @var string|null Untranslated error message from doInstallModule(). */
     static $error_message;
 
+    /**
+     * Template HTML: links to the enabled administration modules.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return string HTML.
+     */
     static function getAdminModules()
     {
         global $zdbh;
@@ -58,6 +68,13 @@ class module_controller extends ctrl_module
         return $line;
     }
 
+    /**
+     * Template HTML: the module settings form (on/off, category, updates, group access).
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller (unused).
+     * @return string HTML.
+     */
     static function getConfigModules()
     {
         global $zdbh;
@@ -142,12 +159,12 @@ class module_controller extends ctrl_module
                     } elseif ($modules['mo_type_en'] == "modadmin") {
 									
                         $line .="" . ui_language::translate("N/A (Module Admin)") . "";
-						### Added line to prevent query adding nothing to inCategory INT cell for "modadmin" modules. Now adds "0".
+						//## Added line to prevent query adding nothing to inCategory INT cell for "modadmin" modules. Now adds "0".
 						$line .="<input type=hidden name=\"inCategory_" . $modules['mo_id_pk'] . "\" id=\"inCategory_" . $modules['mo_id_pk'] . "\" value=0>";	
 						
                     } else {
                         $line .="" . ui_language::translate("N/A (System Module)") . "";
-						### Added line to prevent query adding nothing to inCategory INT cell for "system" modules. Now adds "0".
+						//## Added line to prevent query adding nothing to inCategory INT cell for "system" modules. Now adds "0".
 						$line .="<input type=hidden name=\"inCategory_" . $modules['mo_id_pk'] . "\" id=\"inCategory_" . $modules['mo_id_pk'] . "\" value=0>";
 					
                     }
@@ -194,6 +211,14 @@ class module_controller extends ctrl_module
         return $line;
     }
 
+    /**
+     * Get the enabled/disabled status icon of a module.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller (unused).
+     * @param int|string $mo_id_pk The module ID.
+     * @return string HTML status icon.
+     */
     static function ModuleStatusIcon($mo_id_pk)
     {
         global $zdbh;
@@ -210,6 +235,15 @@ class module_controller extends ctrl_module
         return $retval;
     }
 
+    /**
+     * Handle the module settings form POST: save group access, on/off and category of each non-system module.
+     *
+     * Sets $ok, or $error when there are no modules.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller.
+     * @return void
+     */
     static function doEditModule()
     {
         global $zdbh;
@@ -245,6 +279,11 @@ class module_controller extends ctrl_module
         return;
     }
 
+    /**
+     * Template HTML: the result of the last action, else the module description.
+     *
+     * @return string|null HTML message or the translated module description.
+     */
     static function getResult()
     {
         if (!fs_director::CheckForEmptyValue(self::$error_message))
@@ -260,6 +299,12 @@ class module_controller extends ctrl_module
         return;
     }
 
+    /**
+     * Template flag: the URL asks for a module's information (?showinfo=).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return bool
+     */
     static function getIsShowModuleInfo()
     {
         global $controller;
@@ -268,6 +313,12 @@ class module_controller extends ctrl_module
         return false;
     }
 
+    /**
+     * Template value: the name of the module named by ?showinfo= (from its module.xml).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return string|null The 'name' tag, or null when no module is shown or its XML cannot be read.
+     */
     static function getModuleInfoName()
     {
         global $controller;
@@ -279,6 +330,12 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Template value: the description of the module named by ?showinfo= (from its module.xml).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return string|null The 'desc' tag, or null when no module is shown or its XML cannot be read.
+     */
     static function getModuleDescription()
     {
         global $controller;
@@ -290,6 +347,12 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Template value: the developer's name of the module named by ?showinfo= (from its module.xml).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return string|null The 'authorname' tag, or null when no module is shown or its XML cannot be read.
+     */
     static function getModuleDeveloperName()
     {
         global $controller;
@@ -301,6 +364,12 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Template value: the developer's email address of the module named by ?showinfo= (from its module.xml).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return string|null The 'authoremail' tag, or null when no module is shown or its XML cannot be read.
+     */
     static function getModuleDeveloperEmail()
     {
         global $controller;
@@ -312,6 +381,12 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Template value: the version of the module named by ?showinfo= (from its module.xml).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return string|null The 'version' tag, or null when no module is shown or its XML cannot be read.
+     */
     static function getModuleVersion()
     {
         global $controller;
@@ -323,6 +398,12 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Template value: the developer's web address of the module named by ?showinfo= (from its module.xml).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return string|null The 'authorurl' tag, or null when no module is shown or its XML cannot be read.
+     */
     static function getModuleDeveloperURL()
     {
         global $controller;
@@ -334,6 +415,13 @@ class module_controller extends ctrl_module
         }
     }
 
+    /**
+     * Template value: the update URL of the module named by ?showinfo=.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @global db_driver $zdbh The panel's database connection.
+     * @return string The mo_updateurl_tx column, or '' when the module is not found.
+     */
     static function getModuleUpdateURL()
     {
         global $controller;
@@ -348,6 +436,13 @@ class module_controller extends ctrl_module
         return $retval;
     }
 
+    /**
+     * Template value: the latest known version of the module named by ?showinfo=.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @global db_driver $zdbh The panel's database connection.
+     * @return string The mo_updatever_vc column, or '' when the module is not found.
+     */
     static function getLatestVersion()
     {
         global $controller;
@@ -362,6 +457,13 @@ class module_controller extends ctrl_module
         return $retval;
     }
 
+    /**
+     * Template value: the type (user, modadmin or system) of the module named by ?showinfo=.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @global db_driver $zdbh The panel's database connection.
+     * @return string The mo_type_en column, or '' when the module is not found.
+     */
     static function getModuleType()
     {
         global $controller;
@@ -376,6 +478,14 @@ class module_controller extends ctrl_module
         return $retval;
     }
 
+    /**
+     * Handle the module upload POST: check the .zpp package and queue it for the root installer.
+     *
+     * Sets $uploadqueued on success, else $error_message and $error.
+     *
+     * @global runtime_controller $controller The request controller (unused).
+     * @return void
+     */
     static function doInstallModule()
     {
         global $controller;
