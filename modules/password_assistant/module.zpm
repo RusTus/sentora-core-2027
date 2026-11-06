@@ -1,39 +1,54 @@
 <div class="zmodule_content panel" id="zmodule_header_<@ ModuleName @>">
     <div class="panel-heading">
         <img src="<@ ModuleIcon @>" width="35" height="35" border="0" alt="<@ ModuleName @>">
-
-        <div class="zmodule_title">
-            <@ ModuleName @>
-        </div>
-
+        <div class="zmodule_title"><@ ModuleName @></div>
         <div class="zmodule_desc" id="zmodule_desc_<@ ModuleName @>"><@ ModuleDesc @></div>
-
     </div>
-
     <@ Result @>
+    <link rel="stylesheet" href="modules/password_assistant/assets/password.css">
 
-    <div class="zform_wrapper">
-        <h2><: Enter your current and new password :></h2>
-        <form action="./?module=password_assistant&action=UpdatePassword" method="post">
-            <table class="table table-striped">
-                <tr>
-                    <th><: Current password :>:</th>
-                    <td><input name="inCurPass" type="password" id="inCurPass" /></td>
-                </tr>
-                <tr>
-                    <th><: New password :>:</th>
-                    <td><input name="inNewPass" type="password" id="inNewPass" /></td>
-                </tr>
-                <tr>
-                    <th><: Confirm new password :>:</th>
-                    <td><input name="inConPass" type="password" id="inConPass" /></td>
-                </tr>
-                <tr>
-                    <td>&nbsp;</td>
-                    <td align="right"><@ CSFR_Tag @><button class="button-loader btn btn-primary" type="submit" id="button"><: Change :></button></td>
-                </tr>
-            </table>
-        </form>
+    <div class="pw" id="pw" data-min="<@ MinLength @>" data-user="<@ Username @>"
+         data-weak="<: Weak :>" data-fair="<: Fair :>" data-good="<: Good :>" data-strong="<: Strong :>"
+         data-short="<: Too short :>" data-has-user="<: It contains your username :>" data-repeats="<: Too many repeated characters :>" data-common="<: A very common password :>"
+         data-match="<: The passwords match :>" data-nomatch="<: The passwords do not match yet :>" data-show="<: Show :>" data-hide="<: Hide :>" data-copied="<: Copied :>">
+        <div class="pw-grid">
+            <form class="pw-card pw-form" action="./?module=password_assistant&amp;action=UpdatePassword" method="post" autocomplete="off">
+                <h4><svg class="pw-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><: Change your password :></h4>
+
+                <label class="pw-field"><span><: Current password :></span>
+                    <span class="pw-input"><input class="form-control" name="inCurPass" type="password" id="inCurPass" autocomplete="current-password" required>
+                        <button type="button" class="pw-eye" aria-label="<: Show :>"></button></span></label>
+
+                <label class="pw-field"><span><: New password :> <small class="pw-min"><: at least :> <@ MinLength @> <: characters :></small></span>
+                    <span class="pw-input"><input class="form-control" name="inNewPass" type="password" id="inNewPass" autocomplete="new-password" minlength="<@ MinLength @>" required>
+                        <button type="button" class="pw-eye" aria-label="<: Show :>"></button></span></label>
+                <div class="pw-meter" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+                <div class="pw-verdict" aria-live="polite"><b class="pw-level"></b><span class="pw-why"></span></div>
+
+                <label class="pw-field"><span><: Confirm new password :></span>
+                    <span class="pw-input"><input class="form-control" name="inConPass" type="password" id="inConPass" autocomplete="new-password" required>
+                        <button type="button" class="pw-eye" aria-label="<: Show :>"></button></span></label>
+                <div class="pw-match" aria-live="polite"></div>
+
+                <div class="pw-foot">
+                    <button type="button" class="btn btn-default pw-suggest"><svg class="pw-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2 5 5 2-5 2-2 5-2-5-5-2 5-2z"/></svg><span><: Suggest a strong password :></span></button>
+                    <button type="submit" class="btn btn-primary pw-save" disabled><: Change password :></button>
+                </div>
+                <div class="pw-suggested" hidden><span><: Suggested password (it is filled in above; keep a copy in your password manager): :></span><code></code><button type="button" class="btn btn-default btn-sm pw-copy"><: Copy :></button></div>
+                <@ CSFR_Tag @>
+            </form>
+
+            <aside class="pw-card pw-tips">
+                <h4><svg class="pw-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg><: A good password :></h4>
+                <ul>
+                    <li><: Long beats clever: four or five random words, or 16 random characters. :></li>
+                    <li><: Use it only here. A password used on another site is only as safe as that site. :></li>
+                    <li><: Let a password manager remember it for you. :></li>
+                    <li><: Turn on two-factor login in :> <a href="./?module=my_account"><: My Account :></a>: <: a stolen password alone then is not enough. :></li>
+                </ul>
+                <p class="pw-note"><: This is the password you log in to the panel with. Your mailboxes, FTP accounts and databases each have their own password. :></p>
+            </aside>
+        </div>
     </div>
-
+    <script src="modules/password_assistant/assets/password.js"></script>
 </div>

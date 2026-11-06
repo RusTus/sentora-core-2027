@@ -74,11 +74,11 @@ class module_controller extends ctrl_module
         $userpasshash->SetSalt($result['ac_passsalt_vc']);
         $current_secure_password = $userpasshash->CryptParts($userpasshash->Crypt())->Hash;
 
-        if (fs_director::CheckForEmptyValue($newpass)) {
-            // Current password is blank!
+        if (fs_director::CheckForEmptyValue($current_pass) || fs_director::CheckForEmptyValue($newpass)) {
+            // A password is blank
             self::$error = "error";
-        } elseif ($current_secure_password <> $result['ac_pass_vc']) {
-            // Current password does not match!
+        } elseif (!is_string($result['ac_pass_vc'] ?? null) || !hash_equals((string) $result['ac_pass_vc'], (string) $current_secure_password)) {
+            // Current password does not match (compared in constant time)
             self::$error = "nomatch";
         } else {
             if ($newpass == $conpass) {
@@ -109,20 +109,41 @@ class module_controller extends ctrl_module
     {
         if (!fs_director::CheckForEmptyValue(self::$error)) {
             if (self::$error == "ok") {
-                return ui_sysmessage::shout(ui_language::translate("Your account password been changed successfully!"), "zannounceok");
+                return ui_sysmessage::shout(ui_language::translate("Your password has been changed. Use the new one the next time you log in."), "zannounceok");
             }
             if (self::$error == "nomatch") {
-                return ui_sysmessage::shout(ui_language::translate("Sorry, your current password does not match the one on your account!"), "zannounceerror");
+                return ui_sysmessage::shout(ui_language::translate("Your current password is not right. Nothing was changed."), "zannounceerror");
             }
             if (self::$error == "error") {
-                return ui_sysmessage::shout(ui_language::translate("An error occured and your Sentora account password could not be updated. Please ensure you entered all passwords correctly and try again."), "zannounceerror");
+                return ui_sysmessage::shout(ui_language::translate("Your password was not changed: fill in every field, and type the new password the same way twice."), "zannounceerror");
             }
         } else {
             if (!fs_director::CheckForEmptyValue(self::$badpassword)) {
-                return ui_sysmessage::shout(ui_language::translate("Your password did not meet the minimun length requirements. Characters needed for password length") . ": " . ctrl_options::GetSystemOption('password_minlength'), "zannounceerror");
+                return ui_sysmessage::shout(sprintf(ui_language::translate("Your new password is too short: it needs at least %d characters."), (int) ctrl_options::GetSystemOption('password_minlength')), "zannounceerror");
             }
             return;
         }
+    }
+
+    /**
+     * Template value: the shortest new password allowed (password_minlength option).
+     *
+     * @return int
+     */
+    static function getMinLength()
+    {
+        return max(1, (int) ctrl_options::GetSystemOption('password_minlength'));
+    }
+
+    /**
+     * Template value: the logged-in account's username, HTML-escaped (the page warns when a new password contains it).
+     *
+     * @return string
+     */
+    static function getUsername()
+    {
+        $me = ctrl_users::GetUserDetail();
+        return htmlspecialchars((string) $me['username'], ENT_QUOTES, 'UTF-8');
     }
 
     /**
