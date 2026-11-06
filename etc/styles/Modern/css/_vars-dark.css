@@ -19,4 +19,3 @@
 .zgrid_wrapper, .zform_wrapper { color: var(--ml-ink); }
 table, .table { color: var(--ml-ink); }
 .label-default { background-color: var(--ml-hover); }
-.sm-error { background: #3a1f1c; color: #ffb4a8; }

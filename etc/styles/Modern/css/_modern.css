@@ -151,9 +151,6 @@ legend { color: var(--ml-ink); border-bottom-color: var(--ml-line); }
 .stats-row { background: var(--ml-card); color: var(--ml-ink); border-top-color: var(--ml-line); }
 .stats-row:nth-child(even) { background-color: var(--ml-stripe); }
 
-/* Server Monitor follows the template's colours */
-.sm { --sm-ink: var(--ml-ink); --sm-muted: var(--ml-muted); --sm-line: var(--ml-line); --sm-card: var(--ml-card); --sm-bg: var(--ml-bg); }
-.sm-controls select, .sm-controls button { background: var(--ml-input); color: var(--ml-ink); border-color: var(--ml-input-line); }
 
 /* Status icons (dryden/ui/status.class.php) */
 .sn-ok circle { fill: var(--sn-ok-soft); stroke: var(--sn-ok-line); } .sn-ok path { stroke: var(--sn-ok); }
