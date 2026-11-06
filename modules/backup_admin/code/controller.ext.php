@@ -227,7 +227,7 @@ class module_controller extends ctrl_module
         $hasPw = ($o['offsite_password'] !== '');
         $html = '<form action="./?module=backup_admin&amp;action=SaveOffsite" method="post"><table class="table table-striped">'
             . $row('Enabled', '<label><input type="checkbox" name="inOffsiteEnabled" value="1"' . ($o['offsite_enabled'] === 'true' ? ' checked' : '') . '> ' . $t('Copy the backups every night') . '</label>', 'Off: nothing is copied (the settings are kept).')
-            . $row('Server', '<input class="form-control" name="inOffsiteServer" value="' . $h($o['offsite_server']) . '" placeholder="hembackup1.hemsaw.local" maxlength="253">', 'The backup machine, reached over SSH. Empty: the folder below is on this server (for example an NFS mount).')
+            . $row('Server', '<input class="form-control" name="inOffsiteServer" value="' . $h($o['offsite_server']) . '" placeholder="backup.example.com" maxlength="253">', 'The backup machine, reached over SSH. Empty: the folder below is on this server (for example an NFS mount).')
             . $row('Port', '<input class="form-control" name="inOffsitePort" value="' . $h($o['offsite_port']) . '" inputmode="numeric" maxlength="5" style="max-width: 110px;">', 'SSH port, usually 22.')
             . $row('Username', '<input class="form-control" name="inOffsiteUser" value="' . $h($o['offsite_user']) . '" maxlength="32" autocomplete="off">', 'The user on the backup machine.')
             . $row('Password', '<input class="form-control" type="password" name="inOffsitePassword" value="" maxlength="256" autocomplete="new-password" placeholder="' . $h($hasPw ? $t('stored: leave empty to keep it') : $t('none: the SSH key is used')) . '">'

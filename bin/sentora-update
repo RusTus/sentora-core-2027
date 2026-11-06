@@ -255,15 +255,6 @@ if [ -f "$SRC/VERSION" ]; then
 fi
 
 # --- new core modules, and the bundled apps' databases ----------------------------------------
-# --- the add-on repository moved from the internal server to GitHub -----------------
-ADDONS="https://raw.githubusercontent.com/RusTus/sentora-installers-2027/master2027/sentora-repo"
-RL="$PANEL/etc/zppy-cache/repo.list"
-if [ -f "$RL" ] && ! grep -qxF "$ADDONS" "$RL"; then
-    say "Add-on repository: $ADDONS"
-    sed -i '/^hembackup1\.hemsaw\.local\/sentora-repo\/\?$/d' "$RL"
-    echo "$ADDONS" >> "$RL"
-    php "$PANEL/bin/zppy" update > /dev/null 2>&1 9>&- || warn "could not read the add-on repository's package list yet"
-fi
 say "Registering new modules"
 SRC_MODULES=$(cd "$SRC/modules" && ls -d -- */ | tr -d '/' | tr '\n' ' ')
 ( cd "$PANEL" && php -r '
