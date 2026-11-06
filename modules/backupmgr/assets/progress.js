@@ -1,7 +1,15 @@
-/* Backup: while a backup is being made, count the time and ask for its progress every
+/* Backup: confirm deletes; while a backup is being made, count the time and ask for its progress every
    few seconds; when it is ready (or failed) reload the page, which then shows it. */
 (function () {
     'use strict';
+    // deleting a backup asks first; buttons that start work show the panel's "working" overlay
+    Array.prototype.forEach.call(document.querySelectorAll('#bk form'), function (f) {
+        f.addEventListener('submit', function (e) {
+            var q = f.getAttribute('data-confirm');
+            if (q && !window.confirm(q)) { e.preventDefault(); return; }
+            if (window.Sentora && Sentora.loader) { Sentora.loader.showLoader(); }
+        });
+    });
     var box = document.getElementById('bk-progress');
     if (!box) { return; }
     var url = box.getAttribute('data-status');

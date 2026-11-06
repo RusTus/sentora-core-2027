@@ -347,6 +347,133 @@ class module_controller extends ctrl_module
         }
     }
 
+    // --- page helpers ------------------------------------------------------------------------------
+
+    /**
+     * Escape text for HTML.
+     *
+     * @param mixed $s The text.
+     * @return string
+     */
+    static function h($s)
+    {
+        return htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
+    }
+
+    /**
+     * Translated and HTML-escaped text.
+     *
+     * @param string $s The English text.
+     * @return string
+     */
+    static function t($s)
+    {
+        return self::h(ui_language::translate($s));
+    }
+
+    /**
+     * An inline SVG icon (stroked, in the text colour).
+     *
+     * @param string $name The icon: archive, clock, trash, cloud, download, play, check, x, server, plug, upload.
+     * @return string SVG markup, or '' for an unknown name.
+     */
+    static function Icon($name)
+    {
+        $p = array(
+            'archive' => '<rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9"/><path d="M10 13h4"/>',
+            'clock' => '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+            'trash' => '<path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="m6 7 1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13"/>',
+            'cloud' => '<path d="M7 18a5 5 0 1 1 1.6-9.7A6 6 0 0 1 20 11a4 4 0 0 1-1 7.9z"/>',
+            'download' => '<path d="M20 15v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-4"/><path d="m8 11 4 4 4-4"/><path d="M12 15V4"/>',
+            'play' => '<circle cx="12" cy="12" r="9"/><path d="m10 8 6 4-6 4z"/>',
+            'check' => '<circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/>',
+            'x' => '<circle cx="12" cy="12" r="9"/><path d="m9 9 6 6M15 9l-6 6"/>',
+            'server' => '<rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/>',
+            'plug' => '<path d="M9 2v6M15 2v6"/><path d="M6 8h12v4a6 6 0 0 1-12 0z"/><path d="M12 18v4"/>',
+            'upload' => '<path d="M20 15v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-4"/><path d="m16 8-4-4-4 4"/><path d="M12 4v11"/>',
+        );
+        return isset($p[$name]) ? '<svg class="bk-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' . $p[$name] . '</svg>' : '';
+    }
+
+    /**
+     * "3 hours ago" and the like.
+     *
+     * @param int $ts A Unix time.
+     * @return string Translated text.
+     */
+    static function Ago($ts)
+    {
+        $s = max(0, time() - (int) $ts);
+        if ($s < 60) {
+            return ui_language::translate('just now');
+        }
+        foreach (array(array(86400, 'day', 'days'), array(3600, 'hour', 'hours'), array(60, 'minute', 'minutes')) as $u) {
+            if ($s >= $u[0]) {
+                $n = (int) floor($s / $u[0]);
+                return $n . ' ' . ui_language::translate($n === 1 ? $u[1] : $u[2]) . ' ' . ui_language::translate('ago');
+            }
+        }
+        return '';
+    }
+
+    /**
+     * Template HTML: four cards (backups kept, the latest, automatic deletion, the FTP copy).
+     *
+     * @return string HTML.
+     */
+    static function getSummary()
+    {
+        $me = ctrl_users::GetUserDetail();
+        $files = sys_backup::ListFiles($me['username']);
+        $total = 0;
+        foreach ($files as $f) {
+            $total += (int) $f['size'];
+        }
+        $latest = $files ? reset($files) : null;
+        $purge = self::CheckPurgeDate();
+        $card = function ($icon, $color, $label, $value, $detail) {
+            return '<div class="bk-card" style="--c:' . $color . '">' . self::Icon($icon) . '<div><div class="bk-card-label">' . self::t($label) . '</div>'
+                . '<div class="bk-card-value">' . $value . '</div><div class="bk-card-detail">' . $detail . '</div></div></div>';
+        };
+        $out = $card('archive', '#447fb3', 'Backups kept', (string) count($files), count($files) ? self::h(fs_director::ShowHumanFileSize($total)) . ' ' . self::t('in all') : self::t('none yet'));
+        $out .= $card('clock', '#2db87d', 'Latest backup', $latest ? self::h(self::Ago($latest['mtime'])) : '–', $latest ? self::h(date('Y-m-d H:i', $latest['mtime'])) : self::t('make one below'));
+        $out .= $card('trash', '#f5a623', 'Kept for', $purge ? self::h($purge) . ' ' . self::t('days') : self::t('Until deleted'), $purge ? self::t('older backups are deleted automatically') : self::t('backups are not deleted automatically'));
+        if (sys_clientftp::Allowed()) {
+            $c = sys_clientftp::Get($me['userid']);
+            $st = sys_clientftp::Status($me['userid']);
+            $on = (int) $c['bf_enabled_in'] === 1 && $c['bf_host_vc'] !== '';
+            $out .= $card('cloud', $on ? '#1fa2b5' : '#9aa5b1', 'Copy to my FTP', $on ? sprintf(self::t('Daily at %s'), sprintf('%02d:00', (int) $c['bf_hour_in'])) : self::t('Off'),
+                !empty($st['last_ok']) ? self::t('last good copy') . ' ' . self::h(self::Ago($st['last_ok'])) : ($on ? self::t('no copy yet') : self::t('set it up below')));
+        }
+        return $out;
+    }
+
+    /**
+     * Template HTML: the account's backups as table rows, each with Download and Delete.
+     *
+     * The delete button is named inDelete_<backup name>, as doDeleteBackup() reads it.
+     *
+     * @return string HTML table rows.
+     */
+    static function getBackupRows()
+    {
+        $me = ctrl_users::GetUserDetail();
+        $out = '';
+        $first = true;
+        foreach (sys_backup::ListFiles($me['username']) as $file => $info) {
+            $name = substr($file, 0, -4);
+            $out .= '<tr><td><div class="bk-file">' . self::Icon('archive') . '<div><b>' . self::h($file) . '</b>' . ($first ? ' <span class="bk-tag">' . self::t('latest') . '</span>' : '')
+                . '<span class="bk-sub">' . self::h($me['username']) . '/backups/</span></div></div></td>'
+                . '<td>' . self::h(date('Y-m-d H:i', $info['mtime'])) . '<span class="bk-sub">' . self::h(self::Ago($info['mtime'])) . '</span></td>'
+                . '<td class="bk-num">' . self::h(fs_director::ShowHumanFileSize($info['size'])) . '</td>'
+                . '<td class="bk-act"><a class="btn btn-default btn-sm bk-btn" href="modules/backupmgr/code/downloadbackup.php?id=' . (int) $me['userid'] . '&amp;file=' . rawurlencode($file) . '">' . self::Icon('download') . '<span>' . self::t('Download') . '</span></a> '
+                . '<form class="bk-inline bk-confirm" action="./?module=backupmgr&amp;action=DeleteBackup" method="post" data-confirm="' . self::h(sprintf(ui_language::translate('Delete the backup %s? This can not be undone.'), $file)) . '">'
+                . runtime_csfr::Token() . '<button type="submit" class="btn btn-default btn-sm bk-btn bk-del" name="inDelete_' . self::h($name) . '" value="' . self::h($name) . '" title="' . self::t('Delete') . '">' . self::Icon('trash') . '</button></form></td></tr>';
+            $first = false;
+        }
+        return $out;
+    }
+
     // --- Back up now: in the background, with its progress on this page ------------------------
 
     /** @var string Result of sys_backup::StartBackground(): '', 'started', 'running', 'recent' or 'failed'. */
@@ -373,19 +500,15 @@ class module_controller extends ctrl_module
     {
         $me = ctrl_users::GetUserDetail();
         $p = sys_backup::Progress($me['userid']);
-        $h = function ($s) { return htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8'); };
-        $t = function ($s) { return ui_language::translate($s); };
         if ($p['state'] === 'running') {
             return '<div class="bk-progress" id="bk-progress" data-status="modules/backupmgr/code/status.php" data-started="' . (int) $p['started'] . '">'
                 . '<span class="bk-spinner" aria-hidden="true"></span>'
-                . '<div><strong>' . $t('Making your backup') . '</strong> &mdash; ' . $t('started at') . ' ' . $h(date('H:i', $p['started']))
-                . ', <span id="bk-elapsed">' . (int) $p['elapsed'] . 's</span> ' . $t('so far') . '.<br>'
-                . '<span class="text-muted">' . $t('Your websites and databases are being packed. Large sites can take several minutes. You can leave this page: the backup appears in the list below when it is ready.') . '</span></div></div>';
+                . '<div><b>' . self::t('Making your backup') . '</b><span>' . self::t('Started at') . ' ' . self::h(date('H:i', $p['started'])) . ' · <span id="bk-elapsed">' . (int) $p['elapsed'] . 's</span></span>'
+                . '<span class="bk-sub">' . self::t('Your websites and databases are being packed. Large sites can take several minutes. You can leave this page: the backup appears in the list below when it is ready.') . '</span></div></div>';
         }
-        return '<form action="./?module=backupmgr&amp;action=BackupNow" method="post"><table class="table table-striped"><tr>'
-            . '<th nowrap="nowrap" style="width: 160px;"><button class="btn btn-primary" type="submit">' . $t('Back up now') . '</button></th>'
-            . '<td>' . $t('Makes a backup of your websites and databases on this page. When it is ready it appears in the list below, ready to download.') . '</td>'
-            . '</tr></table>' . runtime_csfr::Token() . '</form>';
+        return '<form class="bk-now" action="./?module=backupmgr&amp;action=BackupNow" method="post">' . runtime_csfr::Token()
+            . '<div><b>' . self::t('Back up your websites and databases') . '</b><span class="bk-sub">' . self::t('Everything in your public_html folder and all your MySQL databases, in one zip. It is made in the background and appears in the list below, ready to download. Your mail is not included.') . '</span></div>'
+            . '<button class="btn btn-primary bk-btn" type="submit">' . self::Icon('play') . '<span>' . self::t('Back up now') . '</span></button></form>';
     }
 
     /**
@@ -549,59 +672,62 @@ class module_controller extends ctrl_module
     {
         $me = ctrl_users::GetUserDetail();
         $c = sys_clientftp::Get($me['userid']);
-        $h = function ($s) { return htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8'); };
-        $t = function ($s) { return ui_language::translate($s); };
-        $row = function ($label, $field, $help) use ($t) {
-            return '<tr><th nowrap="nowrap" style="width: 200px;">' . $t($label) . '</th><td style="width: 340px;">' . $field . '</td><td class="text-muted">' . $t($help) . '</td></tr>';
+        $field = function ($label, $input, $help, $wide = false) {
+            return '<label class="bk-field' . ($wide ? ' bk-wide' : '') . '"><span>' . self::t($label) . '</span>' . $input . ($help !== '' ? '<small>' . $help . '</small>' : '') . '</label>';
         };
-        $opt = function ($value, $label, $cur) use ($h, $t) { return '<option value="' . $h($value) . '"' . ((string) $cur === (string) $value ? ' selected' : '') . '>' . $h($t($label)) . '</option>'; };
+        $opt = function ($value, $label, $cur) { return '<option value="' . self::h($value) . '"' . ((string) $cur === (string) $value ? ' selected' : '') . '>' . self::t($label) . '</option>'; };
         $hours = '';
         for ($i = 0; $i < 24; $i++) {
-            $hours .= $opt($i, sprintf('%02d:00', $i), $c['bf_hour_in']);
+            $hours .= '<option value="' . $i . '"' . ((int) $c['bf_hour_in'] === $i ? ' selected' : '') . '>' . sprintf('%02d:00', $i) . '</option>';
         }
         $hasPw = ((string) $c['bf_pass_tx'] !== '');
-        return '<form action="./?module=backupmgr&amp;action=FtpSave" method="post"><table class="table table-striped">'
-            . $row('Enabled', '<label><input type="checkbox" name="inFtpEnabled" value="1"' . ((int) $c['bf_enabled_in'] === 1 ? ' checked' : '') . '> ' . $t('Copy a backup to my FTP server every day') . '</label>', 'Your websites and databases (not your mail).')
-            . $row('Server', '<input class="form-control" name="inFtpHost" value="' . $h($c['bf_host_vc']) . '" placeholder="ftp.example.com" maxlength="253">', 'Your FTP server.')
-            . $row('Port', '<input class="form-control" name="inFtpPort" value="' . $h($c['bf_port_in']) . '" inputmode="numeric" maxlength="5" style="max-width: 110px;">', '21 for FTP and FTPS with TLS, 990 for implicit FTPS.')
-            . $row('Username', '<input class="form-control" name="inFtpUser" value="' . $h($c['bf_user_vc']) . '" maxlength="128" autocomplete="off">', '')
-            . $row('Password', '<input class="form-control" type="password" name="inFtpPassword" value="" maxlength="256" autocomplete="new-password" placeholder="' . $h($hasPw ? $t('stored: leave empty to keep it') : '') . '">', 'Stored encrypted, never shown again.')
-            . $row('Folder', '<input class="form-control" name="inFtpPath" value="' . $h($c['bf_path_vc']) . '" maxlength="200">', 'Made if it does not exist.')
-            . $row('Connection', '<select class="form-control" name="inFtpTls">' . $opt('explicit', 'FTPS: TLS on port 21 (recommended)', $c['bf_tls_vc']) . $opt('implicit', 'FTPS: implicit TLS (port 990)', $c['bf_tls_vc']) . $opt('none', 'Plain FTP: NOT encrypted', $c['bf_tls_vc']) . '</select>'
-                . '<label style="font-weight: normal; margin-top: 4px;"><input type="checkbox" name="inFtpInsecure" value="1"' . ((int) $c['bf_insecure_in'] === 1 ? ' checked' : '') . '> ' . $t('Accept a self-signed certificate') . '</label>',
-                'Plain FTP sends your password and your backups unencrypted. Accept a self-signed certificate only for a server you run yourself.')
-            . $row('Time', '<select class="form-control" name="inFtpHour" style="max-width: 120px;">' . $hours . '</select>', 'Every day at this hour (server time, ' . $h(date('T')) . ').')
-            . $row('Copies kept', '<input class="form-control" name="inFtpKeep" value="' . $h($c['bf_keep_in']) . '" inputmode="numeric" maxlength="2" style="max-width: 110px;">', 'Older copies of your backups are removed from your FTP server.')
-            . '<tr><th colspan="3"><button class="btn btn-primary" type="submit">' . $t('Save') . '</button></th></tr></table>' . runtime_csfr::Token() . '</form>'
-            . '<form method="post" action="./?module=backupmgr&amp;action=FtpCheck" style="display:inline">' . runtime_csfr::Token() . '<button class="btn btn-default" type="submit">' . $t('Test connection') . '</button></form> '
-            . '<form method="post" action="./?module=backupmgr&amp;action=FtpNow" style="display:inline">' . runtime_csfr::Token() . '<button class="btn btn-default" type="submit">' . $t('Upload now') . '</button></form>';
+        return '<form class="bk-ftp" action="./?module=backupmgr&amp;action=FtpSave" method="post">' . runtime_csfr::Token()
+            . '<label class="bk-switch bk-wide"><input type="checkbox" name="inFtpEnabled" value="1"' . ((int) $c['bf_enabled_in'] === 1 ? ' checked' : '') . '><span class="bk-toggle" aria-hidden="true"></span>'
+            . '<span><b>' . self::t('Copy a backup to my FTP server every day') . '</b><small>' . self::t('Your websites and databases (not your mail).') . '</small></span></label>'
+            . $field('Server', '<input class="form-control" type="text" name="inFtpHost" value="' . self::h($c['bf_host_vc']) . '" placeholder="ftp.example.com" maxlength="253">', '')
+            . $field('Port', '<input class="form-control" type="text" name="inFtpPort" value="' . self::h($c['bf_port_in']) . '" inputmode="numeric" maxlength="5">', self::t('21 for FTP and FTPS with TLS, 990 for implicit FTPS.'))
+            . $field('Username', '<input class="form-control" type="text" name="inFtpUser" value="' . self::h($c['bf_user_vc']) . '" maxlength="128" autocomplete="off">', '')
+            . $field('Password', '<input class="form-control" type="password" name="inFtpPassword" value="" maxlength="256" autocomplete="new-password" placeholder="' . ($hasPw ? self::t('stored: leave empty to keep it') : '') . '">', self::t('Stored encrypted, never shown again.'))
+            . $field('Folder', '<input class="form-control" type="text" name="inFtpPath" value="' . self::h($c['bf_path_vc']) . '" maxlength="200">', self::t('Made if it does not exist.'))
+            . $field('Connection', '<select class="form-control" name="inFtpTls">' . $opt('explicit', 'FTPS: TLS on port 21 (recommended)', $c['bf_tls_vc']) . $opt('implicit', 'FTPS: implicit TLS (port 990)', $c['bf_tls_vc']) . $opt('none', 'Plain FTP: NOT encrypted', $c['bf_tls_vc']) . '</select>'
+                . '<span class="bk-check"><input type="checkbox" name="inFtpInsecure" value="1"' . ((int) $c['bf_insecure_in'] === 1 ? ' checked' : '') . '> ' . self::t('Accept a self-signed certificate') . '</span>',
+                self::t('Plain FTP sends your password and your backups unencrypted. Accept a self-signed certificate only for a server you run yourself.'))
+            . $field('Time', '<select class="form-control" name="inFtpHour">' . $hours . '</select>', sprintf(self::t('Every day at this hour (server time, %s).'), self::h(date('T'))))
+            . $field('Copies kept', '<input class="form-control" type="text" name="inFtpKeep" value="' . self::h($c['bf_keep_in']) . '" inputmode="numeric" maxlength="2">', self::t('Older copies are removed from your FTP server.'))
+            . '<div class="bk-form-foot bk-wide"><button class="btn btn-primary" type="submit">' . self::t('Save settings') . '</button></div></form>';
     }
 
     /**
-     * Template HTML: queued job and the last test, upload and good copy times.
+     * Template HTML: the FTP copy's state (queued job, last test, last upload, last good copy) and the Test connection and Upload now buttons.
      *
-     * @return string HTML table.
+     * @return string HTML.
      */
     static function getFtpStatus()
     {
         $me = ctrl_users::GetUserDetail();
         $c = sys_clientftp::Get($me['userid']);
         $s = sys_clientftp::Status($me['userid']);
-        $h = function ($x) { return htmlspecialchars((string) $x, ENT_QUOTES, 'UTF-8'); };
-        $when = function ($ts) { return ((int) $ts > 0) ? date('Y-m-d H:i', (int) $ts) : '-'; };
-        $lab = function ($ok) { return $ok ? '<span class="label label-success">OK</span>' : '<span class="label label-danger">FAILED</span>'; };
-        $out = '<table class="table table-condensed" style="max-width: 900px; margin-top: 14px;">';
+        $line = function ($icon, $class, $label, $when, $message) {
+            return '<div class="bk-state ' . $class . '">' . self::Icon($icon) . '<div><b>' . self::t($label) . '</b><span>' . $when . '</span>' . ($message !== '' ? '<span class="bk-sub">' . self::h($message) . '</span>' : '') . '</div></div>';
+        };
+        $when = function ($ts) { return (int) $ts > 0 ? self::h(date('Y-m-d H:i', (int) $ts)) . ' · ' . self::h(self::Ago((int) $ts)) : self::t('never'); };
+        $out = '';
         if ($c['bf_request_vc'] !== '') {
-            $out .= '<tr><th style="width: 200px;">' . ui_language::translate('Queued') . '</th><td><span class="label label-warning">' . $h($c['bf_request_vc'] === 'check' ? 'Test connection' : 'Upload now') . '</span> ' . ui_language::translate('starts within 5 minutes') . '</td></tr>';
+            $out .= $line('clock', 'info', $c['bf_request_vc'] === 'check' ? 'Connection test queued' : 'Upload queued', self::t('starts within 5 minutes'), '');
         }
         if (isset($s['check_time'])) {
-            $out .= '<tr><th style="width: 200px;">' . ui_language::translate('Last connection test') . '</th><td>' . $h($when($s['check_time'])) . ' ' . $lab(!empty($s['check_ok'])) . ' ' . $h($s['check_message']) . '</td></tr>';
+            $ok = !empty($s['check_ok']);
+            $out .= $line($ok ? 'check' : 'x', $ok ? 'ok' : 'bad', $ok ? 'Connection test passed' : 'Connection test failed', $when($s['check_time']), (string) $s['check_message']);
         }
         if (isset($s['run_time'])) {
-            $out .= '<tr><th style="width: 200px;">' . ui_language::translate('Last upload') . '</th><td>' . $h($when($s['run_time'])) . ' ' . $lab(!empty($s['run_ok'])) . ' ' . $h($s['run_message']) . '</td></tr>';
+            $ok = !empty($s['run_ok']);
+            $out .= $line($ok ? 'check' : 'x', $ok ? 'ok' : 'bad', $ok ? 'Last upload' : 'Last upload failed', $when($s['run_time']), (string) $s['run_message']);
         }
-        $out .= '<tr><th style="width: 200px;">' . ui_language::translate('Last good copy') . '</th><td>' . $h($when(isset($s['last_ok']) ? $s['last_ok'] : 0)) . '</td></tr>';
-        return $out . '</table>';
+        $out .= $line('archive', '', 'Last good copy', $when(isset($s['last_ok']) ? $s['last_ok'] : 0), '');
+        $disabled = $c['bf_host_vc'] === '' ? ' disabled title="' . self::t('Save your FTP server first.') . '"' : '';
+        return $out . '<div class="bk-ftp-actions">'
+            . '<form class="bk-inline" method="post" action="./?module=backupmgr&amp;action=FtpCheck">' . runtime_csfr::Token() . '<button class="btn btn-default btn-sm bk-btn" type="submit"' . $disabled . '>' . self::Icon('plug') . '<span>' . self::t('Test connection') . '</span></button></form>'
+            . '<form class="bk-inline" method="post" action="./?module=backupmgr&amp;action=FtpNow">' . runtime_csfr::Token() . '<button class="btn btn-default btn-sm bk-btn" type="submit"' . $disabled . '>' . self::Icon('upload') . '<span>' . self::t('Upload now') . '</span></button></form></div>';
     }
 
     /**

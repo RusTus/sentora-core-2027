@@ -117,3 +117,7 @@ etc/apps/phpinfo/index.php
 # System Log Viewer: the two buttons its old page had
 modules/system_logviewer/assets/log1.png
 modules/system_logviewer/assets/log2.png
+# Backup: files its old page used
+modules/backupmgr/assets/progress.css
+modules/backupmgr/assets/delete_small.png
+modules/backupmgr/assets/backup_icon.png

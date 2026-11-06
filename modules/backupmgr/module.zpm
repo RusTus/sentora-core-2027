@@ -1,74 +1,58 @@
 <div class="zmodule_content panel" id="zmodule_header_<@ ModuleName @>">
     <div class="panel-heading">
         <img src="<@ ModuleIcon @>" width="35" height="35" border="0" alt="<@ ModuleName @>">
-
-        <div class="zmodule_title">
-            <@ ModuleName @>
-        </div>
-
+        <div class="zmodule_title"><@ ModuleName @></div>
         <div class="zmodule_desc" id="zmodule_desc_<@ ModuleName @>"><@ ModuleDesc @></div>
-
     </div>
 
     <@ Result @>
     <@ ProgressMessage @>
-    <link rel="stylesheet" href="<@ ModulePath @>assets/progress.css">
-
+    <link rel="stylesheet" href="<@ ModulePath @>assets/backup.css">
     <@ CreateBackupDirectory @>
 
-    <div class="zform_wrapper">
-        <h2><: Backup your hosting account files :></h2>
-        <% if HasData %>
-        <@ BackupNow @>
-        <% else %>
-        <: There are no files in your public folder to back up. :>
-        <% endif %>
-    </div>
+    <div class="bk" id="bk">
+        <div class="bk-cards"><@ Summary @></div>
 
-    <div class="zgrid_wrapper">
-        <h2><: Backup Archives :></h2>
-        <% if BackUpList %>
-        <% if PurgeDate %>
-        <p><: Archived files will automatically be deleted when they are older than :> <b><@ PurgeDate @></b> <: days :>.</p>
-        <% endif %>
-        <a href="./?module=backupmgr" title="<: Refresh archive list :>"><: Refresh archive list :></a><br><br>
-        <form action="./?module=backupmgr&action=DeleteBackup" method="post">
-            <table class="table table-striped">
-                <tr>
-                    <th></th>
-                    <th><: Location :></th>
-                    <th><: File :></th>
-                    <th><: File Size :></th>
-                    <th></th>
-                </tr>
-                <% loop BackUpList %>
-                <tr>
-                    <td width="16px"><img src="<@ ModulePath @>assets/backup_icon.png" border="0" /></td>
-                    <!--
-                    <td width="16px"><input type="image" src="<@ ModulePath @>assets/delete_small.png" name="inDelete_<& backupfile &>" id="inDelete_<& backupfile &>" value="<& backupfile &>" title="<: DELETE BACKUP :>" /></td>
-                    -->
-                    <td width="50px"><@ FileLocation @></td>
-                    <td><& backupfile &>.zip</td>
-                    <td><b><& filesize &></b></td>
-                    <td nowrap="nowrap"><a class="btn btn-default" href="modules/backupmgr/code/downloadbackup.php?id=<@ UserID @>&amp;file=<& backupfile &>.zip"><: Download :></a>
-                        <button class="button-loader delete btn btn-danger" type="submit" name="inDelete_<& backupfile &>" id="inDelete_<& backupfile &>" value="<& backupfile &>"><: Delete Backup :></button></td>
-                </tr>
-                <% endloop %>
-            </table>
-            <@ CSFR_Tag @>
-        </form>
-        <% else %>
-        <% if DiskAllowed %>
-        <p><: You have no backups at this time.  If you have just created a backup then try refreshing :>: <a href="./?module=backupmgr" title="<: Refresh archive list :>"><: Refresh archive list :></a></p>
-        <% else %>
-        <p><: Backup to disk is not enabled on the server. You may still download backups directly to your computer through your browser. :>
+        <div class="bk-panel">
+            <% if HasData %>
+            <@ BackupNow @>
+            <% else %>
+            <p class="bk-empty"><: There are no files in your public folder to back up. :></p>
+            <% endif %>
+        </div>
+
+        <div class="bk-panel">
+            <div class="bk-panel-head">
+                <div><h4><: Your backups :></h4>
+                    <% if PurgeDate %><p><: Backups are deleted automatically when they are older than :> <b><@ PurgeDate @></b> <: days :>. <: Download the ones you want to keep. :></p><% endif %>
+                </div>
+                <a class="btn btn-default btn-sm" href="./?module=backupmgr"><: Refresh :></a>
+            </div>
+            <% if BackUpList %>
+            <div class="bk-scroll">
+                <table class="bk-table">
+                    <thead><tr><th><: Backup :></th><th><: Made :></th><th class="bk-num"><: Size :></th><th class="bk-act"></th></tr></thead>
+                    <tbody><@ BackupRows @></tbody>
+                </table>
+            </div>
+            <% else %>
+            <% if DiskAllowed %>
+            <p class="bk-empty"><: You have no backups yet. A backup you make appears here when it is ready. :></p>
+            <% else %>
+            <p class="bk-empty"><: Backup to disk is not enabled on the server. You may still download backups directly to your computer through your browser. :></p>
             <% endif %>
             <% endif %>
+        </div>
+
         <% if FtpAllowed %>
-        <h3><: Copy my backups to my own FTP server :></h3>
-        <p class="text-muted"><: Every day at the hour you choose, a new backup of your websites and databases is made and uploaded to your FTP server, keeping the number of copies you choose. Your mail is not included. :></p>
-        <@ FtpForm @>
-        <@ FtpStatus @>
+        <div class="bk-panel">
+            <div class="bk-panel-head"><div><h4><: Copy my backups to my own FTP server :></h4>
+                <p><: Every day at the hour you choose, a new backup of your websites and databases is made and uploaded to your FTP server, keeping the number of copies you choose. :></p></div></div>
+            <div class="bk-ftp-grid">
+                <@ FtpForm @>
+                <aside class="bk-ftp-status"><h5><: Status :></h5><@ FtpStatus @></aside>
+            </div>
+        </div>
         <% endif %>
     </div>
     <script src="<@ ModulePath @>assets/progress.js"></script>
