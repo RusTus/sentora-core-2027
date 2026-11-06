@@ -108,6 +108,15 @@ function BuildVhostReWriteSSL($vhostName, $userEmail) {
  * not only on its name; any other unknown name still gets "not found".
  */
 function SentoraPanelAliases() {
+    // Whether the panel also answers on the server's own IP addresses is controlled by
+    // the 'panel_ip_access' setting (Sentora Config), which defaults to on. Only an
+    // explicit off value switches it off; a missing or empty setting (for example a
+    // server upgraded from before this setting existed) keeps the panel answering on its
+    // IP, the previous behaviour. GetSystemOption returns false when the row is absent.
+    $ipval = strtolower(trim((string) ctrl_options::GetSystemOption('panel_ip_access')));
+    if (in_array($ipval, array('false', '0', 'no', 'off'), true)) {
+        return '';
+    }
     $ips = array();
     foreach (array_merge(preg_split('/\s+/', trim((string) @shell_exec('hostname -I 2>/dev/null'))), array((string) ctrl_options::GetSystemOption('server_ip'))) as $ip) {
         if (filter_var($ip, FILTER_VALIDATE_IP) && strpos($ip, '127.') !== 0 && $ip !== '::1') {
