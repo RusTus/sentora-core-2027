@@ -1,78 +1,14 @@
 <div class="zmodule_content panel" id="zmodule_header_<@ ModuleName @>">
     <div class="panel-heading">
         <img src="<@ ModuleIcon @>" width="35" height="35" border="0" alt="<@ ModuleName @>">
-
-        <div class="zmodule_title">
-            <@ ModuleName @>
-        </div>
-
+        <div class="zmodule_title"><@ ModuleName @></div>
         <div class="zmodule_desc" id="zmodule_desc_<@ ModuleName @>"><@ ModuleDesc @></div>
-
     </div>
-
-    <div class="zgrid_wrapper">
-        <@ Usage @>
+    <link rel="stylesheet" href="modules/usage_viewer/assets/usage.css">
+    <div class="uv" id="uv">
+        <div class="uv-head"><: Your package :> <b><@ PackageName @></b></div>
+        <div class="uv-storage"><@ Storage @></div>
+        <div class="uv-grid"><@ Resources @></div>
+        <p class="uv-note"><: Disk space and bandwidth are counted by the server every few minutes, so a change can take a little while to show. :></p>
     </div>
-
-    <table width="100%" class="none" cellpadding="0" cellspacing="0">
-        <tr>
-            <td>
-                <div class="zgrid_wrapper">
-                    <@ DomainsUsage @>
-                </div>
-            </td>
-            <td>
-                <div class="zgrid_wrapper">
-                    <@ SubDomainsUsage @>
-                </div>
-            </td>
-        </tr>
-    </table>
-
-    <table width="100%" class="none" cellpadding="0" cellspacing="0">
-        <tr>
-            <td>
-                <div class="zgrid_wrapper">
-                    <@ ParkedDomainsUsage @>
-                </div>
-            </td>
-            <td>
-                <div class="zgrid_wrapper">
-                    <@ MysqlUsage @>
-                </div>
-            </td>
-        </tr>
-    </table>
-
-    <table width="100%" class="none" cellpadding="0" cellspacing="0">
-        <tr>
-            <td>
-                <div class="zgrid_wrapper">
-                    <@ FTPUsage @>
-                </div>
-            </td>
-            <td>
-                <div class="zgrid_wrapper">
-                    <@ MailboxUsage @>
-                </div>
-            </td>
-        </tr>
-    </table>
-
-    <table width="100%" class="none" cellpadding="0" cellspacing="0">
-        <tr>
-            <td>
-                <div class="zgrid_wrapper">
-                    <@ ForwardersUsage @>
-                </div>
-            </td>
-            <td>
-                <div class="zgrid_wrapper">
-                    <@ DistListUsage @>
-                </div>
-            </td>
-        </tr>
-    </table>
-
-
 </div>

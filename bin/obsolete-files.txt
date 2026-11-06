@@ -121,3 +121,5 @@ modules/system_logviewer/assets/log2.png
 modules/backupmgr/assets/progress.css
 modules/backupmgr/assets/delete_small.png
 modules/backupmgr/assets/backup_icon.png
+# Usage Viewer: the picture its old page showed for "unlimited"
+modules/usage_viewer/assets/unlimited.png

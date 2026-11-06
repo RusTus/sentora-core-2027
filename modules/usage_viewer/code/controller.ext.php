@@ -28,166 +28,83 @@
  * @change P.Peyremorte added unlimited, factorization in functions
  */
 /**
- * Usage Viewer module: controller.
- *
- * Shows the logged-in user's disk, bandwidth and package usage against the quotas.
- * DisplayUsagepChart() (template <@ Usage @>) fills the static usage figures that the
- * other charts then use.
+ * Usage Viewer: the account's use of its package (disk, bandwidth, domains, mail ...),
+ * drawn in the page in the theme's colours (it used pChart images before).
  */
 class module_controller extends ctrl_module
 {
 
-    /** @var int|string The disk quota in bytes (0: no quota). Set by DisplayUsagepChart(). */
-    static $diskquota;
-    /** @var int|string|null Disk space used in bytes. Set by DisplayUsagepChart(). */
-    static $diskspace;
-    /** @var int|string|null Bandwidth used this month in bytes. Set by DisplayUsagepChart(). */
-    static $bandwidth;
-    /** @var int|string The bandwidth quota in bytes (0: no quota). Set by DisplayUsagepChart(). */
-    static $bandwidthquota;
-    /** @var int|string|null Number of domains in use. Set by DisplayUsagepChart(). */
-    static $domains;
-    /** @var int|string The domains quota (-1: unlimited). Set by DisplayUsagepChart(). */
-    static $domainsquota;
-    /** @var int|string|null Number of sub-domains in use. Set by DisplayUsagepChart(). */
-    static $subdomains;
-    /** @var int|string The sub-domains quota (-1: unlimited). Set by DisplayUsagepChart(). */
-    static $subdomainsquota;
-    /** @var int|string|null Number of parked domains in use. Set by DisplayUsagepChart(). */
-    static $parkeddomains;
-    /** @var int|string The parked domains quota (-1: unlimited). Set by DisplayUsagepChart(). */
-    static $parkeddomainsquota;
-    /** @var int|string|null Number of MySQL databases in use. Set by DisplayUsagepChart(). */
-    static $mysql;
-    /** @var int|string The MySQL databases quota (-1: unlimited). Set by DisplayUsagepChart(). */
-    static $mysqlquota;
-    /** @var int|string|null Number of FTP accounts in use. Set by DisplayUsagepChart(). */
-    static $ftpaccounts;
-    /** @var int|string The FTP accounts quota (-1: unlimited). Set by DisplayUsagepChart(). */
-    static $ftpaccountsquota;
-    /** @var int|string|null Number of mailboxes in use. Set by DisplayUsagepChart(). */
-    static $mailboxes;
-    /** @var int|string The mailboxes quota (-1: unlimited). Set by DisplayUsagepChart(). */
-    static $mailboxquota;
-    /** @var int|string|null Number of mail forwarders in use. Set by DisplayUsagepChart(). */
-    static $forwarders;
-    /** @var int|string The forwarders quota (-1: unlimited). Set by DisplayUsagepChart(). */
-    static $forwardersquota;
-    /** @var int|string Number of distribution lists in use (0 when none). Set by DisplayUsagepChart(). */
-    static $distlists;
-    /** @var int|string The distribution lists quota (-1: unlimited). Set by DisplayUsagepChart(). */
-    static $distlistsquota;
-
     /**
-     * Return the chart HTML only when the pChart library is installed.
+     * Escape text for HTML.
      *
-     * @param string $display The chart HTML.
-     * @return string The HTML, or "pChart Library Not Found.".
+     * @param mixed $s The text.
+     * @return string
      */
-    static private function check_pChart($display)
+    static function h($s)
     {
-        return (file_exists('etc/lib/pChart2/pChart/pData.php')) ? $display : 'pChart Library Not Found.';
+        return htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
     }
 
     /**
-     * Template value <@ Usage @>: the disk pie chart and the package usage table.
+     * Translated and HTML-escaped text.
      *
-     * Must run before the other charts: it fills the static usage figures.
-     *
-     * @return string The chart HTML, or "pChart Library Not Found.".
+     * @param string $s The English text.
+     * @return string
      */
-    static function getUsage()
+    static function t($s)
     {
-        return self::check_pChart(self::DisplayUsagepChart());
+        return self::h(ui_language::translate($s));
     }
 
     /**
-     * Template value <@ DomainsUsage @>: the domains usage chart.
+     * An inline SVG icon (stroked, in the text colour).
      *
-     * @return string The chart HTML, or "pChart Library Not Found.".
+     * @param string $name The icon: disk, wave, globe, sub, park, ftp, db, mail, forward, list.
+     * @return string SVG markup.
      */
-    static function getDomainsUsage()
+    static function Icon($name)
     {
-        return self::check_pChart(self::DisplayDomainsUsagepChart());
+        $p = array(
+            'disk' => '<ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/>',
+            'wave' => '<path d="M3 12h4l3-8 4 16 3-8h4"/>',
+            'globe' => '<circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18"/>',
+            'sub' => '<path d="M6 3v12a3 3 0 0 0 3 3h9"/><path d="m15 15 3 3-3 3"/>',
+            'park' => '<path d="M5 21V4h8a5 5 0 0 1 0 10H5"/>',
+            'ftp' => '<path d="M20 15v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-4"/><path d="m16 8-4-4-4 4"/><path d="M12 4v11"/>',
+            'db' => '<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/>',
+            'mail' => '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>',
+            'forward' => '<path d="m15 6 6 6-6 6"/><path d="M21 12H9a6 6 0 0 0-6 6"/>',
+            'list' => '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M21.5 20a6.5 6.5 0 0 0-4-6"/>',
+        );
+        return '<svg class="uv-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' . $p[$name] . '</svg>';
     }
 
     /**
-     * Template value <@ SubDomainsUsage @>: the sub-domains usage chart.
+     * Whether the account may open a module (to link to it).
      *
-     * @return string The chart HTML, or "pChart Library Not Found.".
+     * @global db_driver $zdbh The panel's database connection.
+     * @param array<string, mixed> $user The logged-in account.
+     * @param string $folder The module's folder.
+     * @return bool
      */
-    static function getSubDomainsUsage()
+    static function CanOpen($user, $folder)
     {
-        return self::check_pChart(self::DisplaySubDomainsUsagepChart());
+        global $zdbh;
+        static $ids = null;
+        if ($ids === null) {
+            $ids = array();
+            foreach ($zdbh->query("SELECT mo_id_pk, mo_folder_vc FROM x_modules WHERE mo_enabled_en = 'true'")->fetchAll() as $r) {
+                $ids[$r['mo_folder_vc']] = (int) $r['mo_id_pk'];
+            }
+        }
+        return isset($ids[$folder]) && ctrl_groups::CheckGroupModulePermissions($user['usergroupid'], $ids[$folder]);
     }
 
     /**
-     * Template value <@ ParkedDomainsUsage @>: the parked domains usage chart.
+     * Treat an empty value as 0.
      *
-     * @return string The chart HTML, or "pChart Library Not Found.".
-     */
-    static function getParkedDomainsUsage()
-    {
-        return self::check_pChart(self::DisplayParkedDomainsUsagepChart());
-    }
-
-    /**
-     * Template value <@ MysqlUsage @>: the MySQL databases usage chart.
-     *
-     * @return string The chart HTML, or "pChart Library Not Found.".
-     */
-    static function getMysqlUsage()
-    {
-        return self::check_pChart(self::DisplayMysqlUsagepChart());
-    }
-
-    /**
-     * Template value <@ FTPUsage @>: the FTP accounts usage chart.
-     *
-     * @return string The chart HTML, or "pChart Library Not Found.".
-     */
-    static function getFTPUsage()
-    {
-        return self::check_pChart(self::DisplayFTPUsagepChart());
-    }
-
-    /**
-     * Template value <@ MailboxUsage @>: the mailboxes usage chart.
-     *
-     * @return string The chart HTML, or "pChart Library Not Found.".
-     */
-    static function getMailboxUsage()
-    {
-        return self::check_pChart(self::DisplayMailboxUsagepChart());
-    }
-
-    /**
-     * Template value <@ ForwardersUsage @>: the forwarders usage chart.
-     *
-     * @return string The chart HTML, or "pChart Library Not Found.".
-     */
-    static function getForwardersUsage()
-    {
-        return self::check_pChart(self::DisplayForwardersUsagepChart());
-    }
-
-    /**
-     * Template value <@ DistListUsage @>: the distribution lists usage chart.
-     *
-     * @return string The chart HTML, or "pChart Library Not Found.".
-     */
-    static function getDistListUsage()
-    {
-        return self::check_pChart(self::DisplayDistListUsagepChart());
-    }
-
-    //Begin Display Methods
-
-    /**
-     * Turn an empty value into 0.
-     *
-     * @param mixed $value A quota or usage value.
-     * @return mixed The value, or 0 when it is empty.
+     * @param mixed $value The value.
+     * @return mixed 0 when empty, else the value.
      */
     static function empty_as_0($value)
     {
@@ -195,243 +112,152 @@ class module_controller extends ctrl_module
     }
 
     /**
-     * Build one row of the package usage table.
+     * The account's use of each resource and its limit.
      *
-     * @param string $name The resource label (translated).
-     * @param int|string|float|null $used The amount used.
-     * @param int|string $quota The quota (below 0: unlimited).
-     * @param bool $human Optional. Show the amounts as file sizes. Default false.
-     * @return string The <tr> HTML with a progress bar image.
+     * Disk and bandwidth: 0 in the package means no limit (here -1). The others: -1 means no limit.
+     *
+     * @return array<string, array{used: int|float, max: int|float}> Keyed by resource.
      */
-    static function build_row_usage($name, $used, $quota, $human = false)
+    static function Figures()
     {
-        $res = '<tr><th nowrap="nowrap">' . ui_language::translate($name) . ':</th><td nowrap="nowrap">' . (($human) ? fs_director::ShowHumanFileSize($used) : $used);
-        if ($quota < 0) {
-            $res .= '</td><td style="text-align:center">&#8734; ' . ui_language::translate('Unlimited') . ' &#8734;</td>';
-        } else {
-            $res .= ' / ' . (($human) ? fs_director::ShowHumanFileSize($quota) : $quota) . '</td><td><img src="etc/lib/pChart2/sentora/zProgress.php?percent=' . (($quota == 0 or $used == $quota) ? 100 : round($used / $quota * 100, 0)) . '"/>';
+        static $f = null;
+        if ($f !== null) {
+            return $f;
         }
-        return $res . '</td></tr>';
+        $u = ctrl_users::GetUserDetail();
+        $id = $u['userid'];
+        $q = function ($k) use ($id) { return (float) self::empty_as_0(ctrl_users::GetQuotaUsages($k, $id)); };
+        $f = array(
+            'disk' => array('used' => $q('diskspace'), 'max' => (float) $u['diskquota'] == 0 ? -1 : (float) $u['diskquota']),
+            'bandwidth' => array('used' => $q('bandwidth'), 'max' => (float) self::empty_as_0($u['bandwidthquota']) == 0 ? -1 : (float) $u['bandwidthquota']),
+            'domains' => array('used' => $q('domains'), 'max' => (int) self::empty_as_0($u['domainquota'])),
+            'subdomains' => array('used' => $q('subdomains'), 'max' => (int) self::empty_as_0($u['subdomainquota'])),
+            'parkeddomains' => array('used' => $q('parkeddomains'), 'max' => (int) self::empty_as_0($u['parkeddomainquota'])),
+            'ftpaccounts' => array('used' => $q('ftpaccounts'), 'max' => (int) self::empty_as_0($u['ftpaccountsquota'])),
+            'mysql' => array('used' => $q('mysql'), 'max' => (int) self::empty_as_0($u['mysqlquota'])),
+            'mailboxes' => array('used' => $q('mailboxes'), 'max' => (int) self::empty_as_0($u['mailboxquota'])),
+            'forwarders' => array('used' => $q('forwarders'), 'max' => (int) self::empty_as_0($u['forwardersquota'])),
+            'distlists' => array('used' => $q('distlists'), 'max' => (int) self::empty_as_0($u['distlistsquota'])),
+        );
+        return $f;
     }
 
     /**
-     * Build the disk usage pie chart and package usage table.
+     * How full, as a percentage, and its colour level.
      *
-     * Reads the user's quotas and usage into the static properties used by the other charts.
-     *
-     * @global db_driver $zdbh The panel's database connection (not used).
-     * @global runtime_controller $controller The request controller.
-     * @return string The HTML.
+     * @param int|float $used Used.
+     * @param int|float $max The limit (negative: none).
+     * @return array{0: float, 1: string} Percentage (0 when there is no limit) and 'ok', 'mid', 'high' or 'none'.
      */
-    static function DisplayUsagepChart()
+    static function Level($used, $max)
     {
-        global $zdbh;
-        global $controller;
-        $currentuser = ctrl_users::GetUserDetail();
+        if ($max < 0) {
+            return array(0, 'none');
+        }
+        $pct = $max == 0 ? 100 : min(100, $used / $max * 100);
+        return array($pct, $pct >= 90 ? 'high' : ($pct >= 75 ? 'mid' : 'ok'));
+    }
 
-        self::$diskquota = $currentuser['diskquota'];
-        self::$diskspace = ctrl_users::GetQuotaUsages('diskspace', $currentuser['userid']);
+    /**
+     * A ring chart (SVG) filled to a percentage.
+     *
+     * @param float $pct 0 to 100.
+     * @param string $level 'ok', 'mid', 'high' or 'none'.
+     * @param string $centre HTML in the middle.
+     * @return string HTML.
+     */
+    static function Ring($pct, $level, $centre)
+    {
+        $r = 52;
+        $c = 2 * M_PI * $r;
+        $dash = $level === 'none' ? 0 : round($c * $pct / 100, 1);
+        return '<div class="uv-ring lv-' . $level . '"><svg viewBox="0 0 120 120" aria-hidden="true"><circle class="uv-track" cx="60" cy="60" r="' . $r . '"/>'
+            . ($dash > 0 ? '<circle class="uv-fill" cx="60" cy="60" r="' . $r . '" stroke-dasharray="' . $dash . ' ' . round($c, 1) . '" transform="rotate(-90 60 60)"/>' : '')   // nothing to fill: no dot
+            . '</svg><div class="uv-centre">' . $centre . '</div></div>';
+    }
 
-        self::$bandwidthquota = module_controller::empty_as_0($currentuser['bandwidthquota']);
-        self::$bandwidth = ctrl_users::GetQuotaUsages('bandwidth', $currentuser['userid']);
-
-        self::$domainsquota = module_controller::empty_as_0($currentuser['domainquota']);
-        self::$domains = ctrl_users::GetQuotaUsages('domains', $currentuser['userid']);
-
-        self::$subdomainsquota = module_controller::empty_as_0($currentuser['subdomainquota']);
-        self::$subdomains = ctrl_users::GetQuotaUsages('subdomains', $currentuser['userid']);
-
-        self::$parkeddomainsquota = module_controller::empty_as_0($currentuser['parkeddomainquota']);
-        self::$parkeddomains = ctrl_users::GetQuotaUsages('parkeddomains', $currentuser['userid']);
-
-        self::$mysqlquota = module_controller::empty_as_0($currentuser['mysqlquota']);
-        self::$mysql = ctrl_users::GetQuotaUsages('mysql', $currentuser['userid']);
-
-        self::$ftpaccountsquota = module_controller::empty_as_0($currentuser['ftpaccountsquota']);
-        self::$ftpaccounts = ctrl_users::GetQuotaUsages('ftpaccounts', $currentuser['userid']);
-
-        self::$mailboxquota = module_controller::empty_as_0($currentuser['mailboxquota']);
-        self::$mailboxes = ctrl_users::GetQuotaUsages('mailboxes', $currentuser['userid']);
-
-        self::$forwardersquota = module_controller::empty_as_0($currentuser['forwardersquota']);
-        self::$forwarders = ctrl_users::GetQuotaUsages('forwarders', $currentuser['userid']);
-
-        self::$distlistsquota = $currentuser['distlistsquota'];
-        self::$distlists = module_controller::empty_as_0(ctrl_users::GetQuotaUsages('distlists', $currentuser['userid']));
-
-        $maximum = self::$diskquota;
-        $used = self::$diskspace;
-        if ($maximum == 0) {
-            if (sys_versions::ShowOSPlatformVersion() != 'Windows') {
-                // We'll specify the full path to the hsoted directory to ensure that NFS mounts etc are taken into account.
-                $free = disk_free_space(ctrl_options::GetOption('hosted_dir'));
+    /**
+     * Template HTML: disk and bandwidth, each with a ring chart.
+     *
+     * When the disk has no limit, its ring shows the account's share of the server's disk.
+     *
+     * @return string HTML.
+     */
+    static function getStorage()
+    {
+        $f = self::Figures();
+        $out = '';
+        foreach (array('disk' => array('disk', 'Disk space', '#447fb3'), 'bandwidth' => array('wave', 'Bandwidth this month', '#1fa2b5')) as $k => $m) {
+            $used = $f[$k]['used'];
+            $max = $f[$k]['max'];
+            list($pct, $lv) = self::Level($used, $max);
+            if ($max < 0) {
+                $centre = '<b>' . self::h(fs_director::ShowHumanFileSize($used)) . '</b><span>' . self::t('used') . '</span>';
+                if ($k === 'disk') {
+                    $free = (float) @disk_free_space(rtrim((string) ctrl_options::GetSystemOption('hosted_dir'), '/') ?: '/');
+                    $detail = self::t('No limit in your package.') . ($free > 0 ? ' ' . sprintf(self::t('%s free on the server.'), self::h(fs_director::ShowHumanFileSize($free))) : '');
+                } else {
+                    $detail = self::t('No limit in your package.');
+                }
             } else {
-                // On Windows we'll check the disk (partition) that is configured for the 'hostdata' directory.
-                $free = disk_free_space(substr(ctrl_options::GetOption('hosted_dir'), 0, 2));
+                $centre = '<b>' . round($pct) . '%</b><span>' . self::t('used') . '</span>';
+                $detail = sprintf(self::t('%1$s of %2$s used, %3$s left.'), '<b>' . self::h(fs_director::ShowHumanFileSize($used)) . '</b>', '<b>' . self::h(fs_director::ShowHumanFileSize($max)) . '</b>',
+                    self::h(fs_director::ShowHumanFileSize(max(0, $max - $used))));
             }
-            $freeLabel = fs_director::ShowHumanFileSize($free) . ' (' . ui_language::translate('Server disk') . ')';
-        } else {
-            $free = max($maximum - $used, 0);
-            $freeLabel = fs_director::ShowHumanFileSize($free);
+            $out .= '<div class="uv-card uv-big" style="--c:' . $m[2] . '">' . self::Ring($pct, $lv, $centre) . '<div><h4>' . self::Icon($m[0]) . self::t($m[1]) . '</h4><p>' . $detail . '</p>'
+                . ($k === 'bandwidth' ? '<p class="uv-sub">' . self::t('Counted from the first of the month; it starts again then.') . '</p>' : '')
+                . ($lv === 'high' ? '<p class="uv-warn">' . self::t('Nearly full: free some space, or ask about a larger package.') . '</p>' : '') . '</div></div>';
         }
-        $usedLabel = fs_director::ShowHumanFileSize($used);
-
-
-        $line = '<table class="none" cellpadding="0" cellspacing="0">' .
-                '<tr>' .
-                '<td align="left" valign="top" width="350px">' .
-                '<h2>' . ui_language::translate('Disk Usage Total') . '</h2>' .
-                '<img src="etc/lib/pChart2/sentora/z3DPie.php?score=' . $free . '::' . $used .
-                '&amp;imagesize=350::250&amp;chartsize=150::120&amp;radius=150' .
-                '&amp;labels=Free_Space: ' . $freeLabel . '::Used_Space: ' . $usedLabel .
-                '&amp;legendfont=verdana&amp;legendfontsize=8&amp;legendsize=10::220"/>' .
-                '</td>' .
-                '<td align="left" valign="top">' .
-                '<h2>' . ui_language::translate('Package Usage Total') . '</h2>' .
-                '<table class="table table-striped" border="0" cellspacing="0" cellpadding="0">' .
-                module_controller::build_row_usage('Disk space', self::$diskspace, (self::$diskquota == 0) ? -1 : self::$diskquota, true) .
-                module_controller::build_row_usage('Bandwidth', self::$bandwidth, (self::$bandwidthquota == 0) ? -1 : self::$bandwidthquota, true) .
-                module_controller::build_row_usage('Domains', self::$domains, self::$domainsquota) .
-                module_controller::build_row_usage('Sub-domains', self::$subdomains, self::$subdomainsquota) .
-                module_controller::build_row_usage('Parked domains', self::$parkeddomains, self::$parkeddomainsquota) .
-                module_controller::build_row_usage('FTP accounts', self::$ftpaccounts, self::$ftpaccountsquota) .
-                module_controller::build_row_usage('MySQL&reg databases', self::$mysql, self::$mysqlquota) .
-                module_controller::build_row_usage('Mailboxes', self::$mailboxes, self::$mailboxquota) .
-                module_controller::build_row_usage('Mail forwarders', self::$forwarders, self::$forwardersquota) .
-                module_controller::build_row_usage('Distribution lists', self::$distlists, self::$distlistsquota) .
-                '</table>' .
-                '</td>' .
-                '</tr>' .
-                '</table>';
-        return $line;
+        return $out;
     }
 
     /**
-     * Build one usage pie chart with its heading.
+     * Template HTML: one card per countable resource (domains, mailboxes ...), with a bar and a link to manage it.
      *
-     * @global runtime_controller $controller The request controller.
-     * @param string $name The heading (translated).
-     * @param int|string|null $used The amount used.
-     * @param int|string $maximum The quota (below 0: unlimited, shows the unlimited image).
-     * @return string The HTML.
+     * @return string HTML.
      */
-    static private function DisplayChart($name, $used, $maximum)
+    static function getResources()
     {
-		global $controller;
-        if ($maximum < 0) { //-1 = unlimited
-            $res = '<img src="modules/' . $controller->GetControllerRequest('URL', 'module') . '/assets/unlimited.png" alt="' . ui_language::translate('Unlimited') . '"/>';
-        } else {
-            $free = max($maximum - $used, 0);
-            $res = '<img src="etc/lib/pChart2/sentora/z3DPie.php?score=' . $free . '::' . $used
-                    . '&amp;imagesize=240::190&amp;chartsize=120::90&amp;radius=100'
-                    . '&amp;labels=Free: ' . $free . '::Used: ' . $used
-                    . '&amp;legendfont=verdana&amp;legendfontsize=8&amp;legendsize=10::160"'
-                    . ' alt="' . ui_language::translate('Pie chart') . '"/>';
+        $u = ctrl_users::GetUserDetail();
+        $f = self::Figures();
+        $list = array(
+            'domains' => array('globe', 'Domains', 'domains'), 'subdomains' => array('sub', 'Subdomains', 'sub_domains'), 'parkeddomains' => array('park', 'Parked domains', 'parked_domains'),
+            'mailboxes' => array('mail', 'Mailboxes', 'mailboxes'), 'forwarders' => array('forward', 'Mail forwarders', 'forwarders'), 'distlists' => array('list', 'Distribution lists', 'distlists'),
+            'mysql' => array('db', 'MySQL databases', 'mysql_databases'), 'ftpaccounts' => array('ftp', 'FTP accounts', 'ftp_management'),
+        );
+        $out = '';
+        foreach ($list as $k => $m) {
+            $used = (int) $f[$k]['used'];
+            $max = (int) $f[$k]['max'];
+            list($pct, $lv) = self::Level($used, $max);
+            if ($max < 0) {
+                $count = $used . ' <span>' . self::t('of no limit') . '</span>';
+                $foot = self::t('No limit');
+            } elseif ($max === 0) {
+                $count = $used . ' <span>' . self::t('of 0') . '</span>';
+                $foot = self::t('Not in your package');
+                $lv = 'off';
+            } else {
+                $count = $used . ' <span>' . sprintf(self::t('of %d'), $max) . '</span>';
+                $foot = $used >= $max ? self::t('All used') : sprintf(self::t('%d left'), $max - $used);
+            }
+            $link = self::CanOpen($u, $m[2]) ? '<a class="uv-manage" href="./?module=' . $m[2] . '">' . self::t('Manage') . ' &rarr;</a>' : '';
+            $out .= '<div class="uv-card uv-res lv-' . $lv . '"><div class="uv-res-head">' . self::Icon($m[0]) . '<h4>' . self::t($m[1]) . '</h4></div>'
+                . '<div class="uv-count">' . $count . '</div>'
+                . '<div class="uv-bar"><span style="width: ' . ($lv === 'none' || $lv === 'off' ? 0 : round($pct, 1)) . '%"></span></div>'
+                . '<div class="uv-res-foot"><span>' . $foot . '</span>' . $link . '</div></div>';
         }
-        return '<h2>' . ui_language::translate($name) . '</h2>' . $res;
+        return $out;
     }
 
     /**
-     * The domains usage chart.
+     * Template value: the package name.
      *
-     * @return string The HTML.
+     * @return string HTML-escaped.
      */
-    static function DisplayDomainsUsagepChart()
+    static function getPackageName()
     {
-        return self::DisplayChart('Domain Usage', self::$domains, self::$domainsquota);
+        $u = ctrl_users::GetUserDetail();
+        return self::h($u['packagename']);
     }
-
-    /**
-     * The sub-domains usage chart.
-     *
-     * @return string The HTML.
-     */
-    static function DisplaySubDomainsUsagepChart()
-    {
-        return self::DisplayChart('Sub-Domain Usage', self::$subdomains, self::$subdomainsquota);
-    }
-
-    /**
-     * The parked domains usage chart.
-     *
-     * @return string The HTML.
-     */
-    static function DisplayParkedDomainsUsagepChart()
-    {
-        return self::DisplayChart('Parked-Domain Usage', self::$parkeddomains, self::$parkeddomainsquota);
-    }
-
-    /**
-     * The MySQL databases usage chart.
-     *
-     * @return string The HTML.
-     */
-    static function DisplayMysqlUsagepChart()
-    {
-        return self::DisplayChart('MySQL&reg Database Usage', self::$mysql, self::$mysqlquota);
-    }
-
-    /**
-     * The mailboxes usage chart.
-     *
-     * @return string The HTML.
-     */
-    static function DisplayMailboxUsagepChart()
-    {
-        return self::DisplayChart('Mailbox Usage', self::$mailboxes, self::$mailboxquota);
-    }
-
-    /**
-     * The FTP accounts usage chart.
-     *
-     * @return string The HTML.
-     */
-    static function DisplayFTPUsagepChart()
-    {
-        return self::DisplayChart('FTP Usage', self::$ftpaccounts, self::$ftpaccountsquota);
-    }
-
-    /**
-     * The forwarders usage chart.
-     *
-     * @return string The HTML.
-     */
-    static function DisplayForwardersUsagepChart()
-    {
-        return self::DisplayChart('Forwarders Usage', self::$forwarders, self::$forwardersquota);
-    }
-
-    /**
-     * The distribution lists usage chart.
-     *
-     * @return string The HTML.
-     */
-    static function DisplayDistListUsagepChart()
-    {
-        return self::DisplayChart('Distribution List Usage', self::$distlists, self::$distlistsquota);
-    }
-
-    /**
-     * Build a progress bar image for one resource of the logged-in user.
-     *
-     * Not called anywhere in the panel.
-     *
-     * @param string $total The resource name for ctrl_users::GetQuotaUsages() (e.g. 'domains').
-     * @param string $quota The quota key in the user details (e.g. 'domainquota').
-     * @return string The <img> HTML, or '' when the quota is 0.
-     */
-    static function DisplaypBar($total, $quota)
-    {
-        $currentuser = ctrl_users::GetUserDetail();
-        $typequota = $currentuser[$quota];
-        $type = ctrl_users::GetQuotaUsages($total, $currentuser['userid']);
-        if ($typequota == 0)
-            return ''; //Quota are disabled
-        if (fs_director::CheckForEmptyValue($type))
-            return '<img src="etc/lib/pChart2/sentora/zProgress.php?percent=0"/>';
-        if ($type == $typequota)
-            return '<img src="etc/lib/pChart2/sentora/zProgress.php?percent=100"/>';
-        return '<img src="etc/lib/pChart2/sentora/zProgress.php?percent=' . round($type / $typequota * 100, 0) . '"/>';
-    }
-
 }

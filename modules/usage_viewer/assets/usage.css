@@ -1,0 +1,56 @@
+/* Usage Viewer in the panel's style. Colours come from the theme's shared --sn-* variables
+   (etc/styles/THEMES.md), with these as the fallback, so it follows Light, Dark and Auto. */
+.uv { --uv-ink: var(--sn-ink, #1f2933); --uv-muted: var(--sn-muted, #6b7785); --uv-line: var(--sn-line, #e6e9ee);
+      --uv-card: var(--sn-card, #ffffff); --uv-bg: var(--sn-soft, #f4f6f9); --uv-accent: var(--sn-accent, #447fb3);
+      --uv-ok: #2db87d; --uv-mid: #f5a623; --uv-high: #ff6854;
+      color: var(--uv-ink); background: var(--uv-bg); border-radius: 8px; padding: 18px; margin-top: 10px; }
+.uv * { box-sizing: border-box; }
+.uv-ico { width: 18px; height: 18px; flex: none; }
+.uv-head { color: var(--uv-muted); font-size: 13px; margin: -4px 0 12px; }
+.uv-head b { color: var(--uv-ink); }
+.uv-card { background: var(--uv-card); border-radius: 6px; box-shadow: 0 1px 3px rgba(20,30,40,0.08); padding: 16px; min-width: 0; }
+.uv-card h4 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 15px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; }
+.uv-sub { color: var(--uv-muted); font-size: 12px; }
+.uv-note { color: var(--uv-muted); font-size: 12px; margin: 14px 2px 0; }
+
+/* disk and bandwidth */
+.uv-storage { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 14px; margin-bottom: 14px; }
+.uv-big { display: flex; align-items: center; gap: 22px; border-top: 4px solid var(--c); }
+.uv-big h4 { margin-bottom: 8px; }
+.uv-big h4 .uv-ico { color: var(--c); }
+.uv-big p { margin: 0 0 6px; font-size: 14px; line-height: 1.5; }
+.uv-warn { color: var(--sn-bad, #b42b27); font-weight: 600; font-size: 13px !important; }
+.uv-ring { position: relative; flex: none; width: 128px; height: 128px; }
+.uv-ring svg { width: 100%; height: 100%; }
+.uv-track { fill: none; stroke: var(--uv-line); stroke-width: 12; }
+.uv-fill { fill: none; stroke: var(--uv-ok); stroke-width: 12; stroke-linecap: round; transition: stroke-dasharray .6s ease; }
+.uv-ring.lv-mid .uv-fill { stroke: var(--uv-mid); }
+.uv-ring.lv-high .uv-fill { stroke: var(--uv-high); }
+.uv-centre { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+.uv-centre b { font-size: 20px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.uv-centre span { font-size: 11px; color: var(--uv-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+
+/* everything you can count */
+.uv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 14px; }
+.uv-res { display: flex; flex-direction: column; gap: 8px; }
+.uv-res-head { display: flex; align-items: center; gap: 8px; }
+.uv-res-head .uv-ico { color: var(--uv-accent); width: 20px; height: 20px; }
+.uv-res-head h4 { font-size: 13px; }
+.uv-count { font-size: 26px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.uv-count span { font-size: 14px; font-weight: 600; color: var(--uv-muted); }
+.uv-bar { height: 6px; border-radius: 3px; background: var(--uv-line); overflow: hidden; }
+.uv-bar span { display: block; height: 100%; border-radius: 3px; background: var(--uv-ok); }
+.uv-res.lv-mid .uv-bar span { background: var(--uv-mid); }
+.uv-res.lv-high .uv-bar span { background: var(--uv-high); }
+.uv-res.lv-none .uv-bar { background: repeating-linear-gradient(90deg, var(--uv-line) 0 6px, transparent 6px 10px); }
+.uv-res.lv-off { opacity: 0.6; }
+.uv-res-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 12px; color: var(--uv-muted); }
+.uv-res.lv-high .uv-res-foot span { color: var(--sn-bad, #b42b27); font-weight: 600; }
+.uv-manage { color: var(--uv-accent); font-weight: 600; white-space: nowrap; }
+
+@media (max-width: 640px) {
+    .uv { padding: 12px; }
+    .uv-storage { grid-template-columns: 1fr; }
+    .uv-big { flex-direction: column; align-items: flex-start; }
+}
+@media (prefers-reduced-motion: reduce) { .uv-fill { transition: none; } }
