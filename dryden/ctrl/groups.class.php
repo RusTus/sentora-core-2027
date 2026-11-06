@@ -62,7 +62,10 @@ class ctrl_groups {
         $sqlPrepare = $zdbh->prepare($sqlString);
         $zdbh->bindParams($sqlPrepare, $bindArray);
         unset($sqlString);
-        $rowCount = $sqlPrepare->rowCount();
+        // run the count (rowCount() of a statement never executed was always 0, so every
+        // save of Module Admin added the permission again)
+        $sqlPrepare->execute();
+        $rowCount = (int) $sqlPrepare->fetchColumn();
         unset($sqlPrepare);
 
         if ($rowCount < 1) {

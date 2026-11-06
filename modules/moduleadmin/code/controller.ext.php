@@ -39,201 +39,224 @@ class module_controller extends ctrl_module
     static $error_message;
 
     /**
-     * Template HTML: links to the enabled administration modules.
+     * Escape text for HTML.
+     *
+     * @param mixed $s The text.
+     * @return string
+     */
+    static function h($s)
+    {
+        return htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
+    }
+
+    /**
+     * Translated and HTML-escaped text.
+     *
+     * @param string $s The English text.
+     * @return string
+     */
+    static function t($s)
+    {
+        return self::h(ui_language::translate($s));
+    }
+
+    /**
+     * A module's icon: the theme's own (img/icons/<module>.svg), else the module's icon.png.
+     *
+     * @param string $folder The module folder.
+     * @return string The image address.
+     */
+    static function IconOf($folder)
+    {
+        $theme = ui_template::ThemeIcon($folder);
+        return $theme ? './' . $theme : './modules/' . rawurlencode($folder) . '/assets/icon.png';
+    }
+
+    /**
+     * Every module but the core one, with its category name.
      *
      * @global db_driver $zdbh The panel's database connection.
+     * @return array<int, array<string, mixed>> x_modules rows plus 'cat'.
+     */
+    static function Modules()
+    {
+        global $zdbh;
+        static $rows = null;
+        if ($rows === null) {
+            $rows = $zdbh->query("SELECT m.*, c.mc_name_vc AS cat FROM x_modules m LEFT JOIN x_modcats c ON c.mc_id_pk = m.mo_category_fk
+                WHERE m.mo_folder_vc <> 'zpx_core_module' ORDER BY m.mo_name_vc ASC")->fetchAll();
+        }
+        return $rows;
+    }
+
+    /**
+     * Template HTML: counts of the modules (all, on, off, by type).
+     *
+     * @return string HTML.
+     */
+    static function getSummary()
+    {
+        $n = array('all' => 0, 'on' => 0, 'off' => 0, 'user' => 0, 'modadmin' => 0);
+        foreach (self::Modules() as $m) {
+            $n['all']++;
+            $n[$m['mo_enabled_en'] === 'true' ? 'on' : 'off']++;
+            if (isset($n[$m['mo_type_en']])) {
+                $n[$m['mo_type_en']]++;
+            }
+        }
+        $card = function ($value, $label, $color) {
+            return '<div class="mo-stat" style="--c:' . $color . '"><b>' . (int) $value . '</b><span>' . self::t($label) . '</span></div>';
+        };
+        return $card($n['all'], 'Modules', '#447fb3') . $card($n['on'], 'Switched on', '#2db87d') . $card($n['off'], 'Switched off', $n['off'] ? '#f5a623' : '#9aa5b1')
+            . $card($n['user'], 'In the menus', '#1fa2b5') . $card($n['modadmin'], 'Administration', '#8e6bd8');
+    }
+
+    /**
+     * Template HTML: the enabled administration modules (modadmin), as tiles that open them.
+     *
      * @return string HTML.
      */
     static function getAdminModules()
     {
-        global $zdbh;
-        $line = "<h2>" . ui_language::translate("Administration Modules") . "</h2>";
-        $modsql = "SELECT COUNT(*) FROM x_modules WHERE mo_type_en = 'modadmin' AND mo_enabled_en = 'true' ORDER BY mo_name_vc ASC";
-        if ($nummodsql = $zdbh->query($modsql)) {
-            if ($nummodsql->fetchColumn() > 0) {
-                $modsql = $zdbh->prepare("SELECT * FROM x_modules WHERE mo_type_en = 'modadmin' AND mo_enabled_en = 'true' ORDER BY mo_name_vc ASC");
-                $modsql->execute();
-                $line .="<table>";
-                while ($modules = $modsql->fetch()) {
-                    $translatename = ui_language::translate($modules['mo_name_vc']);
-                    $line .="<tr><td>";
-                    $line .= "<a href=\"./?module=" . $modules['mo_folder_vc'] . "\">" . $translatename . "</a>";
-                    $line .="</td></tr>";
-                }
-                $line .="</table>";
-            } else {
-                $line .= ui_language::translate("You have no administration modules at this time.");
+        $out = '';
+        foreach (self::Modules() as $m) {
+            if ($m['mo_type_en'] === 'modadmin' && $m['mo_enabled_en'] === 'true') {
+                $out .= '<a class="mo-tile" href="./?module=' . rawurlencode($m['mo_folder_vc']) . '"><img src="' . self::h(self::IconOf($m['mo_folder_vc'])) . '" alt="" width="32" height="32">'
+                    . '<span>' . self::h(ui_language::translate($m['mo_name_vc'])) . '</span></a>';
             }
         }
-        return $line;
+        return $out !== '' ? '<div class="mo-tiles">' . $out . '</div>' : '<p class="mo-empty">' . self::t('You have no administration modules at this time.') . '</p>';
     }
 
     /**
-     * Template HTML: the module settings form (on/off, category, updates, group access).
+     * Template HTML: the module settings form, by category: on/off, category and group access.
+     *
+     * The field names are what doEditModule() reads: inDisable_<id> ('true' or 'false'),
+     * inCategory_<id> and inEnable_<group>_<id>. Module Admin itself always stays on and
+     * open to administrators; system modules are shown but can not be changed.
      *
      * @global db_driver $zdbh The panel's database connection.
-     * @global runtime_controller $controller The request controller (unused).
      * @return string HTML.
      */
     static function getConfigModules()
     {
         global $zdbh;
-        global $controller;
-        $line = "<h2>" . ui_language::translate("Configure Modules") . "</h2>";
-        $modsql = "SELECT COUNT(*) FROM x_modules";
-        if ($nummodsql = $zdbh->query($modsql)) {
-            if ($nummodsql->fetchColumn() > 0) {
-                $modsql = $zdbh->prepare("SELECT * FROM x_modules WHERE mo_folder_vc <> 'zpx_core_module' ORDER BY mo_name_vc ASC");
-                $modsql->execute();
-                $line .= "<form action=\"./?module=moduleadmin&action=EditModule\" method=\"post\">";
-                $line .= "<table class=\"table table-striped\">";
-                $line .= "<tr>";
-                $line .= "<th></th>";
-                $line .= "<th>" . ui_language::translate("Module") . "</th>";
-                $line .= "<th>" . ui_language::translate("On") . "/" . ui_language::translate("Off") . "</th>";
-                $line .= "<th>" . ui_language::translate("Category") . "</th>";
-                $line .= "<th style=\"text-align:center\">" . ui_language::translate("Up-to-date?") . "</th>";
-                $groupssql = $zdbh->query("SELECT * FROM x_groups ORDER BY ug_name_vc ASC");
-                while ($groups = $groupssql->fetch()) {
-                    $line .= "<th style=\"text-align:center\">" . htmlspecialchars((string) $groups['ug_name_vc'], ENT_QUOTES, 'UTF-8') . "</th>";
+        $groups = $zdbh->query("SELECT * FROM x_groups ORDER BY ug_id_pk ASC")->fetchAll();
+        $cats = $zdbh->query("SELECT * FROM x_modcats ORDER BY mc_name_vc ASC")->fetchAll();
+        // the modules by section: each menu category, then administration, then system
+        $sections = array();
+        foreach (self::Modules() as $m) {
+            $key = $m['mo_type_en'] === 'user' ? 'c:' . ($m['cat'] !== null ? $m['cat'] : ui_language::translate('No category')) : ($m['mo_type_en'] === 'modadmin' ? 'z1' : 'z2');
+            $sections[$key][] = $m;
+        }
+        ksort($sections);
+        $head = '<tr><th>' . self::t('Module') . '</th><th class="mo-c">' . self::t('On') . '</th><th>' . self::t('Menu category') . '</th>';
+        foreach ($groups as $g) {
+            $head .= '<th class="mo-c">' . self::h(ui_language::translate((string) $g['ug_name_vc'])) . '</th>';
+        }
+        $head .= '</tr>';
+        $cols = 3 + count($groups);
+        $rows = '';
+        foreach ($sections as $key => $mods) {
+            $title = $key === 'z1' ? ui_language::translate('Administration (Module Admin)') : ($key === 'z2' ? ui_language::translate('System (always on)') : substr($key, 2));
+            $rows .= '<tr class="mo-section"><th colspan="' . $cols . '">' . self::h($title) . ' <span>' . count($mods) . '</span></th></tr>';
+            foreach ($mods as $m) {
+                $id = (int) $m['mo_id_pk'];
+                $system = $m['mo_type_en'] === 'system';
+                $self = $m['mo_folder_vc'] === 'moduleadmin';
+                $on = $m['mo_enabled_en'] === 'true';
+                $rows .= '<tr class="mo-row' . ($on ? '' : ' off') . '" data-s="' . self::h(strtolower(ui_language::translate($m['mo_name_vc']) . ' ' . $m['mo_folder_vc'])) . '">'
+                    . '<td><div class="mo-name"><img src="' . self::h(self::IconOf($m['mo_folder_vc'])) . '" alt="" width="26" height="26"><div>'
+                    . '<a href="./?module=moduleadmin&amp;showinfo=' . rawurlencode($m['mo_folder_vc']) . '">' . self::h(ui_language::translate($m['mo_name_vc'])) . '</a>'
+                    . '<span>' . self::h($m['mo_folder_vc']) . '</span></div></div></td>';
+                // on / off: a switch that sends "false" when off; Module Admin can not be switched off
+                if ($system) {
+                    $rows .= '<td class="mo-c"><span class="mo-lock" title="' . self::t('System modules are always on') . '">' . self::t('always') . '</span></td>';
+                } elseif ($self) {
+                    $rows .= '<td class="mo-c"><input type="hidden" name="inDisable_' . $id . '" value="true"><label class="mo-switch" title="' . self::t('Module Admin can not be switched off') . '"><input type="checkbox" checked disabled><span class="mo-toggle"></span></label></td>';
+                } else {
+                    $rows .= '<td class="mo-c"><label class="mo-switch"><input type="hidden" name="inDisable_' . $id . '" value="false"><input type="checkbox" name="inDisable_' . $id . '" value="true"' . ($on ? ' checked' : '') . '><span class="mo-toggle" aria-hidden="true"></span></label></td>';
                 }
-
-                $line .= "</tr>";
-                $numline = 0;
-                while ($modules = $modsql->fetch()) {
-                    if ($numline == 20) {
-                        $line .= "<tr>";
-                        $line .= "<th></th>";
-                        $line .= "<th>" . ui_language::translate("Module") . "</th>";
-                        $line .= "<th>" . ui_language::translate("On") . "/" . ui_language::translate("Off") . "</th>";
-                        $line .= "<th>" . ui_language::translate("Category") . "</th>";
-                        $line .= "<th style=\"text-align:center\">" . ui_language::translate("Up-to-date?") . "</th>";
-                        $groupssql = $zdbh->query("SELECT * FROM x_groups ORDER BY ug_name_vc ASC");
-                        while ($groups = $groupssql->fetch()) {
-                            $line .= "<th style=\"text-align:center\">" . htmlspecialchars((string) $groups['ug_name_vc'], ENT_QUOTES, 'UTF-8') . "</th>";
-                        }
-                        $line .= "</tr>";
+                // menu category (only modules shown in the menus have one)
+                if ($m['mo_type_en'] === 'user') {
+                    $opts = '';
+                    foreach ($cats as $c) {
+                        $opts .= '<option value="' . (int) $c['mc_id_pk'] . '"' . ((int) $m['mo_category_fk'] === (int) $c['mc_id_pk'] ? ' selected' : '') . '>' . self::h(ui_language::translate((string) $c['mc_name_vc'])) . '</option>';
                     }
-                    $ismodadmin = 0;
-                    $line .= "<tr>";
-                    $line .= "<td>" . self::ModuleStatusIcon($modules['mo_id_pk']) . "</td>";
-                    $line .= "<td><a href=\"./?module=moduleadmin&showinfo=" . $modules['mo_folder_vc'] . "\">" . ui_language::translate($modules['mo_name_vc']) . "</a></td>";
-                    $line .= "<td>";
-                    if ($modules['mo_type_en'] != "system") {
-                        $line .="<select style=\"min-width:85px;\" name=\"inDisable_" . $modules['mo_id_pk'] . "\" id=\"inDisable_" . $modules['mo_id_pk'] . "\">";
-                    } else {
-                        $line .="<select style=\"min-width:85px;\" name=\"inDisable_" . $modules['mo_id_pk'] . "\" id=\"inDisable_" . $modules['mo_id_pk'] . "\" disabled=\"disabled\">";
-                    }
-                    if ($modules['mo_enabled_en'] == 'true') {
-                        $selected = "SELECTED";
-                    } else {
-                        $selected = "";
-                    }
-                    if ($modules['mo_name_vc'] == 'Module Admin') {
-                        $ismodadmin = 1;
-                        $disabled = "disabled=\"disabled\"";
-                    } else {
-                        $disabled = "";
-                    }
-
-                    $line .= "<option value=\"true\" " . $selected . " >" . ui_language::translate("Enabled") . "</option>";
-                    if ($modules['mo_enabled_en'] == 'false') {
-                        $selected = "SELECTED";
-                    } else {
-                        $selected = "";
-                    }
-                    $line .= "<option value=\"false\" " . $selected . " " . $disabled . ">" . ui_language::translate("Disabled") . "</option>";
-                    $line .= "</select></td>";
-                    $line .= "<td>";
-                    if ($modules['mo_type_en'] == "user") {
-                        $line .= "<select style=\"min-width:175px;\" name=\"inCategory_" . $modules['mo_id_pk'] . "\" id=\"inCategory_" . $modules['mo_id_pk'] . "\">";
-                        $catssql = $zdbh->query("SELECT * FROM x_modcats ORDER BY mc_name_vc ASC");
-                        while ($modulecats = $catssql->fetch()) {
-                            $selected = "";
-                            if ($modules['mo_category_fk'] == $modulecats['mc_id_pk']) {
-                                $selected = "selected";
-                            }
-                            $line .= "<option value=\"" . $modulecats['mc_id_pk'] . "\" " . $selected . ">" . $modulecats['mc_name_vc'] . "</option>";
-                        }
-                        $line .= "</select>";
-                    } elseif ($modules['mo_type_en'] == "modadmin") {
-									
-                        $line .="" . ui_language::translate("N/A (Module Admin)") . "";
-						//## Added line to prevent query adding nothing to inCategory INT cell for "modadmin" modules. Now adds "0".
-						$line .="<input type=hidden name=\"inCategory_" . $modules['mo_id_pk'] . "\" id=\"inCategory_" . $modules['mo_id_pk'] . "\" value=0>";	
-						
-                    } else {
-                        $line .="" . ui_language::translate("N/A (System Module)") . "";
-						//## Added line to prevent query adding nothing to inCategory INT cell for "system" modules. Now adds "0".
-						$line .="<input type=hidden name=\"inCategory_" . $modules['mo_id_pk'] . "\" id=\"inCategory_" . $modules['mo_id_pk'] . "\" value=0>";
-					
-                    }
-                    $line .= "</td><td style=\"text-align:center\">";
-                    if (ui_module::GetModuleHasUpdates($modules['mo_folder_vc'])) {
-                        $line .= ui_status::Warn('An update is available') . "<br>" . ui_language::translate("Latest version") . ": <a href=\"" . $modules['mo_updateurl_tx'] . "\" target=\"_blank\">" . $modules['mo_updatever_vc'] . "</a>";
-                    } else {
-                        $line .= ui_status::Ok('Up to date');
-                    }
-                    /**
-                     * --
-                     */
-                    $line .= "</td>";
-                    $groupssql = $zdbh->query("SELECT * FROM x_groups ORDER BY ug_name_vc ASC");
-                    while ($groups = $groupssql->fetch()) {
-                        if ($groups['ug_name_vc'] == 'Administrators' && $ismodadmin == 1) {
-                            $line .= "<input type=\"hidden\" value=\"1\" name=\"inEnable_" . $groups['ug_id_pk'] . "_" . $modules['mo_id_pk'] . "\" id=\"inEnable_" . $groups['ug_id_pk'] . "_" . $modules['mo_id_pk'] . "\"/>";
-                            $disabled = "disabled=\"disabled\"";
-                        } else {
-                            $disabled = "";
-                        }
-                        $ischeck = 0;
-                        if (ctrl_groups::CheckGroupModulePermissions($groups['ug_id_pk'], $modules['mo_id_pk']))
-                            $ischeck = "checked=\"checked\" ";
-                        if ($modules['mo_type_en'] != "system") {
-                            $line .= "<td style=\"text-align:center\"><input type=\"checkbox\" value=\"1\" name=\"inEnable_" . $groups['ug_id_pk'] . "_" . $modules['mo_id_pk'] . "\" id=\"inEnable_" . $groups['ug_id_pk'] . "_" . $modules['mo_id_pk'] . "\" " . $ischeck . " " . $disabled . "/></td>";
-                        } else {
-                            $disabled = "disabled=\"disabled\"";
-                            $line .= "<td style=\"text-align:center\"><input type=\"checkbox\" value=\"1\" name=\"inEnable_" . $groups['ug_id_pk'] . "_" . $modules['mo_id_pk'] . "\" id=\"inEnable_" . $groups['ug_id_pk'] . "_" . $modules['mo_id_pk'] . "\" " . $ischeck . " " . $disabled . " /></td>";
-                        }
-                    }
-                    $line .= "</tr>";
-                    $numline++;
-                    if ($numline == 21) {
-                        $numline = 0;
-                    }
+                    $rows .= '<td><select class="form-control input-sm" name="inCategory_' . $id . '">' . $opts . '</select></td>';
+                } else {
+                    $rows .= '<td class="mo-na">' . self::t($system ? 'not in the menus' : 'Module Admin page') . '<input type="hidden" name="inCategory_' . $id . '" value="0"></td>';
                 }
-                $line .= "</table><br>";
-                $line .= "<button class=\"button-loader btn btn-primary\" type=\"submit\" id=\"button\" name=\"inSave\" value=\"inSave\">" . ui_language::translate("Save changes") . "</button></form>";
-            } else {
-                $line .= ui_language::translate("You have no administration modules at this time.");
+                // which groups may use it
+                foreach ($groups as $g) {
+                    $gid = (int) $g['ug_id_pk'];
+                    $checked = ctrl_groups::CheckGroupModulePermissions($gid, $id) ? ' checked' : '';
+                    $locked = $system || ($self && $g['ug_name_vc'] === 'Administrators');
+                    $rows .= '<td class="mo-c">' . ($self && $g['ug_name_vc'] === 'Administrators' ? '<input type="hidden" value="1" name="inEnable_' . $gid . '_' . $id . '">' : '')
+                        . '<input type="checkbox" value="1" name="inEnable_' . $gid . '_' . $id . '"' . $checked . ($locked ? ' disabled' : '') . ' aria-label="' . self::h(ui_language::translate((string) $g['ug_name_vc'])) . '"></td>';
+                }
+                $rows .= '</tr>';
             }
         }
-        return $line;
+        return '<form action="./?module=moduleadmin&amp;action=EditModule" method="post" class="mo-form">'
+            . '<div class="mo-toolbar"><label class="mo-find"><input type="search" class="form-control" placeholder="' . self::t('Find a module') . '" aria-label="' . self::t('Find a module') . '"></label>'
+            . '<span class="mo-changed" hidden>' . self::t('Unsaved changes') . '</span><button class="btn btn-primary" type="submit" name="inSave" value="inSave">' . self::t('Save changes') . '</button></div>'
+            . '<div class="mo-scroll"><table class="mo-table"><thead>' . $head . '</thead><tbody>' . $rows . '</tbody></table></div>'
+            . self::getCSFR_Tag() . '</form>';
     }
 
     /**
-     * Get the enabled/disabled status icon of a module.
+     * Template HTML: the details of the module named by ?showinfo= (from its module.xml, escaped).
      *
-     * @global db_driver $zdbh The panel's database connection.
-     * @global runtime_controller $controller The request controller (unused).
-     * @param int|string $mo_id_pk The module ID.
-     * @return string HTML status icon.
+     * @global runtime_controller $controller The request controller.
+     * @return string HTML.
      */
-    static function ModuleStatusIcon($mo_id_pk)
+    static function getModuleInfoCard()
     {
-        global $zdbh;
         global $controller;
-        $modsql = $zdbh->prepare("SELECT * FROM x_modules WHERE mo_id_pk = :mo_id_pk");
-        $modsql->bindParam(':mo_id_pk', $mo_id_pk);
-        $modsql->execute();
-        $modulestatus = $modsql->fetch();
-        if ($modulestatus['mo_enabled_en'] == 'false') {
-            $retval = ui_status::Bad('Disabled');
-        } else {
-            $retval = ui_status::Ok('Enabled');
+        $folder = (string) $controller->GetControllerRequest('URL', 'showinfo');
+        $row = null;
+        foreach (self::Modules() as $m) {
+            if ($m['mo_folder_vc'] === $folder) {
+                $row = $m;
+            }
         }
-        return $retval;
+        if ($row === null) {
+            return '<p class="mo-empty">' . self::t('There is no module of that name.') . '</p>';
+        }
+        $x = (array) ui_module::GetModuleXMLTags($folder);
+        $g = function ($k) use ($x) { return isset($x[$k]) ? trim((string) $x[$k]) : ''; };
+        $types = array('user' => 'In the menus', 'modadmin' => 'Administration (Module Admin)', 'system' => 'System');
+        $author = self::h($g('authorname'));
+        $url = $g('authorurl');
+        if ($url !== '' && preg_match('#^https?://#i', $url)) {
+            $author = '<a href="' . self::h($url) . '" target="_blank" rel="noopener noreferrer">' . ($author !== '' ? $author : self::h($url)) . '</a>';
+        }
+        if ($g('authoremail') !== '') {
+            $author .= ' <span class="mo-sub">' . self::h($g('authoremail')) . '</span>';
+        }
+        $dl = array(
+            array('Folder', '<code>modules/' . self::h($folder) . '</code>'),
+            array('Type', self::t($types[$row['mo_type_en']] ?? $row['mo_type_en'])),
+            array('Menu category', $row['mo_type_en'] === 'user' && $row['cat'] !== null ? self::h(ui_language::translate((string) $row['cat'])) : '–'),
+            array('Version', self::h($g('version') !== '' ? $g('version') : $row['mo_version_in'])),
+            array('Developer', $author !== '' ? $author : '–'),
+            array('Installed', (int) $row['mo_installed_ts'] > 0 ? self::h(date('Y-m-d', (int) $row['mo_installed_ts'])) : '–'),
+        );
+        $out = '<div class="mo-info"><div class="mo-info-head"><img src="' . self::h(self::IconOf($folder)) . '" alt="" width="48" height="48"><div><h3>' . self::h(ui_language::translate($g('name') !== '' ? $g('name') : $row['mo_name_vc'])) . '</h3>'
+            . '<span class="mo-pill ' . ($row['mo_enabled_en'] === 'true' ? 'on' : 'off') . '">' . self::t($row['mo_enabled_en'] === 'true' ? 'On' : 'Off') . '</span></div>'
+            . '<a class="btn btn-default mo-back" href="./?module=moduleadmin">&larr; ' . self::t('All modules') . '</a></div>'
+            . ($g('desc') !== '' ? '<p class="mo-desc">' . self::h(ui_language::translate($g('desc'))) . '</p>' : '') . '<dl class="mo-dl">';
+        foreach ($dl as $d) {
+            $out .= '<dt>' . self::t($d[0]) . '</dt><dd>' . $d[1] . '</dd>';
+        }
+        $out .= '</dl>';
+        if ($row['mo_enabled_en'] === 'true' && $row['mo_type_en'] !== 'system') {
+            $out .= '<a class="btn btn-primary" href="./?module=' . rawurlencode($folder) . '">' . self::t('Open this module') . '</a>';
+        }
+        return $out . '</div>';
     }
+
 
     /**
      * Handle the module settings form POST: save group access, on/off and category of each non-system module.
@@ -271,6 +294,10 @@ class module_controller extends ctrl_module
                     $sql2->bindParam(':moduleid', $rowmodule['mo_id_pk']);
                     $sql2->execute();
                 }
+                // the same permission stored more than once (every save added it again, before
+                // ctrl_groups::AddGroupModulePermissions was fixed): keep one of each
+                $zdbh->exec("DELETE p1 FROM x_permissions p1 JOIN x_permissions p2
+                    ON p1.pe_group_fk = p2.pe_group_fk AND p1.pe_module_fk = p2.pe_module_fk AND p1.pe_id_pk > p2.pe_id_pk");
                 self::$ok = TRUE;
                 return;
             }
@@ -293,8 +320,6 @@ class module_controller extends ctrl_module
         }
         if (!fs_director::CheckForEmptyValue(self::$ok)) {
             return ui_sysmessage::shout(ui_language::translate("Changes to your module options have been saved successfully!"));
-        } else {
-            return ui_language::translate(ui_module::GetModuleDescription());
         }
         return;
     }
@@ -313,170 +338,14 @@ class module_controller extends ctrl_module
         return false;
     }
 
-    /**
-     * Template value: the name of the module named by ?showinfo= (from its module.xml).
-     *
-     * @global runtime_controller $controller The request controller.
-     * @return string|null The 'name' tag, or null when no module is shown or its XML cannot be read.
-     */
-    static function getModuleInfoName()
-    {
-        global $controller;
-        if (self::getIsShowModuleInfo()) {
-            $info = ui_module::GetModuleXMLTags($controller->GetControllerRequest('URL', 'showinfo'));
-            return $info['name'];
-        } else {
-            return null;
-        }
-    }
 
-    /**
-     * Template value: the description of the module named by ?showinfo= (from its module.xml).
-     *
-     * @global runtime_controller $controller The request controller.
-     * @return string|null The 'desc' tag, or null when no module is shown or its XML cannot be read.
-     */
-    static function getModuleDescription()
-    {
-        global $controller;
-        if (self::getIsShowModuleInfo()) {
-            $info = ui_module::GetModuleXMLTags($controller->GetControllerRequest('URL', 'showinfo'));
-            return $info['desc'];
-        } else {
-            return null;
-        }
-    }
 
-    /**
-     * Template value: the developer's name of the module named by ?showinfo= (from its module.xml).
-     *
-     * @global runtime_controller $controller The request controller.
-     * @return string|null The 'authorname' tag, or null when no module is shown or its XML cannot be read.
-     */
-    static function getModuleDeveloperName()
-    {
-        global $controller;
-        if (self::getIsShowModuleInfo()) {
-            $info = ui_module::GetModuleXMLTags($controller->GetControllerRequest('URL', 'showinfo'));
-            return $info['authorname'];
-        } else {
-            return null;
-        }
-    }
 
-    /**
-     * Template value: the developer's email address of the module named by ?showinfo= (from its module.xml).
-     *
-     * @global runtime_controller $controller The request controller.
-     * @return string|null The 'authoremail' tag, or null when no module is shown or its XML cannot be read.
-     */
-    static function getModuleDeveloperEmail()
-    {
-        global $controller;
-        if (self::getIsShowModuleInfo()) {
-            $info = ui_module::GetModuleXMLTags($controller->GetControllerRequest('URL', 'showinfo'));
-            return $info['authoremail'];
-        } else {
-            return null;
-        }
-    }
 
-    /**
-     * Template value: the version of the module named by ?showinfo= (from its module.xml).
-     *
-     * @global runtime_controller $controller The request controller.
-     * @return string|null The 'version' tag, or null when no module is shown or its XML cannot be read.
-     */
-    static function getModuleVersion()
-    {
-        global $controller;
-        if (self::getIsShowModuleInfo()) {
-            $info = ui_module::GetModuleXMLTags($controller->GetControllerRequest('URL', 'showinfo'));
-            return $info['version'];
-        } else {
-            return null;
-        }
-    }
 
-    /**
-     * Template value: the developer's web address of the module named by ?showinfo= (from its module.xml).
-     *
-     * @global runtime_controller $controller The request controller.
-     * @return string|null The 'authorurl' tag, or null when no module is shown or its XML cannot be read.
-     */
-    static function getModuleDeveloperURL()
-    {
-        global $controller;
-        if (self::getIsShowModuleInfo()) {
-            $info = ui_module::GetModuleXMLTags($controller->GetControllerRequest('URL', 'showinfo'));
-            return $info['authorurl'];
-        } else {
-            return null;
-        }
-    }
 
-    /**
-     * Template value: the update URL of the module named by ?showinfo=.
-     *
-     * @global runtime_controller $controller The request controller.
-     * @global db_driver $zdbh The panel's database connection.
-     * @return string The mo_updateurl_tx column, or '' when the module is not found.
-     */
-    static function getModuleUpdateURL()
-    {
-        global $controller;
-        global $zdbh;
-        //$retval = $zdbh->query("SELECT mo_updateurl_tx FROM x_modules WHERE mo_folder_vc = '" . $controller->GetControllerRequest('URL', 'showinfo') . "'")->Fetch();
-        $numrows = $zdbh->prepare("SELECT mo_updateurl_tx FROM x_modules WHERE mo_folder_vc = :info");
-        $info = $controller->GetControllerRequest('URL', 'showinfo');
-        $numrows->bindParam(':info', $info);
-        $numrows->execute();
-        $retval = $numrows->fetch();
-        $retval = ($retval !== false) ? $retval['mo_updateurl_tx'] : '';
-        return $retval;
-    }
 
-    /**
-     * Template value: the latest known version of the module named by ?showinfo=.
-     *
-     * @global runtime_controller $controller The request controller.
-     * @global db_driver $zdbh The panel's database connection.
-     * @return string The mo_updatever_vc column, or '' when the module is not found.
-     */
-    static function getLatestVersion()
-    {
-        global $controller;
-        global $zdbh;
-        //$retval = $zdbh->query("SELECT mo_updatever_vc FROM x_modules WHERE mo_folder_vc = '" . $controller->GetControllerRequest('URL', 'showinfo') . "'")->Fetch();
-        $numrows = $zdbh->prepare("SELECT mo_updatever_vc FROM x_modules WHERE mo_folder_vc = :info");
-        $info = $controller->GetControllerRequest('URL', 'showinfo');
-        $numrows->bindParam(':info', $info);
-        $numrows->execute();
-        $retval = $numrows->fetch();
-        $retval = ($retval !== false) ? $retval['mo_updatever_vc'] : '';
-        return $retval;
-    }
 
-    /**
-     * Template value: the type (user, modadmin or system) of the module named by ?showinfo=.
-     *
-     * @global runtime_controller $controller The request controller.
-     * @global db_driver $zdbh The panel's database connection.
-     * @return string The mo_type_en column, or '' when the module is not found.
-     */
-    static function getModuleType()
-    {
-        global $controller;
-        global $zdbh;
-        //$retval = $zdbh->query("SELECT mo_type_en FROM x_modules WHERE mo_folder_vc = '" . $controller->GetControllerRequest('URL', 'showinfo') . "'")->Fetch();
-        $numrows = $zdbh->prepare("SELECT mo_type_en FROM x_modules WHERE mo_folder_vc = :info");
-        $info = $controller->GetControllerRequest('URL', 'showinfo');
-        $numrows->bindParam(':info', $info);
-        $numrows->execute();
-        $retval = $numrows->fetch();
-        $retval = ($retval !== false) ? $retval['mo_type_en'] : '';
-        return $retval;
-    }
 
     /**
      * Handle the module upload POST: check the .zpp package and queue it for the root installer.
