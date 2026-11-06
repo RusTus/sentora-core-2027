@@ -147,6 +147,35 @@ class module_controller extends ctrl_module
     }
 
     /**
+     * Save the order the widgets were dragged into (POST inOrder: widget IDs, comma separated).
+     *
+     * The order must hold exactly the widgets on the account's dashboard. Called from the
+     * page in the background: the panel has already checked the form token (and keeps it,
+     * so the next drag can be saved too); answers with JSON and ends the request.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return void
+     */
+    static function doSaveOrder()
+    {
+        global $controller;
+        $order = array_values(array_filter(explode(',', (string) $controller->GetControllerRequest('FORM', 'inOrder')), 'strlen'));
+        $layout = self::Layout();
+        $same = (count($order) === count($layout) && count(array_unique($order)) === count($order) && !array_diff($order, $layout));
+        if ($same) {
+            self::SaveLayout($order);
+        }
+        if (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && $_SERVER['HTTP_X_REQUESTED_WITH'] === 'fetch') {
+            while (ob_get_level() > 0) {
+                ob_end_clean();
+            }
+            header('Content-Type: application/json; charset=utf-8');
+            header('Cache-Control: no-store');
+            exit(json_encode(array('ok' => $same)));
+        }
+    }
+
+    /**
      * Handle "Back to the default widgets" (POST).
      *
      * Checks the CSFR token (dies when it is wrong) and sets $msg.
@@ -230,14 +259,17 @@ class module_controller extends ctrl_module
         if (!$layout) {
             return '<p class="dw-empty">' . dashboard_widgets::h(ui_language::translate('Your dashboard is empty: add a widget below.')) . '</p>';
         }
-        $out = dashboard_widgets::Styles($layout) . '<div class="dw-grid">';
+        runtime_csfr::Token();   // makes the session's token when it has none yet
+        $out = dashboard_widgets::Styles($layout) . '<div class="dw-grid" data-save="./?module=dashboard&amp;action=SaveOrder" data-token="' . dashboard_widgets::h((string) ($_SESSION['zpcsfr'] ?? '')) . '"'
+            . ' data-saved="' . dashboard_widgets::h(ui_language::translate('Order saved')) . '" data-failed="' . dashboard_widgets::h(ui_language::translate('The order could not be saved; reload the page.')) . '">';
         $n = count($layout);
         foreach ($layout as $i => $id) {
             $look = self::Look($id);
             $tools = ($i > 0 ? $form('MoveWidget', $id, ui_language::translate('Move up'), 'up', '<input type="hidden" name="inDir" value="up">') : '')
                 . ($i < $n - 1 ? $form('MoveWidget', $id, ui_language::translate('Move down'), 'down', '<input type="hidden" name="inDir" value="down">') : '')
                 . $form('RemoveWidget', $id, ui_language::translate('Remove from my dashboard'), 'x', '', ' dw-remove');
-            $out .= '<section class="dw-card" id="w-' . dashboard_widgets::h($id) . '" style="--c:' . $look[1] . '"><header><h4>' . self::Icon($look[0]) . dashboard_widgets::h(ui_language::translate($all[$id][0])) . '</h4>'
+            $out .= '<section class="dw-card" id="w-' . dashboard_widgets::h($id) . '" data-id="' . dashboard_widgets::h($id) . '" style="--c:' . $look[1] . '"><header class="dw-handle" title="' . dashboard_widgets::h(ui_language::translate('Drag to move')) . '">'
+                . '<span class="dw-grip" aria-hidden="true"></span><h4>' . self::Icon($look[0]) . dashboard_widgets::h(ui_language::translate($all[$id][0])) . '</h4>'
                 . '<span class="dw-tools">' . $tools . '</span></header>'
                 . '<div class="dw-body">' . dashboard_widgets::Render($id, $me) . '</div></section>';
         }

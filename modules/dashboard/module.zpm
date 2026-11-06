@@ -4,7 +4,7 @@
         <img src="<@ ModuleIcon @>" width="35" height="35" border="0" alt="" style="margin-right: 4px;">
         <div style="flex: 1 1 auto;">
             <div class="zmodule_title"><@ Greeting @></div>
-            <div class="zmodule_desc"><: Here is your dashboard. Arrange it with the widgets you find useful. :></div>
+            <div class="zmodule_desc"><: Here is your dashboard. Add the widgets you find useful, and drag one by its title to move it. :></div>
         </div>
         <a class="btn btn-primary btn-lg dw-continue" href="./"><: Continue to your panel administration :> &rarr;</a>
     </div>
@@ -15,4 +15,5 @@
             <@ WidgetPicker @>
         </div>
     </div>
+    <script src="modules/dashboard/assets/dashboard.js"></script>
 </div>

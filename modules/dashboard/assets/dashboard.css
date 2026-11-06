@@ -24,6 +24,21 @@
 .dw-card { display: flex; flex-direction: column; background: var(--dw-card); border-radius: 6px; box-shadow: 0 1px 3px rgba(20,30,40,0.08); min-width: 0;
     border-top: 4px solid var(--c, var(--dw-accent)); }
 .dw-card > header { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 14px 8px; }
+/* stacking (assets/dashboard.js sets each card's row span) and dragging by the title bar */
+.dw-grid.dw-masonry { grid-auto-rows: 8px; row-gap: 0; align-items: start; }
+.dw-grid.dw-masonry > .dw-card { margin-bottom: 14px; }
+.dw-handle { cursor: grab; touch-action: none; user-select: none; }
+.dw-grip { flex: none; width: 10px; height: 16px; margin-right: -2px; opacity: 0.35;
+    background-image: radial-gradient(circle, currentColor 1.3px, transparent 1.4px); background-size: 5px 5px; color: var(--dw-muted); }
+.dw-card:hover .dw-grip { opacity: 0.8; }
+.dw-card > header h4 { flex: 1; min-width: 0; }
+.dw-dragging { opacity: 0.85; box-shadow: 0 10px 28px rgba(20,30,40,0.28) !important; outline: 2px dashed var(--dw-accent); outline-offset: 2px; position: relative; z-index: 2; }
+body.dw-drag-on, body.dw-drag-on * { cursor: grabbing !important; user-select: none; }
+.dw-toast { position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 20px); opacity: 0; pointer-events: none; z-index: 1000;
+    padding: 8px 16px; border-radius: 6px; font-size: 13px; background: var(--sn-ok, #1e8a4c); color: #fff; box-shadow: 0 4px 14px rgba(0,0,0,0.25); transition: opacity .2s, transform .2s; }
+.dw-toast.bad { background: var(--sn-bad, #b42b27); }
+.dw-toast.on { opacity: 1; transform: translate(-50%, 0); }
+@media (prefers-reduced-motion: reduce) { .dw-toast { transition: none; } }
 .dw-card h4 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 15px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: var(--dw-ink); }
 .dw-card h4 .dw-ico { color: var(--c, var(--dw-accent)); }
 .dw-tools { display: flex; gap: 2px; opacity: 0.55; transition: opacity .15s; }
