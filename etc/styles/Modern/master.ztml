@@ -7,32 +7,32 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
 
         <!-- Stylesheets -->
-        <link href="<# ui_tpl_assetfolderpath #>global-css/bootstrap.min.css" rel="stylesheet">
+        <link href="etc/styles/_shared/global-css/bootstrap.min.css" rel="stylesheet">
         <link href="<# ui_tpl_csspath #>" rel="stylesheet" type="text/css">
 
-        <script src="<# ui_tpl_assetfolderpath #>js/jquery.js"></script>
-        <script src="<# ui_tpl_assetfolderpath #>js/jquery.cookie.js"></script>
-        <script src="<# ui_tpl_assetfolderpath #>js/jquery.sortable-custom.js"></script>
-        <script src="<# ui_tpl_assetfolderpath #>js/spin.min.js"></script>
-        <script src="<# ui_tpl_assetfolderpath #>js/sentora.js"></script>
+        <script src="etc/styles/_shared/js/jquery.js"></script>
+        <script src="etc/styles/_shared/js/jquery.cookie.js"></script>
+        <script src="etc/styles/_shared/js/jquery.sortable-custom.js"></script>
+        <script src="etc/styles/_shared/js/spin.min.js"></script>
+        <script src="etc/styles/_shared/js/sentora.js"></script>
 
         <!-- Favicons -->
-        <link rel="apple-touch-icon-precomposed" sizes="57x57"   href="<# ui_tpl_assetfolderpath #>img/ico/apple-touch-icon-57-precomposed.png">
-        <link rel="apple-touch-icon-precomposed" sizes="114x114" href="<# ui_tpl_assetfolderpath #>img/ico/apple-touch-icon-114-precomposed.png">
-        <link rel="apple-touch-icon-precomposed" sizes="72x72"   href="<# ui_tpl_assetfolderpath #>img/ico/apple-touch-icon-72-precomposed.png">
-        <link rel="apple-touch-icon-precomposed" sizes="144x144" href="<# ui_tpl_assetfolderpath #>img/ico/apple-touch-icon-144-precomposed.png">
+        <link rel="apple-touch-icon-precomposed" sizes="57x57"   href="etc/styles/_shared/img/ico/apple-touch-icon-57-precomposed.png">
+        <link rel="apple-touch-icon-precomposed" sizes="114x114" href="etc/styles/_shared/img/ico/apple-touch-icon-114-precomposed.png">
+        <link rel="apple-touch-icon-precomposed" sizes="72x72"   href="etc/styles/_shared/img/ico/apple-touch-icon-72-precomposed.png">
+        <link rel="apple-touch-icon-precomposed" sizes="144x144" href="etc/styles/_shared/img/ico/apple-touch-icon-144-precomposed.png">
 
-        <link rel="icon" href="<# ui_tpl_assetfolderpath #>img/ico/fav16.png"  sizes="16x16"   type="image/png">
-        <link rel="icon" href="<# ui_tpl_assetfolderpath #>img/ico/fav32.png"  sizes="32x32"   type="image/png">
-        <link rel="icon" href="<# ui_tpl_assetfolderpath #>img/ico/fav48.png"  sizes="48x48"   type="image/png">
-        <link rel="icon" href="<# ui_tpl_assetfolderpath #>img/ico/fav64.png"  sizes="64x64"   type="image/png">
-        <link rel="icon" href="<# ui_tpl_assetfolderpath #>img/ico/fav128.png" sizes="128x128" type="image/png">
+        <link rel="icon" href="etc/styles/_shared/img/ico/fav16.png"  sizes="16x16"   type="image/png">
+        <link rel="icon" href="etc/styles/_shared/img/ico/fav32.png"  sizes="32x32"   type="image/png">
+        <link rel="icon" href="etc/styles/_shared/img/ico/fav48.png"  sizes="48x48"   type="image/png">
+        <link rel="icon" href="etc/styles/_shared/img/ico/fav64.png"  sizes="64x64"   type="image/png">
+        <link rel="icon" href="etc/styles/_shared/img/ico/fav128.png" sizes="128x128" type="image/png">
 
-        <link rel="icon" href="<# ui_tpl_assetfolderpath #>img/ico/fav32.png">
-        <!--[if IE]><link rel="shortcut icon" href="<# ui_tpl_assetfolderpath #>img/ico/favicon.ico"><![endif]-->
+        <link rel="icon" href="etc/styles/_shared/img/ico/fav32.png">
+        <!--[if IE]><link rel="shortcut icon" href="etc/styles/_shared/img/ico/favicon.ico"><![endif]-->
 
         <meta name="msapplication-TileColor" content="#447fb3">
-        <meta name="msapplication-TileImage" content="<# ui_tpl_assetfolderpath #>img/ico/fav144.png">
+        <meta name="msapplication-TileImage" content="etc/styles/_shared/img/ico/fav144.png">
 
     </head>
     <body>
@@ -205,7 +205,7 @@
 
                                     <div class="stats-row">
                                         <div class="stats-column"><strong><: Server OS :>:</strong></div>
-                                        <div class="stats-column"><img src="<# ui_tpl_assetfolderpath #>img/os_icons/<# ui_tpl_serverosname #>.png" width="16" height="16" class="pull-left" alt="<# ui_tpl_serverosname #> Icon">&nbsp;<# ui_tpl_serverosname #></div>
+                                        <div class="stats-column"><img src="etc/styles/_shared/img/os_icons/<# ui_tpl_serverosname #>.png" width="16" height="16" class="pull-left" alt="<# ui_tpl_serverosname #> Icon">&nbsp;<# ui_tpl_serverosname #></div>
                                     </div>
 
                                     <div class="stats-row">
@@ -262,18 +262,18 @@
 
         <!-- Javascript
         ================================================== -->
-        <script src="<# ui_tpl_assetfolderpath #>js/bootstrap-transition.js"></script>
-        <script src="<# ui_tpl_assetfolderpath #>js/bootstrap-alert.js"></script>
-        <script src="<# ui_tpl_assetfolderpath #>js/bootstrap-modal.js"></script>
-        <script src="<# ui_tpl_assetfolderpath #>js/bootstrap-dropdown.js"></script>
-        <script src="<# ui_tpl_assetfolderpath #>js/bootstrap-scrollspy.js"></script>
-        <script src="<# ui_tpl_assetfolderpath #>js/bootstrap-tab.js"></script>
-        <script src="<# ui_tpl_assetfolderpath #>js/bootstrap-tooltip.js"></script>
-        <script src="<# ui_tpl_assetfolderpath #>js/bootstrap-popover.js"></script>
-        <script src="<# ui_tpl_assetfolderpath #>js/bootstrap-button.js"></script>
-        <script src="<# ui_tpl_assetfolderpath #>js/bootstrap-collapse.js"></script>
-        <script src="<# ui_tpl_assetfolderpath #>js/bootstrap-carousel.js"></script>
-        <script src="<# ui_tpl_assetfolderpath #>js/typeahead.min.js"></script>
+        <script src="etc/styles/_shared/js/bootstrap-transition.js"></script>
+        <script src="etc/styles/_shared/js/bootstrap-alert.js"></script>
+        <script src="etc/styles/_shared/js/bootstrap-modal.js"></script>
+        <script src="etc/styles/_shared/js/bootstrap-dropdown.js"></script>
+        <script src="etc/styles/_shared/js/bootstrap-scrollspy.js"></script>
+        <script src="etc/styles/_shared/js/bootstrap-tab.js"></script>
+        <script src="etc/styles/_shared/js/bootstrap-tooltip.js"></script>
+        <script src="etc/styles/_shared/js/bootstrap-popover.js"></script>
+        <script src="etc/styles/_shared/js/bootstrap-button.js"></script>
+        <script src="etc/styles/_shared/js/bootstrap-collapse.js"></script>
+        <script src="etc/styles/_shared/js/bootstrap-carousel.js"></script>
+        <script src="etc/styles/_shared/js/typeahead.min.js"></script>
 
         <!-- Modulelist for Typeahead -->
         <script>

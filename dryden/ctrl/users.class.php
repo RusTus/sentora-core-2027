@@ -19,7 +19,8 @@ class ctrl_users {
     static function SafeTheme($theme)
     {
         $theme = (string) $theme;
-        if ($theme === '' || !preg_match('/^[A-Za-z0-9_-]{1,64}$/', $theme) || !is_dir(dirname(dirname(__DIR__)) . '/etc/styles/' . $theme)) {
+        // A theme is a folder with a master.ztml; "_" folders hold shared files, not themes
+        if ($theme === '' || !preg_match('/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/', $theme) || !is_file(dirname(dirname(__DIR__)) . '/etc/styles/' . $theme . '/master.ztml')) {
             return ($theme === '') ? '' : 'Modern';
         }
         return $theme;

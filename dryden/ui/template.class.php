@@ -43,8 +43,9 @@ class ui_template {
         $chkdir = $rootdir . '/';
         if ($handle) {
             while ($file = readdir($handle)) {
-                if ($file != "." && $file != "..") {
-                    if (is_dir($chkdir . $file)) {
+                // only folders with a page template; "_shared" and other "_" folders are not themes
+                if ($file != "." && $file != ".." && $file[0] !== '_') {
+                    if (is_dir($chkdir . $file) && is_file($chkdir . $file . '/master.ztml')) {
                         array_push($allstyles, array('name' => $file));
                     }
                 }
@@ -156,6 +157,18 @@ class ui_template {
             $zdbh->exec("CREATE TABLE IF NOT EXISTS x_user_styles (us_acc_fk INT NOT NULL PRIMARY KEY, us_style_vc VARCHAR(64) NOT NULL) ENGINE=InnoDB");
             $done = true;
         }
+    }
+
+    /**
+     * Path of a theme file, for example 'img/misc/unlimited.png': the current theme's own
+     * copy when it has one, otherwise the copy every theme shares (etc/styles/_shared/).
+     * @param string $file Path inside the theme folder.
+     * @return string
+     */
+    static function AssetPath($file) {
+        $file = ltrim(str_replace('..', '', (string) $file), '/');
+        $own = 'etc/styles/' . self::CurrentTemplateCached() . '/' . $file;
+        return is_file($own) ? $own : 'etc/styles/_shared/' . $file;
     }
 
     /**

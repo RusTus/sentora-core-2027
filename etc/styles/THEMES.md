@@ -1,7 +1,12 @@
 # Sentora themes
 
-Each folder here is a theme (template) that Theme Manager offers. **Modern** is the
-default; **Kerf** is optional. A folder whose name starts with `_` is not a theme.
+Each folder here with a `master.ztml` is a theme (template) that Theme Manager offers.
+**Modern** is the default; **Kerf** is optional. A folder whose name starts with `_` is not a
+theme: `_shared/` holds the files every theme uses (Bootstrap, jQuery and the other scripts,
+the fontello and Glyphicons fonts, favicons, OS icons, small images), so a theme folder only
+needs its own templates, CSS and images. Link them as `etc/styles/_shared/...` (in a
+stylesheet: `../../_shared/...`). In PHP, `ui_template::AssetPath('img/misc/unlimited.png')`
+gives the theme's own copy of a file when it has one, else the shared one.
 
 ## What a theme folder holds
 
@@ -9,7 +14,7 @@ default; **Kerf** is optional. A folder whose name starts with `_` is not a them
 | --- | --- | --- |
 | `master.ztml` | yes | The page around every module (top bar, sidebar, content) |
 | `login.ztml` | yes | The login page (shown in the administrator's theme and variation; `$loginCss` holds the variation name) |
-| `css/<name>.css` | yes, at least one | One file per **variation**. Theme Manager offers them as a choice when there is more than one, in this order: `default`, `light`, the rest by name. The label is the file name ("high_contrast" shows as "High contrast"). |
+| `css/<name>.css` | yes, at least one | One file per **variation**. Theme Manager offers them as a choice when there is more than one, in this order: `default`, `light`, `dark`, the rest by name, `auto` last. The label is the file name ("high_contrast" shows as "High contrast"). |
 | `css/_<name>.css` | no | A part the variations `@import`; never offered as a variation |
 | `img/icons/<module>.svg` | no | The theme's own module icons (dashboard, menus, module page header). A module without one shows its `assets/icon.png`. |
 | `img/modules/<module>/assets/icon.png` | no | Older way to replace one module's PNG icon |

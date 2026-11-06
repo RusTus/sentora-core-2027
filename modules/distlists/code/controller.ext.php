@@ -600,8 +600,8 @@ class module_controller extends ctrl_module
 		$currentuser = ctrl_users::GetUserDetail();
 		$maximum = $currentuser['distlistsquota'];
 		if ($maximum < 0) { //-1 = unlimited
-            if (file_exists(ui_tpl_assetfolderpath::Template() . 'img/misc/unlimited.png')) {
-				return '<img src="' . ui_tpl_assetfolderpath::Template() . 'img/misc/unlimited.png" alt="' . ui_language::translate('Unlimited') . '"/>';
+            if (file_exists(ui_template::AssetPath('img/misc/unlimited.png'))) {
+				return '<img src="' . ui_template::AssetPath('img/misc/unlimited.png') . '" alt="' . ui_language::translate('Unlimited') . '"/>';
 			} else {
 				return '<img src="modules/' . $controller->GetControllerRequest('URL', 'module') . '/assets/unlimited.png" alt="' . ui_language::translate('Unlimited') . '"/>';
 			}
