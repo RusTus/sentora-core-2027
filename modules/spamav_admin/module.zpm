@@ -4,8 +4,109 @@
         <div class="zmodule_title"><@ ModuleName @></div>
         <div class="zmodule_desc" id="zmodule_desc_<@ ModuleName @>"><@ ModuleDesc @></div>
     </div>
-    <div class="zgrid_wrapper">
-        <@ Result @>
-        <@ Page @>
+    <@ Result @>
+    <link rel="stylesheet" href="modules/spamav_admin/assets/spamav_admin.css">
+
+    <% if Admin %>
+    <div class="sa" id="sa" data-open="<@ OpenTab @>" data-unsaved="<: You have changes that are not saved. :>" data-restart="<: Restart ClamAV and SpamAssassin? Mail waits a moment while they start again. :>">
+        <div class="sa-tabs" role="tablist">
+            <button type="button" class="sa-tab" role="tab" data-tab="overview"><svg class="sa-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg><: Overview :></button>
+            <button type="button" class="sa-tab" role="tab" data-tab="clamav"><@ ClamState @><: Virus scanning :> <small>ClamAV</small></button>
+            <button type="button" class="sa-tab" role="tab" data-tab="spamassassin"><@ SpamState @><: Spam filtering :> <small>SpamAssassin</small></button>
+        </div>
+
+        <section class="sa-pane" data-pane="overview" role="tabpanel">
+            <@ JobBar @>
+            <div class="sa-scanners"><@ Scanners @></div>
+            <h3 class="sa-h"><: All mail on this server :></h3>
+            <div class="sa-row">
+                <div class="sa-tiles"><@ Totals @></div>
+                <div class="sa-card sa-trend">
+                    <div class="sa-trend-head"><h4><: Last 14 days :></h4><span class="sa-key"><i class="sa-b-spam"></i><: Spam :> <i class="sa-b-virus"></i><: Viruses :></span></div>
+                    <@ Chart @>
+                </div>
+            </div>
+            <div class="sa-tops"><@ TopLists @></div>
+        </section>
+
+        <section class="sa-pane" data-pane="clamav" role="tabpanel">
+            <div class="sa-card">
+                <p class="sa-intro"><: Virus scanning for all mail, incoming and (if chosen) outgoing. Viruses are always blocked for every mailbox. :></p>
+                <@ ClamForm @>
+            </div>
+        </section>
+
+        <section class="sa-pane" data-pane="spamassassin" role="tabpanel">
+            <div class="sa-card">
+                <p class="sa-intro"><: Spam filtering for incoming mail. Mailbox owners can fine-tune it for their own mailboxes in Mail > SpamAV if you allow it. :></p>
+                <@ SpamForm @>
+            </div>
+        </section>
     </div>
+    <% else %>
+    <p class="alert alert-warning"><: Only administrators can manage spam and virus filtering. :></p>
+    <% endif %>
 </div>
+<script>
+(function () {
+    'use strict';
+    var sa = document.getElementById('sa'); if (!sa) { return; }
+    var each = function (root, sel, fn) { Array.prototype.forEach.call(root.querySelectorAll(sel), fn); };
+    var show = function (tab) {
+        each(sa, '.sa-tab', function (b) { var on = b.getAttribute('data-tab') === tab; b.classList.toggle('active', on); b.setAttribute('aria-selected', on ? 'true' : 'false'); });
+        each(sa, '.sa-pane', function (p) { p.hidden = p.getAttribute('data-pane') !== tab; });
+        try { sessionStorage.setItem('sa-tab', tab); } catch (e) {}
+    };
+    each(sa, '.sa-tab', function (b) { b.addEventListener('click', function () { show(b.getAttribute('data-tab')); }); });
+    var start = sa.getAttribute('data-open');
+    if (!start) { try { start = sessionStorage.getItem('sa-tab'); } catch (e) {} }
+    show(['overview', 'clamav', 'spamassassin'].indexOf(start) >= 0 ? start : 'overview');
+
+    var field = function (form, name) { return form.querySelector('[name="in_' + name + '"]'); };
+    var dirty = false;
+    each(sa, '.sa-form', function (form) {
+        // settings that only matter when another is on are dimmed while it is off
+        var deps = { clam_enabled: '*', sa_enabled: '*', sa_use_bayes: ['sa_bayes_auto_learn', 'sa_auto_learn_spam', 'sa_auto_learn_ham'], sa_bayes_auto_learn: ['sa_auto_learn_spam', 'sa_auto_learn_ham'] };
+        var sync = function () {
+            each(form, '.sa-field', function (f) { f.classList.remove('sa-off'); });
+            Object.keys(deps).forEach(function (k) {
+                var sw = field(form, k); if (!sw || sw.checked) { return; }
+                each(form, '.sa-field', function (f) {
+                    var n = f.getAttribute('data-name');
+                    if (n !== k && (deps[k] === '*' || deps[k].indexOf(n) >= 0)) { f.classList.add('sa-off'); }
+                });
+            });
+            // the score scale: where mail is delivered, marked and refused
+            var req = field(form, 'sa_required_score'), rej = field(form, 'sa_reject_score'), scale = form.querySelector('.sa-scale');
+            if (req && rej && scale) {
+                var top = 25, a = Math.min(top, Math.max(0, parseFloat(req.value) || 0)), r = parseFloat(rej.value) || 0;
+                var b = r > a ? Math.min(top, r) : top;
+                var z = scale.querySelectorAll('.sa-scale-bar i');
+                z[0].style.width = (a / top * 100) + '%'; z[1].style.width = ((b - a) / top * 100) + '%'; z[2].style.width = ((top - b) / top * 100) + '%';
+                scale.querySelector('.sa-k-ok').textContent = scale.querySelector('.sa-k-ok').textContent.replace(/\s*\(.*\)$/, '') + ' (< ' + a + ')';
+                scale.querySelector('.sa-k-spam').textContent = scale.querySelector('.sa-k-spam').textContent.replace(/\s*\(.*\)$/, '') + ' (' + a + (r > a ? '–' + r : '+') + ')';
+                scale.querySelector('.sa-k-reject').hidden = !(r > a);
+                scale.querySelector('.sa-k-reject').textContent = scale.querySelector('.sa-k-reject').textContent.replace(/\s*\(.*\)$/, '') + ' (' + r + '+)';
+            }
+            each(form, '.sa-list', function (ta) {
+                var n = ta.value.split(/[\r\n]+/).filter(function (l) { return l.trim() !== ''; }).length;
+                var lab = form.querySelector('label[for="' + ta.id + '"] .sa-n'); if (lab) { lab.textContent = n; }
+            });
+        };
+        sync();
+        var snap = function () { var a = []; new FormData(form).forEach(function (v, k) { if (k !== 'csfr_token') { a.push(k + '=' + v); } }); return a.join('&'); };
+        var start = snap();
+        var check = function () { sync(); var d = snap() !== start; form.querySelector('.sa-dirty').hidden = !d; form.setAttribute('data-dirty', d ? '1' : ''); dirty = !!sa.querySelector('.sa-form[data-dirty="1"]'); };
+        form.addEventListener('input', check); form.addEventListener('change', check);
+        form.addEventListener('submit', function () { dirty = false; form.removeAttribute('data-dirty'); if (window.Sentora && Sentora.loader) { Sentora.loader.showLoader(); } });
+        form.addEventListener('invalid', function () { show(form.closest('.sa-pane').getAttribute('data-pane')); }, true);
+    });
+    window.addEventListener('beforeunload', function (e) { if (dirty) { e.preventDefault(); e.returnValue = sa.getAttribute('data-unsaved'); } });
+    each(sa, '.sa-job-form', function (f) {
+        f.addEventListener('submit', function (e) {
+            if (f.querySelector('[name=inWhat]').value === 'restart' && !window.confirm(sa.getAttribute('data-restart'))) { e.preventDefault(); return; }
+            dirty = false;
+        });
+    });
+})();
+</script>
