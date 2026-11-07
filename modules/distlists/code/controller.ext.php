@@ -35,6 +35,9 @@
 class module_controller extends ctrl_module
 {
 
+    /** @var bool|null True when the address is on the list already (shown by getResult()); it was set without being declared, which stopped the page. */
+    static $alreadyexistsdu;
+
     /** @var bool|null True when the last change was saved (shown by getResult()). */
     static $ok;
     /** @var bool|null Not used. */
@@ -263,7 +266,7 @@ class module_controller extends ctrl_module
         $sql = $zdbh->prepare($sqlStatment);
         $sql->bindParam(':userid', $currentuser['userid']);
         $sql->bindParam(':fulladdress', $fulladdress);
-        $sql->bindParam(':time', time());
+        $sql->bindValue(':time', time(), PDO::PARAM_INT); // bindParam refuses time() in PHP 8
         $sql->execute();
         runtime_hook::Execute('OnAfterAddDistList');
         self::$ok = true;
@@ -300,12 +303,12 @@ class module_controller extends ctrl_module
         $sql = "UPDATE x_distlistusers SET du_deleted_ts=:time WHERE du_distlist_fk=:dl_id_pk";
         $sql = $zdbh->prepare($sql);
         $sql->bindParam(':dl_id_pk', $dl_id_pk);
-        $sql->bindParam(':time', time());
+        $sql->bindValue(':time', time(), PDO::PARAM_INT); // bindParam refuses time() in PHP 8
         $sql->execute();
         $sql = "UPDATE x_distlists SET dl_deleted_ts=:time WHERE dl_id_pk=:dl_id_pk";
         $sql = $zdbh->prepare($sql);
         $sql->bindParam(':dl_id_pk', $dl_id_pk);
-        $sql->bindParam(':time', time());
+        $sql->bindValue(':time', time(), PDO::PARAM_INT); // bindParam refuses time() in PHP 8
         $sql->execute();
         runtime_hook::Execute('OnAfterDeleteDistList');
         self::$ok = true;
@@ -330,7 +333,7 @@ class module_controller extends ctrl_module
         global $zdbh;
         global $controller;
         $fulladdress = strtolower(str_replace(' ', '', $address . '@' . $domain));
-        if (fs_director::CheckForEmptyValue(self::CheckCreateForErrorsDistListUser())) {
+        if (fs_director::CheckForEmptyValue(self::CheckCreateForErrorsDistListUser($du_distlist_fk, $address, $domain))) {
             return false;
         }
 
@@ -356,7 +359,7 @@ class module_controller extends ctrl_module
         $sql = $zdbh->prepare($sql);
         $sql->bindParam(':du_distlist_fk', $du_distlist_fk);
         $sql->bindParam(':fulladdress', $fulladdress);
-        $sql->bindParam(':time', time());
+        $sql->bindValue(':time', time(), PDO::PARAM_INT); // bindParam refuses time() in PHP 8
         $sql->execute();
         runtime_hook::Execute('OnAfterAddDistListUser');
         self::$ok = true;
@@ -432,12 +435,12 @@ class module_controller extends ctrl_module
             self::$validdomain = true;
             return false;        
         }
-        $sql = "SELECT * FROM x_mailboxes WHERE mb_address_vc=:fulladdress AND mb_deleted_ts IS NULL";
+        // COUNT: fetch() and then fetchColumn() read past the only row, so a mailbox's address was never seen
+        $sql = "SELECT COUNT(*) FROM x_mailboxes WHERE mb_address_vc=:fulladdress AND mb_deleted_ts IS NULL";
         $numrows = $zdbh->prepare($sql);
         $numrows->bindParam(':fulladdress', $fulladdress);
         $numrows->execute();
-        $result = $numrows->fetch();
-        if ($numrows->fetchColumn() <> 0) {
+        if ((int) $numrows->fetchColumn() <> 0) {
             self::$alreadyexists = true;
             return false;
         }
@@ -472,21 +475,25 @@ class module_controller extends ctrl_module
     }
 
     /**
-     * Validate the posted new list member (inAddAddress, inAddDomain, inDLID).
+     * Validate a new list member: the values given, else the posted inAddAddress, inAddDomain and inDLID.
      *
-     * Sets self::$noaddress or self::$validemail on failure.
+     * Sets self::$noaddress, self::$validemail or self::$alreadyexistsdu on failure.
      *
      * @global db_driver $zdbh The panel's database connection.
      * @global runtime_controller $controller The request controller.
+     * @param int|string|null $dlid Optional. The list ID. Default null (the form's).
+     * @param string|null $address Optional. The part before @. Default null (the form's).
+     * @param string|null $domain Optional. The part after @. Default null (the form's).
      * @return bool True when the member can be added.
      */
-    static function CheckCreateForErrorsDistListUser()
+    static function CheckCreateForErrorsDistListUser($dlid = null, $address = null, $domain = null)
     {
         global $zdbh;
         global $controller;
-        $address = $controller->GetControllerRequest('FORM', 'inAddAddress');
-        $domain = $controller->GetControllerRequest('FORM', 'inAddDomain');
-        $dlid = $controller->GetControllerRequest('FORM', 'inDLID');
+        // the values given, else the form's (as before)
+        $address = $address !== null ? $address : $controller->GetControllerRequest('FORM', 'inAddAddress');
+        $domain = $domain !== null ? $domain : $controller->GetControllerRequest('FORM', 'inAddDomain');
+        $dlid = $dlid !== null ? $dlid : $controller->GetControllerRequest('FORM', 'inDLID');
         $fulladdress = strtolower(str_replace(' ', '', $address . '@' . $domain));
         if (fs_director::CheckForEmptyValue($address)) {
             self::$noaddress = true;
@@ -602,7 +609,14 @@ class module_controller extends ctrl_module
             return false;
         }
         if (isset($formvars['inAdd'])) {
-            if (self::ExecuteAddDistListUser($formvars['inDLID'], $formvars['inAddAddress'], $formvars['inAddDomain'], $formvars['inDLAD'])) {
+            // one field for the whole address now; split at the last @ (the two old fields still work)
+            $addr = strtolower(trim(isset($formvars['inAddAddress']) ? (string) $formvars['inAddAddress'] : ''));
+            $dom = strtolower(trim(isset($formvars['inAddDomain']) ? (string) $formvars['inAddDomain'] : ''));
+            if ($dom === '' && strpos($addr, '@') !== false) {
+                $dom = substr($addr, strrpos($addr, '@') + 1);
+                $addr = substr($addr, 0, strrpos($addr, '@'));
+            }
+            if (self::ExecuteAddDistListUser($formvars['inDLID'], $addr, $dom, '')) {
                 header("location: ./?module=" . $controller->GetCurrentModule() . "&show=Edit&other=" . $formvars['inDLID'] . "&status=ok");
                 exit;
             }
@@ -789,30 +803,184 @@ class module_controller extends ctrl_module
     }
 
     /**
-     * Template value <@ DistListUsagepChart @>: the quota usage pie chart.
+     * Escape a value for HTML.
+     *
+     * @param mixed $s The value (cast to string).
+     * @return string The escaped text.
+     */
+    static function h($s)
+    {
+        return htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
+    }
+
+    /**
+     * Translate and escape a text.
+     *
+     * @param string $s The English text.
+     * @return string The escaped translation.
+     */
+    static function t($s)
+    {
+        return self::h(ui_language::translate($s));
+    }
+
+    /**
+     * The figures at the top (<@ Tiles @>): lists against the package's limit, members, and lists with no members.
+     *
+     * @return string The HTML.
+     */
+    static function getTiles()
+    {
+        $me = ctrl_users::GetUserDetail();
+        $lists = self::ListDist($me['userid']) ?: array();
+        $members = array_sum(array_map(function ($l) { return (int) $l['totalmb']; }, $lists));
+        $empty = count(array_filter($lists, function ($l) { return (int) $l['totalmb'] === 0; }));
+        $max = (int) $me['distlistsquota'];
+        $used = count($lists);
+        $pct = $max > 0 ? min(100, round($used / $max * 100)) : 0;
+        $ico = function ($d) { return '<svg class="dl-ico-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' . $d . '</svg>'; };
+        return '<div class="dl-tile' . ($max >= 0 && $used >= $max ? ' full' : '') . '">' . $ico('<path d="M4 4h16v16H4z"/><path d="m4 7 8 6 8-6"/>')
+            . '<div><b>' . $used . ($max < 0 ? '' : ' <small>/ ' . $max . '</small>') . '</b><span>' . self::t('Distribution lists') . ($max < 0 ? ' &middot; ' . self::t('no limit') : '') . '</span>'
+            . ($max > 0 ? '<div class="dl-bar"><i style="width:' . $pct . '%"></i></div>' : '') . '</div></div>'
+            . '<div class="dl-tile">' . $ico('<circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 14 0"/><path d="M17 11a3 3 0 1 0 0-6M22 21a6 6 0 0 0-4-5.6"/>') . '<div><b>' . $members . '</b><span>' . self::t('Members in all') . '</span></div></div>'
+            . '<div class="dl-tile' . ($empty ? ' warn' : '') . '">' . $ico('<path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/>') . '<div><b>' . $empty . '</b><span>' . self::t('Lists with no members') . '</span></div></div>';
+    }
+
+    /**
+     * One card per list (<@ ListCards @>): its address, how many members and the first of them, Members and Delete
+     * (buttons of the EditDistList form).
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return string The HTML ('' when there are none).
+     */
+    static function getListCards()
+    {
+        global $zdbh;
+        $lists = self::ListDist(ctrl_users::GetUserDetail()['userid']);
+        if (!$lists) {
+            return '';
+        }
+        $q = $zdbh->prepare("SELECT du_address_vc FROM x_distlistusers WHERE du_distlist_fk = :id AND du_deleted_ts IS NULL ORDER BY du_address_vc");
+        $out = '';
+        foreach ($lists as $l) {
+            $id = (int) $l['id'];
+            $q->execute(array(':id' => $id));
+            $members = $q->fetchAll(PDO::FETCH_COLUMN);
+            $n = count($members);
+            $pills = '';
+            foreach (array_slice($members, 0, 5) as $m) {
+                $pills .= '<span class="dl-pill">' . self::h($m) . '</span>';
+            }
+            $addr = (string) $l['address'];
+            $at = strrpos($addr, '@');
+            $out .= '<div class="dl-card' . ($n ? '' : ' is-empty') . '" data-s="' . self::h(strtolower($addr . ' ' . implode(' ', $members))) . '">'
+                . '<div class="dl-main"><div class="dl-addr"><svg class="dl-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 14 0"/><path d="M17 11a3 3 0 1 0 0-6M22 21a6 6 0 0 0-4-5.6"/></svg>'
+                . '<span class="dl-full"><b>' . self::h($at === false ? $addr : substr($addr, 0, $at)) . '</b><span class="dl-dom">' . self::h($at === false ? '' : substr($addr, $at)) . '</span></span>'
+                . '<span class="dl-count">' . $n . ' ' . self::t($n === 1 ? 'member' : 'members') . '</span></div>'
+                . '<div class="dl-members">' . ($n ? $pills . ($n > 5 ? '<span class="dl-more">+' . ($n - 5) . '</span>' : '') : '<span class="dl-none">' . self::t('No members yet: mail to this address goes nowhere') . '</span>') . '</div></div>'
+                . '<div class="dl-act"><button class="btn btn-primary btn-sm" type="submit" name="inEdit_' . $id . '" value="inEdit_' . $id . '">'
+                . '<svg class="dl-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 14 0"/><path d="M19 8v6M16 11h6"/></svg>' . self::t('Members') . '</button>'
+                . '<button class="btn btn-default btn-sm dl-del" type="submit" name="inDelete_' . $id . '" value="inDelete_' . $id . '" title="' . self::t('Delete') . '" aria-label="' . self::t('Delete') . ' ' . self::h($addr) . '">'
+                . '<svg class="dl-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg></button></div>'
+                . '</div>';
+        }
+        return $out;
+    }
+
+    /**
+     * The members of the list being edited, each with Remove (buttons of the UpdateDistList form) (<@ MemberRows @>).
      *
      * @global runtime_controller $controller The request controller.
-     * @return string An <img> tag (the "unlimited" image when the quota is -1).
+     * @return string The HTML.
      */
-    static function getDistListUsagepChart()
+    static function getMemberRows()
     {
-		global $controller;
-		$currentuser = ctrl_users::GetUserDetail();
-		$maximum = $currentuser['distlistsquota'];
-		if ($maximum < 0) { //-1 = unlimited
-            if (file_exists(ui_template::AssetPath('img/misc/unlimited.png'))) {
-				return '<img src="' . ui_template::AssetPath('img/misc/unlimited.png') . '" alt="' . ui_language::translate('Unlimited') . '"/>';
-			} else {
-				return '<img src="modules/' . $controller->GetControllerRequest('URL', 'module') . '/assets/unlimited.png" alt="' . ui_language::translate('Unlimited') . '"/>';
-			}
-        } else {
-            $used = ctrl_users::GetQuotaUsages('distlists', $currentuser['userid']);
-            $free = max($maximum - $used, 0);
-            return '<img src="etc/lib/pChart2/sentora/z3DPie.php?score=' . $free . '::' . $used
-                    . '&labels=Free: ' . $free . '::Used: ' . $used
-                    . '&legendfont=verdana&legendfontsize=8&imagesize=240::190&chartsize=120::90&radius=100&legendsize=150::160"'
-                    . ' alt="' . ui_language::translate('Pie chart') . '"/>';
+        global $controller;
+        $list = self::ListDistUsers($controller->GetControllerRequest('URL', 'other'));
+        if (!$list) {
+            return '<p class="dl-empty">' . self::t('No members yet: add the first below.') . '</p>';
         }
+        $own = array_map('strtolower', array_column(self::ListMailbox(ctrl_users::GetUserDetail()['userid']) ?: array(), 'address'));
+        $out = '';
+        foreach ($list as $m) {
+            $here = in_array(strtolower($m['address']), $own, true);
+            $out .= '<div class="dl-mrow"><span class="dl-avatar" aria-hidden="true">' . self::h(strtoupper(substr($m['address'], 0, 1))) . '</span>'
+                . '<span class="dl-maddr">' . self::h($m['address']) . '</span>'
+                . '<span class="dl-where ' . ($here ? 'here' : 'out') . '">' . self::t($here ? 'your mailbox' : 'outside address') . '</span>'
+                . '<button class="btn btn-default btn-sm dl-del" type="submit" name="inDeleteUser_' . (int) $m['id'] . '" value="' . (int) $m['id'] . '">' . self::t('Remove') . '</button></div>';
+        }
+        return $out;
+    }
+
+    /**
+     * How many members the list being edited has (<@ MemberCount @>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return int
+     */
+    static function getMemberCount()
+    {
+        global $controller;
+        $list = self::ListDistUsers($controller->GetControllerRequest('URL', 'other'));
+        return $list ? count($list) : 0;
+    }
+
+    /**
+     * The account's mailboxes as suggestions for a new member (<@ MailboxSuggestions @>).
+     *
+     * @return string The <option> HTML for a datalist.
+     */
+    static function getMailboxSuggestions()
+    {
+        $out = '';
+        foreach (self::ListMailbox(ctrl_users::GetUserDetail()['userid']) ?: array() as $m) {
+            $out .= '<option value="' . self::h($m['address']) . '"></option>';
+        }
+        return $out;
+    }
+
+    /**
+     * The domain choices for a new list (<@ DomainOptions @>), the one picked before selected.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return string The <option> HTML.
+     */
+    static function getDomainOptions()
+    {
+        global $controller;
+        $picked = (string) $controller->GetControllerRequest('FORM', 'inDomain');
+        $out = '';
+        foreach (self::getDomainList() ?: array() as $d) {
+            $out .= '<option value="' . self::h($d['domain']) . '"' . ($d['domain'] === $picked ? ' selected' : '') . '>@' . self::h($d['domain']) . '</option>';
+        }
+        return $out;
+    }
+
+    /**
+     * The name typed when making a list failed, so it is not lost (<@ PostedAddress @>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return string The escaped text.
+     */
+    static function getPostedAddress()
+    {
+        global $controller;
+        return self::$ok ? '' : self::h((string) $controller->GetControllerRequest('FORM', 'inAddress'));
+    }
+
+    /**
+     * What deleting the list does (<@ DeleteDetails @>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return string The HTML.
+     */
+    static function getDeleteDetails()
+    {
+        global $controller;
+        $list = self::ListDistUsers($controller->GetControllerRequest('URL', 'other'));
+        $n = $list ? count($list) : 0;
+        return '<ul class="dl-lose"><li>' . self::t('Mail sent to the list is no longer passed on') . ($n ? ' ' . self::t('to its') . ' ' . $n . ' ' . self::t($n === 1 ? 'member' : 'members') : '') . '.</li>'
+            . '<li>' . self::t('The members\' own mailboxes and their mail stay.') . '</li></ul>';
     }
 
     /**
@@ -837,8 +1005,11 @@ class module_controller extends ctrl_module
      */
     static function getResult()
     {
+        if (!fs_director::CheckForEmptyValue(self::$alreadyexistsdu)) {
+            return ui_sysmessage::shout(ui_language::translate("That address is on the list already."), "zannounceerror");
+        }
         if (!fs_director::CheckForEmptyValue(self::$alreadyexists)) {
-            return ui_sysmessage::shout(ui_language::translate("A mailbox, alias, forwarder or distribution list already exists with that name."), "zannounceerror");
+            return ui_sysmessage::shout(ui_language::translate("A mailbox, alias, forwarder or distribution list already has that address."), "zannounceerror");
         }
         if (!fs_director::CheckForEmptyValue(self::$validemail)) {
             return ui_sysmessage::shout(ui_language::translate("Your email address is not valid."), "zannounceerror");
@@ -850,7 +1021,7 @@ class module_controller extends ctrl_module
             return ui_sysmessage::shout(ui_language::translate("The selected domain was not valid."), "zannounceerror");
         }
         if (!fs_director::CheckForEmptyValue(self::$ok)) {
-            return ui_sysmessage::shout(ui_language::translate("Changes to your distrubution lists have been saved successfully!"), "zannounceok");
+            return ui_sysmessage::shout(ui_language::translate("Changes to your distribution lists have been saved successfully!"), "zannounceok");
         } else {
             return NULL;
         }

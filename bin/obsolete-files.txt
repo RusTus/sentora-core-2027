@@ -155,3 +155,5 @@ modules/parked_domains/assets/help_small.png
 modules/parked_domains/assets/unlimited.png
 # Aliases: the old "unlimited" picture
 modules/aliases/assets/unlimited.png
+# Distribution Lists: the old "unlimited" picture
+modules/distlists/assets/unlimited.png

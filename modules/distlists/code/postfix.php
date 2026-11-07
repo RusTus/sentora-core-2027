@@ -108,8 +108,16 @@ if (!fs_director::CheckForEmptyValue(self::$deleteuser)) {
     $result = $numrows->fetch();
     if ($result) {
         //echo $rowdlu['du_address_vc'];
-        $newlist = str_replace("," . $rowdlu['du_address_vc'], "", $result['goto']);
-        $newlist = str_replace(",,", ",", $newlist);
+        // remove this exact address only: replacing the text ",address" also cut into longer
+        // addresses (removing bob@x.com broke bob@x.com.au)
+        $keep = array();
+        foreach (explode(',', (string) $result['goto']) as $a) {
+            $a = trim($a);
+            if ($a !== '' && strcasecmp($a, (string) $rowdlu['du_address_vc']) !== 0) {
+                $keep[] = $a;
+            }
+        }
+        $newlist = implode(',', $keep);
         $sql = "UPDATE alias SET goto=:newlist, modified=NOW() WHERE address=:dl_address_vc";
         $sql = $mail_db->prepare($sql);
         $sql->bindParam(':newlist', $newlist);
@@ -126,8 +134,15 @@ if (!fs_director::CheckForEmptyValue(self::$createuser)) {
     $numrows->execute();
     $result = $numrows->fetch();
     if ($result) {
-        $newlist = $result['goto'] . "," . $fulladdress;
-        $newlist = str_replace(",,", ",", $newlist);
+        // the list as exact addresses, without empty entries or the same address twice
+        $keep = array();
+        foreach (explode(',', (string) $result['goto'] . ',' . $fulladdress) as $a) {
+            $a = trim($a);
+            if ($a !== '' && !in_array(strtolower($a), array_map('strtolower', $keep), true)) {
+                $keep[] = $a;
+            }
+        }
+        $newlist = implode(',', $keep);
         $sql = "UPDATE alias SET goto=:newlist, modified=NOW() WHERE address=:dl_address_vc";
         $sql = $mail_db->prepare($sql);
         $sql->bindParam(':newlist', $newlist);
