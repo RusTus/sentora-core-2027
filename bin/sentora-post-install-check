@@ -172,6 +172,10 @@ done
 APIKEY=$(q "SELECT so_value_tx FROM sentora_core.x_settings WHERE so_name_vc='apikey'")
 if [ "${#APIKEY}" -ge 32 ] && [ "$APIKEY" != "ee8795c8c53bfdb3b2cc595186b68912" ]; then ok "the web service API key is this server's own"
 else fail "the web service API key is the public default (or too short): the daemon replaces it within 5 minutes"; fi
+# FollowSymLinks switched on for moving an old site (Apache Admin): fine for the move, not to keep
+SYML=$(q "SELECT GROUP_CONCAT(vh_name_vc SEPARATOR ', ') FROM sentora_core.x_vhosts WHERE vh_deleted_ts IS NULL AND vh_symlinks_in = 1" 2> /dev/null)
+if [ -n "$SYML" ] && [ "$SYML" != "NULL" ]; then warn "FollowSymLinks is switched on for: $SYML (Apache Admin; switch it off once the site is moved)"
+else ok "FollowSymLinks is off for every website"; fi
 # all of /etc/sentora (configuration, DNS zones, Apache's site settings) and /var/sentora,
 # except the hosting folders, the mail store and the two shared scratch folders
 ww=$(find /etc/sentora /var/sentora -xdev \( -path /var/sentora/hostdata -o -path /var/sentora/vmail -o -path /var/sentora/temp -o -path /var/sentora/sessions \) -prune \

@@ -165,10 +165,17 @@ function SentoraOneLine($v) {
  * are kept but commented out.
  *
  * @param string $text The custom entry.
+ * @param bool $symlinks True for a domain with FollowSymLinks switched on (sys_symlinks): its
+ *                       own entry may then use it. Otherwise lines that could switch it on are
+ *                       commented out too.
  * @return string The entry with the dangerous (and mod_php) lines commented out.
  */
-function SentoraSafeCustom($text) {
+function SentoraSafeCustom($text, $symlinks = false) {
     $text = SentoraNoModPhp($text);
+    // FollowSymLinks may only be switched on by the domain's own switch (Apache Admin)
+    if (!$symlinks) {
+        $text = sys_symlinks::Filter($text);
+    }
     $danger = '/^(\s*)((?:Include|IncludeOptional|LoadModule|LoadFile|RewriteMap|PidFile|ServerRoot|CoreDumpDirectory|ScriptSock|Mutex|Define|UnDefine|User|Group|Listen|SSLPassPhraseDialog|SSLCryptoDevice|GlobalLog|ScoreBoardFile|DefaultRuntimeDir)\b.*'
         . '|(?:CustomLog|ErrorLog|TransferLog|ForensicLog|CookieLog|RewriteLog|ScriptLog)\s+["\']?\s*(?:\||syslog:|exec:).*'
         . '|(?:CustomLog|TransferLog)\s+.*["\']?\s*\|.*)$/mi';
@@ -424,7 +431,7 @@ function WriteVhostConfigFile() {
 		$line .= "# Custom settings (if any exist)" . fs_filehandler::NewLine();
 	
 		// Global custom Sentora entry
-		$line .= ctrl_options::GetSystemOption('global_zpcustom') . fs_filehandler::NewLine();
+		$line .= sys_symlinks::Filter(ctrl_options::GetSystemOption('global_zpcustom')) . fs_filehandler::NewLine();
 		$line .= fs_filehandler::NewLine();
 	
 		$line .= "</VirtualHost>" . fs_filehandler::NewLine();
@@ -515,7 +522,7 @@ function WriteVhostConfigFile() {
 		$line .= "</IfModule>" . fs_filehandler::NewLine();
 		$line .= "# Custom settings are loaded below this line (if any exist)" . fs_filehandler::NewLine();
 		// Global custom Sentora entry
-		$line .= ctrl_options::GetSystemOption('global_zpcustom') . fs_filehandler::NewLine();
+		$line .= sys_symlinks::Filter(ctrl_options::GetSystemOption('global_zpcustom')) . fs_filehandler::NewLine();
 		$line .= fs_filehandler::NewLine();
 		
 		$line .= "</VirtualHost>" . fs_filehandler::NewLine();
@@ -550,6 +557,8 @@ function WriteVhostConfigFile() {
 	//
     // Sentora virtual host container configuration
 	//
+	// (the FollowSymLinks switch's column, on a server installed before it)
+	sys_symlinks::EnsureColumn();
 	$sql = $zdbh->prepare("SELECT * FROM x_vhosts WHERE vh_deleted_ts IS NULL");
     $sql->execute();
     while ($rowvhost = $sql->fetch()) {
@@ -626,7 +635,7 @@ function WriteVhostConfigFile() {
 				$line .= SentoraOneLine(ctrl_options::GetSystemOption('dir_index')) . fs_filehandler::NewLine();
 				// Client custom vh entry
 				$line .= "# Custom VH settings (if any exist)" . fs_filehandler::NewLine();
-				$line .= SentoraSafeCustom($rowvhost['vh_custom_tx']) . fs_filehandler::NewLine();
+				$line .= SentoraSafeCustom($rowvhost['vh_custom_tx'], sys_symlinks::Allowed($rowvhost)) . fs_filehandler::NewLine();
 				$line .= "</virtualhost>" . fs_filehandler::NewLine();
 		
 				//############################# add back old code
@@ -673,7 +682,7 @@ function WriteVhostConfigFile() {
 				
 				// Client custom vh entry
 				$line .= "# Custom VH settings (if any exist)" . fs_filehandler::NewLine();
-				$line .= SentoraSafeCustom($rowvhost['vh_custom_tx']) . fs_filehandler::NewLine();
+				$line .= SentoraSafeCustom($rowvhost['vh_custom_tx'], sys_symlinks::Allowed($rowvhost)) . fs_filehandler::NewLine();
 				$line .= "</virtualhost>" . fs_filehandler::NewLine();
 				
 				//############################# add back old code
@@ -721,7 +730,7 @@ function WriteVhostConfigFile() {
 				$line .= SentoraOneLine(ctrl_options::GetSystemOption('dir_index')) . fs_filehandler::NewLine();
 				// Client custom vh entry
 				$line .= "# Custom VH settings (if any exist)" . fs_filehandler::NewLine();
-				$line .= SentoraSafeCustom($rowvhost['vh_custom_tx']) . fs_filehandler::NewLine();
+				$line .= SentoraSafeCustom($rowvhost['vh_custom_tx'], sys_symlinks::Allowed($rowvhost)) . fs_filehandler::NewLine();
 				$line .= "</virtualhost>" . fs_filehandler::NewLine();
 				
 				//############################# add back old code
@@ -767,7 +776,7 @@ function WriteVhostConfigFile() {
 				
 				// Client custom vh entry
 				$line .= "# Custom VH settings (if any exist)" . fs_filehandler::NewLine();
-				$line .= SentoraSafeCustom($rowvhost['vh_custom_tx']) . fs_filehandler::NewLine();
+				$line .= SentoraSafeCustom($rowvhost['vh_custom_tx'], sys_symlinks::Allowed($rowvhost)) . fs_filehandler::NewLine();
 				$line .= "</virtualhost>" . fs_filehandler::NewLine();
 				
 				//############################# add back old code
@@ -817,7 +826,7 @@ function WriteVhostConfigFile() {
 				$line .= SentoraSafeCustom(ctrl_options::GetSystemOption('global_vhcustom')) . fs_filehandler::NewLine();
 				// Client custom vh entry
 				$line .= "# Custom VH settings (if any exist)" . fs_filehandler::NewLine();
-				$line .= SentoraSafeCustom($rowvhost['vh_custom_tx']) . fs_filehandler::NewLine();
+				$line .= SentoraSafeCustom($rowvhost['vh_custom_tx'], sys_symlinks::Allowed($rowvhost)) . fs_filehandler::NewLine();
 				$line .= "</virtualhost>" . fs_filehandler::NewLine();
 				
 				//############################# add back old code
@@ -866,7 +875,7 @@ function WriteVhostConfigFile() {
 				$line .= SentoraSafeCustom(ctrl_options::GetSystemOption('global_vhcustom')) . fs_filehandler::NewLine();
 				// Client custom vh entry
 				$line .= "# Custom VH settings (if any exist)" . fs_filehandler::NewLine();
-				$line .= SentoraSafeCustom($rowvhost['vh_custom_tx']) . fs_filehandler::NewLine();
+				$line .= SentoraSafeCustom($rowvhost['vh_custom_tx'], sys_symlinks::Allowed($rowvhost)) . fs_filehandler::NewLine();
 				$line .= "</virtualhost>" . fs_filehandler::NewLine();
 				
 				//############################# add back old code
@@ -929,9 +938,17 @@ function WriteVhostConfigFile() {
 				// Symbolic links only when the link and its target have the same owner:
 				// Apache can read every account, so following any link would let one
 				// account serve another account's files. .htaccess may not turn that back
-				// on (Options FollowSymLinks there gives an error; use SymLinksIfOwnerMatch).
-				$line .= "    Options -Indexes +SymLinksIfOwnerMatch" . fs_filehandler::NewLine();
-				$line .= "    AllowOverride AuthConfig FileInfo Indexes Limit Options=Indexes,MultiViews,SymLinksIfOwnerMatch" . fs_filehandler::NewLine();
+				// on (Options FollowSymLinks there gives an error; use SymLinksIfOwnerMatch),
+				// unless an administrator switched it on for this domain to move an old
+				// site (Apache Admin, sys_symlinks)
+				if (sys_symlinks::Allowed($rowvhost)) {
+					$line .= "    # FollowSymLinks switched on for this domain in Apache Admin (moving an old site)" . fs_filehandler::NewLine();
+					$line .= "    Options -Indexes +FollowSymLinks" . fs_filehandler::NewLine();
+					$line .= "    AllowOverride AuthConfig FileInfo Indexes Limit Options=Indexes,MultiViews,SymLinksIfOwnerMatch,FollowSymLinks" . fs_filehandler::NewLine();
+				} else {
+					$line .= "    Options -Indexes -FollowSymLinks +SymLinksIfOwnerMatch" . fs_filehandler::NewLine();
+					$line .= "    AllowOverride AuthConfig FileInfo Indexes Limit Options=Indexes,MultiViews,SymLinksIfOwnerMatch" . fs_filehandler::NewLine();
+				}
 				$line .= "    Require all granted" . fs_filehandler::NewLine();
 				$line .= "</Directory>" . fs_filehandler::NewLine();
 				
@@ -989,7 +1006,7 @@ function WriteVhostConfigFile() {
 		
 				// Client custom vh entry
 				$line .= "# Custom VH settings (if any exist)" . fs_filehandler::NewLine();
-				$line .= SentoraSafeCustom($rowvhost['vh_custom_tx']) . fs_filehandler::NewLine();
+				$line .= SentoraSafeCustom($rowvhost['vh_custom_tx'], sys_symlinks::Allowed($rowvhost)) . fs_filehandler::NewLine();
 		
 				// End Virtual Host Settings
 				$line .= "</virtualhost>" . fs_filehandler::NewLine();
@@ -1044,9 +1061,17 @@ function WriteVhostConfigFile() {
 				// Symbolic links only when the link and its target have the same owner:
 				// Apache can read every account, so following any link would let one
 				// account serve another account's files. .htaccess may not turn that back
-				// on (Options FollowSymLinks there gives an error; use SymLinksIfOwnerMatch).
-				$line .= "    Options -Indexes +SymLinksIfOwnerMatch" . fs_filehandler::NewLine();
-				$line .= "    AllowOverride AuthConfig FileInfo Indexes Limit Options=Indexes,MultiViews,SymLinksIfOwnerMatch" . fs_filehandler::NewLine();
+				// on (Options FollowSymLinks there gives an error; use SymLinksIfOwnerMatch),
+				// unless an administrator switched it on for this domain to move an old
+				// site (Apache Admin, sys_symlinks)
+				if (sys_symlinks::Allowed($rowvhost)) {
+					$line .= "    # FollowSymLinks switched on for this domain in Apache Admin (moving an old site)" . fs_filehandler::NewLine();
+					$line .= "    Options -Indexes +FollowSymLinks" . fs_filehandler::NewLine();
+					$line .= "    AllowOverride AuthConfig FileInfo Indexes Limit Options=Indexes,MultiViews,SymLinksIfOwnerMatch,FollowSymLinks" . fs_filehandler::NewLine();
+				} else {
+					$line .= "    Options -Indexes -FollowSymLinks +SymLinksIfOwnerMatch" . fs_filehandler::NewLine();
+					$line .= "    AllowOverride AuthConfig FileInfo Indexes Limit Options=Indexes,MultiViews,SymLinksIfOwnerMatch" . fs_filehandler::NewLine();
+				}
 				$line .= "    Require all granted" . fs_filehandler::NewLine();
 				$line .= "</Directory>" . fs_filehandler::NewLine();
 		
@@ -1107,7 +1132,7 @@ function WriteVhostConfigFile() {
 		
 				// Client custom vh entry
 				$line .= "# Custom VH settings (if any exist)" . fs_filehandler::NewLine();
-				$line .= SentoraSafeCustom($rowvhost['vh_custom_tx']) . fs_filehandler::NewLine();
+				$line .= SentoraSafeCustom($rowvhost['vh_custom_tx'], sys_symlinks::Allowed($rowvhost)) . fs_filehandler::NewLine();
 		
 				// End Virtual Host Settings
 				$line .= "</virtualhost>" . fs_filehandler::NewLine();
@@ -1155,7 +1180,7 @@ function WriteVhostConfigFile() {
 				$line .= SentoraOneLine(ctrl_options::GetSystemOption('dir_index')) . fs_filehandler::NewLine();
 				// Client custom vh entry
 				$line .= "# Custom VH settings (if any exist)" . fs_filehandler::NewLine();
-				$line .= SentoraSafeCustom($rowvhost['vh_custom_tx']) . fs_filehandler::NewLine();
+				$line .= SentoraSafeCustom($rowvhost['vh_custom_tx'], sys_symlinks::Allowed($rowvhost)) . fs_filehandler::NewLine();
 				$line .= "</virtualhost>" . fs_filehandler::NewLine();
 				
 				//############################# add back old code
@@ -1197,7 +1222,7 @@ function WriteVhostConfigFile() {
 				
 				// Client custom vh entry
 				$line .= "# Custom VH settings (if any exist)" . fs_filehandler::NewLine();
-				$line .= SentoraSafeCustom($rowvhost['vh_custom_tx']) . fs_filehandler::NewLine();
+				$line .= SentoraSafeCustom($rowvhost['vh_custom_tx'], sys_symlinks::Allowed($rowvhost)) . fs_filehandler::NewLine();
 				$line .= "</virtualhost>" . fs_filehandler::NewLine();
 				
 				//############################# add back old code

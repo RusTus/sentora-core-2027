@@ -218,6 +218,9 @@ class ui_settingsform
                     $v = rtrim(str_replace("\r\n", "\n", $v));
                     if (strlen($v) > 20000) {
                         $err = 'This is too long.';
+                    } elseif (isset($f['check']) && is_callable($f['check'])) {
+                        // a module's own check of the block: '' when it is fine, else the (English) reason
+                        $err = (string) call_user_func($f['check'], $v);
                     }
                     break;
                 default:

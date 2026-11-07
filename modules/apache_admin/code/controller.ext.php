@@ -86,6 +86,10 @@ class module_controller extends ctrl_module
         $d = 'Domains and backups';
         $c = 'Extra directives';
         $path = array('pattern' => '#^/[A-Za-z0-9._/-]*/$#', 'pattern_help' => 'A folder path starting and ending with /.');
+        // FollowSymLinks is switched on per domain only (its page), never for every website
+        $noSymlinks = function ($v) {
+            return sys_symlinks::Offending($v) ? 'A line here would switch FollowSymLinks on (Options FollowSymLinks or All, AllowOverride All or Options): not allowed. It can be switched on for one domain only, on that domain\'s page.' : '';
+        };
         return array(
             'apache_port' => array('section' => $w, 'label' => 'Port', 'help' => 'The port Apache serves websites on.', 'type' => 'number', 'min' => 1, 'max' => 65535),
             'dir_index' => array('section' => $w, 'label' => 'Start pages', 'help' => 'The files Apache looks for when a folder is asked for, in order.', 'type' => 'text',
@@ -103,8 +107,8 @@ class module_controller extends ctrl_module
             'apache_backup' => array('section' => $d, 'label' => 'Back up the configuration', 'help' => 'Keep a copy of the previous vhost configuration before a new one is written.', 'type' => 'switch'),
             'apache_purgebu' => array('section' => $d, 'label' => 'Delete old copies', 'help' => '', 'type' => 'switch'),
             'apache_purge_date' => array('section' => $d, 'label' => 'Keep copies for', 'help' => '', 'type' => 'number', 'min' => 1, 'max' => 3650, 'unit' => 'days'),
-            'global_vhcustom' => array('section' => $c, 'label' => 'For every website', 'help' => 'Apache directives added to every website\'s configuration.', 'type' => 'code'),
-            'global_zpcustom' => array('section' => $c, 'label' => 'For the panel', 'help' => 'Apache directives added to the panel\'s own site.', 'type' => 'code'),
+            'global_vhcustom' => array('section' => $c, 'label' => 'For every website', 'help' => 'Apache directives added to every website\'s configuration.', 'type' => 'code', 'check' => $noSymlinks),
+            'global_zpcustom' => array('section' => $c, 'label' => 'For the panel', 'help' => 'Apache directives added to the panel\'s own site.', 'type' => 'code', 'check' => $noSymlinks),
         );
     }
 
@@ -131,6 +135,7 @@ class module_controller extends ctrl_module
         global $zdbh;
         static $rows = null;
         if ($rows === null) {
+            sys_symlinks::EnsureColumn();
             $rows = $zdbh->query("SELECT v.*, a.ac_user_vc AS owner FROM x_vhosts v LEFT JOIN x_accounts a ON a.ac_id_pk = v.vh_acc_fk WHERE v.vh_deleted_ts IS NULL ORDER BY v.vh_name_vc")->fetchAll(PDO::FETCH_ASSOC);
             foreach ($rows as &$r) {
                 $o = array();
@@ -139,6 +144,9 @@ class module_controller extends ctrl_module
                 }
                 if ((int) $r['vh_obasedir_in'] === 0) {
                     $o[] = array('open_basedir off', '');
+                }
+                if (sys_symlinks::Allowed($r)) {
+                    $o[] = array('FollowSymLinks on', '');
                 }
                 if ((string) $r['vh_custom_port_in'] !== '' && $r['vh_custom_port_in'] !== null) {
                     $o[] = array('Port %s', (string) (int) $r['vh_custom_port_in']);
@@ -253,7 +261,7 @@ class module_controller extends ctrl_module
             }
             $chips = '';
             foreach ($r['overrides'] as $o) {
-                $chips .= '<span class="aa-chip' . (in_array($o[0], array('Switched off', 'open_basedir off'), true) ? ' warn' : '') . '">' . str_replace('%s', self::h($o[1]), self::t($o[0])) . '</span>';
+                $chips .= '<span class="aa-chip' . (in_array($o[0], array('Switched off', 'open_basedir off', 'FollowSymLinks on'), true) ? ' warn' : '') . '">' . str_replace('%s', self::h($o[1]), self::t($o[0])) . '</span>';
             }
             $rows .= '<div class="aa-row"><div class="aa-main"><b>' . self::h($r['vh_name_vc']) . '</b><span>' . self::t('of') . ' ' . self::h($r['owner']) . '</span><div class="aa-chips">' . $chips . '</div></div>'
                 . '<a class="btn btn-default btn-sm" href="./?module=apache_admin&amp;show=Vhost&amp;id=' . (int) $r['vh_id_pk'] . '">' . self::t('Edit') . '</a></div>';
@@ -366,7 +374,7 @@ class module_controller extends ctrl_module
         }
         $f = self::$errors ? $controller->GetAllControllerRequests('FORM') : array();
         $val = function ($k) use ($r, $f) { return array_key_exists($k, $f) ? (string) $f[$k] : (string) $r[$k]; };
-        $chk = function ($k) use ($r, $f) { return ($f ? !empty($f[$k]) : (int) $r[$k] === 1) ? ' checked' : ''; };
+        $chk = function ($k) use ($r, $f) { return ($f ? !empty($f[$k]) : (int) ($r[$k] ?? 0) === 1) ? ' checked' : ''; };
         $err = function ($k) { return isset(self::$errors[$k]) ? '<em>' . self::t(self::$errors[$k]) . '</em>' : ''; };
         $row = function ($k, $label, $help, $ctl, $wide = false) use ($err) {
             return '<div class="sf-row' . (isset(self::$errors[$k]) ? ' is-bad' : '') . ($wide ? ' is-wide' : '') . '"><div class="sf-what"><label for="' . $k . '">' . self::t($label) . '</label>'
@@ -378,6 +386,7 @@ class module_controller extends ctrl_module
         return '<section class="sf-pane">'
             . $row('vh_enabled_in', 'Website answers', 'Off: Apache does not serve this domain.', $sw('vh_enabled_in'))
             . $row('vh_obasedir_in', 'Keep PHP in the account\'s folder', 'open_basedir. Turn it off only for a program that needs files elsewhere.', $sw('vh_obasedir_in'))
+            . $row('vh_symlinks_in', 'Allow FollowSymLinks (for moving an old site)', 'Off (recommended): Apache follows a symbolic link only to a file of the same owner, and an .htaccess with "Options +FollowSymLinks" gives error 500. On: this site\'s .htaccess may use it, and every link is followed, also to other accounts\' files. Switch it off again once the site uses "Options +SymLinksIfOwnerMatch".', $sw('vh_symlinks_in'))
             . $row('vh_custom_port_in', 'Port', 'Empty: the server\'s port.', $num('vh_custom_port_in'))
             . $row('vh_portforward_in', 'Send port 80 to that port', 'Needs Apache\'s mod_rewrite.', $sw('vh_portforward_in'))
             . $row('vh_custom_ip_vc', 'IP address', 'Empty: every address of the server.', '<input class="form-control" type="text" name="vh_custom_ip_vc" id="vh_custom_ip_vc" value="' . self::h($val('vh_custom_ip_vc')) . '" spellcheck="false">')
@@ -438,6 +447,11 @@ class module_controller extends ctrl_module
         if ($ip !== '' && filter_var($ip, FILTER_VALIDATE_IP) === false) {
             self::$errors['vh_custom_ip_vc'] = 'Enter an IP address, or leave it empty.';
         }
+        // FollowSymLinks: only through the switch, not around it in the extra directives
+        $symlinks = !empty($f['vh_symlinks_in']) ? 1 : 0;
+        if (!$symlinks && sys_symlinks::Offending((string) ($f['vh_custom_tx'] ?? ''))) {
+            self::$errors['vh_custom_tx'] = 'A line here would switch FollowSymLinks on: switch on "Allow FollowSymLinks" above for this domain, or remove the line.';
+        }
         if (self::$errors) {
             return false;
         }
@@ -446,6 +460,9 @@ class module_controller extends ctrl_module
             WHERE vh_id_pk = ? AND vh_deleted_ts IS NULL")->execute(array(
             !empty($f['vh_enabled_in']) ? 1 : 0, !empty($f['vh_obasedir_in']) ? 1 : 0, $text('vh_ssl_tx'), $sport, $cport, !empty($f['vh_portforward_in']) ? 1 : null,
             $ip === '' ? null : $ip, $text('vh_custom_tx'), (int) $r['vh_id_pk']));
+        if (sys_symlinks::EnsureColumn()) {
+            $zdbh->prepare("UPDATE x_vhosts SET " . sys_symlinks::COLUMN . " = ? WHERE vh_id_pk = ? AND vh_deleted_ts IS NULL")->execute(array($symlinks, (int) $r['vh_id_pk']));
+        }
         self::SetWriteApacheConfigTrue();
         header('location: ./?module=apache_admin&saved=' . rawurlencode($r['vh_name_vc']));
         exit;
