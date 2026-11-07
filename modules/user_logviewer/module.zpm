@@ -5,6 +5,7 @@
         <div class="zmodule_desc" id="zmodule_desc_<@ ModuleName @>"><@ ModuleDesc @></div>
     </div>
     <@ Result @>
+    <@ SiteHints @>
     <link rel="stylesheet" href="modules/system_logviewer/assets/logviewer.css">
     <% if HasDomains %>
     <div class="lv lv-panel lv-sites" id="lv" data-read="modules/user_logviewer/code/read.php"

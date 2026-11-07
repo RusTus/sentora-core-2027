@@ -39,3 +39,11 @@
 .aa-dl code { font-size: 12px; background: none; border: 0; padding: 0; color: inherit; }
 @media (max-width: 1000px) { .aa-cols { grid-template-columns: 1fr; } .aa-box { position: static; } }
 @media (max-width: 640px) { .aa { padding: 12px; } .aa-tiles { grid-template-columns: 1fr; } }
+
+/* the domain page's side column: its info and the FollowSymLinks help, kept in view together */
+.aa-side { display: grid; gap: 14px; position: sticky; top: 12px; min-width: 0; }
+.aa-side .aa-box { position: static; }
+.aa-help p, .aa-help li { font-size: 13px; line-height: 1.45; }
+.aa-help p { margin: 0 0 8px; }
+.aa-help ol { margin: 0 0 8px; padding-left: 20px; }
+.aa-help li { margin-bottom: 6px; }

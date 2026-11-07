@@ -122,6 +122,60 @@ class module_controller extends ctrl_module
 	}
 
 	/**
+	 * Template HTML (<@ SiteHints @>): an explanation for each of the account's websites that gives
+	 * error 500 because one of its .htaccess files has "Options +FollowSymLinks", which this server
+	 * does not allow (sys_symlinks). Found from the end of the domain's error log, and shown only
+	 * while that .htaccess file (in the account's own folder) still has the line.
+	 *
+	 * @return string HTML, or '' when no site has the problem.
+	 */
+	static function getSiteHints()
+	{
+		$currentuser = ctrl_users::GetUserDetail();
+		$home = realpath(sys_accountphp::HomeDir($currentuser['username']));
+		if ($home === false) {
+			return '';
+		}
+		$out = '';
+		foreach (self::Domains() as $d) {
+			$log = self::LogPath($currentuser['username'], $d['name'], 'error');
+			if (!is_file($log) || is_link($log)) {
+				continue;
+			}
+			$size = (int) @filesize($log);
+			$fh = @fopen($log, 'rb');
+			if (!$fh) {
+				continue;
+			}
+			fseek($fh, max(0, $size - 262144));
+			$tail = (string) fread($fh, 262144);
+			fclose($fh);
+			if (!preg_match_all('#(/[^\s:]+/\.htaccess): Option (?:FollowSymLinks|All) not allowed here#', $tail, $m)) {
+				continue;
+			}
+			$files = array();
+			foreach (array_unique($m[1]) as $file) {
+				// (the log can hold any text a site writes: only a real file in the account's own folder)
+				$real = realpath($file);
+				if ($real === false || strpos($real, $home . '/') !== 0 || is_link($file)) {
+					continue;
+				}
+				if (preg_match('/^\s*Options\s+(?:.*\s)?[+]?(?:FollowSymLinks|All)(?:\s|$)/mi', (string) @file_get_contents($real, false, null, 0, 65536))) {
+					$files[] = substr($real, strlen($home) + 1);
+				}
+			}
+			foreach ($files as $file) {
+				$out .= ui_sysmessage::shout(
+					str_replace('%s', '<code>' . self::h($file) . '</code>', self::t('Its file %s has the line "Options +FollowSymLinks", which this server does not allow, because it would let one website read the files of another. Change that line to "Options +SymLinksIfOwnerMatch" (in File Manager): it works the same for your site. If the site still does not work, ask your host: they can allow it for this domain while the site is moved.')),
+					'zannounceerror',
+					str_replace('%s', self::h($d['name']), self::t('Your website %s gives error 500 (Internal Server Error)')),
+					false);
+			}
+		}
+		return $out;
+	}
+
+	/**
 	 * Template HTML: each domain with its error and access log, to pick from, and a download button for each log.
 	 *
 	 * @return string HTML.

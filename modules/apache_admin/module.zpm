@@ -25,7 +25,10 @@
                 <div class="sf-foot"><input type="hidden" name="vh_id_pk" value="<@ VhostId @>"><a class="btn btn-default" href="./?module=apache_admin"><: Cancel :></a>
                     <@ CSFR_Tag @><button class="btn btn-primary" type="submit"><: Save :></button></div>
             </form>
-            <aside class="aa-box"><h4><: Domain :></h4><@ VhostInfo @></aside>
+            <div class="aa-side">
+                <aside class="aa-box"><h4><: Domain :></h4><@ VhostInfo @></aside>
+                <aside class="aa-box aa-help"><@ SymlinksHelp @></aside>
+            </div>
         </div>
         <% endif %>
     </div>

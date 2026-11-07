@@ -158,6 +158,17 @@ sentora-update --rollback
 
 It lists the backups, newest first; run it again with the newest one (`sentora-update --rollback /var/sentora/backups/panel-before-update-<date>.tar.gz`).
 
+## Moving websites from an old Sentora server
+
+- **PHP 7.1** is installed switched off, only for sites that do not run on PHP 8 yet: switch it on in **Admin > Server Admin > PHP Versions**, choose it for the domain, and move the site to PHP 8 as soon as it runs. It gets no security fixes.
+- **Error 500 after a move?** Old sites often have `Options +FollowSymLinks` in their `.htaccess`. This server does not allow it (it would let one website read another website's files), so Apache answers the site with error 500, and the site's error log says `Option FollowSymLinks not allowed here`. To move such a site:
+  1. In **Admin > Apache Admin**, open the domain, switch on **Allow FollowSymLinks (for moving an old site)** and save: the site works again within 5 minutes.
+  2. Finish moving the site and check that it works.
+  3. In the site's `.htaccess` files, change `Options +FollowSymLinks` to `Options +SymLinksIfOwnerMatch` (it works the same for the site).
+  4. Switch **Allow FollowSymLinks** off again and check the site once more.
+
+  The client sees the same explanation in **View Site Logs** while the site has this error, and `sentora-post-install-check` lists domains that still have the switch on. Extra directives in Apache Admin can not switch FollowSymLinks on: only the switch can, for one domain.
+
 ## Backups and restore
 
 - **Client backups:** each account can back up its own websites, databases and mail from the panel.

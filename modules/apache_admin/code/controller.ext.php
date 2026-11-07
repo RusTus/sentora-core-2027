@@ -397,6 +397,30 @@ class module_controller extends ctrl_module
     }
 
     /**
+     * <@ SymlinksHelp @>: why a moved site can give error 500, and the steps to move it with the
+     * FollowSymLinks switch, for an administrator who has not met it before.
+     *
+     * @return string The HTML.
+     */
+    static function getSymlinksHelp()
+    {
+        $steps = array(
+            'Switch on "Allow FollowSymLinks" for this domain and save: the site works again within 5 minutes.',
+            'Finish moving the site and check that it works.',
+            'In the site\'s .htaccess files (File Manager), change "Options +FollowSymLinks" to "Options +SymLinksIfOwnerMatch". It works the same for the site.',
+            'Switch "Allow FollowSymLinks" off again and check the site once more.',
+        );
+        $li = '';
+        foreach ($steps as $s) {
+            $li .= '<li>' . self::t($s) . '</li>';
+        }
+        return '<h4>' . self::t('A moved site gives error 500?') . '</h4>'
+            . '<p>' . self::t('Old sites often have the line "Options +FollowSymLinks" in their .htaccess file. This server does not allow it, because it would let one website read another website\'s files, so Apache answers the site with error 500 (Internal Server Error). The site\'s error log then says "Option FollowSymLinks not allowed here".') . '</p>'
+            . '<p><b>' . self::t('To move such a site:') . '</b></p><ol>' . $li . '</ol>'
+            . '<p class="aa-sub">' . self::t('The site\'s owner can also do step 3 alone, without the switch. Clients see the same explanation in View Site Logs when their site has this error.') . '</p>';
+    }
+
+    /**
      * The old chooser's form (inVhost, a domain name): open that domain's page.
      *
      * @global runtime_controller $controller The request controller.
