@@ -518,6 +518,8 @@ class module_controller extends ctrl_module
         $sql->bindParam(':moveid', $moveid);
         $sql->bindParam(':userid', $userid);
         $sql->execute();
+        // its notices go with it: the ones it sent and the personal ones to it (Client Notice Manager)
+        ctrl_notices::ForgetAccount((int) $userid);
         runtime_hook::Execute('OnAfterDeleteClient');
         self::$ok = true;
         return true;
@@ -1031,6 +1033,22 @@ class module_controller extends ctrl_module
         } else {
             return true;
         }
+    }
+
+    /**
+     * Template flag <% if NoticesEnabled %>: the Client Notice Manager is switched on and the
+     * logged-in account's group may use it, for the "Send notice" button on each client.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return bool
+     */
+    static function getNoticesEnabled()
+    {
+        global $zdbh;
+        $q = $zdbh->prepare("SELECT mo_id_pk FROM x_modules WHERE mo_folder_vc = 'client_notices' AND mo_enabled_en = 'true'");
+        $q->execute();
+        $mid = (int) $q->fetchColumn();
+        return $mid > 0 && ctrl_groups::CheckGroupModulePermissions((int) ctrl_users::GetUserDetail()['usergroupid'], $mid);
     }
 
     /**

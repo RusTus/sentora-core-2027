@@ -229,6 +229,7 @@ input[type=submit] {
                     <td><& bandwidthreadable &> / <& bandwidthquotareadable &></td>
                     <td>
                         <button class="button-loader btn btn-default" type="submit" id="button" name="inEdit_<& userid &>" value="<& userid &>"><: Edit :></button>
+                        <% if NoticesEnabled %><a class="btn btn-default" href="./?module=client_notices&amp;show=New&amp;user=<& userid &>" title="<: Send this client a personal notice :>"><: Send notice :></a><% endif %>
                         <& tfreset &>
                         <button class="button-loader delete btn btn-danger" type="submit" id="button" name="inDelete_<& userid &>" value="<& userid &>"><: Delete :></button>
                     </td>

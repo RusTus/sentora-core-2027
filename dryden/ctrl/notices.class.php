@@ -266,6 +266,23 @@ class ctrl_notices
     }
 
     /**
+     * Take away the notices of a deleted account: the ones it sent and the personal ones to it.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int $uid The account ID.
+     * @return int How many were taken away.
+     */
+    static function ForgetAccount($uid)
+    {
+        global $zdbh;
+        self::Ready();
+        $q = $zdbh->prepare("UPDATE x_notices SET nt_deleted_ts = :t WHERE nt_deleted_ts IS NULL AND (nt_acc_fk = :u OR (nt_scope_vc = 'user' AND nt_targets_vc = :u2))");
+        $q->execute(array(':t' => time(), ':u' => (int) $uid, ':u2' => (string) (int) $uid));
+        unset(self::$accounts[(int) $uid]);
+        return $q->rowCount();
+    }
+
+    /**
      * One notice.
      *
      * @global db_driver $zdbh The panel's database connection.
