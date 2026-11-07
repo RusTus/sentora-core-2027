@@ -23,6 +23,13 @@ if ($zlo->hasInfo()) {
     $zlo->reset();
 }
 
+// an account switched off or deleted since it logged in (or the one shadowing, while shadowing) is
+// logged out here, before anything else (ctrl_auth::CheckSessionAccounts)
+if (!ctrl_auth::CheckSessionAccounts()) {
+    header("location: ./");
+    exit;
+}
+
 if (isset($_GET['logout'])) {
     // Only the panel's own logout link (it carries the session's secret) logs out;
     // a bare ./?logout loaded by another site just goes back to the panel

@@ -8,6 +8,7 @@ require_once 'dryden/loader.inc.php';
 require_once 'cnf/db.php';
 require_once 'inc/dbc.inc.php';
 session_start();
+ctrl_auth::CheckSessionAccounts();   // (a switched-off or deleted account's session ends here)
 $uid = isset($_SESSION['zpuid']) ? (int) $_SESSION['zpuid'] : 0;
 session_write_close();
 header('Content-Type: application/json; charset=utf-8');

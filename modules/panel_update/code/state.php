@@ -35,6 +35,7 @@ class panel_update_state
     static function RequireAdmin()
     {
         session_start();
+        ctrl_auth::CheckSessionAccounts();   // (a switched-off or deleted account's session ends here)
         $uid = isset($_SESSION['zpuid']) ? (int) $_SESSION['zpuid'] : 0;
         $user = ($uid > 0) ? ctrl_users::GetUserDetail($uid) : false;
         $asked = isset($_SESSION['pu_asked']) ? (int) $_SESSION['pu_asked'] : 0;

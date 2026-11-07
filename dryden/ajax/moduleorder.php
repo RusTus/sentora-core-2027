@@ -25,6 +25,7 @@ session_start();
 require_once 'dryden/loader.inc.php';
 require_once 'cnf/db.php';
 require_once 'inc/dbc.inc.php';
+ctrl_auth::CheckSessionAccounts();   // (a switched-off or deleted account's session ends here)
 
 // The panel's own error setting (production: errors go to the log, not the page)
 debug_phperrors::SetMode(ctrl_options::GetSystemOption('debug_mode'));

@@ -77,7 +77,8 @@ class module_controller extends ctrl_module
     }
 
     /**
-     * The accounts the logged-in account may shadow: an administrator every other account, a reseller its own clients.
+     * The accounts the logged-in account may shadow: an administrator every other account, a reseller its own clients
+     * (never one above it: see ctrl_privilege).
      *
      * @global db_driver $zdbh The panel's database connection.
      * @return array<int, array<string, mixed>> By user name: 'id', 'user', 'name', 'email', 'package', 'group', 'reseller', 'enabled', 'lastlogon', 'disk', 'bw'.
@@ -91,10 +92,13 @@ class module_controller extends ctrl_module
         }
         $me = (int) ctrl_users::GetUserDetail()['userid'];
         $admin = self::IsAdmin();
+        // never an account above a reseller (an administrator, or one with an administrator's
+        // module the reseller's group lacks): shadowing it would be taking over an administrator
+        $above = $admin ? '' : ' AND NOT ' . ctrl_privilege::AboveSql('a.ac_group_fk', (int) ctrl_users::GetUserDetail()['usergroupid']);
         $q = $zdbh->prepare("SELECT a.ac_id_pk, a.ac_user_vc, a.ac_email_vc, a.ac_enabled_in, a.ac_lastlogon_ts, p.ud_fullname_vc, k.pk_name_vc, g.ug_name_vc, r.ac_user_vc AS reseller
             FROM x_accounts a LEFT JOIN x_profiles p ON p.ud_user_fk = a.ac_id_pk LEFT JOIN x_packages k ON k.pk_id_pk = a.ac_package_fk
             LEFT JOIN x_groups g ON g.ug_id_pk = a.ac_group_fk LEFT JOIN x_accounts r ON r.ac_id_pk = a.ac_reseller_fk
-            WHERE a.ac_deleted_ts IS NULL AND a.ac_id_pk <> :me" . ($admin ? '' : ' AND a.ac_reseller_fk = :me2') . " ORDER BY a.ac_user_vc");
+            WHERE a.ac_deleted_ts IS NULL AND a.ac_id_pk <> :me" . ($admin ? '' : ' AND a.ac_reseller_fk = :me2') . $above . " ORDER BY a.ac_user_vc");
         $q->execute(array(':me' => $me) + ($admin ? array() : array(':me2' => $me)));
         $rows = array();
         foreach ($q->fetchAll(PDO::FETCH_ASSOC) as $r) {

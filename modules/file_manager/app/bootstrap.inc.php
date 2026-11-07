@@ -31,6 +31,7 @@ require_once 'inc/dbc.inc.php';
 
 // --- 1. Sentora login
 session_start();
+ctrl_auth::CheckSessionAccounts();   // (a switched-off or deleted account's session ends here)
 $sentora_fm_uid = isset($_SESSION['zpuid']) ? (int) $_SESSION['zpuid'] : 0;
 $sentora_fm_user = ($sentora_fm_uid > 0) ? ctrl_users::GetUserDetail($sentora_fm_uid) : false;
 session_write_close();

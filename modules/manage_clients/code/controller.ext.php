@@ -57,6 +57,9 @@ class module_controller extends ctrl_module
     static $passwordblank;
     /** @var bool|null True when no (or an unknown) package was chosen. */
     static $packageblank;
+    /** @var string[] Accounts that went to an administrator instead of the chosen account at the last delete (ctrl_privilege). */
+    static $movedtoadmin = array();
+
     /** @var bool|null True when no (or an unknown) group was chosen. */
     static $groupblank;
     /** @var bool|null True when the last change was saved (shown by getResult()). */
@@ -476,6 +479,25 @@ class module_controller extends ctrl_module
         $parent = (int) $q->fetchColumn();
         if (empty($moveid) || (int) $moveid === (int) $userid) {
             $moveid = $parent > 0 && $parent !== (int) $userid ? $parent : 1;
+        }
+        // what would be above the new owner (administrators, accounts and groups with an administrator's
+        // module it lacks; see ctrl_privilege) goes to an administrator instead: handing an
+        // administrator to a reseller let the reseller shadow it or set its password
+        $q = $zdbh->prepare("SELECT ac_group_fk FROM x_accounts WHERE ac_id_pk = :id");
+        $q->execute(array(':id' => (int) $moveid));
+        $moveGroup = (int) $q->fetchColumn();
+        $admin = ctrl_privilege::AdminAccount();
+        self::$movedtoadmin = array();
+        if ($moveGroup !== 1 && $admin !== (int) $moveid) {
+            $q = $zdbh->prepare("SELECT a.ac_id_pk, a.ac_user_vc FROM x_accounts a WHERE a.ac_reseller_fk = :u AND a.ac_id_pk <> :u2 AND a.ac_deleted_ts IS NULL AND " . ctrl_privilege::AboveSql('a.ac_group_fk', $moveGroup));
+            $q->execute(array(':u' => (int) $userid, ':u2' => (int) $userid));
+            $set = $zdbh->prepare("UPDATE x_accounts SET ac_reseller_fk = :a WHERE ac_id_pk = :id");
+            foreach ($q->fetchAll(PDO::FETCH_ASSOC) as $r) {
+                $set->execute(array(':a' => $admin, ':id' => (int) $r['ac_id_pk']));
+                self::$movedtoadmin[] = (string) $r['ac_user_vc'];
+            }
+            $q = $zdbh->prepare("UPDATE x_groups g SET g.ug_reseller_fk = :a WHERE g.ug_reseller_fk = :u AND " . ctrl_privilege::AboveSql('g.ug_id_pk', $moveGroup));
+            $q->execute(array(':a' => $admin, ':u' => (int) $userid));
         }
         runtime_hook::Execute('OnBeforeDeleteClient');
         $sql = $zdbh->prepare("
@@ -1126,10 +1148,13 @@ class module_controller extends ctrl_module
             return $rows;
         }
         $me = (int) ctrl_users::GetUserDetail()['userid'];
+        // never a client above a reseller (an administrator, or one with an administrator's module the
+        // reseller's group lacks; see ctrl_privilege): setting its password would be taking it over
+        $above = ' AND NOT ' . ctrl_privilege::AboveSql('a.ac_group_fk', (int) ctrl_users::GetUserDetail()['usergroupid']);
         $q = $zdbh->prepare("SELECT a.ac_id_pk, a.ac_user_vc, a.ac_email_vc, a.ac_enabled_in, a.ac_created_ts, a.ac_lastlogon_ts, p.ud_fullname_vc, k.pk_name_vc, g.ug_name_vc,
             (SELECT COUNT(*) FROM x_accounts c WHERE c.ac_reseller_fk = a.ac_id_pk AND c.ac_id_pk <> a.ac_id_pk AND c.ac_deleted_ts IS NULL) AS clients
             FROM x_accounts a LEFT JOIN x_profiles p ON p.ud_user_fk = a.ac_id_pk LEFT JOIN x_packages k ON k.pk_id_pk = a.ac_package_fk LEFT JOIN x_groups g ON g.ug_id_pk = a.ac_group_fk
-            WHERE a.ac_reseller_fk = :me AND a.ac_id_pk <> :me2 AND a.ac_deleted_ts IS NULL ORDER BY a.ac_user_vc");
+            WHERE a.ac_reseller_fk = :me AND a.ac_id_pk <> :me2 AND a.ac_deleted_ts IS NULL" . $above . " ORDER BY a.ac_user_vc");
         $q->execute(array(':me' => $me, ':me2' => $me));
         $rows = array();
         foreach ($q->fetchAll(PDO::FETCH_ASSOC) as $r) {
@@ -1790,7 +1815,8 @@ class module_controller extends ctrl_module
             return false;
         }
         self::ExecuteDeleteClient($client['id'], $move);
-        header('location: ./?module=' . $controller->GetCurrentModule() . '&deleted=' . rawurlencode($client['user']));
+        header('location: ./?module=' . $controller->GetCurrentModule() . '&deleted=' . rawurlencode($client['user'])
+            . (self::$movedtoadmin ? '&toadmin=' . rawurlencode(implode(', ', self::$movedtoadmin)) : ''));
         exit;
     }
 
@@ -1842,7 +1868,9 @@ class module_controller extends ctrl_module
         }
         foreach ((array) self::ListGroups($currentuser['userid']) as $group) {
             if ((string) $group['groupid'] === (string) $gid) {
-                return ((int) $gid !== 1) || ((int) $currentuser['usergroupid'] === 1);
+                // not a group above the account (ctrl_privilege): one of its own groups may still hold an
+                // administrator's module, when it was handed one by an administrator
+                return !ctrl_privilege::GroupAbove((int) $gid, (int) $currentuser['usergroupid']);
             }
         }
         return false;
@@ -1936,7 +1964,9 @@ class module_controller extends ctrl_module
         foreach (array('created' => 'The client %s is created. Its folders are ready within 5 minutes.', 'saved' => 'The client %s is saved.', 'deleted' => 'The client %s is deleted. Its websites, mail and databases are removed within the hour.') as $k => $m) {
             $who = $controller->GetControllerRequest('URL', $k);
             if ($who) {
-                return ui_sysmessage::shout(str_replace('%s', '<strong>' . self::h($who) . '</strong>', self::t($m)), 'zannounceok');
+                $to = $k === 'deleted' ? (string) $controller->GetControllerRequest('URL', 'toadmin') : '';
+                return ui_sysmessage::shout(str_replace('%s', '<strong>' . self::h($who) . '</strong>', self::t($m))
+                    . ($to !== '' ? ' ' . str_replace('%s', '<strong>' . self::h($to) . '</strong>', self::t('Its clients %s went to an administrator (you, when you are one), not to the account you chose: they have administrator rights that account does not have.')) : ''), 'zannounceok');
             }
         }
         return;

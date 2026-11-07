@@ -14,6 +14,7 @@ require_once 'inc/dbc.inc.php';
 require_once 'modules/goaccess_stats/code/goaccess.php';
 
 session_start();
+ctrl_auth::CheckSessionAccounts();   // (a switched-off or deleted account's session ends here)
 $uid = isset($_SESSION['zpuid']) ? (int) $_SESSION['zpuid'] : 0;
 $user = ($uid > 0) ? ctrl_users::GetUserDetail($uid) : false;
 session_write_close();

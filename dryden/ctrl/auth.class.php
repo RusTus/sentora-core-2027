@@ -98,6 +98,41 @@ class ctrl_auth
     }
 
     /**
+     * End a session whose account was switched off or deleted since it logged in.
+     *
+     * Switching an account off (or deleting it) only stopped new logins: a browser already logged in
+     * kept working, and a shadowing session went "Back to" the switched-off account. Called on every
+     * request (the panel and its own pages that read the session). The person behind the session (the
+     * shadowing account while shadowing, otherwise the logged-in one) must exist and be switched on;
+     * an account being shadowed must exist (an administrator may shadow a switched-off one).
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return bool True when the session may go on (or nobody is logged in); false when it was ended.
+     */
+    static function CheckSessionAccounts()
+    {
+        global $zdbh;
+        if (empty($_SESSION['zpuid']) || !isset($zdbh) || !is_object($zdbh)) {
+            return true;
+        }
+        $person = !empty($_SESSION['ruid']) ? (int) $_SESSION['ruid'] : (int) $_SESSION['zpuid'];
+        $q = $zdbh->prepare("SELECT ac_id_pk, ac_enabled_in FROM x_accounts WHERE ac_id_pk IN (:a, :b) AND ac_deleted_ts IS NULL");
+        $q->execute(array(':a' => $person, ':b' => (int) $_SESSION['zpuid']));
+        $ok = array();
+        foreach ($q->fetchAll(PDO::FETCH_ASSOC) as $r) {
+            $ok[(int) $r['ac_id_pk']] = (int) $r['ac_enabled_in'] === 1;
+        }
+        if (!empty($ok[$person]) && isset($ok[(int) $_SESSION['zpuid']])) {
+            return true;
+        }
+        $_SESSION = array();
+        if (session_status() === PHP_SESSION_ACTIVE && !headers_sent()) {
+            session_regenerate_id(true);
+        }
+        return false;
+    }
+
+    /**
      * Sets the value of a given named session variable, if does not exist will create the session variable too.
      * @author Bobby Allen (ballen@bobbyallen.me)
      * @param string $name The name of the session variable to set.

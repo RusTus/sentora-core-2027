@@ -36,6 +36,7 @@ if (isset($_GET['id'])) {
 }
 
 session_start();
+ctrl_auth::CheckSessionAccounts();   // (a switched-off or deleted account's session ends here)
 // no panel controller here: the logged-in account's own language for ui_language::translate()
 ui_language::ForAccount(isset($_SESSION['zpuid']) ? (int) $_SESSION['zpuid'] : 0);
 // Strict: a missing session id must never match (loose == let null equal null)
