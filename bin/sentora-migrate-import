@@ -26,7 +26,10 @@
  * this server's administrator), its package (with the old limits) and its group (with the modules that
  * exist here) are looked up by name and made when missing; it gets the old contact details and a new
  * panel password, shown at the end and saved in /root/sentora-migrate-passwords-<date>.txt (root only).
- * Moved under another name, the new account must exist first (Admin > Manage Clients). Moved for it: its domains,
+ * What each old account, package, group and domain became is recorded in x_migrate_map (old server, kind,
+ * old ID and name, new ID, made or matched), and looked up first by a later run: an account renamed here
+ * after its move is still found. Moved under another name, the new account must exist first (Admin >
+ * Manage Clients). Moved for it: its domains,
  * sub-domains and parked domains, their website files, DNS records, MySQL databases and users (with
  * their passwords, so the sites' settings keep working), FTP accounts, cron jobs, protected folders,
  * mailboxes (with their mail), aliases, forwarders and distribution lists. Never moved: the old
@@ -275,7 +278,7 @@ if (!$NEWID && $NEWU !== $OLDU) {
     stop("the account $NEWU does not exist on this server: make it first (Admin > Manage Clients), then run this again. (An account moved under its own name, $OLDU, is made here when it is missing.)");
 }
 if (!$NEWID) {
-    ui_info("the account $NEWU is not on this server yet: it is made from the old one (see below)");
+    ui_info("there is no account $NEWU on this server: it is found (if moved before) or made from the old one, see below");
 }
 $HOSTED = rtrim((string) ctrl_options::GetSystemOption('hosted_dir'), '/') . '/';
 $NEWHOME = $HOSTED . $NEWU;
@@ -397,6 +400,53 @@ $OLDID = (int) $r[0]['ac_id_pk'];
 // lands under that reseller)
 $MADE = array('accounts' => array(), 'packages' => array(), 'groups' => array(), 'warn' => array());
 $CREATED_PW = array();   // user name => new panel password (shown at the end)
+// x_migrate_map: what each old account, package, group and domain became here (one row per old server,
+// kind and old ID), so where something came from can always be looked up, and a later run finds it again
+// even after it was renamed here. Only read in a dry run (nothing changes until --yes).
+$SRC = substr((string) ($M['server'] ?? ''), 0, 255);
+$mapReady = function ($create) {
+    static $ready = null;
+    if ($ready === true) {
+        return true;
+    }
+    if ($create) {
+        $GLOBALS['zdbh']->exec("CREATE TABLE IF NOT EXISTS x_migrate_map (
+            mm_id_pk INT NOT NULL AUTO_INCREMENT PRIMARY KEY, mm_server_vc VARCHAR(255) NOT NULL, mm_kind_vc VARCHAR(16) NOT NULL,
+            mm_old_id_in INT NOT NULL, mm_old_name_vc VARCHAR(255) NOT NULL DEFAULT '', mm_new_id_in INT NOT NULL,
+            mm_made_in TINYINT NOT NULL DEFAULT 0, mm_ts INT NOT NULL, UNIQUE KEY mm_old (mm_server_vc, mm_kind_vc, mm_old_id_in)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        return $ready = true;
+    }
+    $ready = (int) $GLOBALS['zdbh']->query("SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'x_migrate_map'")->fetchColumn() > 0 ? true : null;
+    return $ready === true;
+};
+// the new ID an old one became (0: none, or that row is gone/deleted here)
+$mapGet = function ($kind, $oldId) use ($mapReady, &$SRC) {
+    if (!$mapReady(false)) {
+        return 0;
+    }
+    $q = $GLOBALS['zdbh']->prepare("SELECT mm_new_id_in FROM x_migrate_map WHERE mm_server_vc = :s AND mm_kind_vc = :k AND mm_old_id_in = :o");
+    $q->execute(array(':s' => $SRC, ':k' => $kind, ':o' => (int) $oldId));
+    $id = (int) $q->fetchColumn();
+    if ($id <= 0) {
+        return 0;
+    }
+    $alive = array('account' => "SELECT COUNT(*) FROM x_accounts WHERE ac_id_pk = :i AND ac_deleted_ts IS NULL",
+        'package' => "SELECT COUNT(*) FROM x_packages WHERE pk_id_pk = :i AND pk_deleted_ts IS NULL",
+        'group' => "SELECT COUNT(*) FROM x_groups WHERE ug_id_pk = :i",
+        'domain' => "SELECT COUNT(*) FROM x_vhosts WHERE vh_id_pk = :i AND vh_deleted_ts IS NULL");
+    $q = $GLOBALS['zdbh']->prepare($alive[$kind]);
+    $q->execute(array(':i' => $id));
+    return (int) $q->fetchColumn() > 0 ? $id : 0;
+};
+// record it (only when moving: --yes)
+$mapPut = function ($kind, $oldId, $oldName, $newId, $made) use ($mapReady, &$SRC) {
+    if ($newId <= 0 || !$mapReady(true)) {
+        return;
+    }
+    $GLOBALS['zdbh']->prepare("INSERT INTO x_migrate_map (mm_server_vc, mm_kind_vc, mm_old_id_in, mm_old_name_vc, mm_new_id_in, mm_made_in, mm_ts)
+        VALUES (:s, :k, :o, :n, :i, :m, :t) ON DUPLICATE KEY UPDATE mm_old_name_vc = VALUES(mm_old_name_vc), mm_new_id_in = VALUES(mm_new_id_in), mm_ts = VALUES(mm_ts)")
+        ->execute(array(':s' => $SRC, ':k' => $kind, ':o' => (int) $oldId, ':n' => substr((string) $oldName, 0, 255), ':i' => (int) $newId, ':m' => $made ? 1 : 0, ':t' => time()));
+};
 $adminId = function () {
     static $id = null;
     if ($id === null) {
@@ -411,17 +461,23 @@ $newIdByName = function ($table, $idCol, $where, $params) {
 };
 // $mapAccount(old id, $apply): the account's id here (made when $apply; -1 = would be made)
 $mapAccount = null;
-$mapGroup = function ($oldGid, $ownerNew, $ownerIsAdmin, $apply) use ($old, $O, $newIdByName, &$MADE) {
+$mapGroup = function ($oldGid, $ownerNew, $ownerIsAdmin, $apply) use ($old, $O, $newIdByName, &$MADE, $mapGet, $mapPut) {
     $g = $old("SELECT * FROM `$O`.x_groups WHERE ug_id_pk = :g", array(':g' => (int) $oldGid));
     if (!$g) {
         return 3;   // unknown: Users
     }
     $g = $g[0];
     $name = (string) $g['ug_name_vc'];
+    if ($id = $mapGet('group', $oldGid)) {
+        return $id;
+    }
     if ((int) $g['ug_reseller_fk'] === 1 && in_array($name, array('Administrators', 'Resellers', 'Users'), true) || $name === 'Administrators') {
-        return $newIdByName('x_groups', 'ug_id_pk', "ug_name_vc = :n AND ug_reseller_fk = 1", array(':n' => $name)) ?: 3;
+        $id = $newIdByName('x_groups', 'ug_id_pk', "ug_name_vc = :n AND ug_reseller_fk = 1", array(':n' => $name)) ?: 3;
+        $apply && $mapPut('group', $oldGid, $name, $id, false);
+        return $id;
     }
     if ($ownerNew > 0 && ($id = $newIdByName('x_groups', 'ug_id_pk', "ug_name_vc = :n AND ug_reseller_fk = :r", array(':n' => $name, ':r' => $ownerNew)))) {
+        $apply && $mapPut('group', $oldGid, $name, $id, false);
         return $id;
     }
     // its modules, by folder name, that exist here (an administrator's modules only in an administrator's group)
@@ -446,17 +502,22 @@ $mapGroup = function ($oldGid, $ownerNew, $ownerIsAdmin, $apply) use ($old, $O, 
         }
     }
     $MADE['groups'][$key] = "$name ($n module(s))";
+    $mapPut('group', $oldGid, $name, $gid, true);
     return $gid;
 };
-$mapPackage = function ($oldPid, $apply) use ($old, $O, $newIdByName, &$MADE, &$mapAccount, $adminId) {
+$mapPackage = function ($oldPid, $apply) use ($old, $O, $newIdByName, &$MADE, &$mapAccount, $adminId, $mapGet, $mapPut) {
     $p = $old("SELECT * FROM `$O`.x_packages WHERE pk_id_pk = :p", array(':p' => (int) $oldPid));
     if (!$p) {
         return 0;
     }
     $p = $p[0];
+    if ($id = $mapGet('package', $oldPid)) {
+        return $id;
+    }
     $owner = (int) $p['pk_reseller_fk'] > 0 ? $mapAccount((int) $p['pk_reseller_fk'], $apply) : $adminId();
     $name = (string) $p['pk_name_vc'];
     if ($owner > 0 && ($id = $newIdByName('x_packages', 'pk_id_pk', "pk_name_vc = :n AND pk_reseller_fk = :r AND pk_deleted_ts IS NULL", array(':n' => $name, ':r' => $owner)))) {
+        $apply && $mapPut('package', $oldPid, $name, $id, false);
         return $id;
     }
     $qt = $old("SELECT * FROM `$O`.x_quotas WHERE qt_package_fk = :p", array(':p' => (int) $oldPid));
@@ -478,9 +539,10 @@ $mapPackage = function ($oldPid, $apply) use ($old, $O, $newIdByName, &$MADE, &$
     $GLOBALS['zdbh']->prepare("INSERT INTO x_quotas (" . implode(', ', array_keys($row)) . ") VALUES (:" . implode(', :', array_keys($row)) . ")")
         ->execute(array_combine(array_map(function ($k) { return ':' . $k; }, array_keys($row)), array_values($row)));
     $MADE['packages'][$name . '|' . $owner] = $name;
+    $mapPut('package', $oldPid, $name, $pid, true);
     return $pid;
 };
-$mapAccount = function ($oldAid, $apply, $depth = 0) use ($old, $O, $newIdByName, &$MADE, &$CREATED_PW, &$mapAccount, $mapPackage, $mapGroup, $adminId) {
+$mapAccount = function ($oldAid, $apply, $depth = 0) use ($old, $O, $newIdByName, &$MADE, &$CREATED_PW, &$mapAccount, $mapPackage, $mapGroup, $adminId, $mapGet, $mapPut) {
     $a = $old("SELECT a.*, p.ud_fullname_vc, p.ud_address_tx, p.ud_postcode_vc, p.ud_phone_vc, p.ud_language_vc FROM `$O`.x_accounts a
         LEFT JOIN `$O`.x_profiles p ON p.ud_user_fk = a.ac_id_pk WHERE a.ac_id_pk = :a", array(':a' => (int) $oldAid));
     if (!$a) {
@@ -488,7 +550,11 @@ $mapAccount = function ($oldAid, $apply, $depth = 0) use ($old, $O, $newIdByName
     }
     $a = $a[0];
     $user = strtolower((string) $a['ac_user_vc']);
+    if ($id = $mapGet('account', $oldAid)) {
+        return $id;
+    }
     if ($id = $newIdByName('x_accounts', 'ac_id_pk', "ac_user_vc = :u AND ac_deleted_ts IS NULL", array(':u' => $user))) {
+        $apply && $mapPut('account', $oldAid, $user, $id, false);
         return $id;
     }
     if (isset($MADE['accounts'][$user])) {
@@ -537,8 +603,16 @@ $mapAccount = function ($oldAid, $apply, $depth = 0) use ($old, $O, $newIdByName
     $info['id'] = $id;
     $MADE['accounts'][$user] = $info;
     $CREATED_PW[$user] = $pw;
+    $mapPut('account', $oldAid, $user, $id, true);
     return $id;
 };
+if (!$NEWID && $NEWU === $OLDU && ($mapped = $mapGet('account', $OLDID))) {
+    // moved before, and renamed here since: the same account (its folder is under its name here)
+    $NEWID = $mapped;
+    $NEWU = (string) $zdbh->query("SELECT ac_user_vc FROM x_accounts WHERE ac_id_pk = " . (int) $NEWID)->fetchColumn();
+    $NEWHOME = $HOSTED . $NEWU;
+    ui_info("$OLDU was moved here before and is now called $NEWU (x_migrate_map): moving into it");
+}
 if (!$NEWID) {
     $mapAccount($OLDID, false);   // dry: what would be made
 }
@@ -806,6 +880,9 @@ foreach (array('sentora_core', 'sentora_postfix', $FTPDB) as $db) {
 ui_info("in $PRE");
 
 // --- the account (and its owner, package, group) when it is not here yet ----------------------------
+if ($NEWID) {
+    $mapPut('account', $OLDID, $OLDU, $NEWID, false);
+}
 if (!$NEWID) {
     ui_step('Making the account (matched by name)');
     $MADE = array('accounts' => array(), 'packages' => array(), 'groups' => array(), 'warn' => array());
@@ -851,6 +928,7 @@ foreach ($plan['domains'] as $v) {
     $row = array_intersect_key($row, array_flip($newCols));
     $zdbh->prepare("INSERT INTO x_vhosts (" . implode(',', array_keys($row)) . ") VALUES (" . implode(',', array_fill(0, count($row), '?')) . ")")->execute(array_values($row));
     $VHMAP[(int) $v['vh_id_pk']] = (int) $zdbh->lastInsertId();
+    $mapPut('domain', (int) $v['vh_id_pk'], strtolower($v['vh_name_vc']), $VHMAP[(int) $v['vh_id_pk']], true);
     if ($opt['allow-symlinks'] && isset($customFsl[$v['vh_name_vc']])) {
         $SYMON[$v['vh_name_vc']] = $VHMAP[(int) $v['vh_id_pk']];
     }
