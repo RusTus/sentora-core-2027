@@ -120,6 +120,9 @@ class ctrl_notices
     /**
      * Save a notice (new, or the one with the same 'id', or with the same 'key' from the same sender).
      *
+     * Saving a notice exactly as it is changes nothing (no hooks, same version), so code may send
+     * the same notice every day and it stays closed for those who closed it.
+     *
      * @global db_driver $zdbh The panel's database connection.
      * @param array<string, mixed> $n 'body' (required), and optionally:
      *        'type' (see TYPES, default 'info'), 'title' (default: none, the type's name is shown),
@@ -176,6 +179,18 @@ class ctrl_notices
         }
         self::$last = array('id' => $id, 'from' => $from, 'scope' => $scope, 'targets' => $targets, 'type' => $type, 'title' => $title, 'body' => $body,
             'closable' => (bool) $row[':closable'], 'start' => $start, 'end' => $end, 'key' => $row[':key'], 'source' => $row[':source']);
+        if ($id) {
+            // the same notice sent again (a daily check, a form saved as it was): left as it is, so it
+            // keeps its version and stays closed for those who closed it
+            $q = $zdbh->prepare("SELECT nt_acc_fk, nt_scope_vc, nt_targets_vc, nt_type_vc, nt_title_vc, nt_body_tx, nt_closable_in, nt_start_ts, nt_end_ts, nt_key_vc, nt_source_vc
+                FROM x_notices WHERE nt_id_pk = :id AND nt_deleted_ts IS NULL");
+            $q->execute(array(':id' => $id));
+            $was = $q->fetch(PDO::FETCH_NUM);
+            $now = array($row[':acc'], $row[':scope'], $row[':targets'], $row[':type'], $row[':title'], $row[':body'], $row[':closable'], $row[':start'], $row[':end'], $row[':key'], $row[':source']);
+            if ($was && array_map('strval', $was) === array_map('strval', $now)) {
+                return $id;
+            }
+        }
         runtime_hook::Execute('OnBeforeSendNotice');
         if ($id) {
             $q = $zdbh->prepare("UPDATE x_notices SET nt_acc_fk = :acc, nt_scope_vc = :scope, nt_targets_vc = :targets, nt_type_vc = :type, nt_title_vc = :title, nt_body_tx = :body,

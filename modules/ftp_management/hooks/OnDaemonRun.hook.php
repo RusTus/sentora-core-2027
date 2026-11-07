@@ -20,6 +20,10 @@ echo fs_filehandler::NewLine() . "START FTP accounts of switched-off clients" . 
 require_once dirname(__FILE__) . '/../code/clientstate.php';
 $ftpState = FtpSyncClientState();
 echo "Switched off " . $ftpState['off'] . " and back on " . $ftpState['on'] . " FTP login(s)" . fs_filehandler::NewLine();
+$ftpEnded = FtpEndSwitchedOffSessions();
+if ($ftpEnded > 0) {
+    echo "Ended " . $ftpEnded . " open FTP session(s) of switched-off logins" . fs_filehandler::NewLine();
+}
 echo "END FTP accounts of switched-off clients" . fs_filehandler::NewLine();
 
 /**

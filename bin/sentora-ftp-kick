@@ -1,0 +1,26 @@
+#!/usr/bin/php
+<?php
+/**
+ * sentora-ftp-kick (run as root): end the open FTP sessions of FTP logins that are switched off
+ * because their client is (Manage Clients). Takes no arguments.
+ *
+ * The panel asks for it through "zsudo ftp-kick" right after a client is switched off; the daemon
+ * does the same on every run.
+ *
+ * @package Sentora
+ * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
+ */
+$rootPath = str_replace('/bin', '/', str_replace("\\", '/', dirname(__FILE__)));
+chdir($rootPath);
+require_once 'dryden/loader.inc.php';
+require_once 'cnf/db.php';
+require_once 'inc/dbc.inc.php';
+if (!runtime_controller::IsCLI()) {
+    exit(1);
+}
+if (!function_exists('posix_geteuid') || posix_geteuid() !== 0) {
+    fwrite(STDERR, "sentora-ftp-kick: run it as root\n");
+    exit(1);
+}
+require_once 'modules/ftp_management/code/clientstate.php';
+echo "Ended " . FtpEndSwitchedOffSessions() . " open FTP session(s) of switched-off logins\n";

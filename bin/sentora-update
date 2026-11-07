@@ -70,7 +70,7 @@ fix_permissions() {
     chown -R root:root "$PANEL"
     find "$PANEL" -type d -exec chmod 755 {} +
     find "$PANEL" -type f -exec chmod 644 {} +
-    for b in zppy setso setzadmin sentora-notice sentora-update sentora-update-check sentora-post-install-check sentora-restore sentora-smoke-test sentora-offsite-backup sentora-panel-restore sentora-web-probe; do
+    for b in zppy setso setzadmin sentora-notice sentora-update sentora-update-check sentora-post-install-check sentora-restore sentora-smoke-test sentora-offsite-backup sentora-panel-restore sentora-web-probe sentora-ftp-kick; do
         [ -f "$PANEL/bin/$b" ] && chmod 755 "$PANEL/bin/$b"
     done
     [ -f "$PANEL/bin/zsudo" ] && { chown root:"$PANEL_USER" "$PANEL/bin/zsudo"; chmod 4750 "$PANEL/bin/zsudo"; }
