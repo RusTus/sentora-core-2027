@@ -16,6 +16,10 @@
  *                       custom Apache settings or an .htaccess in their folder use FollowSymLinks. Off by
  *                       default: such lines are then switched off, and those sites give error 500 until
  *                       their .htaccess uses "Options +SymLinksIfOwnerMatch" (they are listed)
+ *     --fix-htaccess    change the sites' .htaccess lines this server refuses with error 500 without
+ *                       asking (Options FollowSymLinks/All/ExecCGI/Includes, php_value/php_flag, which
+ *                       move to a .user.ini); each changed file is kept as .htaccess.before-migrate
+ *     --no-fix-htaccess only list them (the default when there is no keyboard to ask on)
  *
  * The new account must exist (Admin > Manage Clients, or zadmin itself). Moved for it: its domains,
  * sub-domains and parked domains, their website files, DNS records, MySQL databases and users (with
@@ -43,13 +47,15 @@ if (!function_exists('posix_geteuid') || posix_geteuid() !== 0) {
 
 /** @var array<int, string> $args The positional arguments. */
 $args = array();
-$opt = array('yes' => false, 'php' => '7.1', 'keep-ip' => false, 'overwrite' => false, 'allow-symlinks' => false);
+$opt = array('yes' => false, 'php' => '7.1', 'keep-ip' => false, 'overwrite' => false, 'allow-symlinks' => false, 'fix-htaccess' => null);
 for ($i = 1; $i < $argc; $i++) {
     $a = $argv[$i];
     if ($a === '--yes') { $opt['yes'] = true; }
     elseif ($a === '--keep-ip') { $opt['keep-ip'] = true; }
     elseif ($a === '--overwrite') { $opt['overwrite'] = true; }
     elseif ($a === '--allow-symlinks') { $opt['allow-symlinks'] = true; }
+    elseif ($a === '--fix-htaccess') { $opt['fix-htaccess'] = true; }
+    elseif ($a === '--no-fix-htaccess') { $opt['fix-htaccess'] = false; }
     elseif ($a === '--php') { $opt['php'] = (string) ($argv[++$i] ?? ''); }
     elseif ($a === '-h' || $a === '--help') { $args = array(); break; }
     elseif (strncmp($a, '--', 2) === 0) { fwrite(STDERR, "Unknown option $a\n"); exit(2); }
@@ -242,7 +248,7 @@ foreach (array($OLDU, $NEWU) as $u) {
 
 ui_banner(($APPLY ? 'Moving ' : 'What moving would do (nothing changes until --yes): ') . "$OLDU from " . $M['server'] . ' (Sentora ' . $M['sentora'] . ")"
     . ($NEWU !== $OLDU ? " into $NEWU" : ''));
-$UI['total'] = $APPLY ? 12 : 2;
+$UI['total'] = $APPLY ? 13 : 3;
 ui_logline('===== ' . ($APPLY ? 'moving ' : 'dry run ') . "$OLDU into $NEWU from $EXP");
 // the checksums of the copy
 ui_step('Checking the copy against its checksums');
@@ -294,8 +300,10 @@ function cleanup()
     foreach (array('', '_mail', '_ftp') as $sfx) {
         try { $zdbh->exec("DROP DATABASE IF EXISTS `" . $TMPDB . $sfx . "`"); } catch (Exception $e) { }
     }
-    if ($STAGE && is_dir($STAGE)) {
-        sh('rm -rf ' . q($STAGE));
+    foreach (array($STAGE, $STAGE . '-htaccess') as $d) {
+        if ($STAGE && is_dir($d)) {
+            sh('rm -rf ' . q($d));
+        }
     }
     @unlink($MYCNF);
 }
@@ -415,6 +423,60 @@ foreach (array('x_cronjobs' => 'ct', 'x_aliases' => 'al', 'x_forwarders' => 'fw'
 $dnsCount = count($old("SELECT 1 FROM `$O`.x_dns WHERE dn_acc_fk = :a AND dn_deleted_ts IS NULL", array(':a' => $OLDID)));
 $filesTar = $EXP . '/files/' . $OLDU . '.tar.gz';
 
+// --- the websites' .htaccess files: the lines this server refuses with error 500 ---------------------
+/**
+ * Each .htaccess under a folder that has lines this server refuses (sys_htaccessfix).
+ *
+ * @param string $root The folder (an account's public_html, or an unpacked copy of it).
+ * @param string[] $symDirs Folders (with a trailing /) of domains with "Allow FollowSymLinks" on.
+ * @return array<string, array> path => sys_htaccessfix::Fix() result.
+ */
+function htaccess_scan($root, array $symDirs = array())
+{
+    $found = array();
+    if (!is_dir($root)) { return $found; }
+    $it = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root, FilesystemIterator::SKIP_DOTS), RecursiveIteratorIterator::LEAVES_ONLY, RecursiveIteratorIterator::CATCH_GET_CHILD);
+    foreach ($it as $f) {
+        if ($f->getFilename() !== '.htaccess' || $f->isLink() || !$f->isFile()) { continue; }
+        $p = $f->getPathname();
+        $sym = false;
+        foreach ($symDirs as $d) { if (strpos($p, $d) === 0) { $sym = true; } }
+        $r = sys_htaccessfix::Fix((string) file_get_contents($p), $sym);
+        if ($r['changes']) { $found[$p] = $r; }
+    }
+    ksort($found);
+    return $found;
+}
+/**
+ * Show what would change in each file.
+ *
+ * @param array<string, array> $found From htaccess_scan().
+ * @param string $base Cut from the start of each path shown.
+ * @return void
+ */
+function htaccess_show(array $found, $base)
+{
+    foreach ($found as $p => $r) {
+        echo '     ' . c('bold') . substr($p, strlen($base)) . c('reset') . "
+";
+        foreach ($r['changes'] as $ch) {
+            printf("        %s%-4s%s %s
+%s             -> %s%s  %s(%s)%s
+", c('dim'), $ch['line'], c('reset'), $ch['from'], '', c('green'), $ch['to'], c('dim'), $ch['why'], c('reset'));
+        }
+    }
+}
+$HTFOUND = array();
+if (!$APPLY && is_file($filesTar)) {
+    // the dry run reads only the .htaccess files out of the export
+    ui_step('Checking the websites\' .htaccess files');
+    $htStage = $STAGE . '-htaccess';
+    @mkdir($htStage, 0700, true);
+    sh('tar -xzf ' . q($filesTar) . ' -C ' . q($htStage) . ' --no-same-owner --wildcards ' . q('*/.htaccess') . ' ' . q('.htaccess'), $o);
+    $HTFOUND = htaccess_scan($htStage . '/' . $OLDU . '/public_html');
+    $HTBASE = $htStage . '/' . $OLDU . '/';
+}
+
 ui_end_step();
 // --- the plan ----------------------------------------------------------------------------------------
 function plan_head($label, $n) { echo "\n  " . c('bold') . $label . c('reset') . ($n !== null ? c('dim') . " ($n)" . c('reset') : '') . "\n"; }
@@ -477,6 +539,15 @@ if ($customSsl) {
 plan_line('FollowSymLinks', $opt['allow-symlinks']
     ? 'switched on (Apache Admin) for each domain whose settings or .htaccess files use it; switch it off once the site is fixed'
     : 'off for every moved domain (the .htaccess files that use it are listed at the end; --allow-symlinks switches it on for those domains)');
+if ($HTFOUND) {
+    $n = 0; foreach ($HTFOUND as $r) { $n += count($r['changes']); }
+    plan_warn(count($HTFOUND) . " .htaccess file(s) have $n line(s) this server refuses with error 500: the move shows them, and asks to fix them (--fix-htaccess: without asking)");
+    htaccess_show($HTFOUND, $HTBASE);
+    sh('rm -rf ' . q($htStage));
+} elseif (!$APPLY && is_file($filesTar)) {
+    plan_line('.htaccess', 'no line this server refuses');
+    sh('rm -rf ' . q($htStage));
+}
 plan_line('Never moved', c('dim') . 'the old panel\'s modules (custom ones included) and add-ons, settings, themes, translations' . c('reset'));
 echo "\n";
 if (!$APPLY) {
@@ -581,6 +652,57 @@ if ($SYMON) {
     foreach ($SYMON as $id) { $set->execute(array(':id' => $id)); }
     ui_info('"Allow FollowSymLinks" switched on for: ' . implode(', ', array_keys($SYMON)));
 }
+// --- the .htaccess lines this server refuses: shown, and fixed when the administrator agrees --------
+ui_step('Checking the websites\' .htaccess files');
+$symDirs = array();
+foreach ($plan['domains'] as $v) {
+    if (isset($SYMON[$v['vh_name_vc']])) { $symDirs[] = $NEWHOME . '/public_html' . rtrim('/' . ltrim((string) $v['vh_directory_vc'], '/'), '/') . '/'; }
+}
+$HTFOUND = htaccess_scan($NEWHOME . '/public_html', $symDirs);
+$HTFIXED = 0;
+if (!$HTFOUND) {
+    ui_info('no line this server refuses');
+} else {
+    $n = 0; foreach ($HTFOUND as $r) { $n += count($r['changes']); }
+    $fix = $opt['fix-htaccess'];
+    if ($fix === null && function_exists('posix_isatty') && posix_isatty(STDIN)) {
+        ui_end_step();
+        echo "
+  " . c('bold') . c('yellow') . count($HTFOUND) . " .htaccess file(s) have $n line(s) this server refuses (error 500)" . c('reset') . "
+";
+        echo '  ' . c('dim') . 'The change keeps each site working the same: links within the site and its URL rewriting still work, and' . c('reset') . "
+";
+        echo '  ' . c('dim') . 'PHP settings move to a .user.ini beside the file. Each original line stays as a comment, and each file is' . c('reset') . "
+";
+        echo '  ' . c('dim') . 'kept as .htaccess.before-migrate.' . c('reset') . "
+
+";
+        htaccess_show($HTFOUND, $HOSTED);
+        echo "
+  " . c('bold') . c('cyan') . 'Fix these .htaccess files now?' . c('reset') . "
+";
+        echo '  (y) fix them, (n) leave them as they are > ';
+        $a = strtolower(trim((string) fgets(STDIN)));
+        $fix = ($a !== '' && $a[0] === 'y');
+        echo "
+";
+        ui_step($fix ? 'Fixing the websites\' .htaccess files' : 'The websites\' .htaccess files, left as they are');
+        $UI['total']++;
+    }
+    if ($fix) {
+        foreach ($HTFOUND as $p => $r) {
+            if (!is_file($p . '.before-migrate')) { @copy($p, $p . '.before-migrate'); }
+            file_put_contents($p, $r['text']);
+            if ($r['userini']) { sys_htaccessfix::MergeUserIni(dirname($p), $r['userini']); }
+            $HTFIXED++;
+        }
+        ui_info("$HTFIXED .htaccess file(s) fixed ($n line(s)); each kept as .htaccess.before-migrate");
+        $HTFOUND = array();
+    } else {
+        warn(count($HTFOUND) . " .htaccess file(s) left as they are: they give error 500 here (listed at the end)");
+    }
+}
+
 // --- DNS ----------------------------------------------------------------------------------------------
 ui_step('DNS records');
 $n = 0;
@@ -817,21 +939,10 @@ if ($newpass) {
     foreach ($newpass as $p) { echo "     $p\n"; ui_logline('new password: ' . preg_replace('/:.*/', ': (shown on screen)', $p)); }
     echo "\n";
 }
-$fsl = array();
-sh('grep -rliE --include=.htaccess "^[[:space:]]*Options[[:space:]].*FollowSymLinks" ' . q($NEWHOME . '/public_html'), $o);
-// (not those of a domain that got "Allow FollowSymLinks": they work)
-$onDirs = array();
-foreach ($plan['domains'] as $v) {
-    if (isset($SYMON[$v['vh_name_vc']])) { $onDirs[] = $NEWHOME . '/public_html' . rtrim('/' . ltrim((string) $v['vh_directory_vc'], '/'), '/') . '/'; }
-}
-foreach (array_filter(explode("\n", $o)) as $f) {
-    if (strpos($f, $NEWHOME) !== 0) { continue; }
-    foreach ($onDirs as $d) { if (strpos($f, $d) === 0) { continue 2; } }
-    $fsl[] = substr($f, strlen($HOSTED));
-}
-if ($fsl) {
-    echo '  ' . c('bold') . c('yellow') . 'Error 500 ahead' . c('reset') . c('dim') . '  these .htaccess files use FollowSymLinks (Apache Admin > the domain: "A moved site gives error 500?")' . c('reset') . "\n";
-    foreach ($fsl as $f) { echo "     $f\n"; ui_logline('FollowSymLinks: ' . $f); }
+// (still there: they were not fixed above)
+if ($HTFOUND) {
+    echo '  ' . c('bold') . c('yellow') . 'Error 500 ahead' . c('reset') . c('dim') . '  these .htaccess files have lines this server refuses (run the move again with --fix-htaccess, or change them by hand):' . c('reset') . "\n";
+    foreach (array_keys($HTFOUND) as $p) { echo '     ' . substr($p, strlen($HOSTED)) . "\n"; ui_logline('.htaccess left: ' . $p); }
     echo "\n";
 }
 if ($SYMON) {
