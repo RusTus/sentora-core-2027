@@ -324,6 +324,24 @@ if [ "$MODE" = rollback ]; then
         --exclude=/etc/apps/webmail/config/config.inc.php --exclude=/etc/apps/phpmyadmin/config.inc.php \
         --exclude=/etc/apps/webmail/plugins/managesieve/config.inc.php --exclude=/etc/apps/webmail/plugins/password/config.inc.php \
         "$TMP/panel/" "$PANEL/" || die "the restore did not complete"
+    # Only the files go back, not the database: modules the newer panel registered (Panel Update and
+    # the like) would stay in the menu with nothing behind them ("Unable to find requested module").
+    # Unregister the ones whose folder the restored panel does not have; the next update registers
+    # them again, as it does any new module.
+    GONE=$( cd "$PANEL" && php -r '
+        include "cnf/db.php";
+        $db = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $user, $pass, array(PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION));
+        $gone = array();
+        foreach ($db->query("SELECT mo_id_pk, mo_folder_vc FROM x_modules")->fetchAll(PDO::FETCH_NUM) as $r) {
+            if (preg_match("/^[A-Za-z0-9_]+\$/", (string) $r[1]) && !is_dir("modules/" . $r[1])) {
+                $db->prepare("DELETE FROM x_permissions WHERE pe_module_fk = ?")->execute(array($r[0]));
+                $db->prepare("DELETE FROM x_modules WHERE mo_id_pk = ?")->execute(array($r[0]));
+                $gone[] = $r[1];
+            }
+        }
+        echo implode(" ", $gone);
+    ' 2>&1 ) || warn "could not check the menu for modules the restored panel does not have: $GONE"
+    [ -n "$GONE" ] && [ "${GONE#*Error}" = "$GONE" ] && say "unregistered the module(s) the restored panel does not have: $GONE (an update registers them again)"
     fix_permissions; php_reload
     rm -f "$STATE"
     finish
