@@ -88,7 +88,12 @@ class module_controller extends ctrl_module
         $path = array('pattern' => '#^/[A-Za-z0-9._/-]*/$#', 'pattern_help' => 'A folder path starting and ending with /.');
         // FollowSymLinks is switched on per domain only (its page), never for every website
         $noSymlinks = function ($v) {
-            return sys_symlinks::Offending($v) ? 'A line here would switch FollowSymLinks on (Options FollowSymLinks or All, AllowOverride All or Options): not allowed. It can be switched on for one domain only, on that domain\'s page.' : '';
+            if (sys_symlinks::Offending($v)) {
+                return 'A line here would switch FollowSymLinks on (Options FollowSymLinks or All, AllowOverride All or Options): not allowed. It can be switched on for one domain only, on that domain\'s page.';
+            }
+            // Apache's own check: a line it refuses would hold up every later change
+            $why = sys_apachecustom::Test($v);
+            return $why === '' ? '' : array('Apache refuses this: %s', $why);
         };
         return array(
             'apache_port' => array('section' => $w, 'label' => 'Port', 'help' => 'The port Apache serves websites on.', 'type' => 'number', 'min' => 1, 'max' => 65535),
@@ -147,6 +152,9 @@ class module_controller extends ctrl_module
                 }
                 if (sys_symlinks::Allowed($r)) {
                     $o[] = array('FollowSymLinks on', '');
+                }
+                if (sys_apachecustom::IsOff('vh:' . (int) $r['vh_id_pk'] . ':custom') || sys_apachecustom::IsOff('vh:' . (int) $r['vh_id_pk'] . ':ssl')) {
+                    $o[] = array('Switched off: Apache refused it', '');
                 }
                 if ((string) $r['vh_custom_port_in'] !== '' && $r['vh_custom_port_in'] !== null) {
                     $o[] = array('Port %s', (string) (int) $r['vh_custom_port_in']);
@@ -261,7 +269,7 @@ class module_controller extends ctrl_module
             }
             $chips = '';
             foreach ($r['overrides'] as $o) {
-                $chips .= '<span class="aa-chip' . (in_array($o[0], array('Switched off', 'open_basedir off', 'FollowSymLinks on'), true) ? ' warn' : '') . '">' . str_replace('%s', self::h($o[1]), self::t($o[0])) . '</span>';
+                $chips .= '<span class="aa-chip' . (in_array($o[0], array('Switched off', 'open_basedir off', 'FollowSymLinks on', 'Switched off: Apache refused it'), true) ? ' warn' : '') . '">' . str_replace('%s', self::h($o[1]), self::t($o[0])) . '</span>';
             }
             $rows .= '<div class="aa-row"><div class="aa-main"><b>' . self::h($r['vh_name_vc']) . '</b><span>' . self::t('of') . ' ' . self::h($r['owner']) . '</span><div class="aa-chips">' . $chips . '</div></div>'
                 . '<a class="btn btn-default btn-sm" href="./?module=apache_admin&amp;show=Vhost&amp;id=' . (int) $r['vh_id_pk'] . '">' . self::t('Edit') . '</a></div>';
@@ -271,6 +279,49 @@ class module_controller extends ctrl_module
                 . '<label for="aa-id">' . self::t('Change the settings of a domain:') . '</label><div><select class="form-control" name="id" id="aa-id">' . $opts . '</select>'
                 . '<button class="btn btn-default" type="submit">' . self::t('Open') . '</button></div></form>' : '')
             . ($rows !== '' ? '<div class="aa-rows">' . $rows . '</div>' : '<p class="aa-sub">' . self::t('No domain has settings of its own.') . '</p>');
+    }
+
+    /**
+     * What the daemon had to switch off or put back because Apache refused it (<@ Problems @>).
+     *
+     * @return string The HTML ('' when there is nothing).
+     */
+    static function getProblems()
+    {
+        $items = '';
+        foreach (sys_apachecustom::Problems() as $key => $p) {
+            if ($key === 'apache') {
+                $what = self::t($p['name'] === 'start' ? 'Apache did not run with the last change, so the previous configuration was put back:' : 'Apache refused the last change, so the previous configuration stays:');
+            } else {
+                $what = str_replace('%s', '<b>' . self::DescribeEntry($key, $p['name']) . '</b>', self::t('%s: switched off, Apache refused it (everything else went live):'));
+            }
+            $items .= '<li>' . $what . ' <code>' . self::h($p['error']) . '</code> <small>' . self::h(ui_language::Date('j M Y H:i', (int) $p['time'])) . '</small></li>';
+        }
+        return $items === '' ? '' : ui_sysmessage::shout('<ul class="aa-problems">' . $items . '</ul>'
+            . self::t('Correct the settings on the domain\'s page (or above) and save: Apache checks them, and the daemon writes them within 5 minutes.'), 'zannounceerror',
+            self::t('Apache did not take some settings'), false);
+    }
+
+    /**
+     * What a switched-off entry is, in the viewer's language (HTML).
+     *
+     * @param string $key The entry's key (sys_apachecustom).
+     * @param string $name The stored name (used when the domain is gone).
+     * @return string
+     */
+    static function DescribeEntry($key, $name)
+    {
+        if ($key === 'global_vhcustom') {
+            return self::t('Extra directives') . ': ' . self::t('For every website');
+        }
+        if ($key === 'global_zpcustom') {
+            return self::t('Extra directives') . ': ' . self::t('For the panel');
+        }
+        if (preg_match('/^vh:(\d+):(custom|ssl)$/', $key, $m)) {
+            $v = self::Vhost((int) $m[1]);
+            return self::h($v ? $v['vh_name_vc'] : preg_replace('/:.*$/', '', $name)) . ': ' . self::t($m[2] === 'ssl' ? 'SSL settings' : 'Extra directives');
+        }
+        return self::h($name);
     }
 
     /**
@@ -299,6 +350,11 @@ class module_controller extends ctrl_module
         $fields = ui_settingsform::Fields(ui_module::GetModuleName(), self::Spec());
         $changes = ui_settingsform::Read($fields, $form);
         $saved = ui_settingsform::Write($changes);
+        foreach (array('global_vhcustom', 'global_zpcustom') as $k) {
+            if (array_key_exists($k, $changes)) {
+                sys_apachecustom::Clear($k);
+            }
+        }
         if ($saved > 0 || !empty($form['inForce'])) {
             self::SetWriteApacheConfigTrue();
         }
@@ -376,10 +432,23 @@ class module_controller extends ctrl_module
         $f = self::$errors ? $controller->GetAllControllerRequests('FORM') : array();
         $val = function ($k) use ($r, $f) { return array_key_exists($k, $f) ? (string) $f[$k] : (string) $r[$k]; };
         $chk = function ($k) use ($r, $f) { return ($f ? !empty($f[$k]) : (int) ($r[$k] ?? 0) === 1) ? ' checked' : ''; };
-        $err = function ($k) { return isset(self::$errors[$k]) ? '<em>' . self::t(self::$errors[$k]) . '</em>' : ''; };
+        $err = function ($k) use ($r) {
+            if (isset(self::$errors[$k])) {
+                $e = self::$errors[$k];
+                return '<em>' . (is_array($e) ? str_replace('%s', self::h($e[1]), self::t($e[0])) : self::t($e)) . '</em>';
+            }
+            // switched off by the daemon: Apache refused it
+            $key = 'vh:' . (int) $r['vh_id_pk'] . ':' . ($k === 'vh_ssl_tx' ? 'ssl' : 'custom');
+            if (in_array($k, array('vh_custom_tx', 'vh_ssl_tx'), true) && sys_apachecustom::IsOff($key)) {
+                $p = sys_apachecustom::Problems()[$key];
+                return '<em>' . str_replace('%s', self::h($p['error']), self::t('Switched off: Apache refused it (%s). Correct it and save: it is used again.')) . '</em>';
+            }
+            return '';
+        };
         $row = function ($k, $label, $help, $ctl, $wide = false) use ($err) {
-            return '<div class="sf-row' . (isset(self::$errors[$k]) ? ' is-bad' : '') . ($wide ? ' is-wide' : '') . '"><div class="sf-what"><label for="' . $k . '">' . self::t($label) . '</label>'
-                . ($help !== '' ? '<small>' . self::t($help) . '</small>' : '') . $err($k) . '</div><div class="sf-ctl">' . $ctl . '</div></div>';
+            $e = $err($k);
+            return '<div class="sf-row' . ($e !== '' ? ' is-bad' : '') . ($wide ? ' is-wide' : '') . '"><div class="sf-what"><label for="' . $k . '">' . self::t($label) . '</label>'
+                . ($help !== '' ? '<small>' . self::t($help) . '</small>' : '') . $e . '</div><div class="sf-ctl">' . $ctl . '</div></div>';
         };
         $sw = function ($k) use ($chk) { return '<label class="sf-switch"><input type="checkbox" name="' . $k . '" id="' . $k . '" value="1"' . $chk($k) . '><span class="sf-toggle"></span></label>'; };
         $num = function ($k) use ($val) { return '<input class="form-control" type="number" name="' . $k . '" id="' . $k . '" min="1" max="65535" value="' . self::h($val($k)) . '" style="max-width:160px">'; };
@@ -477,6 +546,13 @@ class module_controller extends ctrl_module
         if (!$symlinks && sys_symlinks::Offending((string) ($f['vh_custom_tx'] ?? ''))) {
             self::$errors['vh_custom_tx'] = 'A line here would switch FollowSymLinks on: switch on "Allow FollowSymLinks" above for this domain, or remove the line.';
         }
+        // Apache's own check: a line it refuses (or SSL it can not start with) would hold up
+        // every later change, or stop Apache
+        foreach (array('vh_custom_tx' => false, 'vh_ssl_tx' => true) as $k => $isSsl) {
+            if (!isset(self::$errors[$k]) && ($why = sys_apachecustom::Test((string) ($f[$k] ?? ''), $isSsl, (bool) $symlinks)) !== '') {
+                self::$errors[$k] = array('Apache refuses this: %s', $why);
+            }
+        }
         if (self::$errors) {
             return false;
         }
@@ -488,6 +564,9 @@ class module_controller extends ctrl_module
         if (sys_symlinks::EnsureColumn()) {
             $zdbh->prepare("UPDATE x_vhosts SET " . sys_symlinks::COLUMN . " = ? WHERE vh_id_pk = ? AND vh_deleted_ts IS NULL")->execute(array($symlinks, (int) $r['vh_id_pk']));
         }
+        // saved again after Apache's check: switched-off settings are used again
+        sys_apachecustom::Clear('vh:' . (int) $r['vh_id_pk'] . ':custom');
+        sys_apachecustom::Clear('vh:' . (int) $r['vh_id_pk'] . ':ssl');
         self::SetWriteApacheConfigTrue();
         header('location: ./?module=apache_admin&saved=' . rawurlencode($r['vh_name_vc']));
         exit;

@@ -171,15 +171,7 @@ function SentoraOneLine($v) {
  * @return string The entry with the dangerous (and mod_php) lines commented out.
  */
 function SentoraSafeCustom($text, $symlinks = false) {
-    $text = SentoraNoModPhp($text);
-    // FollowSymLinks may only be switched on by the domain's own switch (Apache Admin)
-    if (!$symlinks) {
-        $text = sys_symlinks::Filter($text);
-    }
-    $danger = '/^(\s*)((?:Include|IncludeOptional|LoadModule|LoadFile|RewriteMap|PidFile|ServerRoot|CoreDumpDirectory|ScriptSock|Mutex|Define|UnDefine|User|Group|Listen|SSLPassPhraseDialog|SSLCryptoDevice|GlobalLog|ScoreBoardFile|DefaultRuntimeDir)\b.*'
-        . '|(?:CustomLog|ErrorLog|TransferLog|ForensicLog|CookieLog|RewriteLog|ScriptLog)\s+["\']?\s*(?:\||syslog:|exec:).*'
-        . '|(?:CustomLog|TransferLog)\s+.*["\']?\s*\|.*)$/mi';
-    return preg_replace($danger, '$1# Not allowed in custom entries (would run as root): $2', $text);
+    return sys_apachecustom::Filter($text, $symlinks);
 }
 
 /**
@@ -260,15 +252,15 @@ function SentoraRequestGuard()
 }
 
 /**
- * Build and write the whole Apache vhosts file, then test and reload Apache.
+ * Build the whole Apache vhosts file (WriteVhostConfigFile() writes, tests and loads it).
  *
  * Writes the panel's default vhost and one vhost per domain (enabled, over quota,
  * parked, regular/subdomain, disabled). The old file is kept as a backup and put back
  * when the config test fails (the failed file is kept as <file>-failed).
  * @global db_driver $zdbh The panel's database connection.
- * @return void
+ * @return string The file's content.
  */
-function WriteVhostConfigFile() {
+function BuildVhostConfig() {
     global $zdbh;
 
     // Start enabled extra PHP versions and stop disabled ones (PHP Versions module)
@@ -431,7 +423,7 @@ function WriteVhostConfigFile() {
 		$line .= "# Custom settings (if any exist)" . fs_filehandler::NewLine();
 	
 		// Global custom Sentora entry
-		$line .= sys_symlinks::Filter(ctrl_options::GetSystemOption('global_zpcustom')) . fs_filehandler::NewLine();
+		$line .= sys_apachecustom::Block('global_zpcustom', ctrl_options::GetSystemOption('global_zpcustom'));
 		$line .= fs_filehandler::NewLine();
 	
 		$line .= "</VirtualHost>" . fs_filehandler::NewLine();
@@ -522,7 +514,7 @@ function WriteVhostConfigFile() {
 		$line .= "</IfModule>" . fs_filehandler::NewLine();
 		$line .= "# Custom settings are loaded below this line (if any exist)" . fs_filehandler::NewLine();
 		// Global custom Sentora entry
-		$line .= sys_symlinks::Filter(ctrl_options::GetSystemOption('global_zpcustom')) . fs_filehandler::NewLine();
+		$line .= sys_apachecustom::Block('global_zpcustom', ctrl_options::GetSystemOption('global_zpcustom'));
 		$line .= fs_filehandler::NewLine();
 		
 		$line .= "</VirtualHost>" . fs_filehandler::NewLine();
@@ -562,7 +554,21 @@ function WriteVhostConfigFile() {
 	$sql = $zdbh->prepare("SELECT * FROM x_vhosts WHERE vh_deleted_ts IS NULL");
     $sql->execute();
     while ($rowvhost = $sql->fetch()) {
-	
+
+	// SSL settings Apache would refuse to start with (its config test does not catch these, and a
+	// reload stops the running Apache): switched off, and the domain is written without SSL
+	$sslKey = 'vh:' . (int) $rowvhost['vh_id_pk'] . ':ssl';
+	if (trim((string) $rowvhost['vh_ssl_tx']) !== '' && !sys_apachecustom::IsOff($sslKey)) {
+		$sslWhy = sys_apachecustom::CheckSsl($rowvhost['vh_ssl_tx'], true);
+		if ($sslWhy !== '') {
+			sys_apachecustom::SwitchOff($sslKey, $rowvhost['vh_name_vc'], $sslWhy);
+			echo "   SSL settings of " . $rowvhost['vh_name_vc'] . " switched off: " . $sslWhy . fs_filehandler::NewLine();
+		}
+	}
+	if (sys_apachecustom::IsOff($sslKey)) {
+		$rowvhost['vh_ssl_tx'] = null;
+	}
+
 	// Grab some variables we will use for later...
 	$vhostuser = ctrl_users::GetUserDetail($rowvhost['vh_acc_fk']);
 	$bandwidth = ctrl_users::GetQuotaUsages('bandwidth', $vhostuser['userid']);
@@ -635,7 +641,7 @@ function WriteVhostConfigFile() {
 				$line .= SentoraOneLine(ctrl_options::GetSystemOption('dir_index')) . fs_filehandler::NewLine();
 				// Client custom vh entry
 				$line .= "# Custom VH settings (if any exist)" . fs_filehandler::NewLine();
-				$line .= SentoraSafeCustom($rowvhost['vh_custom_tx'], sys_symlinks::Allowed($rowvhost)) . fs_filehandler::NewLine();
+				$line .= sys_apachecustom::Block('vh:' . (int) $rowvhost['vh_id_pk'] . ':custom', $rowvhost['vh_custom_tx'], sys_symlinks::Allowed($rowvhost));
 				$line .= "</virtualhost>" . fs_filehandler::NewLine();
 		
 				//############################# add back old code
@@ -677,12 +683,12 @@ function WriteVhostConfigFile() {
 				
 				// SSL Settings
 				$line .= "# SSL settings (if any exist)" . fs_filehandler::NewLine();
-				$line .= $rowvhost['vh_ssl_tx'] . fs_filehandler::NewLine();
+				$line .= sys_apachecustom::Block('vh:' . (int) $rowvhost['vh_id_pk'] . ':ssl', $rowvhost['vh_ssl_tx'], sys_symlinks::Allowed($rowvhost), true);
 				$line .= fs_filehandler::NewLine();
 				
 				// Client custom vh entry
 				$line .= "# Custom VH settings (if any exist)" . fs_filehandler::NewLine();
-				$line .= SentoraSafeCustom($rowvhost['vh_custom_tx'], sys_symlinks::Allowed($rowvhost)) . fs_filehandler::NewLine();
+				$line .= sys_apachecustom::Block('vh:' . (int) $rowvhost['vh_id_pk'] . ':custom', $rowvhost['vh_custom_tx'], sys_symlinks::Allowed($rowvhost));
 				$line .= "</virtualhost>" . fs_filehandler::NewLine();
 				
 				//############################# add back old code
@@ -730,7 +736,7 @@ function WriteVhostConfigFile() {
 				$line .= SentoraOneLine(ctrl_options::GetSystemOption('dir_index')) . fs_filehandler::NewLine();
 				// Client custom vh entry
 				$line .= "# Custom VH settings (if any exist)" . fs_filehandler::NewLine();
-				$line .= SentoraSafeCustom($rowvhost['vh_custom_tx'], sys_symlinks::Allowed($rowvhost)) . fs_filehandler::NewLine();
+				$line .= sys_apachecustom::Block('vh:' . (int) $rowvhost['vh_id_pk'] . ':custom', $rowvhost['vh_custom_tx'], sys_symlinks::Allowed($rowvhost));
 				$line .= "</virtualhost>" . fs_filehandler::NewLine();
 				
 				//############################# add back old code
@@ -771,12 +777,12 @@ function WriteVhostConfigFile() {
 				
 				// SSL Settings
 				$line .= "# SSL settings (if any exist)" . fs_filehandler::NewLine();
-				$line .= $rowvhost['vh_ssl_tx'] . fs_filehandler::NewLine();
+				$line .= sys_apachecustom::Block('vh:' . (int) $rowvhost['vh_id_pk'] . ':ssl', $rowvhost['vh_ssl_tx'], sys_symlinks::Allowed($rowvhost), true);
 				$line .= fs_filehandler::NewLine();
 				
 				// Client custom vh entry
 				$line .= "# Custom VH settings (if any exist)" . fs_filehandler::NewLine();
-				$line .= SentoraSafeCustom($rowvhost['vh_custom_tx'], sys_symlinks::Allowed($rowvhost)) . fs_filehandler::NewLine();
+				$line .= sys_apachecustom::Block('vh:' . (int) $rowvhost['vh_id_pk'] . ':custom', $rowvhost['vh_custom_tx'], sys_symlinks::Allowed($rowvhost));
 				$line .= "</virtualhost>" . fs_filehandler::NewLine();
 				
 				//############################# add back old code
@@ -823,10 +829,10 @@ function WriteVhostConfigFile() {
 				$line .= SentoraOneLine(ctrl_options::GetSystemOption('dir_index')) . fs_filehandler::NewLine();
 				// Global custom global vh entry
 				$line .= "# Custom Global Settings (if any exist)" . fs_filehandler::NewLine();
-				$line .= SentoraSafeCustom(ctrl_options::GetSystemOption('global_vhcustom')) . fs_filehandler::NewLine();
+				$line .= sys_apachecustom::Block('global_vhcustom', ctrl_options::GetSystemOption('global_vhcustom'));
 				// Client custom vh entry
 				$line .= "# Custom VH settings (if any exist)" . fs_filehandler::NewLine();
-				$line .= SentoraSafeCustom($rowvhost['vh_custom_tx'], sys_symlinks::Allowed($rowvhost)) . fs_filehandler::NewLine();
+				$line .= sys_apachecustom::Block('vh:' . (int) $rowvhost['vh_id_pk'] . ':custom', $rowvhost['vh_custom_tx'], sys_symlinks::Allowed($rowvhost));
 				$line .= "</virtualhost>" . fs_filehandler::NewLine();
 				
 				//############################# add back old code
@@ -867,15 +873,15 @@ function WriteVhostConfigFile() {
 				
 				// SSL Settings
 				$line .= "# SSL settings (if any exist)" . fs_filehandler::NewLine();
-				$line .= $rowvhost['vh_ssl_tx'] . fs_filehandler::NewLine();
+				$line .= sys_apachecustom::Block('vh:' . (int) $rowvhost['vh_id_pk'] . ':ssl', $rowvhost['vh_ssl_tx'], sys_symlinks::Allowed($rowvhost), true);
 				$line .= fs_filehandler::NewLine();
 				
 				// Global custom global vh entry
 				$line .= "# Custom Global Settings (if any exist)" . fs_filehandler::NewLine();
-				$line .= SentoraSafeCustom(ctrl_options::GetSystemOption('global_vhcustom')) . fs_filehandler::NewLine();
+				$line .= sys_apachecustom::Block('global_vhcustom', ctrl_options::GetSystemOption('global_vhcustom'));
 				// Client custom vh entry
 				$line .= "# Custom VH settings (if any exist)" . fs_filehandler::NewLine();
-				$line .= SentoraSafeCustom($rowvhost['vh_custom_tx'], sys_symlinks::Allowed($rowvhost)) . fs_filehandler::NewLine();
+				$line .= sys_apachecustom::Block('vh:' . (int) $rowvhost['vh_id_pk'] . ':custom', $rowvhost['vh_custom_tx'], sys_symlinks::Allowed($rowvhost));
 				$line .= "</virtualhost>" . fs_filehandler::NewLine();
 				
 				//############################# add back old code
@@ -1002,11 +1008,11 @@ function WriteVhostConfigFile() {
 		
 				// Global custom global vh entry
 				$line .= "# Custom Global Settings (if any exist)" . fs_filehandler::NewLine();
-				$line .= SentoraSafeCustom(ctrl_options::GetSystemOption('global_vhcustom')) . fs_filehandler::NewLine();
+				$line .= sys_apachecustom::Block('global_vhcustom', ctrl_options::GetSystemOption('global_vhcustom'));
 		
 				// Client custom vh entry
 				$line .= "# Custom VH settings (if any exist)" . fs_filehandler::NewLine();
-				$line .= SentoraSafeCustom($rowvhost['vh_custom_tx'], sys_symlinks::Allowed($rowvhost)) . fs_filehandler::NewLine();
+				$line .= sys_apachecustom::Block('vh:' . (int) $rowvhost['vh_id_pk'] . ':custom', $rowvhost['vh_custom_tx'], sys_symlinks::Allowed($rowvhost));
 		
 				// End Virtual Host Settings
 				$line .= "</virtualhost>" . fs_filehandler::NewLine();
@@ -1123,16 +1129,16 @@ function WriteVhostConfigFile() {
 		
 				// SSL Settings
 				$line .= "# SSL settings (if any exist)" . fs_filehandler::NewLine();
-				$line .= $rowvhost['vh_ssl_tx'] . fs_filehandler::NewLine();
+				$line .= sys_apachecustom::Block('vh:' . (int) $rowvhost['vh_id_pk'] . ':ssl', $rowvhost['vh_ssl_tx'], sys_symlinks::Allowed($rowvhost), true);
 				$line .= fs_filehandler::NewLine();
 		
 				// Global custom global vh entry
 				$line .= "# Custom Global Settings (if any exist)" . fs_filehandler::NewLine();
-				$line .= SentoraSafeCustom(ctrl_options::GetSystemOption('global_vhcustom')) . fs_filehandler::NewLine();
+				$line .= sys_apachecustom::Block('global_vhcustom', ctrl_options::GetSystemOption('global_vhcustom'));
 		
 				// Client custom vh entry
 				$line .= "# Custom VH settings (if any exist)" . fs_filehandler::NewLine();
-				$line .= SentoraSafeCustom($rowvhost['vh_custom_tx'], sys_symlinks::Allowed($rowvhost)) . fs_filehandler::NewLine();
+				$line .= sys_apachecustom::Block('vh:' . (int) $rowvhost['vh_id_pk'] . ':custom', $rowvhost['vh_custom_tx'], sys_symlinks::Allowed($rowvhost));
 		
 				// End Virtual Host Settings
 				$line .= "</virtualhost>" . fs_filehandler::NewLine();
@@ -1180,7 +1186,7 @@ function WriteVhostConfigFile() {
 				$line .= SentoraOneLine(ctrl_options::GetSystemOption('dir_index')) . fs_filehandler::NewLine();
 				// Client custom vh entry
 				$line .= "# Custom VH settings (if any exist)" . fs_filehandler::NewLine();
-				$line .= SentoraSafeCustom($rowvhost['vh_custom_tx'], sys_symlinks::Allowed($rowvhost)) . fs_filehandler::NewLine();
+				$line .= sys_apachecustom::Block('vh:' . (int) $rowvhost['vh_id_pk'] . ':custom', $rowvhost['vh_custom_tx'], sys_symlinks::Allowed($rowvhost));
 				$line .= "</virtualhost>" . fs_filehandler::NewLine();
 				
 				//############################# add back old code
@@ -1217,12 +1223,12 @@ function WriteVhostConfigFile() {
 				
 				// SSL Settings
 				$line .= "# SSL settings (if any exist)" . fs_filehandler::NewLine();
-				$line .= $rowvhost['vh_ssl_tx'] . fs_filehandler::NewLine();
+				$line .= sys_apachecustom::Block('vh:' . (int) $rowvhost['vh_id_pk'] . ':ssl', $rowvhost['vh_ssl_tx'], sys_symlinks::Allowed($rowvhost), true);
 				$line .= fs_filehandler::NewLine();
 				
 				// Client custom vh entry
 				$line .= "# Custom VH settings (if any exist)" . fs_filehandler::NewLine();
-				$line .= SentoraSafeCustom($rowvhost['vh_custom_tx'], sys_symlinks::Allowed($rowvhost)) . fs_filehandler::NewLine();
+				$line .= sys_apachecustom::Block('vh:' . (int) $rowvhost['vh_id_pk'] . ':custom', $rowvhost['vh_custom_tx'], sys_symlinks::Allowed($rowvhost));
 				$line .= "</virtualhost>" . fs_filehandler::NewLine();
 				
 				//############################# add back old code
@@ -1282,44 +1288,152 @@ function WriteVhostConfigFile() {
     }
 	*/
 	
-	// Check, Write config and Restart/Reload Webserver service if apache config passes check
+	return $line;
+}
 
-	// Move current vhosts.conf file to backup incase Apache config test fails on new config
+/**
+ * Write the vhosts file, test it, load it, and make sure Apache still runs.
+ *
+ * - The config test fails: the entry the line Apache names comes from (an administrator's own
+ *   settings, sys_apachecustom) is switched off and the file is built again without it, so
+ *   everything else goes live; anything else keeps the previous file, and says so in Apache Admin.
+ * - The test passes but Apache does not run after the reload (it refuses to start on some things
+ *   its test does not check): the previous file goes back and Apache is started again.
+ * The previous file is kept until Apache runs on the new one; a failed one as <file>-failed.
+ *
+ * @global db_driver $zdbh The panel's database connection.
+ * @return void
+ */
+function WriteVhostConfigFile() {
+	global $zdbh;
 	$vhconfigfile = ctrl_options::GetSystemOption('apache_vhost');
-	$BackupFileName = $vhconfigfile . "_bak_" . time();
-	rename($vhconfigfile, $BackupFileName);
-	
-	// Write to new Apache vhosts.conf file
-	WriteDataToFile($vhconfigfile, $line);
-		
-	// Check Apache vhosts file for errors
-	echo "Checking Apache vhost config for errors..." . fs_filehandler::NewLine();
-	// If Apache config check return 0 or False
-	if ( CheckApacheVhostConfig() == FALSE ) {
-		
-		// Delete vhost backup file and Failed config if exists
-		unlink($BackupFileName);
-		
-		// Delete httpd-vhost.conf_failed config file after apache config passes syntax check
-		if (is_file($vhconfigfile . "-failed")) {
-			unlink($vhconfigfile . "-failed");
+	$stopRetrying = function () use (&$zdbh) {
+		// (the same broken file every 5 minutes helps nobody: the next change tries again)
+		$GLOBALS['zdbh']->prepare("UPDATE x_settings SET so_value_tx = :t WHERE so_name_vc = 'apache_changed'")->execute(array(':t' => time()));
+	};
+	for ($try = 1; $try <= 6; $try++) {
+		$line = BuildVhostConfig();
+		$BackupFileName = $vhconfigfile . "_bak_" . time();
+		if (is_file($vhconfigfile)) {
+			copy($vhconfigfile, $BackupFileName);
 		}
-			
-		// Restart Apache service
-		RestartHttpdServices();
-				
-	} else {
-		
-		echo "   Error: Restoring orginal vhost file. Check in Sentora Panel Apache vhost config settings or httpd-vhosts.conf file for errors and retry." . fs_filehandler::NewLine();
-		
-		// If config failed. Copy file to (httpd-vhosts.conf_failed)
+		WriteDataToFile($vhconfigfile, $line);
+		echo "Checking Apache vhost config for errors..." . fs_filehandler::NewLine();
+		list($rc, $out) = ApacheConfigTest();
+		if ($rc === 0) {
+			break;
+		}
+		echo "   Error: Apache refused the new vhost file: " . substr($out, 0, 300) . fs_filehandler::NewLine();
 		fs_filehandler::CopyFile($vhconfigfile, $vhconfigfile . "-failed");
-		
-		// Restore orginal apache vhosts config file if failed.
+		if (is_file($BackupFileName)) {
+			fs_filehandler::CopyFile($BackupFileName, $vhconfigfile);
+			unlink($BackupFileName);
+		}
+		$key = sys_apachecustom::Culprit($line, $out, $vhconfigfile);
+		if ($key === null || sys_apachecustom::IsOff($key)) {
+			// not in an administrator's own settings: the previous file stays, Apache Admin says why
+			sys_apachecustom::SwitchOff('apache', 'config test', $out);
+			echo "   The previous vhost file was put back (Apache Admin shows the error)." . fs_filehandler::NewLine();
+			$stopRetrying();
+			return;
+		}
+		sys_apachecustom::SwitchOff($key, sys_apachecustom::Describe($key), $out);
+		echo "   Switched off: " . sys_apachecustom::Describe($key) . " (Apache refused it); writing the rest again..." . fs_filehandler::NewLine();
+	}
+	if ($rc !== 0) {
+		return;
+	}
+	if (is_file($vhconfigfile . "-failed")) {
+		unlink($vhconfigfile . "-failed");
+	}
+	RestartHttpdServices();
+	// Some settings pass the config test but Apache refuses to start with them (a reload then
+	// stops the running Apache): it must still run, or the previous file goes back
+	if (ApacheIsRunning()) {
+		sys_apachecustom::Clear('apache');
+		if (isset($BackupFileName) && is_file($BackupFileName)) {
+			unlink($BackupFileName);
+		}
+		return;
+	}
+	$why = ApacheStartError();
+	echo "   Error: Apache did not run with the new vhost file (" . substr($why, 0, 200) . "); putting the previous one back." . fs_filehandler::NewLine();
+	fs_filehandler::CopyFile($vhconfigfile, $vhconfigfile . "-failed");
+	if (isset($BackupFileName) && is_file($BackupFileName)) {
 		fs_filehandler::CopyFile($BackupFileName, $vhconfigfile);
 		unlink($BackupFileName);
-		
 	}
+	exec('systemctl restart ' . escapeshellarg((string) ctrl_options::GetSystemOption('apache_sn')) . ' 2>&1');
+	echo "   Apache " . (ApacheIsRunning() ? "runs again on the previous file." : "STILL DOES NOT RUN: check it (systemctl status apache2).") . fs_filehandler::NewLine();
+	// the entry behind it, when Apache's message names a domain whose own settings are written
+	$found = false;
+	foreach ($zdbh->query("SELECT vh_id_pk, vh_name_vc, vh_custom_tx, vh_ssl_tx FROM x_vhosts WHERE vh_deleted_ts IS NULL")->fetchAll(PDO::FETCH_ASSOC) as $v) {
+		if ($v['vh_name_vc'] === '' || stripos($why, $v['vh_name_vc']) === false) {
+			continue;
+		}
+		foreach (array('ssl' => 'vh_ssl_tx', 'custom' => 'vh_custom_tx') as $k => $col) {
+			$key = 'vh:' . (int) $v['vh_id_pk'] . ':' . $k;
+			if (trim((string) $v[$col]) !== '' && !sys_apachecustom::IsOff($key)) {
+				sys_apachecustom::SwitchOff($key, sys_apachecustom::Describe($key), $why);
+				$found = true;
+			}
+		}
+	}
+	if ($found) {
+		// written again without it at the next daemon run
+		$zdbh->exec("UPDATE x_settings SET so_value_tx = 'true' WHERE so_name_vc = 'apache_changed'");
+	} else {
+		sys_apachecustom::SwitchOff('apache', 'start', $why);
+		$stopRetrying();
+	}
+}
+
+/**
+ * Apache's config test, with its output.
+ *
+ * Also locks the shared log folders before Apache opens them.
+ * @return array{0:int, 1:string} The exit status (0 when the config is valid) and the output.
+ */
+function ApacheConfigTest() {
+	// New domain log folders made above: root's and the panel's only, before Apache opens them
+	sys_accountphp::LockSharedFolders();
+	exec('apachectl configtest 2>&1', $out, $rc);
+	$text = trim(implode("\n", $out));
+	echo "   Apache vhost Config test " . (( 0 === $rc ) ? "SUCEEDED" : "FAILED") . "." . fs_filehandler::NewLine();
+	return array((int) $rc, $text);
+}
+
+/**
+ * Is Apache running? Waits a few seconds after a reload.
+ *
+ * @return bool
+ */
+function ApacheIsRunning() {
+	$svc = escapeshellarg((string) ctrl_options::GetSystemOption('apache_sn'));
+	for ($i = 0; $i < 8; $i++) {
+		sleep(1);
+		exec('systemctl is-active --quiet ' . $svc, $o, $rc);
+		if ($rc === 0 && $i >= 2) {
+			return true;
+		}
+	}
+	return false;
+}
+
+/**
+ * Why Apache did not start: the end of its log.
+ *
+ * @return string
+ */
+function ApacheStartError() {
+	$out = (string) shell_exec('journalctl -u ' . escapeshellarg((string) ctrl_options::GetSystemOption('apache_sn')) . ' -n 15 --no-pager 2>/dev/null; tail -n 8 /var/log/apache2/error.log 2>/dev/null');
+	$lines = array();
+	foreach (preg_split('/\r?\n/', $out) as $l) {
+		if (preg_match('/(emerg|error|AH\d{5}|fail)/i', $l)) {
+			$lines[] = trim(preg_replace('/^.*?\]\s*(\[[^\]]*\]\s*)*/', '', $l));
+		}
+	}
+	return $lines ? implode(' | ', array_slice(array_unique($lines), -4)) : 'Apache did not start (no message in its log)';
 }
 
 /**

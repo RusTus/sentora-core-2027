@@ -47,3 +47,8 @@
 .aa-help p { margin: 0 0 8px; }
 .aa-help ol { margin: 0 0 8px; padding-left: 20px; }
 .aa-help li { margin-bottom: 6px; }
+
+/* what the daemon switched off because Apache refused it */
+.aa-problems { margin: 0 0 8px; padding-left: 18px; }
+.aa-problems li { margin-bottom: 6px; }
+.aa-problems code { white-space: normal; overflow-wrap: anywhere; font-size: 11px; }

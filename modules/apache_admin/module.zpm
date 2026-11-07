@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="modules/apache_admin/assets/apache.css">
 
     <div class="aa" id="aa">
+        <@ Problems @>
         <% if IsMain %>
         <div class="aa-tiles"><@ Tiles @></div>
         <div class="aa-cols">

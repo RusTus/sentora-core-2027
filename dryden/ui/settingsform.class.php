@@ -173,6 +173,10 @@ class ui_settingsform
         foreach (isset($f['error_args']) ? (array) $f['error_args'] : array() as $a) {
             $text = preg_replace('/%d/', (string) (int) $a, $text, 1);
         }
+        // a value shown as it is, not translated (such as Apache's own message)
+        if (isset($f['error_text_arg'])) {
+            $text = str_replace('%s', (string) $f['error_text_arg'], $text);
+        }
         return $text;
     }
 
@@ -220,7 +224,13 @@ class ui_settingsform
                         $err = 'This is too long.';
                     } elseif (isset($f['check']) && is_callable($f['check'])) {
                         // a module's own check of the block: '' when it is fine, else the (English) reason
-                        $err = (string) call_user_func($f['check'], $v);
+                        // '' when fine, the (English) reason, or array(reason with %s, value for it)
+                        $err = call_user_func($f['check'], $v);
+                        if (is_array($err)) {
+                            $f['error_text_arg'] = (string) $err[1];
+                            $err = (string) $err[0];
+                        }
+                        $err = (string) $err;
                     }
                     break;
                 default:
