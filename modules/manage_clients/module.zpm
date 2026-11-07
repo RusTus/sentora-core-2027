@@ -1,564 +1,130 @@
-<style>
-
-
-/* Style all input fields */
-input {
-  width: 100%;
-  padding: 12px;
-  border: 1px solid var(--sn-line, #ccc);
-  border-radius: 4px;
-  box-sizing: border-box;
-  margin-top: 6px;
-  margin-bottom: 16px;
-}
-
-/* Style the submit button */
-input[type=submit] {
-  background-color: var(--sn-ok, #4CAF50);
-  color: white;
-}
-
-/* Style the container for inputs */
-.check_container {
-  background-color: var(--sn-soft, #f1f1f1);
-  padding: 0px;
-}
-
-/* The message box is shown when the user clicks on the password field */
-#message {
-  display:none;
-  background: var(--sn-soft, #f1f1f1);
-  color: var(--sn-ink, #000);
-  position: relative;
-  padding: 20px;
-  margin-top: 5px;
-}
-
-#message p {
-  padding: 0px 35px;
-  font-size: 14px;
-}
-
-/* Add a green text color and a checkmark when the requirements are right */
-.valid {
-  color: var(--sn-ok, green);
-}
-
-.valid:before {
-  position: relative;
-  left: -35px;
-  content: "\2714";
-}
-
-/* Add a red text color and an "x" icon when the requirements are wrong */
-.invalid {
-  color: var(--sn-bad, red);
-}
-
-.invalid:before {
-  position: relative;
-  left: -35px;
-  content: "\2718";
-}
-
-</style>
-
 <div class="zmodule_content panel" id="zmodule_header_<@ ModuleName @>">
     <div class="panel-heading">
         <img src="<@ ModuleIcon @>" width="35" height="35" border="0" alt="<@ ModuleName @>">
-
-        <div class="zmodule_title">
-            <@ ModuleName @>
-        </div>
-
-        <div class="zmodule_desc" id="zmodule_desc_<@ ModuleName @>"><@ ModuleDesc @></div>
-
+        <div class="zmodule_title"><@ ModuleName @></div>
+        <div class="zmodule_desc" id="zmodule_desc_<@ ModuleName @>"><: Your client accounts: make new ones, change their package or details, switch them off, or delete them. :></div>
     </div>
-
     <@ Result @>
+    <link rel="stylesheet" href="modules/manage_clients/assets/clients.css">
 
-    <% if isDeleteClient %>
-    <div class="zform_wrapper alert alert-danger">
-        <h2><: Delete :>: <@ EditCurrentName @> ?</h2>
-        <p><: Please confirm that you want to delete this client. :></p>
-        <p><b><: WARNING! This will remove all files and services belonging to this client! :></b></p>
-        <form action="./?module=manage_clients&action=DeleteClient" method="post">
-            <table class="table table-striped" cellpadding="0" cellspacing="0">
-                <% if AllClientList %>
-                <tr>
-                    <th><: Move clients and packages (if any exist) this user has to :>:</th>
-                    <td>
-                        <select name="inMoveClient" id="inMoveClient">
-                            <% loop AllClientList %>
-                            <option value="<& moveclientid &>"><& moveclientname &></option>
-                            <% endloop %>
-                        </select>
-                    </td>
-                </tr>
+    <div class="mc" id="mc">
+        <% if IsList %>
+        <div class="mc-tiles"><@ Tiles @></div>
+        <% if NoPackage %>
+        <div class="mc-box mc-empty"><b><: Make a package first :></b><span><: A client gets its limits (disk space, domains, mailboxes and so on) from a package. :></span>
+            <% if PackagesOn %><a class="btn btn-primary" href="./?module=packages"><: Package Manager :></a><% endif %></div>
+        <% endif %>
+        <div class="mc-box">
+            <div class="mc-head">
+                <h4><: Clients :></h4>
+                <% if HasClients %>
+                <div class="mc-filters" role="group" aria-label="<: Show :>">
+                    <button type="button" class="mc-filter active" data-f="all"><: All :></button>
+                    <button type="button" class="mc-filter" data-f="on"><: Active :></button>
+                    <% if HasOff %><button type="button" class="mc-filter" data-f="off"><: Switched off :></button><% endif %>
+                </div>
+                <label class="mc-find"><svg class="mc-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                    <input type="search" class="form-control" id="mc-find" placeholder="<: Search name, email or package :>" aria-label="<: Search clients :>"></label>
                 <% endif %>
-                <tr>
-                    <th colspan="2" align="right">
-                        <input type="hidden" name="inDelete" value="<@ EditCurrentID @>">
-                        <button class="button-loader delete btn btn-danger" type="submit" ><: Delete :></button>
-                        <button class="button-loader btn btn-default" type="button" onclick="window.location.href='./?module=manage_clients';return false;"><: Cancel :></button>
-                    </th>
-                </tr>
-            </table>
-            <@ CSFR_Tag @>
-        </form>
-    </div>
-    <% endif %>
-
-    <% if isEditClient %>
-    <div class="zgrid_wrapper">
-        <h2><: Edit existing client :>: <@ EditCurrentName @></h2>
-        <form action="./?module=manage_clients&action=UpdateClient" method="post">
-            <table class="table table-striped">
-                <tr>
-                    <th><: Username :>:</th>
-                    <td><input name="inUserName" type="text" disabled="disabled" size="30" maxlength="30" id="inUserName" value="<@ EditCurrentName @>" readonly="readonly" /></td>
-                </tr>
-                <tr>
-                    <th><: Group :>:</th>
-                    <td>
-                        <select name="inGroup" id="inGroup">
-                            <% loop CurrentGroupList %>
-                            <option value="<& groupid &>" <& groupselected &>><& groupname &></option>
-                            <% endloop %>
-                        </select>
-                    </td>
-                <tr>
-                    <th><: Package :>:</th>
-                    <td>
-                        <select name="inPackage" id="inPackage">
-                            <% loop CurrentPackageList %>
-                            <option value="<& packageid &>" <& packageselected &>><& packagename &></option>
-                            <% endloop %>
-                        </select>
-                    </td>
-                </tr>
-                <tr>
-                    <th><: Full name :>:</th>
-                    <td><input type="text" name="inFullName" id="inFullName" value="<@ EditCurrentFullName @>" /></td>
-                </tr>
-                <tr>
-                    <th><: Email address :>:</th>
-                    <td><input type="text" name="inEmailAddress" id="inEmailAddress" value="<@ EditCurrentEmail @>" /></td>
-                </tr>
-                <tr>
-                    <th><: Postal address :>:</th>
-                    <td><textarea name="inAddress" id="inAddress" cols="45" rows="5"><@ EditCurrentAddress @></textarea></td>
-                </tr>
-                <tr>
-                    <th><: Postal code :>:</th>
-                    <td><input name="inPostCode" type="text" id="inPostCode" size="20" maxlength="10" value="<@ EditCurrentPost @>" /></td>
-                </tr>
-                <tr>
-                    <th><: Phone number :>:</th>
-                    <td><input name="inPhone" type="text" id="inPhone" size="20" maxlength="50" value="<@ EditCurrentPhone @>" /></td>
-                </tr>
-                <tr>
-                    <th><: Reset password :>:</th>
-                    <td><input class="inPassword" name="inNewPassword" type="password" id="inPassword" size="20" pattern="(?=.*\d)(?=.*[a-z])(?=.*[A-Z]).{<@ MinPassLength @>,}" /><a href="#" class="link-password" id="generate" onclick="passwordShow(), check()" ><: Generate Password :></a></td>
-					<td><input id="showPassword" type="checkbox" onclick="passwordShowHide()" >Show Password</td>
-                </tr>
-				</table>
-				
-				
-				<div class="check_container">
-					<div id="message">
-						<h4>Password must contain the following:</h4>
-						<p id="letter" class="invalid">A <b>lowercase</b> letter</p>
-						<p id="capital" class="invalid">A <b>capital (uppercase)</b> letter</p>
-						<p id="number" class="invalid">A <b>number</b></p>
-						<p id="length" class="invalid">Minimum <b><@ MinPassLength @> characters</b></p>
-					</div>
-				</div>
-				
-				<table class="table table-striped">
-				
-                <td>
-                    <% loop CheckEnabledHTML %>
-                    <input type="radio" name="inEnabled" value="1" <& echecked &>/> Enabled
-                           <input type="radio" name="inEnabled" value="0" <& dchecked &>/> Disabled
-                           <% endloop %>
-                </td>
-                </tr>
-                <tr>
-                    <th><input type="hidden" name="inClientID" value="<@ EditCurrentID @>" /></th>
-                    <td>
-                        <button class="button-nonloader btn btn-primary" type="submit" id="button-nonloader " name="inSubmit" value="Save"><: Save :></button>
-                        <button class="button-loader btn btn-default" type="button" onclick="window.location.href='./?module=manage_clients';return false;"><: Cancel :></button>
-                    </td>
-                </tr>
-            </table>
-            <@ CSFR_Tag @>
-        </form>
-    </div>
-    <% endif %>
-
-    <div class="zgrid_wrapper">
-        <h2><: Current Clients :></h2>
-        <% if ClientList %>
-        <form action="./?module=manage_clients&action=EditClient" method="post">
-            <table class="table table-striped">
-                <tr>
-                    <th><: Username :></th>
-                    <% if ShadowEnabled %>
-                    <th><: Shadow :></th>
-                    <% endif %>
-                    <th><: Created :></th>
-                    <th><: Package :></th>
-                    <th><: Group :></th>
-                    <th><: Clients :></th>
-                    <th><: Current disk :></th>
-                    <th><: Current bandwidth :></th>
-                    <th></th>
-                </tr>
-                <% loop ClientList %>
-                <tr>
-                    <td><& username &></td>
-                    <% if ShadowEnabled %>
-                    <td><button class="button-loader btn btn-primary" type="submit" name="inShadow_<& userid &>" id="inShadow_<& userid &>" value="inShadow_<& userid &>" formaction="./?module=shadowing&action=ShadowUser"><: Shadow :></button></td>
-                    <% endif %>
-                    <td><& created &></td>
-                    <td><& packagename &></td>
-                    <td><& usergroup &></td>
-                    <td><& numclients &></td>
-                    <td><& diskspacereadable &> / <& diskspacequotareadable &></td>
-                    <td><& bandwidthreadable &> / <& bandwidthquotareadable &></td>
-                    <td>
-                        <button class="button-loader btn btn-default" type="submit" id="button" name="inEdit_<& userid &>" value="<& userid &>"><: Edit :></button>
-                        <% if NoticesEnabled %><a class="btn btn-default" href="./?module=client_notices&amp;show=New&amp;user=<& userid &>" title="<: Send this client a personal notice :>"><: Send notice :></a><% endif %>
-                        <& tfreset &>
-                        <button class="button-loader delete btn btn-danger" type="submit" id="button" name="inDelete_<& userid &>" value="<& userid &>"><: Delete :></button>
-                    </td>
-                </tr>
-                <% endloop %>
-            </table>
-            <@ CSFR_Tag @>
-        </form>
-        <% else %>
-        <% if HasPackage %>
-        <: You have no client accounts at this time. Create a client using the form below. :>
-        <% else %>
-        <: You must first create a Package with the Package Manager module before you can create a client. :>
+                <% if HasPackage %><a class="btn btn-primary mc-new" href="./?module=manage_clients&amp;show=New"><svg class="mc-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><: New client :></a><% endif %>
+            </div>
+            <% if HasClients %>
+            <div class="mc-rows" id="mc-rows"><@ ClientRows @></div>
+            <p class="mc-nomatch" id="mc-nomatch" hidden><: No client matches. :></p>
+            <% endif %>
+            <% if NoClients %>
+            <div class="mc-empty"><svg class="mc-ico-xl" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14a6 6 0 0 1 3.5 6"/></svg>
+                <b><: No clients yet :></b><span><: A client gets its own login to the panel, with the limits of the package you give it. :></span></div>
+            <% endif %>
+        </div>
+        <form id="mc-act" method="post" action="./?module=manage_clients&amp;action=EditClient"><@ CSFR_Tag @></form>
         <% endif %>
+
+        <% if IsForm %>
+        <a href="./?module=manage_clients" class="btn btn-default btn-sm mc-back"><svg class="mc-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg><: All clients :></a>
+        <div class="mc-formwrap">
+            <% if IsNew %><form class="mc-form" id="mc-form" action="./?module=manage_clients&amp;show=New&amp;action=CreateClient" method="post" autocomplete="off"><% endif %>
+            <% if IsEdit %><form class="mc-form" id="mc-form" action="./?module=manage_clients&amp;show=Edit&amp;other=<@ FId @>&amp;action=UpdateClient" method="post" autocomplete="off">
+                <input type="hidden" name="inClientID" value="<@ FId @>"><% endif %>
+                <h3 class="mc-h"><@ FormTitle @></h3>
+
+                <div class="mc-box">
+                    <h4><: Account :></h4>
+                    <div class="mc-grid">
+                        <% if IsNew %>
+                        <label class="mc-field"><span><: User name :></span>
+                            <input class="form-control" type="text" name="inNewUserName" id="inNewUserName" value="<@ FUser @>" maxlength="50" pattern="[A-Za-z0-9][A-Za-z0-9-]*" required autocapitalize="none" spellcheck="false">
+                            <small><: Letters, digits and hyphens. It is also the name of its folder, and can not be changed later. :></small></label>
+                        <% endif %>
+                        <label class="mc-field"><span><: Package :></span><select class="form-control" name="<% if IsNew %>inNewPackage<% endif %><% if IsEdit %>inPackage<% endif %>" required><@ PackageOptions @></select>
+                            <small><: Its limits: disk space, bandwidth, domains, mailboxes and so on. :></small></label>
+                        <label class="mc-field"><span><: Group :></span><select class="form-control" name="<% if IsNew %>inNewGroup<% endif %><% if IsEdit %>inGroup<% endif %>" required><@ GroupOptions @></select>
+                            <small><: Which modules it can use. :></small></label>
+                    </div>
+                    <% if IsEdit %>
+                    <div class="mc-switchrow"><div><label for="inEnabled"><: Can log in :></label><small><: Off: the client can not log in and its websites stop answering. Nothing is deleted. :></small></div>
+                        <label class="mc-switch"><input type="checkbox" name="inEnabled" id="inEnabled" value="1"<@ FEnabledChecked @>><span class="mc-toggle"></span></label></div>
+                    <% endif %>
+                </div>
+
+                <div class="mc-box">
+                    <h4><: Password :></h4>
+                    <% if IsEdit %><p class="mc-sub"><: Leave it empty to keep the current password. :></p><% endif %>
+                    <div class="mc-pass"><input class="form-control" type="password" name="inNewPassword" id="inPassword" autocomplete="new-password"<% if IsNew %> required<% endif %>>
+                        <button type="button" class="btn btn-default mc-show" data-show="<: Show :>" data-hide="<: Hide :>"><: Show :></button>
+                        <button type="button" class="btn btn-default mc-gen" data-len="<@ MinPassLength @>"><: Make one :></button></div>
+                    <ul class="mc-rules idle" data-len="<@ MinPassLength @>">
+                        <li data-rule="len"><: At least :> <@ MinPassLength @> <: characters :></li><li data-rule="lower"><: A lower case letter :></li>
+                        <li data-rule="upper"><: A capital :></li><li data-rule="digit"><: A digit :></li>
+                    </ul>
+                </div>
+
+                <div class="mc-box">
+                    <h4><: Contact :></h4>
+                    <div class="mc-grid">
+                        <label class="mc-field"><span><: Full name :></span><input class="form-control" type="text" name="<% if IsNew %>inNewFullName<% endif %><% if IsEdit %>inFullName<% endif %>" value="<@ FName @>" maxlength="100"></label>
+                        <label class="mc-field"><span><: Email address :></span><input class="form-control" type="email" name="<% if IsNew %>inNewEmailAddress<% endif %><% if IsEdit %>inEmailAddress<% endif %>" value="<@ FEmail @>" required maxlength="250">
+                            <small><: Where the panel sends its messages and password resets. Each account needs its own. :></small></label>
+                        <label class="mc-field"><span><: Phone number :></span><input class="form-control" type="tel" name="<% if IsNew %>inNewPhone<% endif %><% if IsEdit %>inPhone<% endif %>" value="<@ FPhone @>" maxlength="50"></label>
+                        <label class="mc-field"><span><: Postal code :></span><input class="form-control" type="text" name="<% if IsNew %>inNewPostCode<% endif %><% if IsEdit %>inPostCode<% endif %>" value="<@ FPost @>" maxlength="10"></label>
+                        <label class="mc-field mc-wide"><span><: Postal address :></span><textarea class="form-control" name="<% if IsNew %>inNewAddress<% endif %><% if IsEdit %>inAddress<% endif %>" rows="3"><@ FAddress @></textarea></label>
+                    </div>
+                </div>
+
+                <% if IsNew %>
+                <div class="mc-box">
+                    <div class="mc-switchrow mc-first"><div><label for="inSWE"><: Send a welcome email :></label><small><: With the login details, to the email address above. :></small></div>
+                        <label class="mc-switch"><input type="checkbox" name="inSWE" id="inSWE" value="1"<@ FSendChecked @>><span class="mc-toggle"></span></label></div>
+                    <div class="mc-welcome" id="mc-welcome">
+                        <label class="mc-field"><span><: Subject :></span><input class="form-control" type="text" name="inEmailSubject" value="<@ FSubject @>"></label>
+                        <label class="mc-field"><span><: Text :></span><textarea class="form-control" name="inEmailBody" rows="8"><@ FBody @></textarea></label>
+                        <p class="mc-sub"><: These are filled in: :> <code>{{username}}</code> <code>{{password}}</code> <code>{{fullname}}</code> <code>{{controlpanelurl}}</code></p>
+                    </div>
+                </div>
+                <% endif %>
+
+                <div class="mc-foot">
+                    <button class="btn btn-primary" type="submit"><% if IsNew %><: Create client :><% endif %><% if IsEdit %><: Save changes :><% endif %></button>
+                    <a class="btn btn-default" href="./?module=manage_clients"><: Cancel :></a>
+                </div>
+                <@ CSFR_Tag @>
+            </form>
+            <% if IsEdit %><aside class="mc-box mc-sum"><@ ClientSummary @></aside>
+            <form id="mc-act" method="post" action="./?module=manage_clients&amp;action=EditClient"><@ CSFR_Tag @></form><% endif %>
+        </div>
+        <% endif %>
+
+        <% if IsDelete %>
+        <form class="mc-box mc-confirm" action="./?module=manage_clients&amp;action=DeleteClient" method="post">
+            <h4><svg class="mc-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg><: Delete the client :> <code><@ DeleteName @></code>?</h4>
+            <@ DeleteDetails @>
+            <label class="mc-sure"><input type="checkbox" required> <: I understand that this deletes the client and everything it has. :></label>
+            <div class="mc-foot"><input type="hidden" name="inDelete" value="<@ DeleteId @>">
+                <button class="btn btn-danger" type="submit"><: Delete client :></button>
+                <a class="btn btn-default" href="./?module=manage_clients"><: Cancel :></a></div>
+            <@ CSFR_Tag @>
+        </form>
         <% endif %>
     </div>
-
-    <% if DisabledClientList %>
-    <div class="zgrid_wrapper">
-        <h2><: Disabled Clients :></h2>
-        <form action="./?module=manage_clients&action=EditDisabledClient" method="post">
-            <table class="table table-striped">
-                <tr>
-                    <th><: Username :></th>
-                    <th><: Package :></th>
-                    <th><: Group :></th>
-                    <th><: Current disk :></th>
-                    <th><: Current bandwidth :></th>
-                    <th></th>
-                </tr>
-                <% loop DisabledClientList %>
-                <tr>
-                    <td><& username &></td>
-                    <td><& packagename &></td>
-                    <td><& usergroup &></td>
-                    <td><& diskspacereadable &> / <& diskspacequotareadable &></td>
-                    <td><& bandwidthreadable &> / <& bandwidthquotareadable &></td>
-                    <td>
-                        <button class="button-loader btn btn-default" type="submit" id="button" name="inEdit_<& userid &>" value="<& userid &>"><: Edit :></button>
-                        <button class="button-loader delete btn btn-danger" type="submit" id="button" name="inDelete_<& userid &>" value="<& userid &>"><: Delete :></button>
-                    </td>
-                </tr>
-                <% endloop %>
-            </table>
-            <@ CSFR_Tag @>
-        </form>
-    </div>
-    <% endif %>
-
-    <% if HasPackage %>
-    <% if isCreateClient %>
-    <div class="zform_wrapper">
-        <h2><: Create new client account :></h2>
-        <form action="./?module=manage_clients&action=CreateClient" method="post">
-            <table class="table table-striped">
-                <tr>
-                    <th><: Username :>:</th>
-                    <td><input type="text" name="inNewUserName" id="inNewUserName" size="30" maxlength="30" value="<@ FormName @>" /></td>
-                </tr>
-                <tr>
-                    <th><: Password :>:</th>
-                    <td><input class="inPassword" type="text" name="inNewPassword" id="inPassword" size="30" value="" pattern="(?=.*\d)(?=.*[a-z])(?=.*[A-Z]).{<@ MinPassLength @>,}" required /> <a href="#" class="link-password" id="generate"><: Generate Password :></a></td>
-                </tr>
-				
-				</table>
-						
-				<div class="check_container">
-					<div id="message">
-						<h4><: Password must contain the following: :></h4>
-						<p id="letter" class="invalid">A <b>lowercase</b> letter</p>
-						<p id="capital" class="invalid">A <b>capital (uppercase)</b> letter</p>
-						<p id="number" class="invalid">A <b>number</b></p>
-						<p id="length" class="invalid">Minimum <b><@ MinPassLength @> characters</b></p>
-					</div>
-				</div>
-						
-				<table class="table table-striped">
-
-                <tr>
-                    <th><: Group :>:</th>
-                    <td>
-                        <select name="inNewGroup" id="inNewGroup">
-                            <option value="" selected="selected">-- Select a user group --</option>
-                            <% loop GroupList %>
-                            <option value="<& groupid &>"><& groupname &></option>
-                            <% endloop %>
-                        </select>
-                    </td>
-                </tr>
-                <tr>
-                    <th><: Package :>:</th>
-                    <td>
-                        <select name="inNewPackage" id="inNewPackage">
-                            <option value="" selected="selected">-- Select a package --</option>
-                            <% loop PackageList %>
-                            <option value="<& packageid &>"><& packagename &></option>
-                            <% endloop %>
-                        </select>
-                    </td>
-                </tr>
-                <tr>
-                    <th><: Full Name :>:</th>
-                    <td><input type="text" name="inNewFullName" id="inNewFullName" value="<@ FormFullName @>" /></td>
-                </tr>
-                <tr>
-                    <th><: Email address :>:</th>
-                    <td><input type="text" name="inNewEmailAddress" id="inNewEmailAddress" value="<@ FormEmail @>" /></td>
-                </tr>
-                <tr>
-                    <th><: Postal address :>:</th>
-                    <td><textarea name="inNewAddress" id="inNewAddress" cols="45" rows="5"><@ FormAddress @></textarea></td>
-                </tr>
-                <tr>
-                    <th><: Postal code :>:</th>
-                    <td><input name="inNewPostCode" type="text" id="inNewPostCode" size="20" maxlength="10" value="<@ FormPost @>" /></td>
-                </tr>
-                <tr>
-                    <th><: Phone number :>:</th>
-                    <td><input name="inNewPhone" type="text" id="inNewPhone" size="20" maxlength="50" value="<@ FormPhone @>" /></td>
-                </tr>
-                <tr>
-                    <th><: Send welcome email :></th>
-                    <td><input name="inSWE" type="checkbox" id="inSWE" value="1" checked="checked" /></td>
-                </tr>
-                <tr>
-                    <th><: Email subject :>:</th>
-                    <td><input name="inEmailSubject" type="text" id="inEmailSubject" value="<: Your Sentora Account details :>" style="width:380px;" /></td>
-                </tr>
-                <tr>
-                    <th><: Email body :>:</th>
-                    <td><textarea name="inEmailBody" id="inEmailBody" cols="45" rows="5"><@ DefaultEmailBody @></textarea></td>
-                </tr>
-                <tr>
-                    <th></th>
-                    <td><button class="button-nonloader btn btn-primary" type="submit" id="button-nonloader" name="inSubmit" value="Save"><: Save :></button></td>
-                </tr>
-            </table>
-            <@ CSFR_Tag @>
-        </form>
-    </div>
-    <% endif %>
-    <% endif %>
 </div>
-
-<script type="text/javascript">
-    <!--
-    function hide_div(id) {
-        var e = document.getElementById(id);
-        if(e.style.display == 'block')
-            e.style.display = 'none';
-    }
-    //-->
-</script>
-
-
-<script type="text/JavaScript">
-    $.extend({
-        password: function (length, special) {
-            var iteration = 0;
-            var $password = "";
-			
-			
-		var chars = "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-			var string_length = Math.max(12, <@ MinPassLength @>);
-			// Sentora: the browser's cryptographic generator, each character from the whole
-			// set (this used Math.random(), and only the digits 0-4); retried until it has a
-			// lower case letter, a capital and a digit
-			var randomstring = '';
-			var buf = new Uint32Array(1);
-			var limit = Math.floor(4294967296 / chars.length) * chars.length;
-			do {
-				randomstring = '';
-				while (randomstring.length < string_length) {
-					window.crypto.getRandomValues(buf);
-					if (buf[0] < limit) {
-						randomstring += chars.charAt(buf[0] % chars.length);
-					}
-				}
-			} while (!/[a-z]/.test(randomstring) || !/[A-Z]/.test(randomstring) || !/[0-9]/.test(randomstring));
-		
-		return (randomstring);
-			
-        }
-    });
-	
-	
-	
-    $(document).ready(function() {
-        $('.link-password').click(function(e){
-            linkId = $(this).attr('id');
-            if (linkId == 'generate'){
-                password = $.password(<@ MinPassLength @>,false);
-                $('.inPassword').val(password);
-            }
-            e.preventDefault();
-        });
-    });
-	
-</script>
-
-
-<script type="text/JavaScript">
-	
-	var myInput = document.getElementById("inPassword");
-	var letter = document.getElementById("letter");
-	var capital = document.getElementById("capital");
-	var number = document.getElementById("number");
-	var length = document.getElementById("length");
-	
-	// When the user clicks on the password field, show the message box
-	myInput.onfocus = function() {
-	  	document.getElementById("message").style.display = "block";
-	}
-	
-	// When the user clicks outside of the password field, hide the message box
-	myInput.onblur = function() {
-	  	document.getElementById("message").style.display = "none";
-	}
-	
-	// When the user starts to type something inside the password field
-	myInput.onclick = function() {
-		  // Validate lowercase letters
-		  var lowerCaseLetters = /[a-z]/g;
-		  if(myInput.value.match(lowerCaseLetters)) {
-			letter.classList.remove("invalid");
-			letter.classList.add("valid");
-		  } else {
-			letter.classList.remove("valid");
-			letter.classList.add("invalid");
-	}
-	
-	  // Validate capital letters
-	  var upperCaseLetters = /[A-Z]/g;
-	  if(myInput.value.match(upperCaseLetters)) {
-			capital.classList.remove("invalid");
-			capital.classList.add("valid");
-	  } else {
-			capital.classList.remove("valid");
-			capital.classList.add("invalid");
-	  }
-	
-	  // Validate numbers
-	  var numbers = /[0-9]/g;
-	  if(myInput.value.match(numbers)) {
-			number.classList.remove("invalid");
-			number.classList.add("valid");
-	  } else {
-			number.classList.remove("valid");
-			number.classList.add("invalid");
-	  }
-	
-	  // Validate length
-	  if(myInput.value.length >= <@ MinPassLength @>) {
-			length.classList.remove("invalid");
-			length.classList.add("valid");
-	  } else {
-			length.classList.remove("valid");
-			length.classList.add("invalid");
-	  }
-	}
-
-	// When the user clicks inside the password field
-	myInput.onkeyup = function() {
-		  // Validate lowercase letters
-		  var lowerCaseLetters = /[a-z]/g;
-		  if(myInput.value.match(lowerCaseLetters)) {
-			letter.classList.remove("invalid");
-			letter.classList.add("valid");
-		  } else {
-			letter.classList.remove("valid");
-			letter.classList.add("invalid");
-	}
-	
-	  // Validate capital letters
-	  var upperCaseLetters = /[A-Z]/g;
-	  if(myInput.value.match(upperCaseLetters)) {
-			capital.classList.remove("invalid");
-			capital.classList.add("valid");
-	  } else {
-			capital.classList.remove("valid");
-			capital.classList.add("invalid");
-	  }
-	
-	  // Validate numbers
-	  var numbers = /[0-9]/g;
-	  if(myInput.value.match(numbers)) {
-			number.classList.remove("invalid");
-			number.classList.add("valid");
-	  } else {
-			number.classList.remove("valid");
-			number.classList.add("invalid");
-	  }
-	
-	  // Validate length
-	  if(myInput.value.length >= <@ MinPassLength @>) {
-			length.classList.remove("invalid");
-			length.classList.add("valid");
-	  } else {
-			length.classList.remove("valid");
-			length.classList.add("invalid");
-	  }
-	}
-
-</script>
-
-
-<script>
-
-function passwordShowHide() {
-  var x = document.getElementById("inPassword");
-  if (x.type === "password") {
-    x.type = "text";
-  } else {
-    x.type = "password";
-  }
-}
-
-function passwordShow() {
-  var x = document.getElementById("inPassword");
-  if (x.type === "password") {
-    x.type = "text";
-  } 
-}
-
-function check() {
-  document.getElementById("showPassword").checked = true;
-}
-function uncheck() {
-  document.getElementById("showPassword").checked = false;
-}
-
-</script>
+<script src="modules/manage_clients/assets/clients.js"></script>

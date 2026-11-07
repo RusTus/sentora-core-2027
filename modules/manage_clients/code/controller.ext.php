@@ -488,6 +488,14 @@ class module_controller extends ctrl_module
     static function ExecuteDeleteClient($userid, $moveid)
     {
         global $zdbh;
+        // its clients, packages and groups need a new owner: by default its own reseller (an
+        // empty one made them owned by nobody); never the account being deleted
+        $q = $zdbh->prepare("SELECT ac_reseller_fk FROM x_accounts WHERE ac_id_pk = :id");
+        $q->execute(array(':id' => (int) $userid));
+        $parent = (int) $q->fetchColumn();
+        if (empty($moveid) || (int) $moveid === (int) $userid) {
+            $moveid = $parent > 0 && $parent !== (int) $userid ? $parent : 1;
+        }
         runtime_hook::Execute('OnBeforeDeleteClient');
         $sql = $zdbh->prepare("
 			UPDATE x_accounts
@@ -542,16 +550,37 @@ class module_controller extends ctrl_module
      * @param string $post Postcode.
      * @param string $phone Phone number.
      * @param string $newpass New password, or '' to keep the current one.
-     * @return bool True when saved, false when the new password is not valid.
+     * @return bool True when saved, false when the email address or the new password is not valid (a flag says which).
      */
     static function ExecuteUpdateClient($clientid, $package, $enabled, $group, $fullname, $email, $address, $post, $phone, $newpass)
     {
         global $zdbh;
+        $email = trim((string) $email);
+        if ($email === '') {
+            self::$emailblank = true;
+            return false;
+        }
+        if (!self::IsValidEmail($email)) {
+            self::$bademail = true;
+            return false;
+        }
+        // another account may not have the address (it may keep its own)
+        $q = $zdbh->prepare("SELECT COUNT(*) FROM x_accounts WHERE LOWER(ac_email_vc) = :e AND ac_id_pk <> :id AND ac_deleted_ts IS NULL");
+        $q->execute(array(':e' => strtolower($email), ':id' => (int) $clientid));
+        if ((int) $q->fetchColumn() > 0) {
+            self::$not_unique_email = true;
+            self::$email_owner = self::EmailOwnerFor($email);
+            return false;
+        }
+        $q = $zdbh->prepare("SELECT ac_enabled_in FROM x_accounts WHERE ac_id_pk = :id");
+        $q->execute(array(':id' => (int) $clientid));
+        $wasEnabled = (int) $q->fetchColumn();
+        $enabled = (int) $enabled === 1 ? 1 : 0;
         runtime_hook::Execute('OnBeforeUpdateClient');
         if ($newpass != "") {
-            // Check for password length...
-            if (strlen($newpass) < ctrl_options::GetSystemOption('password_minlength')) {
-                self::$badpassword = true;
+            // Check for password length (this set an undeclared property, a fatal error in PHP 8)
+            if (strlen($newpass) < (int) self::getMinPassLength()) {
+                self::$badpasswordlength = true;
                 return false;
             }
 			// Check for invalid password
@@ -580,6 +609,13 @@ class module_controller extends ctrl_module
         //$sql->bindParam(':accountid', $clientid);
         $sql->execute();
 
+        // an account made elsewhere may have no profile row yet
+        $q = $zdbh->prepare("SELECT COUNT(*) FROM x_profiles WHERE ud_user_fk = :id");
+        $q->execute(array(':id' => (int) $clientid));
+        if ((int) $q->fetchColumn() === 0) {
+            $q = $zdbh->prepare("INSERT INTO x_profiles (ud_user_fk, ud_created_ts) VALUES (:id, :t)");
+            $q->execute(array(':id' => (int) $clientid, ':t' => time()));
+        }
         $sql = $zdbh->prepare("UPDATE x_profiles SET ud_fullname_vc= :fullname, ud_group_fk= :group, ud_package_fk= :package, ud_address_tx= :address,ud_postcode_vc= :postcode, ud_phone_vc= :phone WHERE ud_user_fk=:accountid");
         $sql->bindParam(':fullname', $fullname);
         $sql->bindParam(':group', $group);
@@ -589,10 +625,11 @@ class module_controller extends ctrl_module
         $sql->bindParam(':phone', $phone);
         $sql->bindParam(':accountid', $clientid);
         $sql->execute();
-        if ($enabled == 0) {
+        // the enable and disable hooks (they rewrite the web server's settings) only when it changes
+        if ($enabled === 0 && $wasEnabled === 1) {
             self::DisableClient($clientid);
         }
-        if ($enabled == 1) {
+        if ($enabled === 1 && $wasEnabled !== 1) {
             self::EnableClient($clientid);
         }
         runtime_hook::Execute('OnAfterUpdateClient');
@@ -737,12 +774,10 @@ class module_controller extends ctrl_module
         $sql->execute();
         // Now lets pull back the client ID so that we can add their personal address details etc...
         //$client = $zdbh->query("SELECT * FROM x_accounts WHERE ac_reseller_fk=" . $uid . " ORDER BY ac_id_pk DESC")->Fetch();
-        $numrows = $zdbh->prepare("SELECT * FROM x_accounts WHERE ac_reseller_fk=:uid ORDER BY ac_id_pk DESC");
-        $numrows->bindParam(':uid', $uid);
-        $numrows->execute();
-        $client = $numrows->fetch();
+        // the new row's own ID (the reseller's newest account could be another one made at the same time)
+        $client = array('ac_id_pk' => (int) $zdbh->lastInsertId());
 
-        $sql = $zdbh->prepare("INSERT INTO x_profiles (ud_user_fk, ud_fullname_vc, ud_group_fk, ud_package_fk, ud_address_tx, ud_postcode_vc, ud_phone_vc, ud_created_ts) VALUES (:userid, :fullname, :packageid, :groupid, :address, :postcode, :phone, :time)");
+        $sql = $zdbh->prepare("INSERT INTO x_profiles (ud_user_fk, ud_fullname_vc, ud_group_fk, ud_package_fk, ud_address_tx, ud_postcode_vc, ud_phone_vc, ud_created_ts) VALUES (:userid, :fullname, :groupid, :packageid, :address, :postcode, :phone, :time)");
         $sql->bindParam(':userid', $client['ac_id_pk']);
         $sql->bindParam(':fullname', $fullname);
         $sql->bindParam(':packageid', $packageid);
@@ -857,7 +892,7 @@ class module_controller extends ctrl_module
             return false;
         }	
 		// Check for password length...
-		if (strlen($password) < ctrl_options::GetSystemOption('password_minlength')) {
+		if (strlen($password) < (int) self::getMinPassLength()) {
 			self::$badpasswordlength = true;
 			return false;
 		}
@@ -1035,53 +1070,658 @@ class module_controller extends ctrl_module
         }
     }
 
+    // End 'worker' methods.
+
     /**
-     * Template flag <% if NoticesEnabled %>: the Client Notice Manager is switched on and the
-     * logged-in account's group may use it, for the "Send notice" button on each client.
+     * The view after a refused save: 'new' or 'edit' ('' for none), so the form shows again with what was typed.
+     *
+     * @var string
+     */
+    static $failed = '';
+
+    /**
+     * Escape a value for HTML.
+     *
+     * @param mixed $s The value (cast to string).
+     * @return string The escaped text.
+     */
+    static function h($s)
+    {
+        return htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
+    }
+
+    /**
+     * Translate and escape a text.
+     *
+     * @param string $s The English text.
+     * @return string The escaped translation.
+     */
+    static function t($s)
+    {
+        return self::h(ui_language::translate($s));
+    }
+
+    /**
+     * An inline line icon.
+     *
+     * @param string $name 'user', 'off', 'disk', 'plus', 'edit', 'shadow', 'notice', 'key', 'trash', 'back', 'search' or 'users'.
+     * @param string $class Optional. The SVG's class. Default 'mc-ico'.
+     * @return string The SVG.
+     */
+    static function Icon($name, $class = 'mc-ico')
+    {
+        $p = array(
+            'user' => '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
+            'users' => '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14a6 6 0 0 1 3.5 6"/>',
+            'off' => '<circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/>',
+            'disk' => '<ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/>',
+            'plus' => '<path d="M12 5v14M5 12h14"/>',
+            'edit' => '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
+            'shadow' => '<path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="m10 17 5-5-5-5"/><path d="M15 12H3"/>',
+            'notice' => '<path d="M3 11v2a1 1 0 0 0 1 1h2l5 4V6L6 10H4a1 1 0 0 0-1 1z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/>',
+            'key' => '<circle cx="7.5" cy="15.5" r="4.5"/><path d="m10.7 12.3 9.8-9.8M17 6l3 3M14.5 8.5l2 2"/>',
+            'trash' => '<path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/>',
+            'back' => '<path d="M15 18l-6-6 6-6"/>',
+            'search' => '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
+            'warn' => '<path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/>',
+            'mail' => '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>',
+        );
+        return '<svg class="' . $class . '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+            . (isset($p[$name]) ? $p[$name] : '') . '</svg>';
+    }
+
+    /**
+     * The logged-in account's own clients (enabled and switched off), with what the list shows.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return array<int, array<string, mixed>> By user name: 'id', 'user', 'name', 'email', 'package', 'group', 'enabled', 'created', 'lastlogon',
+     *         'clients' (its own clients), 'disk', 'diskmax', 'bw', 'bwmax' (bytes; max 0 = no limit), 'twofactor'.
+     */
+    static function Rows()
+    {
+        global $zdbh;
+        static $rows = null;
+        if ($rows !== null) {
+            return $rows;
+        }
+        $me = (int) ctrl_users::GetUserDetail()['userid'];
+        $q = $zdbh->prepare("SELECT a.ac_id_pk, a.ac_user_vc, a.ac_email_vc, a.ac_enabled_in, a.ac_created_ts, a.ac_lastlogon_ts, p.ud_fullname_vc, k.pk_name_vc, g.ug_name_vc,
+            (SELECT COUNT(*) FROM x_accounts c WHERE c.ac_reseller_fk = a.ac_id_pk AND c.ac_id_pk <> a.ac_id_pk AND c.ac_deleted_ts IS NULL) AS clients
+            FROM x_accounts a LEFT JOIN x_profiles p ON p.ud_user_fk = a.ac_id_pk LEFT JOIN x_packages k ON k.pk_id_pk = a.ac_package_fk LEFT JOIN x_groups g ON g.ug_id_pk = a.ac_group_fk
+            WHERE a.ac_reseller_fk = :me AND a.ac_id_pk <> :me2 AND a.ac_deleted_ts IS NULL ORDER BY a.ac_user_vc");
+        $q->execute(array(':me' => $me, ':me2' => $me));
+        $rows = array();
+        foreach ($q->fetchAll(PDO::FETCH_ASSOC) as $r) {
+            $id = (int) $r['ac_id_pk'];
+            $u = ctrl_users::GetUserDetail($id);
+            $tf = ctrl_twofactor::Row($id);
+            $rows[] = array(
+                'id' => $id, 'user' => (string) $r['ac_user_vc'], 'name' => (string) $r['ud_fullname_vc'], 'email' => (string) $r['ac_email_vc'],
+                'package' => (string) $r['pk_name_vc'], 'group' => (string) $r['ug_name_vc'], 'enabled' => (int) $r['ac_enabled_in'] === 1,
+                'created' => (int) $r['ac_created_ts'], 'lastlogon' => (int) $r['ac_lastlogon_ts'], 'clients' => (int) $r['clients'],
+                'disk' => (float) ctrl_users::GetQuotaUsages('diskspace', $id), 'diskmax' => (float) $u['diskquota'],
+                'bw' => (float) ctrl_users::GetQuotaUsages('bandwidth', $id), 'bwmax' => (float) $u['bandwidthquota'],
+                'twofactor' => $tf && (int) $tf['tf_enabled_in'] === 1,
+            );
+        }
+        return $rows;
+    }
+
+    /**
+     * One of the logged-in account's own clients (never the account itself).
+     *
+     * @param int|string|null $id The account ID.
+     * @return array<string, mixed>|false The client (see Rows()), or false.
+     */
+    static function Mine($id)
+    {
+        foreach (self::Rows() as $r) {
+            if ($r['id'] === (int) $id) {
+                return $r;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Which page shows: the list, the new client form, a client's edit form, or a delete confirmation.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return string 'list', 'new', 'edit' or 'delete'.
+     */
+    static function View()
+    {
+        global $controller;
+        if (self::$failed !== '') {
+            return self::$failed;
+        }
+        $show = $controller->GetControllerRequest('URL', 'show');
+        if ($show === 'New' && self::CheckHasPackage(ctrl_users::GetUserDetail()['userid'])) {
+            return 'new';
+        }
+        if (in_array($show, array('Edit', 'Delete'), true) && self::Mine($controller->GetControllerRequest('URL', 'other'))) {
+            return strtolower($show);
+        }
+        return 'list';
+    }
+
+    /**
+     * Template flag <% if IsList %>: the client list.
+     *
+     * @return bool
+     */
+    static function getIsList()
+    {
+        return self::View() === 'list';
+    }
+
+    /**
+     * Template flag <% if IsForm %>: the new client form or a client's edit form.
+     *
+     * @return bool
+     */
+    static function getIsForm()
+    {
+        return in_array(self::View(), array('new', 'edit'), true);
+    }
+
+    /**
+     * Template flag <% if IsNew %>: the new client form.
+     *
+     * @return bool
+     */
+    static function getIsNew()
+    {
+        return self::View() === 'new';
+    }
+
+    /**
+     * Template flag <% if IsEdit %>: a client's edit form.
+     *
+     * @return bool
+     */
+    static function getIsEdit()
+    {
+        return self::View() === 'edit';
+    }
+
+    /**
+     * Template flag <% if IsDelete %>: a delete confirmation.
+     *
+     * @return bool
+     */
+    static function getIsDelete()
+    {
+        return self::View() === 'delete';
+    }
+
+    /**
+     * Template flag <% if NoPackage %>: no package yet, so no client can be made.
+     *
+     * @return bool
+     */
+    static function getNoPackage()
+    {
+        return !self::CheckHasPackage(ctrl_users::GetUserDetail()['userid']);
+    }
+
+    /**
+     * Template flag <% if HasPackage %>: the account has a package, so it can make clients.
+     *
+     * @return bool
+     */
+    static function getHasPackage()
+    {
+        return !self::getNoPackage();
+    }
+
+    /**
+     * Template flag <% if PackagesOn %>: the Package Manager is switched on, for its link.
      *
      * @global db_driver $zdbh The panel's database connection.
      * @return bool
      */
-    static function getNoticesEnabled()
+    static function getPackagesOn()
     {
         global $zdbh;
-        $q = $zdbh->prepare("SELECT mo_id_pk FROM x_modules WHERE mo_folder_vc = 'client_notices' AND mo_enabled_en = 'true'");
-        $q->execute();
-        $mid = (int) $q->fetchColumn();
-        return $mid > 0 && ctrl_groups::CheckGroupModulePermissions((int) ctrl_users::GetUserDetail()['usergroupid'], $mid);
+        return (int) $zdbh->query("SELECT COUNT(*) FROM x_modules WHERE mo_folder_vc = 'packages' AND mo_enabled_en = 'true'")->fetchColumn() > 0;
     }
 
     /**
-     * Check if the Shadowing module is enabled/exists.
+     * A size in words, such as '1.2 GB'.
      *
-     * Template flag <% if ShadowEnabled %>.
-     *
-     * @global db_driver $zdbh The panel's database connection.
-     * @return bool True when it is enabled (or the query failed).
+     * @param float $bytes The size.
+     * @return string The escaped text.
      */
-    static function getShadowEnabled()
+    static function Size($bytes)
     {
-        global $zdbh;
-        $sql = "SELECT COUNT(*) FROM x_modules WHERE mo_folder_vc='shadowing' AND mo_enabled_en='true'";
-        $shadowEnabled = $zdbh->prepare($sql);
-        if ($shadowEnabled->execute()) {
-            if ($shadowEnabled->fetchColumn() > 0) {
-                return true;
-            } else {
-                return false;
-            }
-        } else {
-            return true;
-        }
+        return self::h(fs_director::ShowHumanFileSize($bytes));
     }
 
-    // End 'worker' methods.
+    /**
+     * A usage bar: how much of the limit is used.
+     *
+     * @param float $used Bytes used.
+     * @param float $max The limit (0 = no limit).
+     * @param string $label 'Disk' or 'Bandwidth'.
+     * @return string The HTML.
+     */
+    static function Bar($used, $max, $label)
+    {
+        $pct = $max > 0 ? min(100, round($used / $max * 100)) : 0;
+        return '<div class="mc-use' . ($max > 0 && $pct >= 90 ? ' full' : ($max > 0 && $pct >= 75 ? ' high' : '')) . '"><span class="mc-use-l">' . self::t($label) . '</span>'
+            . '<span class="mc-use-v">' . self::Size($used) . ' <small>' . ($max > 0 ? self::t('of') . ' ' . self::Size($max) : self::t('no limit')) . '</small></span>'
+            . '<div class="mc-bar"><i style="width:' . ($max > 0 ? $pct : 0) . '%"></i></div></div>';
+    }
 
     /**
-     * Handle the create client form (start of the web interface methods).
+     * The figures at the top (<@ Tiles @>): clients, switched off, and the disk space they use.
+     *
+     * @return string The HTML.
+     */
+    static function getTiles()
+    {
+        $rows = self::Rows();
+        $on = count(array_filter($rows, function ($r) { return $r['enabled']; }));
+        $disk = array_sum(array_map(function ($r) { return $r['disk']; }, $rows));
+        $tile = function ($cls, $icon, $num, $text) {
+            return '<div class="mc-tile ' . $cls . '">' . self::Icon($icon, 'mc-ico-lg') . '<div><b>' . $num . '</b><span>' . self::t($text) . '</span></div></div>';
+        };
+        return $tile('', 'users', $on, 'Active clients') . $tile(count($rows) - $on ? 'warn' : '', 'off', count($rows) - $on, 'Switched off')
+            . $tile('', 'disk', self::Size($disk), 'Disk space they use');
+    }
+
+    /**
+     * The client list (<@ ClientRows @>): a row each with its package, usage and actions.
+     *
+     * @return string The HTML.
+     */
+    static function getClientRows()
+    {
+        $rows = self::Rows();
+        if (!$rows) {
+            return '';
+        }
+        $shadow = self::getShadowEnabled();
+        $notices = self::getNoticesEnabled();
+        $out = '';
+        foreach ($rows as $r) {
+            $id = $r['id'];
+            $search = strtolower($r['user'] . ' ' . $r['name'] . ' ' . $r['email'] . ' ' . $r['package'] . ' ' . $r['group']);
+            $out .= '<div class="mc-row' . ($r['enabled'] ? '' : ' is-off') . '" data-s="' . self::h($search) . '" data-state="' . ($r['enabled'] ? 'on' : 'off') . '">'
+                . '<span class="mc-avatar" aria-hidden="true">' . self::h(strtoupper(substr($r['user'], 0, 1))) . '</span>'
+                . '<div class="mc-main"><div class="mc-name"><a href="./?module=manage_clients&amp;show=Edit&amp;other=' . $id . '"><b>' . self::h($r['user']) . '</b></a>'
+                . ($r['name'] !== '' ? '<span class="mc-full">' . self::h($r['name']) . '</span>' : '')
+                . (!$r['enabled'] ? '<span class="mc-badge off">' . self::t('Switched off') . '</span>' : '')
+                . ($r['clients'] ? '<span class="mc-badge">' . $r['clients'] . ' ' . self::t($r['clients'] === 1 ? 'client' : 'clients') . '</span>' : '')
+                . ($r['twofactor'] ? '<span class="mc-badge ok" title="' . self::t('Two-factor login is on') . '">2FA</span>' : '') . '</div>'
+                . '<div class="mc-sub">' . ($r['email'] !== '' ? '<span>' . self::h($r['email']) . '</span>' : '')
+                . '<span class="mc-chip">' . self::h($r['package'] !== '' ? $r['package'] : '?') . '</span><span>' . self::h(ui_language::translate($r['group'])) . '</span>'
+                . '<span>' . ($r['lastlogon'] ? self::t('Last login') . ' ' . self::h(date('j M Y', $r['lastlogon'])) : self::t('Never logged in')) . '</span></div></div>'
+                . '<div class="mc-uses">' . self::Bar($r['disk'], $r['diskmax'], 'Disk') . self::Bar($r['bw'], $r['bwmax'], 'Bandwidth') . '</div>'
+                . '<div class="mc-act">'
+                . '<a class="btn btn-default btn-sm" href="./?module=manage_clients&amp;show=Edit&amp;other=' . $id . '">' . self::t('Edit') . '</a>'
+                . ($shadow && $r['enabled'] ? '<button class="btn btn-default btn-sm mc-ib" type="submit" form="mc-act" formaction="./?module=shadowing&amp;action=ShadowUser" name="inShadow_' . $id . '" value="inShadow_' . $id . '" title="' . self::t('Log in as this client (shadow)') . '" aria-label="' . self::t('Shadow') . ' ' . self::h($r['user']) . '">' . self::Icon('shadow') . '</button>' : '')
+                . ($notices ? '<a class="btn btn-default btn-sm mc-ib" href="./?module=client_notices&amp;show=New&amp;user=' . $id . '" title="' . self::t('Send this client a personal notice') . '" aria-label="' . self::t('Send notice') . ' ' . self::h($r['user']) . '">' . self::Icon('notice') . '</a>' : '')
+                . '<a class="btn btn-default btn-sm mc-ib mc-del" href="./?module=manage_clients&amp;show=Delete&amp;other=' . $id . '" title="' . self::t('Delete') . '" aria-label="' . self::t('Delete') . ' ' . self::h($r['user']) . '">' . self::Icon('trash') . '</a>'
+                . '</div></div>';
+        }
+        return $out;
+    }
+
+    /**
+     * Template flag <% if HasClients %>: the account has a client.
+     *
+     * @return bool
+     */
+    static function getHasClients()
+    {
+        return count(self::Rows()) > 0;
+    }
+
+    /**
+     * Template flag <% if NoClients %>: no client yet.
+     *
+     * @return bool
+     */
+    static function getNoClients()
+    {
+        return !self::getHasClients();
+    }
+
+    /**
+     * Template flag <% if HasOff %>: a client is switched off, for the filter.
+     *
+     * @return bool
+     */
+    static function getHasOff()
+    {
+        foreach (self::Rows() as $r) {
+            if (!$r['enabled']) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * The values in the form: what was typed after a refused save, the client being changed, or empty for a new one.
      *
      * @global runtime_controller $controller The request controller.
-     * @return bool True when the client was created.
+     * @global db_driver $zdbh The panel's database connection.
+     * @return array<string, string> 'id', 'user', 'name', 'email', 'address', 'post', 'phone', 'group', 'package', 'enabled', 'subject', 'body', 'send'.
+     */
+    static function FormValues()
+    {
+        global $controller, $zdbh;
+        static $v = null;
+        if ($v !== null) {
+            return $v;
+        }
+        $f = $controller->GetAllControllerRequests('FORM');
+        $g = function ($k, $d = '') use ($f) { return isset($f[$k]) ? (string) $f[$k] : $d; };
+        if (self::$failed === 'new') {
+            $v = array('id' => '', 'user' => $g('inNewUserName'), 'name' => $g('inNewFullName'), 'email' => $g('inNewEmailAddress'), 'address' => $g('inNewAddress'),
+                'post' => $g('inNewPostCode'), 'phone' => $g('inNewPhone'), 'group' => $g('inNewGroup'), 'package' => $g('inNewPackage'), 'enabled' => '1',
+                'subject' => $g('inEmailSubject'), 'body' => $g('inEmailBody'), 'send' => isset($f['inSWE']) ? '1' : '');
+        } elseif (self::$failed === 'edit') {
+            $v = array('id' => $g('inClientID'), 'user' => '', 'name' => $g('inFullName'), 'email' => $g('inEmailAddress'), 'address' => $g('inAddress'), 'post' => $g('inPostCode'),
+                'phone' => $g('inPhone'), 'group' => $g('inGroup'), 'package' => $g('inPackage'), 'enabled' => $g('inEnabled') === '1' ? '1' : '0', 'subject' => '', 'body' => '', 'send' => '');
+            $c = self::Mine($v['id']);
+            $v['user'] = $c ? $c['user'] : '';
+        } elseif (self::View() === 'edit') {
+            $id = (int) $controller->GetControllerRequest('URL', 'other');
+            $q = $zdbh->prepare("SELECT a.ac_user_vc, a.ac_email_vc, a.ac_enabled_in, a.ac_group_fk, a.ac_package_fk, p.ud_fullname_vc, p.ud_address_tx, p.ud_postcode_vc, p.ud_phone_vc
+                FROM x_accounts a LEFT JOIN x_profiles p ON p.ud_user_fk = a.ac_id_pk WHERE a.ac_id_pk = :id");
+            $q->execute(array(':id' => $id));
+            $r = $q->fetch(PDO::FETCH_ASSOC);
+            $v = array('id' => (string) $id, 'user' => (string) $r['ac_user_vc'], 'name' => (string) $r['ud_fullname_vc'], 'email' => (string) $r['ac_email_vc'],
+                'address' => (string) $r['ud_address_tx'], 'post' => (string) $r['ud_postcode_vc'], 'phone' => (string) $r['ud_phone_vc'], 'group' => (string) $r['ac_group_fk'],
+                'package' => (string) $r['ac_package_fk'], 'enabled' => (int) $r['ac_enabled_in'] === 1 ? '1' : '0', 'subject' => '', 'body' => '', 'send' => '');
+        } else {
+            $v = array('id' => '', 'user' => '', 'name' => '', 'email' => '', 'address' => '', 'post' => '', 'phone' => '', 'group' => '', 'package' => '', 'enabled' => '1',
+                'subject' => ui_language::translate('Your Sentora Account details'), 'body' => (string) self::DefaultEmailBody(), 'send' => '1');
+        }
+        return $v;
+    }
+
+    /**
+     * Template value <@ F_x @>: one form value, escaped (the template tags call these getters).
+     *
+     * @param string $k The key (see FormValues()).
+     * @return string The escaped value.
+     */
+    static function F($k)
+    {
+        $v = self::FormValues();
+        return self::h(isset($v[$k]) ? $v[$k] : '');
+    }
+
+    /**
+     * <@ FId @>: the client's account ID in the edit form.
+     *
+     * @return string
+     */
+    static function getFId()
+    {
+        return self::F('id');
+    }
+
+    /**
+     * <@ FUser @>: the user name.
+     *
+     * @return string
+     */
+    static function getFUser()
+    {
+        return self::F('user');
+    }
+
+    /**
+     * <@ FName @>: the full name.
+     *
+     * @return string
+     */
+    static function getFName()
+    {
+        return self::F('name');
+    }
+
+    /**
+     * <@ FEmail @>: the email address.
+     *
+     * @return string
+     */
+    static function getFEmail()
+    {
+        return self::F('email');
+    }
+
+    /**
+     * <@ FAddress @>: the postal address.
+     *
+     * @return string
+     */
+    static function getFAddress()
+    {
+        return self::F('address');
+    }
+
+    /**
+     * <@ FPost @>: the postal code.
+     *
+     * @return string
+     */
+    static function getFPost()
+    {
+        return self::F('post');
+    }
+
+    /**
+     * <@ FPhone @>: the phone number.
+     *
+     * @return string
+     */
+    static function getFPhone()
+    {
+        return self::F('phone');
+    }
+
+    /**
+     * <@ FSubject @>: the welcome email's subject.
+     *
+     * @return string
+     */
+    static function getFSubject()
+    {
+        return self::F('subject');
+    }
+
+    /**
+     * <@ FBody @>: the welcome email's text.
+     *
+     * @return string
+     */
+    static function getFBody()
+    {
+        return self::F('body');
+    }
+
+    /**
+     * <@ FSendChecked @>: ' checked' when the welcome email is sent.
+     *
+     * @return string
+     */
+    static function getFSendChecked()
+    {
+        return self::FormValues()['send'] === '1' ? ' checked' : '';
+    }
+
+    /**
+     * <@ FEnabledChecked @>: ' checked' when the client may log in.
+     *
+     * @return string
+     */
+    static function getFEnabledChecked()
+    {
+        return self::FormValues()['enabled'] === '1' ? ' checked' : '';
+    }
+
+    /**
+     * The groups the account may give a client, as <option>s with the form's one selected (<@ GroupOptions @>).
+     *
+     * @return string The HTML.
+     */
+    static function getGroupOptions()
+    {
+        $cur = self::FormValues()['group'];
+        $groups = (array) self::getGroupList();
+        // a client keeps the group it has, even one this account can not give (shown so a save does not change it unseen)
+        $out = $cur === '' ? '<option value="">' . self::t('Choose a group') . '</option>' : '';
+        foreach ($groups as $g) {
+            $out .= '<option value="' . (int) $g['groupid'] . '"' . ((string) $g['groupid'] === $cur ? ' selected' : '') . '>' . $g['groupname'] . '</option>';
+        }
+        return $out;
+    }
+
+    /**
+     * The account's packages as <option>s with the form's one selected (<@ PackageOptions @>).
+     *
+     * @return string The HTML.
+     */
+    static function getPackageOptions()
+    {
+        $cur = self::FormValues()['package'];
+        $out = $cur === '' ? '<option value="">' . self::t('Choose a package') . '</option>' : '';
+        foreach ((array) self::ListPackages(ctrl_users::GetUserDetail()['userid']) as $k) {
+            $out .= '<option value="' . (int) $k['packageid'] . '"' . ((string) $k['packageid'] === $cur ? ' selected' : '') . '>' . self::h($k['packagename']) . '</option>';
+        }
+        return $out;
+    }
+
+    /**
+     * The form's heading (<@ FormTitle @>).
+     *
+     * @return string The escaped text.
+     */
+    static function getFormTitle()
+    {
+        return self::View() === 'edit' ? self::h(self::FormValues()['user']) : self::t('New client');
+    }
+
+    /**
+     * The card beside the edit form (<@ ClientSummary @>): usage, dates and the quick actions.
+     *
+     * @return string The HTML.
+     */
+    static function getClientSummary()
+    {
+        $r = self::Mine(self::FormValues()['id']);
+        if (!$r) {
+            return '';
+        }
+        $d = function ($t) { return $t ? self::h(date('j M Y, H:i', $t)) : self::t('never'); };
+        $out = '<div class="mc-sum-head"><span class="mc-avatar lg" aria-hidden="true">' . self::h(strtoupper(substr($r['user'], 0, 1))) . '</span><div><b>' . self::h($r['user']) . '</b>'
+            . '<span>' . self::h($r['package']) . ' &middot; ' . self::h(ui_language::translate($r['group'])) . '</span></div></div>'
+            . self::Bar($r['disk'], $r['diskmax'], 'Disk') . self::Bar($r['bw'], $r['bwmax'], 'Bandwidth')
+            . '<dl class="mc-dl"><dt>' . self::t('Added') . '</dt><dd>' . $d($r['created']) . '</dd><dt>' . self::t('Last login') . '</dt><dd>' . $d($r['lastlogon']) . '</dd>'
+            . '<dt>' . self::t('Its own clients') . '</dt><dd>' . $r['clients'] . '</dd><dt>' . self::t('Two-factor login') . '</dt><dd>' . self::t($r['twofactor'] ? 'on' : 'off') . '</dd></dl>'
+            . '<div class="mc-quick">';
+        if (self::getShadowEnabled() && $r['enabled']) {
+            $out .= '<button class="btn btn-default btn-sm" type="submit" form="mc-act" formaction="./?module=shadowing&amp;action=ShadowUser" name="inShadow_' . $r['id'] . '" value="inShadow_' . $r['id'] . '">' . self::Icon('shadow') . self::t('Log in as this client') . '</button>';
+        }
+        if (self::getNoticesEnabled()) {
+            $out .= '<a class="btn btn-default btn-sm" href="./?module=client_notices&amp;show=New&amp;user=' . $r['id'] . '">' . self::Icon('notice') . self::t('Send a notice') . '</a>';
+        }
+        if ($r['twofactor']) {
+            $out .= '<button class="btn btn-default btn-sm" type="submit" form="mc-act" formaction="./?module=manage_clients&amp;action=EditClient" name="inResetTwoFactor_' . $r['id'] . '" value="1" data-confirm="'
+                . self::t('Reset the two-factor login of this client? Do this only after checking who is asking (for example by phone).') . '">' . self::Icon('key') . self::t('Reset two-factor login') . '</button>';
+        }
+        return $out . '<a class="btn btn-default btn-sm mc-delbtn" href="./?module=manage_clients&amp;show=Delete&amp;other=' . $r['id'] . '">' . self::Icon('trash') . self::t('Delete this client') . '</a></div>';
+    }
+
+    /**
+     * The client the delete confirmation is for (<@ DeleteName @>), escaped.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return string
+     */
+    static function getDeleteName()
+    {
+        global $controller;
+        $r = self::Mine($controller->GetControllerRequest('URL', 'other'));
+        return $r ? self::h($r['user']) : '';
+    }
+
+    /**
+     * The client's ID in the delete confirmation (<@ DeleteId @>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return int
+     */
+    static function getDeleteId()
+    {
+        global $controller;
+        $r = self::Mine($controller->GetControllerRequest('URL', 'other'));
+        return $r ? $r['id'] : 0;
+    }
+
+    /**
+     * What deleting the client removes, counted (<@ DeleteDetails @>), and where its own clients and packages go.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @global db_driver $zdbh The panel's database connection.
+     * @return string The HTML.
+     */
+    static function getDeleteDetails()
+    {
+        global $controller, $zdbh;
+        $r = self::Mine($controller->GetControllerRequest('URL', 'other'));
+        if (!$r) {
+            return '';
+        }
+        $id = $r['id'];
+        $count = function ($sql) use ($zdbh, $id) {
+            $q = $zdbh->prepare($sql);
+            $q->execute(array(':id' => $id));
+            return (int) $q->fetchColumn();
+        };
+        $what = array(
+            array($count("SELECT COUNT(*) FROM x_vhosts WHERE vh_acc_fk = :id AND vh_deleted_ts IS NULL"), 'website (domains, sub-domains and parked domains), with their files', 'websites (domains, sub-domains and parked domains), with their files'),
+            array($count("SELECT COUNT(*) FROM x_mailboxes WHERE mb_acc_fk = :id AND mb_deleted_ts IS NULL"), 'mailbox, with its mail', 'mailboxes, with their mail'),
+            array($count("SELECT COUNT(*) FROM x_mysql_databases WHERE my_acc_fk = :id AND my_deleted_ts IS NULL"), 'MySQL database', 'MySQL databases'),
+            array($count("SELECT COUNT(*) FROM x_ftpaccounts WHERE ft_acc_fk = :id AND ft_deleted_ts IS NULL"), 'FTP account', 'FTP accounts'),
+            array($count("SELECT COUNT(*) FROM x_cronjobs WHERE ct_acc_fk = :id AND ct_deleted_ts IS NULL"), 'cron job', 'cron jobs'),
+        );
+        $li = '';
+        foreach ($what as $w) {
+            if ($w[0] > 0) {
+                $li .= '<li><b>' . $w[0] . '</b> ' . self::t($w[0] === 1 ? $w[1] : $w[2]) . '</li>';
+            }
+        }
+        $out = '<p>' . self::t('The account can no longer log in, and everything it has is removed from the server within the hour. This can not be undone.') . '</p>'
+            . ($li !== '' ? '<ul class="mc-lose">' . $li . '</ul>' : '<p class="mc-sub">' . self::t('It has no websites, mailboxes, databases, FTP accounts or cron jobs.') . '</p>');
+        $owned = $r['clients'] + $count("SELECT COUNT(*) FROM x_packages WHERE pk_reseller_fk = :id AND pk_deleted_ts IS NULL");
+        if ($owned > 0) {
+            $me = ctrl_users::GetUserDetail();
+            $opts = '<option value="' . (int) $me['userid'] . '">' . self::h($me['username']) . ' (' . self::t('you') . ')</option>';
+            foreach ((array) self::ListAllClients($id, $me['userid']) as $m) {
+                if ((int) $m['moveclientid'] === (int) $me['userid']) {
+                    continue;
+                }
+                $opts .= '<option value="' . (int) $m['moveclientid'] . '">' . self::h($m['moveclientname']) . '</option>';
+            }
+            $out .= '<div class="mc-move"><label for="inMoveClient">' . self::t('It has') . ' ' . $r['clients'] . ' ' . self::t($r['clients'] === 1 ? 'client' : 'clients')
+                . ' ' . self::t('and its own packages. Give them to:') . '</label><select class="form-control" name="inMoveClient" id="inMoveClient">' . $opts . '</select></div>';
+        }
+        return $out;
+    }
+
+    /**
+     * Handle the create client form (start of the web interface methods). When refused, the form shows again with what was typed.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return bool|void False when refused; otherwise ends with a redirect to the list and exit.
      */
     static function doCreateClient()
     {
@@ -1089,26 +1729,28 @@ class module_controller extends ctrl_module
         runtime_csfr::Protect();
         $currentuser = ctrl_users::GetUserDetail();
         $formvars = $controller->GetAllControllerRequests('FORM');
+        self::$failed = 'new';
         // A reseller may only use its own packages and the groups it is offered; only an
         // administrator may create administrators (any reseller could, by sending group 1)
-        if (!isset($formvars['inNewPackage'], $formvars['inNewGroup']) || !ctrl_ownership::Owns('x_packages', 'pk_id_pk', 'pk_reseller_fk', $formvars['inNewPackage'], ' AND pk_deleted_ts IS NULL') || !self::AllowedGroup($formvars['inNewGroup'])) {
+        if (empty($formvars['inNewPackage']) || !ctrl_ownership::Owns('x_packages', 'pk_id_pk', 'pk_reseller_fk', $formvars['inNewPackage'], ' AND pk_deleted_ts IS NULL')) {
+            self::$packageblank = true;
             return false;
         }
-        if (isset($formvars['inSWE'])) {
-            $sendemail = $formvars['inSWE'];
-        } else {
-            $sendemail = 0;
-        }
-        if (self::ExecuteCreateClient($currentuser['userid'], $formvars['inNewUserName'], $formvars['inNewPackage'], $formvars['inNewGroup'], $formvars['inNewFullName'], $formvars['inNewEmailAddress'], $formvars['inNewAddress'], $formvars['inNewPostCode'], $formvars['inNewPhone'], $formvars['inNewPassword'], $sendemail, ($formvars['inEmailSubject'] ?? ''), ($formvars['inEmailBody'] ?? ''))) {
-            unset($_POST['inNewUserName']);
-            return true;
-        } else {
+        if (empty($formvars['inNewGroup']) || !self::AllowedGroup($formvars['inNewGroup'])) {
+            self::$groupblank = true;
             return false;
         }
+        $sendemail = isset($formvars['inSWE']) ? $formvars['inSWE'] : 0;
+        if (self::ExecuteCreateClient($currentuser['userid'], (string) ($formvars['inNewUserName'] ?? ''), $formvars['inNewPackage'], $formvars['inNewGroup'], (string) ($formvars['inNewFullName'] ?? ''), trim((string) ($formvars['inNewEmailAddress'] ?? '')),
+            (string) ($formvars['inNewAddress'] ?? ''), (string) ($formvars['inNewPostCode'] ?? ''), (string) ($formvars['inNewPhone'] ?? ''), (string) ($formvars['inNewPassword'] ?? ''), $sendemail, ($formvars['inEmailSubject'] ?? ''), ($formvars['inEmailBody'] ?? ''))) {
+            header('location: ./?module=' . $controller->GetCurrentModule() . '&created=' . rawurlencode(strtolower(str_replace(' ', '', (string) $formvars['inNewUserName']))));
+            exit;
+        }
+        return false;
     }
 
     /**
-     * Handle the client list buttons: Edit, Delete (redirect and exit) or Reset two-factor.
+     * Handle Reset two-factor (and the old list's Edit and Delete buttons, which redirect and exit).
      *
      * @global runtime_controller $controller The request controller.
      * @return void
@@ -1119,19 +1761,19 @@ class module_controller extends ctrl_module
         runtime_csfr::Protect();
         $currentuser = ctrl_users::GetUserDetail();
         $formvars = $controller->GetAllControllerRequests('FORM');
-        foreach (self::ListClients($currentuser['userid']) as $row) {
-            if (isset($formvars['inDelete_' . $row['userid'] . ''])) {
-                header("location: ./?module=" . $controller->GetCurrentModule() . "&show=Delete&other=" . $row['userid'] . "");
+        foreach (self::Rows() as $row) {
+            if (isset($formvars['inDelete_' . $row['id']])) {
+                header("location: ./?module=" . $controller->GetCurrentModule() . "&show=Delete&other=" . $row['id']);
                 exit;
             }
-            if (isset($formvars['inEdit_' . $row['userid'] . ''])) {
-                header("location: ./?module=" . $controller->GetCurrentModule() . "&show=Edit&other=" . $row['userid'] . "");
+            if (isset($formvars['inEdit_' . $row['id']])) {
+                header("location: ./?module=" . $controller->GetCurrentModule() . "&show=Edit&other=" . $row['id']);
                 exit;
             }
             // one of this administrator's or reseller's own clients (the list has only those)
-            if (isset($formvars['inResetTwoFactor_' . $row['userid']])) {
-                ctrl_twofactor::ResetBy($row['userid'], $currentuser['username']);
-                self::$tfreset = $row['username'];
+            if (isset($formvars['inResetTwoFactor_' . $row['id']])) {
+                ctrl_twofactor::ResetBy($row['id'], $currentuser['username']);
+                self::$tfreset = $row['user'];
                 return;
             }
         }
@@ -1139,139 +1781,69 @@ class module_controller extends ctrl_module
     }
 
     /**
-     * Handle the disabled client list buttons: Edit or Delete (redirect and exit).
+     * The old disabled client list's buttons (the list is one now): the same as doEditClient().
      *
-     * @global runtime_controller $controller The request controller.
      * @return void
      */
     static function doEditDisabledClient()
     {
-        global $controller;
-        runtime_csfr::Protect();
-        $currentuser = ctrl_users::GetUserDetail();
-        $formvars = $controller->GetAllControllerRequests('FORM');
-        foreach (self::ListDisabledClients($currentuser['userid']) as $row) {
-            if (isset($formvars['inDelete_' . $row['userid'] . ''])) {
-                header("location: ./?module=" . $controller->GetCurrentModule() . "&show=Delete&other=" . $row['userid'] . "");
-                exit;
-            }
-            if (isset($formvars['inEdit_' . $row['userid'] . ''])) {
-                header("location: ./?module=" . $controller->GetCurrentModule() . "&show=Edit&other=" . $row['userid'] . "");
-                exit;
-            }
-        }
-        return;
+        self::doEditClient();
     }
 
     /**
-     * Handle the delete confirmation form.
+     * Handle the delete confirmation form: one of the account's own clients, its clients and
+     * packages given to the account itself or one of its other reseller clients.
      *
      * @global runtime_controller $controller The request controller.
-     * @return bool True when deleted; false when the client or move target is not allowed.
+     * @return bool|void False when the client or the new owner is not allowed; otherwise ends with a redirect and exit.
      */
     static function doDeleteClient()
     {
         global $controller;
         runtime_csfr::Protect();
         $formvars = $controller->GetAllControllerRequests('FORM');
-        // Only this reseller's own clients, moved to another of its own clients
-        if (!isset($formvars['inDelete']) || !ctrl_ownership::Owns('x_accounts', 'ac_id_pk', 'ac_reseller_fk', $formvars['inDelete'], ' AND ac_deleted_ts IS NULL')
-            || (!empty($formvars['inMoveClient']) && (string) $formvars['inMoveClient'] !== (string) ctrl_users::GetUserDetail()['userid'] && !ctrl_ownership::Owns('x_accounts', 'ac_id_pk', 'ac_reseller_fk', $formvars['inMoveClient'], ' AND ac_deleted_ts IS NULL'))) {
+        $me = (int) ctrl_users::GetUserDetail()['userid'];
+        $client = isset($formvars['inDelete']) ? self::Mine($formvars['inDelete']) : false;
+        $move = !empty($formvars['inMoveClient']) ? (int) $formvars['inMoveClient'] : $me;
+        if (!$client || ($move !== $me && (!self::Mine($move) || $move === $client['id']))) {
             return false;
         }
-        if (self::ExecuteDeleteClient($formvars['inDelete'], $formvars['inMoveClient']))
-            return true;
-        return false;
+        self::ExecuteDeleteClient($client['id'], $move);
+        header('location: ./?module=' . $controller->GetCurrentModule() . '&deleted=' . rawurlencode($client['user']));
+        exit;
     }
 
     /**
-     * Handle the edit client form.
+     * Handle the edit client form. When refused, the form shows again with what was typed.
      *
      * @global runtime_controller $controller The request controller.
-     * @return bool True when saved.
+     * @return bool|void False when refused; otherwise ends with a redirect to the list and exit.
      */
     static function doUpdateClient()
     {
         global $controller;
         runtime_csfr::Protect();
-        $currentuser = ctrl_users::GetUserDetail();
         $formvars = $controller->GetAllControllerRequests('FORM');
-        // Only this reseller's own clients, packages and groups
-        if (!isset($formvars['inClientID'], $formvars['inPackage'], $formvars['inGroup']) || !ctrl_ownership::Owns('x_accounts', 'ac_id_pk', 'ac_reseller_fk', $formvars['inClientID'], ' AND ac_deleted_ts IS NULL') || !ctrl_ownership::Owns('x_packages', 'pk_id_pk', 'pk_reseller_fk', $formvars['inPackage'], ' AND pk_deleted_ts IS NULL') || !self::AllowedGroup($formvars['inGroup'])) {
+        $client = isset($formvars['inClientID']) ? self::Mine($formvars['inClientID']) : false;
+        if (!$client) {
             return false;
         }
-        if (self::ExecuteUpdateClient($formvars['inClientID'], $formvars['inPackage'], $formvars['inEnabled'], $formvars['inGroup'], $formvars['inFullName'], $formvars['inEmailAddress'], $formvars['inAddress'], $formvars['inPostCode'], $formvars['inPhone'], $formvars['inNewPassword']))
-            return true;
+        self::$failed = 'edit';
+        // Only this reseller's own packages and groups
+        if (empty($formvars['inPackage']) || !ctrl_ownership::Owns('x_packages', 'pk_id_pk', 'pk_reseller_fk', $formvars['inPackage'], ' AND pk_deleted_ts IS NULL')) {
+            self::$packageblank = true;
+            return false;
+        }
+        if (empty($formvars['inGroup']) || !self::AllowedGroup($formvars['inGroup'])) {
+            self::$groupblank = true;
+            return false;
+        }
+        if (self::ExecuteUpdateClient($client['id'], $formvars['inPackage'], !empty($formvars['inEnabled']) ? 1 : 0, $formvars['inGroup'], (string) ($formvars['inFullName'] ?? ''), (string) ($formvars['inEmailAddress'] ?? ''),
+            (string) ($formvars['inAddress'] ?? ''), (string) ($formvars['inPostCode'] ?? ''), (string) ($formvars['inPhone'] ?? ''), (string) ($formvars['inNewPassword'] ?? ''))) {
+            header('location: ./?module=' . $controller->GetCurrentModule() . '&saved=' . rawurlencode($client['user']));
+            exit;
+        }
         return false;
-    }
-
-    /**
-     * Template loop <% loop ClientList %>: the logged-in reseller's enabled clients.
-     *
-     * @return array<int, array<string, mixed>>|false See ListClients().
-     */
-    static function getClientList()
-    {
-        $currentuser = ctrl_users::GetUserDetail();
-        $clientlist = self::ListClients($currentuser['userid']);
-        if (!fs_director::CheckForEmptyValue($clientlist)) {
-            return $clientlist;
-        } else {
-            return false;
-        }
-    }
-
-    /**
-     * Template loop <% loop AllClientList %>: accounts the client in ?other= can be moved to.
-     *
-     * @global runtime_controller $controller The request controller.
-     * @return array<int, array<string, mixed>>|false See ListAllClients().
-     */
-    static function getAllClientList()
-    {
-        global $controller;
-        $currentuser = ctrl_users::GetUserDetail();
-        $urlvars = $controller->GetAllControllerRequests('URL');
-        $clientlist = self::ListAllClients($urlvars['other'], $currentuser['userid']);
-        if (!fs_director::CheckForEmptyValue($clientlist)) {
-            return $clientlist;
-        } else {
-            return false;
-        }
-    }
-
-    /**
-     * Template loop <% loop DisabledClientList %>: the logged-in reseller's disabled clients.
-     *
-     * @return array<int, array<string, mixed>>|false See ListDisabledClients().
-     */
-    static function getDisabledClientList()
-    {
-        $currentuser = ctrl_users::GetUserDetail();
-        $disabledclientlist = self::ListDisabledClients($currentuser['userid']);
-        if (!fs_director::CheckForEmptyValue($disabledclientlist)) {
-            return $disabledclientlist;
-        } else {
-            return false;
-        }
-    }
-
-    /**
-     * The profile of the client in ?other=.
-     *
-     * @global runtime_controller $controller The request controller.
-     * @return array<int, array<string, mixed>>|false See ListCurrentClient().
-     */
-    static function getCurrentClient()
-    {
-        global $controller;
-        $urlvars = $controller->GetAllControllerRequests('URL');
-        $client = self::ListCurrentClient($urlvars['other']);
-        if (!fs_director::CheckForEmptyValue($client)) {
-            return $client;
-        } else {
-            return false;
-        }
     }
 
     /**
@@ -1296,14 +1868,12 @@ class module_controller extends ctrl_module
     }
 
     /**
-     * Template loop <% loop GroupList %>: groups the logged-in user may give a new client.
+     * The groups the logged-in user may give a client.
      *
-     * @global runtime_controller $controller The request controller (not used).
      * @return array<int, array<string, mixed>>|false One row per group: 'groupid', 'groupname', 'groupselected'; false when there are none.
      */
     static function getGroupList()
     {
-        global $controller;
         $currentuser = ctrl_users::GetUserDetail();
         $groups = array();
         foreach ((array) self::ListGroups($currentuser['userid']) as $group) {
@@ -1315,405 +1885,7 @@ class module_controller extends ctrl_module
     }
 
     /**
-     * Template loop <% loop CurrentGroupList %>: groups for the edit form.
-     *
-     * @global runtime_controller $controller The request controller.
-     * @return array<int, array<string, mixed>>|false See ListCurrentGroups().
-     */
-    static function getCurrentGroupList()
-    {
-        global $controller;
-        $currentuser = ctrl_users::GetUserDetail();
-        return self::ListCurrentGroups($controller->GetControllerRequest('URL', 'other'), $currentuser['resellerid'], $currentuser['userid']);
-    }
-
-    /**
-     * Template loop <% loop PackageList %>: the logged-in reseller's packages.
-     *
-     * @global runtime_controller $controller The request controller (not used).
-     * @return array<int, array<string, mixed>>|false See ListPackages().
-     */
-    static function getPackageList()
-    {
-        global $controller;
-        $currentuser = ctrl_users::GetUserDetail();
-        return self::ListPackages($currentuser['userid']);
-    }
-
-    /**
-     * Template loop <% loop CurrentPackageList %>: packages for the edit form.
-     *
-     * @global runtime_controller $controller The request controller.
-     * @return array<int, array<string, mixed>>|false See ListCurrentPackages().
-     */
-    static function getCurrentPackageList()
-    {
-        global $controller;
-        $currentuser = ctrl_users::GetUserDetail();
-        return self::ListCurrentPackages($controller->GetControllerRequest('URL', 'other'), $currentuser['userid']);
-    }
-
-    /**
-     * Template loop <% loop CheckEnabledHTML %>: the enabled/disabled radio states.
-     *
-     * @global runtime_controller $controller The request controller.
-     * @return array<int, array<string, string>> See CheckEnabledHTML().
-     */
-    static function getCheckEnabledHTML()
-    {
-        global $controller;
-        return self::CheckEnabledHTML($controller->GetControllerRequest('URL', 'other'));
-    }
-
-    /**
-     * Template flag <% if HasPackage %>: does the logged-in reseller have a package?
-     *
-     * @global runtime_controller $controller The request controller (not used).
-     * @return bool
-     */
-    static function getHasPackage()
-    {
-        global $controller;
-        $currentuser = ctrl_users::GetUserDetail();
-        return self::CheckHasPackage($currentuser['userid']);
-    }
-
-    /**
-     * Whether the logged-in user has packages (same check as getHasPackage()).
-     *
-     * @global runtime_controller $controller The request controller (not used).
-     * @return bool
-     */
-    static function getIsReseller()
-    {
-        global $controller;
-        $currentuser = ctrl_users::GetUserDetail();
-        return self::CheckHasPackage($currentuser['userid']);
-    }
-
-    /**
-     * Template flag <% if isCreateClient %>: show the list and create form?
-     *
-     * @global runtime_controller $controller The request controller.
-     * @return bool True when there is no ?show=.
-     */
-    static function getisCreateClient()
-    {
-        global $controller;
-        $urlvars = $controller->GetAllControllerRequests('URL');
-        if (!isset($urlvars['show']))
-            return true;
-        return false;
-    }
-
-    /**
-     * Template flag <% if isDeleteClient %>: show the delete view?
-     *
-     * @global runtime_controller $controller The request controller.
-     * @global db_driver $zdbh The panel's database connection.
-     * @param int|string|null $uid Optional. The account ID. Default null (the logged-in user).
-     * @return bool|null True when ?show=Delete and the client in ?other= is the user's; null when it is not.
-     */
-    static function getisDeleteClient($uid = null)
-    {
-        global $controller;
-        global $zdbh;
-
-        $urlvars = $controller->GetAllControllerRequests('URL');
-
-        // Verify if Current user can Delete Selected user.
-        // This shall avoid exposing User based on ID lookups.
-        $currentuser = ctrl_users::GetUserDetail($uid);
-
-        $sql = " SELECT * FROM x_accounts WHERE ac_reseller_fk=:userid AND ac_id_pk=:editedUsrID AND ac_deleted_ts IS NULL";
-        $numrows = $zdbh->prepare($sql);
-        $numrows->bindParam(':userid', $currentuser['userid']);
-        $numrows->bindParam(':editedUsrID', $urlvars['other']);
-        $numrows->execute();
-
-        if( $numrows->rowCount() == 0 ) {
-            return;
-        }
-
-        // Show User Info
-        return (isset($urlvars['show'])) && ($urlvars['show'] == "Delete");
-    }
-
-    /**
-     * Template flag <% if isEditClient %>: show the edit view?
-     *
-     * @global runtime_controller $controller The request controller.
-     * @global db_driver $zdbh The panel's database connection.
-     * @param int|string|null $uid Optional. The account ID. Default null (the logged-in user).
-     * @return bool|null True when ?show=Edit and the client in ?other= is the user's; null when it is not.
-     */
-    static function getisEditClient($uid = null)
-    {
-        global $controller;
-        global $zdbh;
-
-        $urlvars     = $controller->GetAllControllerRequests('URL');
-
-        // Verify if Current user can Edit Selected user.
-        // This shall avoid exposing User based on ID lookups.
-        $currentuser = ctrl_users::GetUserDetail($uid);
-
-        $sql = " SELECT * FROM x_accounts WHERE ac_reseller_fk=:userid AND ac_id_pk=:editedUsrID AND ac_deleted_ts IS NULL";
-        $numrows = $zdbh->prepare($sql);
-        $numrows->bindParam(':userid', $currentuser['userid']);
-        $numrows->bindParam(':editedUsrID', $urlvars['other']);
-        $numrows->execute();
-
-        if( $numrows->rowCount() == 0 ) {
-            return;
-        }
-
-        // Show User Info
-        return (isset($urlvars['show'])) && ($urlvars['show'] == "Edit");
-    }
-
-    /**
-     * Template value <@ EditCurrentName @>: user name of the client in ?other=.
-     *
-     * @global runtime_controller $controller The request controller.
-     * @return mixed The value ('' when there is no ?other=; null when there is no profile).
-     */
-    static function getEditCurrentName()
-    {
-        global $controller;
-        if ($controller->GetControllerRequest('URL', 'other')) {
-            $current = self::ListCurrentClient($controller->GetControllerRequest('URL', 'other'));
-            return $current[0]['username'];
-        } else {
-            return "";
-        }
-    }
-
-    /**
-     * Template value <@ EditCurrentEmail @>: email of the client in ?other=.
-     *
-     * @global runtime_controller $controller The request controller.
-     * @return mixed The value ('' when there is no ?other=; null when there is no profile).
-     */
-    static function getEditCurrentEmail()
-    {
-        global $controller;
-        if ($controller->GetControllerRequest('URL', 'other')) {
-            $current = self::ListCurrentClient($controller->GetControllerRequest('URL', 'other'));
-            return $current[0]['email'];
-        } else {
-            return "";
-        }
-    }
-
-    /**
-     * Template value <@ EditCurrentFullName @>: full name of the client in ?other=.
-     *
-     * @global runtime_controller $controller The request controller.
-     * @return mixed The value ('' when there is no ?other=; null when there is no profile).
-     */
-    static function getEditCurrentFullName()
-    {
-        global $controller;
-        if ($controller->GetControllerRequest('URL', 'other')) {
-            $current = self::ListCurrentClient($controller->GetControllerRequest('URL', 'other'));
-            return $current[0]['fullname'];
-        } else {
-            return "";
-        }
-    }
-
-    /**
-     * Template value <@ EditCurrentPost @>: postcode of the client in ?other=.
-     *
-     * @global runtime_controller $controller The request controller.
-     * @return mixed The value ('' when there is no ?other=; null when there is no profile).
-     */
-    static function getEditCurrentPost()
-    {
-        global $controller;
-        if ($controller->GetControllerRequest('URL', 'other')) {
-            $current = self::ListCurrentClient($controller->GetControllerRequest('URL', 'other'));
-            return $current[0]['postcode'];
-        } else {
-            return "";
-        }
-    }
-
-    /**
-     * Template value <@ EditCurrentID @>: account ID of the client in ?other=.
-     *
-     * @global runtime_controller $controller The request controller.
-     * @return mixed The value ('' when there is no ?other=; null when there is no profile).
-     */
-    static function getEditCurrentID()
-    {
-        global $controller;
-        if ($controller->GetControllerRequest('URL', 'other')) {
-            $current = self::ListCurrentClient($controller->GetControllerRequest('URL', 'other'));
-            return $current[0]['userid'];
-        } else {
-            return "";
-        }
-    }
-
-    /**
-     * Template value <@ EditCurrentAddress @>: postal address of the client in ?other=.
-     *
-     * @global runtime_controller $controller The request controller.
-     * @return mixed The value ('' when there is no ?other=; null when there is no profile).
-     */
-    static function getEditCurrentAddress()
-    {
-        global $controller;
-        if ($controller->GetControllerRequest('URL', 'other')) {
-            $current = self::ListCurrentClient($controller->GetControllerRequest('URL', 'other'));
-            return $current[0]['address'];
-        } else {
-            return "";
-        }
-    }
-
-    /**
-     * Template value <@ EditCurrentPhone @>: phone number of the client in ?other=.
-     *
-     * @global runtime_controller $controller The request controller.
-     * @return mixed The value ('' when there is no ?other=; null when there is no profile).
-     */
-    static function getEditCurrentPhone()
-    {
-        global $controller;
-        if ($controller->GetControllerRequest('URL', 'other')) {
-            $current = self::ListCurrentClient($controller->GetControllerRequest('URL', 'other'));
-            return $current[0]['phone'];
-        } else {
-            return "";
-        }
-    }
-
-    /**
-     * Template value <@ DefaultEmailBody @>: the welcome email template.
-     *
-     * @global runtime_controller $controller The request controller (not used).
-     * @return string|false See DefaultEmailBody().
-     */
-    static function getDefaultEmailBody()
-    {
-        global $controller;
-        return self::DefaultEmailBody();
-    }
-
-    /**
-     * Template value <@ FormName @>: the posted user name, to refill the create form.
-     *
-     * @global runtime_controller $controller The request controller.
-     * @return mixed The posted value, or null after a successful create or when not posted.
-     */
-    static function getFormName()
-    {
-        global $controller;
-        $formvars = $controller->GetAllControllerRequests('FORM');
-        if (isset($formvars['inNewUserName']) && fs_director::CheckForEmptyValue(self::$resetform)) {
-            return $formvars['inNewUserName'];
-        }
-        return;
-    }
-
-    /**
-     * Template value <@ FormFullName @>: the posted full name, to refill the create form.
-     *
-     * @global runtime_controller $controller The request controller.
-     * @return mixed The posted value, or null after a successful create or when not posted.
-     */
-    static function getFormFullName()
-    {
-        global $controller;
-        $formvars = $controller->GetAllControllerRequests('FORM');
-        if (isset($formvars['inNewFullName']) && fs_director::CheckForEmptyValue(self::$resetform)) {
-            return $formvars['inNewFullName'];
-        }
-        return;
-    }
-
-    /**
-     * Template value <@ FormEmail @>: the posted email, to refill the create form.
-     *
-     * @global runtime_controller $controller The request controller.
-     * @return mixed The posted value, or null after a successful create or when not posted.
-     */
-    static function getFormEmail()
-    {
-        global $controller;
-        $formvars = $controller->GetAllControllerRequests('FORM');
-        if (isset($formvars['inNewEmailAddress']) && fs_director::CheckForEmptyValue(self::$resetform)) {
-            return $formvars['inNewEmailAddress'];
-        }
-        return;
-    }
-
-    /**
-     * Template value <@ FormAddress @>: the posted address, to refill the create form.
-     *
-     * @global runtime_controller $controller The request controller.
-     * @return mixed The posted value, or null after a successful create or when not posted.
-     */
-    static function getFormAddress()
-    {
-        global $controller;
-        $formvars = $controller->GetAllControllerRequests('FORM');
-        if (isset($formvars['inNewAddress']) && fs_director::CheckForEmptyValue(self::$resetform)) {
-            return $formvars['inNewAddress'];
-        }
-        return;
-    }
-
-    /**
-     * Template value <@ FormPost @>: the posted postcode, to refill the create form.
-     *
-     * @global runtime_controller $controller The request controller.
-     * @return mixed The posted value, or null after a successful create or when not posted.
-     */
-    static function getFormPost()
-    {
-        global $controller;
-        $formvars = $controller->GetAllControllerRequests('FORM');
-        if (isset($formvars['inNewPostCode']) && fs_director::CheckForEmptyValue(self::$resetform)) {
-            return $formvars['inNewPostCode'];
-        }
-        return;
-    }
-
-    /**
-     * Template value <@ FormPhone @>: the posted phone number, to refill the create form.
-     *
-     * @global runtime_controller $controller The request controller.
-     * @return mixed The posted value, or null after a successful create or when not posted.
-     */
-    static function getFormPhone()
-    {
-        global $controller;
-        $formvars = $controller->GetAllControllerRequests('FORM');
-        if (isset($formvars['inNewPhone']) && fs_director::CheckForEmptyValue(self::$resetform)) {
-            return $formvars['inNewPhone'];
-        }
-        return;
-    }
-/*
-    static function getRandomPassword()
-    {
-		$minpasswordlength = "16";
-        $trylength = 9;
-        if ($trylength < $minpasswordlength) {
-            $uselength = $minpasswordlength;
-        } else {
-            $uselength = $trylength;
-        }
-        $password = fs_director::GenerateRandomPassword($uselength, 4);
-        return $password;
-    }
-*/
-    /**
-     * Template value <@ MinPassLength @>: the minimum password length shown in the form.
+     * Template value <@ MinPassLength @>: the shortest password allowed, and the one the form asks for.
      *
      * @return int|string The 'password_minlength' option (a string) when above 9, otherwise 9.
      */
@@ -1732,42 +1904,42 @@ class module_controller extends ctrl_module
     /**
      * Template value <@ Result @>: the outcome of the last action.
      *
+     * @global runtime_controller $controller The request controller.
      * @return string|null The error or success message HTML, or null when there is none.
      */
     static function getResult()
     {
+        global $controller;
+        $err = function ($m) { return ui_sysmessage::shout(ui_language::translate($m), 'zannounceerror'); };
         if (!fs_director::CheckForEmptyValue(self::$userblank)) {
-            return ui_sysmessage::shout(ui_language::translate("You need to specify a username to create a new client."), "zannounceerror");
+            return $err('Enter a user name for the new client.');
         }
         if (!fs_director::CheckForEmptyValue(self::$emailblank)) {
-            return ui_sysmessage::shout(ui_language::translate("You need to specify an email address to create a new client."), "zannounceerror");
+            return $err('Enter the client\'s email address: the panel sends its notices and password resets there.');
         }
         if (!fs_director::CheckForEmptyValue(self::$passwordblank)) {
-            return ui_sysmessage::shout(ui_language::translate("Your password cannot be blank."), "zannounceerror");
+            return $err('Enter a password, or use Make one.');
         }
         if (!fs_director::CheckForEmptyValue(self::$packageblank)) {
-            return ui_sysmessage::shout(ui_language::translate("You must select a package for your new client."), "zannounceerror");
+            return $err('Choose one of your packages for the client.');
         }
         if (!fs_director::CheckForEmptyValue(self::$groupblank)) {
-            return ui_sysmessage::shout(ui_language::translate("You must select a user group for your new client."), "zannounceerror");
+            return $err('Choose a user group for the client.');
         }
         if (!fs_director::CheckForEmptyValue(self::$badname)) {
-            return ui_sysmessage::shout(ui_language::translate("Your client name is not valid. Please enter a valid client name."), "zannounceerror");
+            return $err('The user name may have letters, digits and hyphens (not at the start or end), at most 63 characters.');
         }
-		if (!fs_director::CheckForEmptyValue(self::$badpass)) {
-            return ui_sysmessage::shout(ui_language::translate("Your password is not valid. Valid characters are A-Z, a-z, 0-9."), "zannounceerror");
+        if (!fs_director::CheckForEmptyValue(self::$badpass)) {
+            return $err('The password needs a lower case letter, a capital and a digit.');
         }
         if (!fs_director::CheckForEmptyValue(self::$bademail)) {
-            return ui_sysmessage::shout(ui_language::translate("Your email address is not valid. Please enter a valid email address."), "zannounceerror");
+            return $err('That is not a valid email address.');
         }
         if (!fs_director::CheckForEmptyValue(self::$badpasswordlength)) {
-            return ui_sysmessage::shout(ui_language::translate("Your password did not meet the minimun length requirements. Characters needed for password length") . ": " . ctrl_options::GetSystemOption('password_minlength'), "zannounceerror");
+            return ui_sysmessage::shout(ui_language::translate('The password is too short: it needs at least') . ' ' . (int) self::getMinPassLength() . ' ' . ui_language::translate('characters.'), 'zannounceerror');
         }
         if (!fs_director::CheckForEmptyValue(self::$alreadyexists)) {
-            return ui_sysmessage::shout(ui_language::translate("A client with that name already appears to exsist on this server."), "zannounceerror");
-        }
-        if (!fs_director::CheckForEmptyValue(self::$ok)) {
-            return ui_sysmessage::shout(ui_language::translate("Changes to your client(s) have been saved successfully!"), "zannounceok");
+            return $err('An account with that user name already exists on this server.');
         }
         if (self::$tfreset !== null) {
             return ui_sysmessage::shout(ui_language::translate('The two-factor login of') . ' <strong>' . htmlspecialchars(self::$tfreset, ENT_QUOTES, 'UTF-8') . '</strong> '
@@ -1780,7 +1952,49 @@ class module_controller extends ctrl_module
                 : ui_language::translate("This email address is already used by an account that is not one of yours.");
             return ui_sysmessage::shout($msg . ' ' . ui_language::translate("Each account needs its own email address."), "zannounceerror");
         }
+        foreach (array('created' => 'is created. Its folders are ready within 5 minutes.', 'saved' => 'is saved.', 'deleted' => 'is deleted. Its websites, mail and databases are removed within the hour.') as $k => $m) {
+            $who = $controller->GetControllerRequest('URL', $k);
+            if ($who) {
+                return ui_sysmessage::shout(ui_language::translate('The client') . ' <strong>' . self::h($who) . '</strong> ' . ui_language::translate($m), 'zannounceok');
+            }
+        }
         return;
+    }
+
+    /**
+     * Template flag <% if NoticesEnabled %>: the Client Notice Manager is switched on and the
+     * logged-in account's group may use it, for the "Send notice" buttons.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return bool
+     */
+    static function getNoticesEnabled()
+    {
+        global $zdbh;
+        static $on = null;
+        if ($on === null) {
+            $q = $zdbh->prepare("SELECT mo_id_pk FROM x_modules WHERE mo_folder_vc = 'client_notices' AND mo_enabled_en = 'true'");
+            $q->execute();
+            $mid = (int) $q->fetchColumn();
+            $on = $mid > 0 && ctrl_groups::CheckGroupModulePermissions((int) ctrl_users::GetUserDetail()['usergroupid'], $mid);
+        }
+        return $on;
+    }
+
+    /**
+     * Whether the Shadowing module is switched on, for the "log in as this client" buttons.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return bool
+     */
+    static function getShadowEnabled()
+    {
+        global $zdbh;
+        static $on = null;
+        if ($on === null) {
+            $on = (int) $zdbh->query("SELECT COUNT(*) FROM x_modules WHERE mo_folder_vc = 'shadowing' AND mo_enabled_en = 'true'")->fetchColumn() > 0;
+        }
+        return $on;
     }
 
     // Webinterface sudo methods.
