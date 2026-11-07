@@ -248,6 +248,11 @@ class ui_template {
             return '<span class="theme-icon"><span style="-webkit-mask-image:url(' . $url . ');mask-image:url(' . $url . ')"></span></span>';
         }
         if (self::HasThemeIcons()) {
+            // an add-on module without its icon file: the template's generic module icon, not a broken image
+            if (!is_file($png) && ($svg = self::ThemeIcon('_default'))) {
+                $url = htmlspecialchars($svg, ENT_QUOTES);
+                return '<span class="theme-icon"><span style="-webkit-mask-image:url(' . $url . ');mask-image:url(' . $url . ')"></span></span>';
+            }
             return '<span class="theme-icon"><img src="' . htmlspecialchars($png, ENT_QUOTES) . '" alt=""></span>';
         }
         return '<img src="' . htmlspecialchars($png, ENT_QUOTES) . '" border="0">';
