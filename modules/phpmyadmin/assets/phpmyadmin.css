@@ -1,0 +1,51 @@
+/* phpMyAdmin (the panel's page that opens it) in the panel's style. Colours come from the theme's
+   shared --sn-* variables (etc/styles/THEMES.md), with these as the fallback, so it follows Light,
+   Dark and Auto. phpMyAdmin itself keeps its own look. */
+.pm { --pm-ink: var(--sn-ink, #1f2933); --pm-muted: var(--sn-muted, #6b7785); --pm-line: var(--sn-line, #e6e9ee);
+      --pm-card: var(--sn-card, #ffffff); --pm-bg: var(--sn-soft, #f4f6f9); --pm-accent: var(--sn-accent, #447fb3); --pm-accent-soft: var(--sn-accent-soft, #e3edf6);
+      color: var(--pm-ink); background: var(--pm-bg); border-radius: 8px; padding: 18px; margin-top: 10px; }
+.pm * { box-sizing: border-box; }
+.pm-ico { width: 16px; height: 16px; flex: none; }
+.pm-card { background: var(--pm-card); border-radius: 6px; box-shadow: 0 1px 3px rgba(20,30,40,0.08); padding: 16px 18px; min-width: 0; }
+.pm-card h4 { margin: 0 0 10px; font-size: 15px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; }
+.pm-sub { color: var(--pm-muted); font-size: 12px; margin: 0 0 10px; }
+
+/* open */
+.pm-hero { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; padding: 20px 22px; margin-bottom: 14px; border-radius: 8px; background: var(--pm-card); box-shadow: 0 1px 3px rgba(20,30,40,0.08); border-left: 4px solid var(--pm-accent); }
+.pm-hero-ico { width: 56px; height: 56px; padding: 11px; border-radius: 12px; flex: none; background: var(--pm-accent-soft); color: var(--pm-accent); }
+.pm-hero-text { flex: 1 1 320px; min-width: 0; }
+.pm-hero-text h3 { margin: 0 0 4px; font-size: 20px; font-weight: 700; }
+.pm-ver { font-size: 12px; font-weight: 600; color: var(--pm-muted); background: var(--pm-bg); border: 1px solid var(--pm-line); border-radius: 10px; padding: 1px 8px; vertical-align: middle; }
+.pm-hero-text p { margin: 0; color: var(--pm-muted); font-size: 13px; line-height: 1.5; }
+.pm-open { display: inline-flex; align-items: center; gap: 8px; }
+.pm-open .pm-ico { width: 18px; height: 18px; }
+
+.pm-cols { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+
+/* users */
+.pm-users { display: grid; gap: 8px; }
+.pm-user { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--pm-line); border-radius: 6px; }
+.pm-user-main { flex: 1; min-width: 0; }
+.pm-name { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.pm-name code { font-size: 13px; background: none; border: 0; padding: 0; color: var(--pm-ink); overflow-wrap: anywhere; }
+.pm-prefix { color: var(--pm-muted); }
+.pm-copy.done { background: #2db87d !important; border-color: #2db87d !important; color: #fff !important; }
+.pm-dbs { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
+.pm-db { font-size: 11px; font-family: SFMono-Regular, Menlo, Consolas, monospace; padding: 0 7px; border-radius: 9px; background: var(--pm-accent-soft); color: var(--pm-accent); }
+.pm-none { font-size: 12px; color: var(--sn-warn, #8f5b00); }
+.pm-warn { margin: 6px 0 0; font-size: 12px; color: var(--sn-warn, #8f5b00); }
+.pm-show { margin: 0; flex: none; }
+.pm-show .btn { display: inline-flex; align-items: center; gap: 6px; }
+.pm-empty { display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; padding: 14px 10px; color: var(--pm-muted); font-size: 13px; }
+.pm-empty b { color: var(--pm-ink); font-size: 14px; }
+.pm-links { display: flex; gap: 8px; margin-top: 4px; }
+
+/* good to know */
+.pm-facts { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.pm-facts li { display: flex; gap: 10px; align-items: flex-start; }
+.pm-facts .pm-ico { color: var(--pm-accent); margin-top: 2px; }
+.pm-facts b { display: block; font-size: 13px; }
+.pm-facts span { display: block; font-size: 12px; color: var(--pm-muted); line-height: 1.45; }
+
+@media (max-width: 900px) { .pm-cols { grid-template-columns: 1fr; } }
+@media (max-width: 640px) { .pm { padding: 12px; } .pm-hero { padding: 16px; } .pm-open { width: 100%; justify-content: center; } .pm-user { flex-wrap: wrap; } .pm-user-main { flex-basis: 100%; } }

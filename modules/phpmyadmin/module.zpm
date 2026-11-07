@@ -1,15 +1,68 @@
 <div class="zmodule_content panel" id="zmodule_header_<@ ModuleName @>">
     <div class="panel-heading">
         <img src="<@ ModuleIcon @>" width="35" height="35" border="0" alt="<@ ModuleName @>">
+        <div class="zmodule_title"><@ ModuleName @></div>
+        <div class="zmodule_desc" id="zmodule_desc_<@ ModuleName @>"><@ ModuleDesc @></div>
+    </div>
+    <link rel="stylesheet" href="modules/phpmyadmin/assets/phpmyadmin.css">
 
-        <div class="zmodule_title">
-            <@ ModuleName @>
+    <div class="pm" id="pm">
+        <div class="pm-hero">
+            <svg class="pm-hero-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>
+            <div class="pm-hero-text">
+                <h3>phpMyAdmin <span class="pm-ver"><@ Version @></span></h3>
+                <p><: Browse and edit your tables, run SQL, and import or export a database. It opens in a new tab and has its own login: one of your MySQL users and its password. :></p>
+            </div>
+            <a href="etc/apps/phpmyadmin/" class="btn btn-primary btn-lg pm-open" target="_blank" rel="noopener"><svg class="pm-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6"/><path d="M20 4 10 14"/><path d="M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/></svg><: Open phpMyAdmin :></a>
         </div>
 
-        <div class="zmodule_desc" id="zmodule_desc_<@ ModuleName @>"><@ ModuleDesc @></div>
+        <div class="pm-cols">
+            <div class="pm-card">
+                <h4><: Log in with :></h4>
+                <% if HasUsers %>
+                <p class="pm-sub"><: Server: :> <code>localhost</code> &middot; <: each user sees only the databases it has access to. :></p>
+                <div class="pm-users"><@ UserRows @></div>
+                <% endif %>
+                <% if NoUsers %>
+                <div class="pm-empty">
+                    <b><: You have no MySQL user yet :></b>
+                    <span><: phpMyAdmin logs in with a MySQL user. Make a database, then a user for it: :></span>
+                    <div class="pm-links">
+                        <% if DatabasesOn %><a class="btn btn-default btn-sm" href="./?module=mysql_databases"><: MySQL Databases :></a><% endif %>
+                        <% if UsersOn %><a class="btn btn-primary btn-sm" href="./?module=mysql_users"><: MySQL Users :></a><% endif %>
+                    </div>
+                </div>
+                <% endif %>
+            </div>
 
+            <div class="pm-card">
+                <h4><: Good to know :></h4>
+                <ul class="pm-facts">
+                    <li><svg class="pm-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+                        <div><b><: Largest file to import: :> <@ UploadLimit @></b><span><: A compressed file (.sql.gz or .zip) counts at its compressed size, so compress a big export first. For a file larger than this, ask your host. :></span></div></li>
+                    <li><svg class="pm-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/></svg>
+                        <div><b><: Make and delete databases in the panel :></b><span><: phpMyAdmin works inside the databases you have; new databases and users are made in MySQL Databases and MySQL Users. :></span></div></li>
+                    <li><svg class="pm-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                        <div><b><: Wrong passwords are blocked :></b><span><: Five failed logins within 10 minutes block that address for an hour. :></span></div></li>
+                    <li><svg class="pm-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+                        <div><b><: It logs you out when idle :></b><span><: After 24 minutes without use; log in again with the same user. :></span></div></li>
+                </ul>
+            </div>
+        </div>
     </div>
-
-    <a href="etc/apps/phpmyadmin/" class="btn btn-large btn-primary" target="_blank"><: Launch phpMyAdmin :></a>
-
 </div>
+<script>
+(function () {
+    'use strict';
+    var pm = document.getElementById('pm'); if (!pm) { return; }
+    Array.prototype.forEach.call(pm.querySelectorAll('.pm-copy'), function (b) {
+        b.addEventListener('click', function () {
+            var text = b.parentNode.querySelector('[data-copy]').getAttribute('data-copy');
+            var done = function () { var o = b.textContent; b.textContent = b.getAttribute('data-done'); b.classList.add('done'); setTimeout(function () { b.textContent = o; b.classList.remove('done'); }, 1500); };
+            if (navigator.clipboard && window.isSecureContext) { navigator.clipboard.writeText(text).then(done, function () {}); return; }
+            var ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select();
+            try { document.execCommand('copy'); done(); } catch (e) {} document.body.removeChild(ta);
+        });
+    });
+})();
+</script>
