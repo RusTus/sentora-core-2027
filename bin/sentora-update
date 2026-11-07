@@ -663,6 +663,17 @@ if [ -f "$PANEL/bin/zsudo.c" ]; then
         fi
     fi
 fi
+# --- LDAP for the server's own PHP (sites that log users in against Active Directory, such as
+# Snipe-IT; the installer adds it since 2027.11)
+PHPV_SYS=$(php -r 'echo PHP_MAJOR_VERSION . "." . PHP_MINOR_VERSION;' 2> /dev/null)
+if [ -n "$PHPV_SYS" ] && ! php -m 2> /dev/null | grep -qix ldap; then
+    if DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "php$PHPV_SYS-ldap" > /dev/null 2>&1; then
+        say "PHP $PHPV_SYS: LDAP added (php$PHPV_SYS-ldap)"
+        systemctl reload "php$PHPV_SYS-fpm" > /dev/null 2>&1 || systemctl restart "php$PHPV_SYS-fpm" > /dev/null 2>&1 || true
+    else
+        warn "php$PHPV_SYS-ldap did not install: apt-get install php$PHPV_SYS-ldap"
+    fi
+fi
 # --- SpamAV: SpamAssassin and ClamAV (the new installer installs them; older servers get them here)
 if [ -d "$PANEL/modules/spamav_admin" ] && { [ ! -x /usr/sbin/spamd ] || [ ! -x /usr/sbin/clamd ]; }; then
     say "Installing SpamAssassin and ClamAV (Admin > SpamAV Admin)"

@@ -51,7 +51,7 @@ fi
 tar -tzf "$FILE" "opt/sentora-php/$MM/sbin/php-fpm" > /dev/null 2>&1 || { echo "$FILE is not a PHP $MM bundle. Nothing changed."; exit 1; }
 
 # the libraries the bundles link against (all part of Ubuntu 26.04)
-apt-get -qq -y install libpng16-16t64 libjpeg-turbo8 libfreetype6 libwebp7 libgmp10 zlib1g > /dev/null 2>&1 || true
+apt-get -qq -y install libpng16-16t64 libjpeg-turbo8 libfreetype6 libwebp7 libgmp10 zlib1g libldap2 libgnutls30t64 > /dev/null 2>&1 || true
 tar -xzmf "$FILE" -C /
 if ! "$P/sbin/php-fpm" -v > /dev/null 2>&1; then
     echo "PHP $MM does not run on this server:"; "$P/sbin/php-fpm" -v 2>&1 | head -3
