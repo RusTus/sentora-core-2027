@@ -17,7 +17,7 @@
  * sub-domains and parked domains, their website files, DNS records, MySQL databases and users (with
  * their passwords, so the sites' settings keep working), FTP accounts, cron jobs, protected folders,
  * mailboxes (with their mail), aliases, forwarders and distribution lists. Never moved: the old
- * panel itself (its modules and add-ons, settings, themes and translations). A name that is already
+ * panel itself (its modules, custom ones included, and add-ons, settings, themes and translations). A name that is already
  * taken on this server is skipped and reported. Before anything is changed, the panel's databases
  * are saved in /var/sentora/backups/pre-migrate-<date>/. Log: /var/sentora/logs/migrate-import.log
  *
@@ -275,7 +275,7 @@ say('Mailboxes (' . count($plan['mail']) . ')' . ($plan['mail'] ? ': ' . implode
 if ($plan['skipmail']) { warn('mailboxes skipped: ' . implode(', ', $plan['skipmail'])); }
 say('Also: ' . $dnsCount . ' DNS record(s)' . ($OLDIP !== '' && !$opt['keep-ip'] ? " (those pointing to $OLDIP get $NEWIP)" : '') . ', ' . $counts['x_cronjobs'] . ' cron job(s), '
     . $counts['x_htaccess'] . ' protected folder(s), ' . $counts['x_aliases'] . ' alias(es), ' . $counts['x_forwarders'] . ' forwarder(s), ' . $counts['x_distlists'] . ' distribution list(s)');
-say('Not moved (never): the old panel\'s modules and add-ons, settings, themes and translations');
+say('Not moved (never): the old panel\'s modules (custom ones included) and add-ons, settings, themes and translations');
 say('PHP for these domains: ' . ($PHPV !== '' ? $PHPV : 'the server\'s own (' . sys_phpversions::DefaultVersion() . ')') . '; old server: PHP ' . $M['php']);
 if ($PHPV !== '' && !sys_phpversions::IsEnabled($PHPV)) {
     say("  (PHP $PHPV is switched off in PHP Versions: it is switched on for these domains)");
