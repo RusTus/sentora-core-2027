@@ -1,7 +1,10 @@
 # Auto detect text files and perform LF normalization
 * text=auto
 
-# Not part of the release zips (git archive): GitHub-only files, so changing the release
-# workflow does not change the zip and its SHA-256
+# Not part of the release zips (git archive): GitHub-only files (the workflow, the README and the
+# administrator's guide, which the release page shows), so changing them
+# does not change the zip and its SHA-256 (servers would see an update that is none)
 /.github export-ignore
 /.gitattributes export-ignore
+/README.md export-ignore
+/docs export-ignore

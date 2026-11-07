@@ -132,6 +132,8 @@ Both repositories have one release with the tag **`current`**, and each has a **
    - installers: builds and replaces `sentora-installers-2027.zip` and `sentora2027-ub26.04`
 3. The job log prints each file's SHA-256; it should match the one GitHub lists on the release page.
 
+A file is uploaded only when its content changed (a run with nothing new uploads nothing, so servers see no update). Each run also rewrites the release page: its title is `Sentora-<VERSION>`, and its text is the version's `- Release <version>:` line from the change log, then this README and the [administrator's guide](docs/ADMIN-GUIDE.md). To change the page, edit those files and run the workflow; neither is in the core zip, so editing them never makes an update for servers.
+
 The workflows build the files the same way as by hand:
 
 ```bash
@@ -252,6 +254,7 @@ The full list of fixes is in the [change log](CHANGELOG.md). To report a vulnera
 
 ## Documentation
 
+- [Administrator's guide](docs/ADMIN-GUIDE.md): running the server day to day
 - [Change log](CHANGELOG.md): everything changed from Sentora 2.0.2, with the security fixes
 - [Security policy](SECURITY.md)
 - [Contributing](.github/CONTRIBUTING.md)
