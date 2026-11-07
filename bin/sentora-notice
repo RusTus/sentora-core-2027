@@ -1,0 +1,142 @@
+#!/usr/bin/php
+<?php
+/**
+ * sentora-notice: send, list and withdraw panel notices from the shell or a script (see ctrl_notices).
+ *
+ *     sentora-notice send --to everyone --type maintenance --end "2026-11-10 04:00" "Maintenance tonight from 02:00."
+ *     sentora-notice send --to user:john --type warning --key disk-john "Your disk is **90%** full."
+ *     sentora-notice withdraw disk-john
+ *     sentora-notice list
+ *
+ * @package Sentora
+ * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
+ */
+$rootPath = str_replace('/bin', '/', str_replace("\\", '/', dirname(__FILE__)));
+chdir($rootPath);
+ini_set('display_errors', 'On');
+require_once 'dryden/loader.inc.php';
+require_once 'cnf/db.php';
+require_once 'inc/dbc.inc.php';
+if (!runtime_controller::IsCLI()) {
+    exit(1);
+}
+
+/**
+ * Print the help and exit.
+ *
+ * @param int $code The exit code.
+ * @return void
+ */
+function notice_help($code)
+{
+    fwrite($code ? STDERR : STDOUT, "Sentora notices\n"
+        . "Usage:\n"
+        . "  sentora-notice send [options] \"text\"   Send a notice (text from stdin when it is -)\n"
+        . "  sentora-notice withdraw <key>           Take away the notices sent with this key\n"
+        . "  sentora-notice remove <id>              Take away one notice\n"
+        . "  sentora-notice list                     The notices the panel sent, and which are showing\n"
+        . "Options for send:\n"
+        . "  --to everyone | user:<name> | clients:<reseller name> | package:<id> | group:<id>   (default everyone)\n"
+        . "  --type info | warning | maintenance | outage   (default info)\n"
+        . "  --title \"text\"                 (default: the type's name)\n"
+        . "  --start \"date\" --end \"date\"    When it shows (any date strtotime() reads; server time)\n"
+        . "  --pinned                       Clients can not close it\n"
+        . "  --key <key>                    Replace the earlier notice sent with this key\n"
+        . "The text is plain: **bold**, [text](https://address), web addresses, and lines starting with \"- \".\n");
+    exit($code);
+}
+
+/**
+ * An account ID by user name.
+ *
+ * @global db_driver $zdbh The panel's database connection.
+ * @param string $name The user name.
+ * @return int The ID (exits when there is no such account).
+ */
+function notice_account($name)
+{
+    global $zdbh;
+    $q = $zdbh->prepare("SELECT ac_id_pk FROM x_accounts WHERE ac_user_vc = :n AND ac_deleted_ts IS NULL");
+    $q->execute(array(':n' => $name));
+    $id = (int) $q->fetchColumn();
+    if (!$id) {
+        fwrite(STDERR, "No account named $name.\n");
+        exit(2);
+    }
+    return $id;
+}
+
+$args = array_slice($argv, 1);
+$cmd = array_shift($args);
+if ($cmd === 'send') {
+    $n = array('scope' => 'everyone', 'source' => 'cli');
+    $text = null;
+    while ($args) {
+        $a = array_shift($args);
+        $v = in_array($a, array('--to', '--type', '--title', '--start', '--end', '--key'), true) ? array_shift($args) : null;
+        if (in_array($a, array('--to', '--type', '--title', '--start', '--end', '--key'), true) && $v === null) {
+            notice_help(2);
+        }
+        switch ($a) {
+            case '--to':
+                list($kind, $what) = array_pad(explode(':', $v, 2), 2, '');
+                if ($kind === 'everyone') {
+                    $n['scope'] = 'everyone';
+                } elseif ($kind === 'user') {
+                    $n['scope'] = 'user';
+                    $n['targets'] = array(notice_account($what));
+                } elseif ($kind === 'clients') {
+                    $n['scope'] = 'clients';
+                    $n['targets'] = array(notice_account($what));
+                } elseif ($kind === 'package' || $kind === 'group') {
+                    $n['scope'] = $kind . 's';
+                    $n['targets'] = array_map('intval', explode(',', $what));
+                } else {
+                    notice_help(2);
+                }
+                break;
+            case '--type':
+                $n['type'] = $v;
+                break;
+            case '--title':
+                $n['title'] = $v;
+                break;
+            case '--key':
+                $n['key'] = $v;
+                break;
+            case '--start':
+            case '--end':
+                $t = strtotime($v);
+                if ($t === false) {
+                    fwrite(STDERR, "Not a date: $v\n");
+                    exit(2);
+                }
+                $n[substr($a, 2)] = $t;
+                break;
+            case '--pinned':
+                $n['closable'] = false;
+                break;
+            default:
+                $text = $a === '-' ? stream_get_contents(STDIN) : $a;
+        }
+    }
+    if ($text === null) {
+        notice_help(2);
+    }
+    $id = ctrl_notices::Send($n + array('body' => $text));
+    if ($id === false) {
+        fwrite(STDERR, ctrl_notices::$error . "\n");
+        exit(1);
+    }
+    echo "Notice $id saved.\n";
+} elseif ($cmd === 'withdraw' && isset($args[0])) {
+    echo ctrl_notices::Withdraw($args[0]) . " notice(s) taken away.\n";
+} elseif ($cmd === 'remove' && isset($args[0])) {
+    echo ctrl_notices::Remove((int) $args[0]) ? "Notice taken away.\n" : "No such notice.\n";
+} elseif ($cmd === 'list') {
+    foreach (ctrl_notices::From(0) as $x) {
+        printf("%-5d %-10s %-11s %-9s %-20s %s\n", $x['id'], ctrl_notices::State($x), $x['type'], $x['scope'], (string) $x['key'], mb_strimwidth(str_replace("\n", ' ', $x['body']), 0, 60, '...'));
+    }
+} else {
+    notice_help(in_array($cmd, array(null, 'help', '-h', '--help'), true) ? 0 : 2);
+}

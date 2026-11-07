@@ -3,7 +3,7 @@
     <name>Client Notice Manager</name>
     <version>200</version>
     <defaultcat>Reseller</defaultcat>
-    <desc>Enables resellers to set global notices for their clients.</desc>
+    <desc>Send notices to your clients at the top of their panel: planned maintenance, outages, news, or a personal notice to one client, with a start and end time.</desc>
     <authorname>Sentora Project</authorname>
     <authoremail>info@sentora.org</authoremail>
     <authorurl>http://sentora.org/</authorurl>

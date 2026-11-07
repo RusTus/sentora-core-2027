@@ -158,3 +158,21 @@ legend { color: var(--ml-ink); border-bottom-color: var(--ml-line); }
 .sn-warn circle { fill: var(--sn-warn-soft); stroke: var(--sn-warn-line); } .sn-warn path { stroke: var(--sn-warn); }
 
 #footer { color: var(--ml-muted); }
+
+/* Notices at the top of the panel (<# ui_tpl_notice #>, Client Notice Manager): one box per notice, coloured by its kind */
+.sn-notices { display: grid; gap: 10px; margin: 0 0 16px; }
+.sn-notice { --nc: var(--ml-teal); position: relative; display: flex; align-items: flex-start; gap: 12px; padding: 12px 40px 12px 14px; border-radius: 6px;
+    border: 1px solid color-mix(in srgb, var(--nc) 35%, var(--ml-card)); border-left: 4px solid var(--nc);
+    background: color-mix(in srgb, var(--nc) var(--ml-tint), var(--ml-card)); color: var(--ml-ink); font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
+.sn-notice-warning { --nc: var(--ml-amber); }
+.sn-notice-maintenance { --nc: var(--ml-purple); }
+.sn-notice-outage { --nc: var(--ml-red); }
+.sn-notice-ico { width: 22px; height: 22px; flex: none; margin-top: 1px; color: color-mix(in srgb, var(--nc) 80%, var(--ml-ink)); }
+.sn-notice-main { flex: 1; min-width: 0; }
+.sn-notice-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 2px; }
+.sn-notice-head b { font-size: 15px; }
+.sn-notice-head small { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; color: var(--ml-muted); }
+.sn-notice-body ul { margin: 4px 0; padding-left: 20px; }
+.sn-notice-body a { color: inherit; text-decoration: underline; text-underline-offset: 2px; font-weight: 600; }
+.sn-notice-close { position: absolute; top: 8px; right: 8px; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 6px; background: none; color: var(--ml-muted); font-size: 20px; line-height: 28px; cursor: pointer; }
+.sn-notice-close:hover, .sn-notice-close:focus-visible { background: color-mix(in srgb, var(--nc) 20%, transparent); color: var(--ml-ink); }

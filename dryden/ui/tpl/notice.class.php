@@ -14,29 +14,89 @@
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  */
 /**
- * Template tag <# ui_tpl_notice #>: the reseller's notice to their clients.
+ * Template tag <# ui_tpl_notice #>: the notices the logged-in account sees (see ctrl_notices).
  *
- * A notice is plain text: line breaks are kept, web addresses become links and **text** is bold.
- * Notices saved by the old HTML editor (they start with a tag such as <p>) are read as text, their tags removed.
+ * A notice is plain text: line breaks are kept, web addresses and [text](https://address) become
+ * links, **text** is bold and lines starting with "- " are a list. Notices saved by the old HTML
+ * editor (they start with a tag such as <p>) are read as text, their tags removed.
  */
 class ui_tpl_notice {
 
     /**
-     * Returns the notice the user's reseller set (Client Notice Manager) as an alert box.
+     * The notices the account sees, one box each, most urgent first.
      *
-     * @global db_driver $zdbh The panel's database connection.
-     * @return string|false The alert HTML from ui_sysmessage::shout(), or false when the reseller has no notice.
+     * Notices a client may close stay closed (a cookie per notice and version) until the notice changes.
+     *
+     * @return string|false The HTML, or false when there are none.
      */
     public static function Template() {
-        $user_array = ctrl_users::GetUserDetail();
-        global $zdbh;
-        $q = $zdbh->prepare("SELECT ac_notice_tx FROM x_accounts WHERE ac_id_pk = :r");
-        $q->execute(array(':r' => (int) $user_array['resellerid']));
-        $result = $q->fetch();
-        if ($result && self::Text($result['ac_notice_tx']) !== '') {
-            return ui_sysmessage::shout(self::Format($result['ac_notice_tx']), 'notice', ui_language::translate('Notice:'), true);
+        $user = ctrl_users::GetUserDetail();
+        if (empty($user['userid'])) {
+            return false;
         }
-        return false;
+        $out = '';
+        foreach (ctrl_notices::ForAccount((int) $user['userid']) as $n) {
+            $out .= self::Box($n, (int) $user['userid']);
+        }
+        if ($out === '') {
+            return false;
+        }
+        // hide the ones closed before (here, so they do not flash), and remember a close
+        return '<div class="sn-notices" id="sn-notices">' . $out . '</div><script>(function(){var w=document.getElementById("sn-notices");if(!w){return;}'
+            . 'Array.prototype.forEach.call(w.querySelectorAll(".sn-notice[data-key]"),function(n){var k="sn_notice_"+n.getAttribute("data-key");'
+            . 'if(document.cookie.split("; ").indexOf(k+"=1")>=0){n.parentNode.removeChild(n);return;}'
+            . 'var c=n.querySelector(".sn-notice-close");if(c){c.addEventListener("click",function(){document.cookie=k+"=1; path=/; max-age=31536000; SameSite=Lax";n.parentNode.removeChild(n);});}});'
+            . 'if(!w.querySelector(".sn-notice")){w.parentNode.removeChild(w);}})();</script>';
+    }
+
+    /**
+     * The name of a kind of notice.
+     *
+     * @param string $type 'outage', 'warning', 'maintenance' or 'info'.
+     * @return string The translated name.
+     */
+    public static function TypeName($type) {
+        $names = array('outage' => 'Outage', 'warning' => 'Warning', 'maintenance' => 'Maintenance', 'info' => 'Information');
+        return ui_language::translate(isset($names[$type]) ? $names[$type] : 'Information');
+    }
+
+    /**
+     * The icon of a kind of notice.
+     *
+     * @param string $type 'outage', 'warning', 'maintenance' or 'info'.
+     * @param string $class Optional. The class of the SVG. Default 'sn-notice-ico'.
+     * @return string The SVG.
+     */
+    public static function Icon($type, $class = 'sn-notice-ico') {
+        $paths = array(
+            'outage' => '<path d="M7.9 2h8.2L22 7.9v8.2L16.1 22H7.9L2 16.1V7.9z"/><path d="M12 8v4M12 16h.01"/>',
+            'warning' => '<path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/>',
+            'maintenance' => '<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-.6-.6-2.4z"/>',
+            'info' => '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>',
+        );
+        return '<svg class="' . $class . '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+            . (isset($paths[$type]) ? $paths[$type] : $paths['info']) . '</svg>';
+    }
+
+    /**
+     * One notice as a box: its icon, title (or the kind's name), who it is from, the text, and Close when it may be closed.
+     *
+     * @param array<string, mixed> $n The notice (see ctrl_notices::Row()).
+     * @param int $uid Optional. The account looking (to say "Just for you"). Default 0.
+     * @param bool $preview Optional. A preview: no key, so it can not be closed for real. Default false.
+     * @return string The HTML.
+     */
+    public static function Box($n, $uid = 0, $preview = false) {
+        $h = function ($s) { return htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8'); };
+        $type = in_array($n['type'], ctrl_notices::TYPES, true) ? $n['type'] : 'info';
+        $from = $n['scope'] === 'user' ? 'Just for you' : ($n['scope'] === 'everyone' ? 'For everyone' : ((int) $n['from'] === 0 ? 'From the panel' : 'From your host'));
+        return '<div class="sn-notice sn-notice-' . $type . '"' . ($preview ? '' : ' data-key="' . (int) $n['id'] . '-' . (int) $n['updated'] . '"')
+            . ' role="' . ($type === 'outage' ? 'alert' : 'status') . '">' . self::Icon($type)
+            . '<div class="sn-notice-main"><div class="sn-notice-head"><b>' . $h($n['title'] !== '' ? $n['title'] : self::TypeName($type)) . '</b>'
+            . '<small>' . $h(ui_language::translate($from)) . '</small></div>'
+            . '<div class="sn-notice-body">' . self::Format($n['body']) . '</div></div>'
+            . (!empty($n['closable']) ? '<button type="button" class="sn-notice-close" aria-label="' . $h(ui_language::translate('Close')) . '" title="' . $h(ui_language::translate('Close')) . '">&times;</button>' : '')
+            . '</div>';
     }
 
     /**
@@ -61,25 +121,56 @@ class ui_tpl_notice {
     }
 
     /**
-     * A notice as safe HTML: escaped, with line breaks, links for web addresses and **bold**.
+     * A notice as safe HTML: escaped, with line breaks, lists, links and **bold**.
+     *
+     * The same rules run in the browser for the editor's preview (modules/client_notices/assets/notices.js).
      *
      * @param string|null $notice The stored notice.
      * @return string The HTML.
      */
     public static function Format($notice) {
+        $keep = array();
+        $hold = function ($html) use (&$keep) {
+            $keep[] = $html;
+            return "\x01" . (count($keep) - 1) . "\x02";
+        };
         $s = htmlspecialchars(self::Text($notice), ENT_QUOTES, 'UTF-8');
-        $s = preg_replace('#\*\*(\S(?:.*?\S)?)\*\*#', '<b>$1</b>', $s);
-        $s = preg_replace_callback('#\bhttps?://[^\s<]+#i', function ($m) {
+        // [text](https://address)
+        $s = preg_replace_callback('#\[([^\]\n]+)\]\((https?://[^\s)]+)\)#i', function ($m) use ($hold) {
+            return $hold('<a href="' . $m[2] . '" target="_blank" rel="noopener noreferrer">' . $m[1] . '</a>');
+        }, $s);
+        // a bare address; the sentence's punctuation and quotes (escaped by now) stay outside the link
+        $s = preg_replace_callback('#\bhttps?://[^\s<\x01]+#i', function ($m) use ($hold) {
             $url = $m[0];
             $tail = '';
-            // leave the sentence's punctuation and quotes (escaped by now) outside the link
             while (preg_match('#(&quot;|&\#039;|&gt;|[.,;:!?)])$#', $url, $p)) {
                 $tail = $p[1] . $tail;
                 $url = substr($url, 0, -strlen($p[1]));
             }
-            return '<a href="' . $url . '" target="_blank" rel="noopener noreferrer">' . $url . '</a>' . $tail;
+            return $hold('<a href="' . $url . '" target="_blank" rel="noopener noreferrer">' . $url . '</a>') . $tail;
         }, $s);
-        return nl2br($s, false);
+        $s = preg_replace('#\*\*(\S(?:.*?\S)?)\*\*#', '<b>$1</b>', $s);
+        // lines starting with "- " are a list; other lines keep their breaks
+        $out = '';
+        $list = '';
+        $prev = false;
+        foreach (explode("\n", $s) as $line) {
+            if (preg_match('#^\s*- (.*)$#', $line, $m)) {
+                $list .= '<li>' . $m[1] . '</li>';
+                continue;
+            }
+            if ($list !== '') {
+                $out .= '<ul>' . $list . '</ul>';
+                $list = '';
+                $prev = false;
+            }
+            $out .= ($prev ? '<br>' : '') . $line;
+            $prev = true;
+        }
+        if ($list !== '') {
+            $out .= '<ul>' . $list . '</ul>';
+        }
+        return preg_replace_callback("#\x01(\d+)\x02#", function ($m) use ($keep) { return $keep[(int) $m[1]]; }, $out);
     }
 
 }

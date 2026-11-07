@@ -2,70 +2,85 @@
     <div class="panel-heading">
         <img src="<@ ModuleIcon @>" width="35" height="35" border="0" alt="<@ ModuleName @>">
         <div class="zmodule_title"><@ ModuleName @></div>
-        <div class="zmodule_desc" id="zmodule_desc_<@ ModuleName @>"><: Set a notice that appears at the top of the panel for your clients: planned maintenance, an outage, a new feature. :></div>
+        <div class="zmodule_desc" id="zmodule_desc_<@ ModuleName @>"><: Notices appear at the top of your clients' panel: planned maintenance, an outage, something new, or a personal message to one client. :></div>
     </div>
     <@ Result @>
     <link rel="stylesheet" href="modules/client_notices/assets/notices.css">
 
     <div class="cn" id="cn">
-        <div class="cn-cols">
-            <form class="cn-card cn-edit" action="./?module=client_notices&amp;action=UpdateMessage" method="post">
-                <h4><: Your notice :></h4>
-                <textarea class="form-control" name="inNotice" id="inNotice" aria-label="<: Notice message :>" rows="8" maxlength="<@ MaxLength @>" placeholder="<: For example: Planned maintenance on Sunday from 02:00 to 04:00. Mail may be slow during that time. :>"><@ CurrentNoticeText @></textarea>
-                <div class="cn-under">
-                    <span class="cn-hint"><: Plain text. A blank line starts a new paragraph, web addresses become links and :> <code>**<: text :>**</code> <: is bold. :></span>
-                    <span class="cn-count" id="cn-count" data-max="<@ MaxLength @>"></span>
+        <% if IsList %>
+        <div class="cn-top">
+            <div class="cn-tiles"><@ Tiles @></div>
+            <a class="btn btn-primary cn-new" href="./?module=client_notices&amp;show=New"><svg class="cn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><: New notice :></a>
+        </div>
+        <div class="cn-list"><@ NoticeList @></div>
+        <form id="cn-remove" action="./?module=client_notices&amp;action=Remove" method="post"><@ CSFR_Tag @></form>
+        <% endif %>
+
+        <% if IsEdit %>
+        <form class="cn-form" id="cn-form" action="./?module=client_notices&amp;show=New&amp;action=Save" method="post">
+            <input type="hidden" name="inId" value="<@ FormId @>">
+            <div class="cn-main">
+                <a href="./?module=client_notices" class="btn btn-default btn-sm cn-back"><svg class="cn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg><: All notices :></a>
+                <h3 class="cn-h"><@ FormTitle @></h3>
+
+                <div class="cn-card">
+                    <h4><: What kind :></h4>
+                    <div class="cn-types"><@ TypeChoices @></div>
                 </div>
+
+                <div class="cn-card">
+                    <h4><: Message :></h4>
+                    <label class="cn-label" for="inTitle"><: Title :> <small><: optional: without one, the kind's name shows :></small></label>
+                    <input class="form-control" type="text" name="inTitle" id="inTitle" maxlength="<@ MaxTitle @>" value="<@ FormTitleValue @>">
+                    <label class="cn-label" for="inBody"><: Text :></label>
+                    <div class="cn-tools" role="toolbar" aria-label="<: Formatting :>">
+                        <button type="button" class="btn btn-default btn-sm" data-do="bold" title="<: Bold :>" aria-label="<: Bold :>"><b>B</b></button>
+                        <button type="button" class="btn btn-default btn-sm" data-do="link" title="<: Link :>" aria-label="<: Link :>"><svg class="cn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg></button>
+                        <button type="button" class="btn btn-default btn-sm" data-do="list" title="<: List :>" aria-label="<: List :>"><svg class="cn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11"/><path d="M4 6h.01M4 12h.01M4 18h.01"/></svg></button>
+                        <span class="cn-tools-hint"><: or type **bold**, [text](https://…) and lines starting with - :></span>
+                    </div>
+                    <div class="cn-linkrow" id="cn-linkrow" hidden>
+                        <input class="form-control input-sm" type="url" id="cn-linkurl" placeholder="https://" aria-label="<: Web address :>">
+                        <button type="button" class="btn btn-primary btn-sm" id="cn-linkadd"><: Add link :></button>
+                        <button type="button" class="btn btn-default btn-sm" id="cn-linkno"><: Cancel :></button>
+                    </div>
+                    <textarea class="form-control" name="inBody" id="inBody" rows="7" maxlength="<@ MaxBody @>" required><@ FormBody @></textarea>
+                    <div class="cn-under"><span></span><span class="cn-count" id="cn-count" data-max="<@ MaxBody @>"></span></div>
+                </div>
+
+                <div class="cn-card">
+                    <h4><: Who sees it :></h4>
+                    <@ AudienceChoices @>
+                </div>
+
+                <div class="cn-card">
+                    <h4><: When :></h4>
+                    <div class="cn-when">
+                        <label><span><: Show from :></span><input class="form-control" type="datetime-local" name="inStart" value="<@ FormStart @>"><small><: empty: straight away :></small></label>
+                        <label><span><: Until :></span><input class="form-control" type="datetime-local" name="inEnd" value="<@ FormEnd @>"><small><: empty: until you remove it :></small></label>
+                    </div>
+                    <p class="cn-sub"><: Server time: :> <@ ServerTime @></p>
+                    <div class="cn-switchrow"><div><label for="inClosable"><: Clients can close it :></label><small><: Off: it stays at the top until it ends or you remove it. Use it for what clients must not miss. :></small></div>
+                        <label class="cn-switch"><input type="checkbox" name="inClosable" id="inClosable" value="1"<@ FormClosable @>><span class="cn-toggle"></span></label></div>
+                </div>
+
                 <div class="cn-foot">
                     <button class="btn btn-primary" type="submit"><: Save notice :></button>
-                    <% if HasNotice %><button class="btn btn-default cn-clear" type="submit" name="inClear" value="1"><: Remove notice :></button><% endif %>
-                </div>
-                <@ CSFR_Tag @>
-            </form>
-
-            <div class="cn-side">
-                <div class="cn-card">
-                    <h4><: What your clients see :></h4>
-                    <div class="cn-preview" id="cn-preview" data-empty="<: No notice: nothing is shown. :>" data-title="<: Notice: :>"><div class="alert alert-block alert-info cn-alert"><button type="button" class="close" tabindex="-1" aria-hidden="true">&times;</button><h4><: Notice: :></h4><p><@ Preview @></p></div></div>
-                </div>
-                <div class="cn-card cn-facts">
-                    <div class="cn-who"><svg class="cn-ico-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14a6 6 0 0 1 3.5 6"/></svg><div><@ Audience @></div></div>
-                    <ul>
-                        <li><svg class="cn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/></svg><span><: It shows at the top of every page, above the modules. :></span></li>
-                        <li><svg class="cn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg><span><: A client can close it; it comes back for everyone when you change the text. :></span></li>
-                        <li><svg class="cn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg><span><: Remove it when it no longer applies, so clients keep reading the next one. :></span></li>
-                    </ul>
+                    <a class="btn btn-default" href="./?module=client_notices"><: Cancel :></a>
                 </div>
             </div>
-        </div>
+
+            <div class="cn-aside">
+                <div class="cn-card cn-sticky">
+                    <h4><: What they see :></h4>
+                    <div class="cn-preview" id="cn-preview"<@ PreviewTexts @>><@ FormPreview @></div>
+                    <p class="cn-sub"><: It shows at the top of every page of their panel, above the modules. A notice they closed comes back when you change it. :></p>
+                </div>
+            </div>
+            <@ CSFR_Tag @>
+        </form>
+        <% endif %>
     </div>
 </div>
-<script>
-(function () {
-    'use strict';
-    var ta = document.getElementById('inNotice'), pv = document.getElementById('cn-preview'), cnt = document.getElementById('cn-count');
-    if (!ta || !pv) { return; }
-    var max = parseInt(cnt.getAttribute('data-max'), 10) || 2000;
-    var esc = function (s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;'); };
-    // the same rules as ui_tpl_notice::Format()
-    var format = function (t) {
-        var s = esc(t.replace(/\r\n?/g, '\n').trim());
-        s = s.replace(/\*\*(\S(?:.*?\S)?)\*\*/g, '<b>$1</b>');
-        s = s.replace(/\bhttps?:\/\/[^\s<]+/gi, function (url) {
-            var tail = '', m;
-            while ((m = url.match(/(&quot;|&#039;|&gt;|[.,;:!?)])$/))) { tail = m[1] + tail; url = url.slice(0, -m[1].length); }
-            return '<a href="' + url + '" target="_blank" rel="noopener noreferrer">' + url + '</a>' + tail;
-        });
-        return s.replace(/\n/g, '<br>');
-    };
-    var draw = function () {
-        var t = ta.value;
-        if (t.trim() === '') { pv.innerHTML = '<div class="cn-none">' + esc(pv.getAttribute('data-empty')) + '</div>'; }
-        else { pv.innerHTML = '<div class="alert alert-block alert-info cn-alert"><button type="button" class="close" tabindex="-1" aria-hidden="true">&times;</button><h4>' + esc(pv.getAttribute('data-title')) + '</h4><p>' + format(t) + '</p></div>'; }
-        cnt.textContent = Array.from(t).length + ' / ' + max;
-        cnt.classList.toggle('near', Array.from(t).length > max * 0.9);
-    };
-    ta.addEventListener('input', draw);
-    draw();
-})();
-</script>
+<script src="modules/client_notices/assets/notices.js"></script>

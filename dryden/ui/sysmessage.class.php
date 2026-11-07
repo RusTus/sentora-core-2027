@@ -55,7 +55,7 @@ class ui_sysmessage {
                 $class = 'alert-primary';
                 break;
             case 'notice':
-                $class = 'alert-info notice-manager-alert hidden';
+                $class = 'alert-info';
                 break;
             default:
                 $class = 'alert-info';
