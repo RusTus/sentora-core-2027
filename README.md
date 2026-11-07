@@ -206,7 +206,7 @@ The menus:
 | Mail | Mailboxes, Forwards, Aliases, Distribution Lists, WebMail, SpamAV |
 | Database Management | MySQL Database, MySQL Users, phpMyAdmin |
 | File Management | File Manager, FTP Accounts |
-| Advanced | Backup, Cron Manager, Protected Directories, View Logs, GoAccess, Matomo, Service Status, PHPInfo |
+| Advanced | Backup, Cron Manager, Protected Directories, View Logs, GoAccess, Matomo, Service Status, PHPInfo, FAQ (answers for clients; administrators and resellers add their own) |
 
 ## Clients, packages and resellers
 
@@ -390,7 +390,7 @@ The add-ons live in the [`sentora-repo` folder](https://github.com/RusTus/sentor
 
 ## The daemon
 
-Most of what the panel changes is done by the **daemon**: `bin/daemon.php`, run by cron as root every 5 minutes (`/etc/cron.d/zdaemon`), with its last run in `/var/sentora/logs/daemon-last-run.log`. That is why a change in the panel can take up to 5 minutes. Each module adds its own work through hooks, run every time, every hour or every day (by elapsed time since the last such run):
+Most of what the panel changes is done by the **daemon**: `bin/daemon.php`, run by cron as root every 5 minutes (`/etc/cron.d/zdaemon`), with its last run in `/var/sentora/logs/daemon-last-run.log`. That is why a change in the panel can take up to 5 minutes. Only one run works at a time: a run that finds another one busy waits for it (up to 15 minutes, then it is skipped), so a long run never overlaps the next. Each module adds its own work through hooks, run every time, every hour or every day (by elapsed time since the last such run):
 
 | When | What |
 | --- | --- |
@@ -446,14 +446,14 @@ So a typing mistake in Extra directives or a bad certificate can't take every we
 | FTP logins | SHA-512 crypt, plus an encrypted copy | The account owner, with Show password |
 | MySQL users | An encrypted copy (MySQL keeps its own hash) | The account owner, with Show password |
 
-The encrypted copies use libsodium with a key derived from `cnf/security.php` (readable by root and the panel only), so a copy of the database alone is unreadable. Every Show password, and every wrong confirmation, is logged in `/var/lib/sentora/password-reveal.log`.
+Two-factor secrets are stored encrypted the same way. The encrypted copies use libsodium with a key derived from `cnf/security.php` (readable by root and the panel only), so a copy of the database alone is unreadable. Every Show password, and every wrong confirmation, is logged in `/var/lib/sentora/password-reveal.log`.
 
 ## Logins and sessions
 
 - **Lockout:** 5 wrong passwords for a user name, or 20 from one address, within 15 minutes lock logins for 15 minutes (with the same answer as a wrong password). Failures are logged for fail2ban, which bans an address for an hour after 5 failures in 5 minutes on SSH, mail logins, webmail, SOGo, FTP, phpMyAdmin and the panel.
 - **Two-factor login** (TOTP from an authenticator app): on per account in My Account, or required for everyone (Sentora Config). Each account gets 10 one-time recovery codes. A lost phone: use a recovery code, or ask the administrator or reseller to reset it; an administrator who lost theirs, as root: `setso --set twofactor_enabled disabled`. Resets and recovery-code logins are logged in `/var/lib/sentora/twofactor.log`.
 - **Forgot password** sends a single-use link to the account's email address (at most 3 per address).
-- **Remember me** keeps a login for 30 days with a random token (only its hash is stored, a new one each time it is used).
+- **Remember me** keeps a login for 30 days with a random token (only its hash is stored, a new one each time it is used). When two-factor login is required and the account has not set it up, it asks for the password instead, which then asks to set it up.
 - **Sessions:** a new session at every login, cookies that scripts can't read, and every form and action carries a token, so another website can't act in your name. An account that is switched off or deleted is logged out at its next page; while shadowing, the shadowing account counts.
 - **Every action** checks that the item belongs to the logged-in account.
 

@@ -27,7 +27,8 @@
  *
  */
 /**
- * Package Manager module: a reseller's hosting packages (name, PHP switch and quotas).
+ * Package Manager module: a reseller's hosting packages (name and quotas). The old per-package PHP
+ * switch (pk_enablephp_in) is kept as 1 and no longer shown: it never had an effect.
  */
 class module_controller extends ctrl_module
 {
@@ -769,7 +770,7 @@ class module_controller extends ctrl_module
             $n = count($p['clients']);
             $out .= '<div class="pk-card"><div class="pk-card-head"><div class="pk-card-title"><b>' . self::h($p['name']) . '</b>'
                 . '<span>' . ($n === 1 ? self::t('1 client') : str_replace('%d', (string) $n, self::t('%d clients'))) . ($p['created'] ? ' &middot; ' . str_replace('%s', self::h(ui_language::Date('j M Y', $p['created'])), self::t('made %s')) : '') . '</span></div>'
-                . '<span class="pk-php' . ($p['php'] ? ' on' : '') . '">' . self::t($p['php'] ? 'PHP on' : 'PHP off') . '</span></div>'
+                . '</div>'
                 . '<ul class="pk-limits">' . $lim . '</ul>'
                 . ($n ? '<div class="pk-clients">' . implode('', array_map(function ($u) { return '<span>' . self::h($u) . '</span>'; }, array_slice(array_values($p['clients']), 0, 8))) . ($n > 8 ? '<em>+' . ($n - 8) . '</em>' : '') . '</div>' : '')
                 . '<div class="pk-act"><a class="btn btn-default btn-sm" href="./?module=packages&amp;show=Edit&amp;other=' . $p['id'] . '">' . self::t('Edit') . '</a>'

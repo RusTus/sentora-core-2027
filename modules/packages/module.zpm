@@ -2,7 +2,7 @@
     <div class="panel-heading">
         <img src="<@ ModuleIcon @>" width="35" height="35" border="0" alt="<@ ModuleName @>">
         <div class="zmodule_title"><@ ModuleName @></div>
-        <div class="zmodule_desc" id="zmodule_desc_<@ ModuleName @>"><: A package sets a client's limits: how many domains, mailboxes and databases it can have, its disk space and bandwidth, and whether it can use PHP. :></div>
+        <div class="zmodule_desc" id="zmodule_desc_<@ ModuleName @>"><: A package sets a client's limits: how many domains, mailboxes and databases it can have, and its disk space and bandwidth. :></div>
     </div>
     <@ Result @>
     <link rel="stylesheet" href="modules/packages/assets/packages.css">
@@ -27,8 +27,8 @@
                     <h4><: Package :></h4>
                     <label class="pk-name"><span><: Name :></span><input class="form-control" type="text" name="inPackageName" value="<@ FormName @>" maxlength="30" required>
                         <small><: Clients see it in their panel. At most 30 characters. :></small></label>
-                    <div class="pk-switchrow"><div><label for="inEnablePHP"><: PHP :></label><small><: Off: its websites serve plain files only. :></small></div>
-                        <label class="pk-switch"><input type="checkbox" name="inEnablePHP" id="inEnablePHP" value="1"<@ FormPHPChecked @>><span class="pk-toggle"></span></label></div>
+                    <!-- PHP is always on: the old per-package PHP switch never had an effect (every domain runs PHP in its account's own PHP-FPM pool) -->
+                    <input type="hidden" name="inEnablePHP" value="1">
                 </div>
                 <div class="pk-box">
                     <h4><: Limits :></h4>

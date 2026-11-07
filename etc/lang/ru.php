@@ -145,6 +145,7 @@ return array(
     'A new sub-domain or a change goes live at the next update of the web server, within an hour.' => 'Новый поддомен или изменение начинает работать при следующем обновлении веб-сервера, в течение часа.',
     'A newer panel is published' => 'Вышла новая версия панели',
     'A newer release has been published since: update again above.' => 'С тех пор вышел более новый выпуск: обновите панель ещё раз выше.',
+    'A package sets a client\'s limits: how many domains, mailboxes and databases it can have, and its disk space and bandwidth.' => 'Пакет задаёт ограничения клиента: сколько у него может быть доменов, почтовых ящиков и баз данных, а также дисковое пространство и трафик.',
     'A package sets a client\'s limits: how many domains, mailboxes and databases it can have, its disk space and bandwidth, and whether it can use PHP.' => 'Пакет задаёт ограничения клиента: сколько у него может быть доменов, почтовых ящиков и баз данных, дисковое пространство и трафик, а также доступен ли PHP.',
     'A panel update is available' => 'Доступно обновление панели',
     'A parked domain has no site of its own: it shows this server\'s holding page. Park a name you own but do not use yet, so it answers while you decide.' => 'У припаркованного домена нет своего сайта: он показывает страницу-заглушку этого сервера. Паркуйте имя, которым владеете, но пока не используете, — оно будет отвечать, пока вы решаете.',

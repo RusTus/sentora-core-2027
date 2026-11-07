@@ -78,7 +78,7 @@ class ctrl_twofactor
         if (!$done) {
             self::EnsureSetting();
             $zdbh->exec("CREATE TABLE IF NOT EXISTS x_twofactor (
-                tf_acc_fk INT NOT NULL PRIMARY KEY, tf_secret_vc VARCHAR(64) NOT NULL,
+                tf_acc_fk INT NOT NULL PRIMARY KEY, tf_secret_vc VARCHAR(255) NOT NULL,
                 tf_enabled_in TINYINT NOT NULL DEFAULT 0, tf_lastcounter_in BIGINT NOT NULL DEFAULT 0) ENGINE=InnoDB");
             // one-time recovery codes (stored hashed, like passwords)
             $zdbh->exec("CREATE TABLE IF NOT EXISTS x_twofactor_recovery (
@@ -100,7 +100,77 @@ class ctrl_twofactor
         self::Ensure();
         $sql = $zdbh->prepare("SELECT * FROM x_twofactor WHERE tf_acc_fk = :a");
         $sql->execute(array(':a' => (int) $uid));
-        return $sql->fetch();
+        $row = $sql->fetch();
+        if ($row) {
+            // the secret is stored encrypted (ctrl_secret); one from before that is used as it is
+            // until the daemon encrypts it (EncryptStored)
+            $plain = self::SecretFrom((string) $row['tf_secret_vc']);
+            $row['tf_secret_vc'] = $plain;
+            $row[1] = $plain;
+        }
+        return $row;
+    }
+
+    /**
+     * The secret as stored: encrypted (ctrl_secret, "enc1:...") or, from before that, plain base32.
+     *
+     * @param string $stored The tf_secret_vc value.
+     * @return string The base32 secret ('' when it can not be decrypted).
+     */
+    static function SecretFrom($stored)
+    {
+        if (ctrl_secret::IsEncrypted($stored)) {
+            $plain = ctrl_secret::Decrypt($stored);
+            return $plain === false ? '' : (string) $plain;
+        }
+        return $stored;
+    }
+
+    /**
+     * The secret as it is stored: encrypted when the column has room (servers updated before the
+     * daemon widened it keep the plain secret until EncryptStored runs).
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param string $secret The base32 secret.
+     * @return string
+     */
+    static function SecretTo($secret)
+    {
+        global $zdbh;
+        static $wide = null;
+        if ($wide === null) {
+            $len = $zdbh->query("SELECT CHARACTER_MAXIMUM_LENGTH FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'x_twofactor' AND COLUMN_NAME = 'tf_secret_vc'")->fetchColumn();
+            $wide = (int) $len >= 255;
+        }
+        $enc = $wide ? ctrl_secret::Encrypt($secret) : '';
+        return $enc !== '' ? $enc : $secret;
+    }
+
+    /**
+     * Daemon: make room for encrypted secrets and encrypt the ones still stored plain (they were
+     * readable to anyone with a copy of the panel's database).
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return int How many were encrypted.
+     */
+    static function EncryptStored()
+    {
+        global $zdbh;
+        self::Ensure();
+        $len = (int) $zdbh->query("SELECT CHARACTER_MAXIMUM_LENGTH FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'x_twofactor' AND COLUMN_NAME = 'tf_secret_vc'")->fetchColumn();
+        if ($len > 0 && $len < 255) {
+            $zdbh->exec("ALTER TABLE x_twofactor MODIFY tf_secret_vc VARCHAR(255) NOT NULL");
+        }
+        $n = 0;
+        $set = $zdbh->prepare("UPDATE x_twofactor SET tf_secret_vc = :s WHERE tf_acc_fk = :a AND tf_secret_vc = :old");
+        foreach ($zdbh->query("SELECT tf_acc_fk, tf_secret_vc FROM x_twofactor WHERE tf_secret_vc NOT LIKE 'enc1:%'")->fetchAll(PDO::FETCH_ASSOC) as $r) {
+            $enc = ctrl_secret::Encrypt((string) $r['tf_secret_vc']);
+            if ($enc !== '') {
+                $set->execute(array(':s' => $enc, ':a' => (int) $r['tf_acc_fk'], ':old' => $r['tf_secret_vc']));
+                $n += $set->rowCount();
+            }
+        }
+        return $n;
     }
 
     /**
@@ -213,7 +283,7 @@ class ctrl_twofactor
         self::Ensure();
         $secret = self::Base32Encode(random_bytes(20));
         $zdbh->prepare("REPLACE INTO x_twofactor (tf_acc_fk, tf_secret_vc, tf_enabled_in, tf_lastcounter_in) VALUES (:a, :s, 0, 0)")
-            ->execute(array(':a' => (int) $uid, ':s' => $secret));
+            ->execute(array(':a' => (int) $uid, ':s' => self::SecretTo($secret)));
         return $secret;
     }
 

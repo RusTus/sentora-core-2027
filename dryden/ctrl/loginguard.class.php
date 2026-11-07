@@ -247,6 +247,13 @@ class ctrl_loginguard
             self::Forget();
             return false;
         }
+        // Two-factor required for everyone, and this account has not set it up (the token is from
+        // before that was switched on): log in with the password, which then asks to set it up. The
+        // cookie login came after that check in init.inc.php, so its first page went without it.
+        if (ctrl_twofactor::Forced() && !ctrl_twofactor::Required((int) $row['rt_acc_fk'])) {
+            self::Forget();
+            return false;
+        }
         ctrl_auth::SetUserSession((int) $row['rt_acc_fk'], true);
         self::Remember((int) $row['rt_acc_fk']);
         return true;

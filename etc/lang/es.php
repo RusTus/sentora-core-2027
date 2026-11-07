@@ -145,6 +145,7 @@ return array(
     'A new sub-domain or a change goes live at the next update of the web server, within an hour.' => 'Un subdominio nuevo o un cambio se activa en la próxima actualización del servidor web, en menos de una hora.',
     'A newer panel is published' => 'Hay una versión más reciente del panel',
     'A newer release has been published since: update again above.' => 'Desde entonces se ha publicado una versión más reciente: vuelva a actualizar arriba.',
+    'A package sets a client\'s limits: how many domains, mailboxes and databases it can have, and its disk space and bandwidth.' => 'Un paquete define los límites de un cliente: cuántos dominios, buzones y bases de datos puede tener, y su espacio en disco y ancho de banda.',
     'A package sets a client\'s limits: how many domains, mailboxes and databases it can have, its disk space and bandwidth, and whether it can use PHP.' => 'Un paquete define los límites de un cliente: cuántos dominios, buzones y bases de datos puede tener, su espacio en disco y ancho de banda, y si puede usar PHP.',
     'A panel update is available' => 'Hay una actualización del panel disponible',
     'A parked domain has no site of its own: it shows this server\'s holding page. Park a name you own but do not use yet, so it answers while you decide.' => 'Un dominio aparcado no tiene sitio propio: muestra la página provisional de este servidor. Aparque un nombre que posea pero aún no use, para que responda mientras decide.',

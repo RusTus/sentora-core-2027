@@ -26,6 +26,29 @@ require_once 'dryden/loader.inc.php';
 require_once 'cnf/db.php';
 require_once 'inc/dbc.inc.php';
 
+// One run at a time. A run that takes longer than 5 minutes (a big backup, many sites) overlapped
+// the next one from cron, and both then wrote the same files and settings. A second run now waits
+// for the first (up to 15 minutes), so the tools that run the daemon themselves (sentora-update,
+// the move from an old server, the smoke test) still get their run; it is skipped only when the
+// other run is still busy after that.
+$daemonLock = @fopen('/var/lib/sentora/daemon.lock', 'ce');   // (e: not passed on to programs it starts)
+if ($daemonLock !== false) {
+    $waited = 0;
+    while (!flock($daemonLock, LOCK_EX | LOCK_NB)) {
+        if ($waited === 0) {
+            echo "Another daemon run is busy: waiting for it (up to 15 minutes)...\n";
+        }
+        if ($waited >= 900) {
+            echo "The other daemon run is still busy after 15 minutes: this run is skipped.\n";
+            exit(0);
+        }
+        sleep(5);
+        $waited += 5;
+    }
+    ftruncate($daemonLock, 0);
+    fwrite($daemonLock, getmypid() . "\n");
+}
+
 $daemonLog = new debug_logger();
 $daemonLog->method = "file";
 $daemonLog->logcode = "001";
