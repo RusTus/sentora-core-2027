@@ -1,37 +1,27 @@
 <div class="zmodule_content panel" id="zmodule_header_<@ ModuleName @>">
     <div class="panel-heading">
         <img src="<@ ModuleIcon @>" width="35" height="35" border="0" alt="<@ ModuleName @>">
-
-        <div class="zmodule_title">
-            <@ ModuleName @>
-        </div>
-
-        <div class="zmodule_desc" id="zmodule_desc_<@ ModuleName @>"><@ ModuleDesc @></div>
-
+        <div class="zmodule_title"><@ ModuleName @></div>
+        <div class="zmodule_desc" id="zmodule_desc_<@ ModuleName @>"><: The mail server's settings: mailbox size, and the SOGo groupware's language, features, security and performance. :></div>
     </div>
-
     <@ Result @>
-
-    <div class="zgrid_wrapper">
-        <h2><: Configure your Mail Settings :></h2>
-        <form action="./?module=mail_admin&action=UpdateConfig" method="post">
-            <table class="table table-striped">
-                <% loop Config %>
-                <tr valign="top">
-                    <th nowrap="nowrap"><& cleanname &></th>
-                    <td><& fieldhtml &></td>
-                    <td><& description &></td>
-                </tr>
-                <% endloop %>
-                <tr>
-                    <th colspan="3">
-                        <button class="button-loader btn btn-primary" type="submit" id="button" name="inSaveSystem"><: Save Changes :></button>
-                        <button class="button-loader btn btn-default" type="button" onclick="window.location.href='./?module=moduleadmin';return false;"><: Cancel :></button>
-                    </th>
-                </tr>
-            </table>
-            <@ CSFR_Tag @>
-        </form>
+    <style>
+    .ma { --ma-muted: var(--sn-muted, #6b7785); background: var(--sn-soft, #f4f6f9); border-radius: 8px; padding: 18px; margin-top: 10px; display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 14px; align-items: start; color: var(--sn-ink, #1f2933); }
+    .ma-box { background: var(--sn-card, #fff); border-radius: 6px; box-shadow: 0 1px 3px rgba(20,30,40,0.08); padding: 16px 18px; position: sticky; top: 12px; }
+    .ma-box h4 { margin: 0 0 12px; font-size: 15px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; }
+    .ma-svc { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; font-size: 13px; }
+    .ma-svc li { display: grid; grid-template-columns: auto 1fr auto; gap: 2px 8px; align-items: center; }
+    .ma-svc i { width: 9px; height: 9px; border-radius: 50%; background: var(--sn-ok, #1e8a4c); grid-row: span 2; }
+    .ma-svc li.bad i { background: var(--sn-bad, #c62f2b); }
+    .ma-svc code { grid-column: 3; grid-row: 1; font-size: 11px; background: none; border: 0; padding: 0; color: var(--ma-muted); }
+    .ma-svc b { grid-column: 2; font-size: 11px; font-weight: 600; color: var(--sn-ok, #1e8a4c); }
+    .ma-svc li.bad b { color: var(--sn-bad, #c62f2b); }
+    .ma-sub { margin: 12px 0 0; font-size: 12px; color: var(--ma-muted); line-height: 1.45; }
+    @media (max-width: 900px) { .ma { grid-template-columns: 1fr; } .ma-box { position: static; order: -1; } }
+    @media (max-width: 640px) { .ma { padding: 12px; } }
+    </style>
+    <div class="ma">
+        <@ SettingsForm @>
+        <aside class="ma-box"><h4><: Mail services :></h4><@ Services @></aside>
     </div>
-
 </div>

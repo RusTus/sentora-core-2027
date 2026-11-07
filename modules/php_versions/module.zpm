@@ -1,30 +1,43 @@
 <div class="zmodule_content panel" id="zmodule_header_<@ ModuleName @>">
     <div class="panel-heading">
         <img src="<@ ModuleIcon @>" width="35" height="35" border="0" alt="<@ ModuleName @>">
-        <div class="zmodule_title">
-            <@ ModuleName @>
-        </div>
-        <div class="zmodule_desc" id="zmodule_desc_<@ ModuleName @>"><@ ModuleDesc @></div>
+        <div class="zmodule_title"><@ ModuleName @></div>
+        <div class="zmodule_desc" id="zmodule_desc_<@ ModuleName @>"><: The PHP versions on this server, and which of them domains may choose in Domains and Sub Domains. :></div>
     </div>
-
     <@ Result @>
-
-    <div class="zgrid_wrapper">
-        <h2><: Available PHP versions :></h2>
-        <form action="./?module=php_versions&action=SaveVersions" method="post">
-            <table class="table table-striped">
-                <tr>
-                    <th><: Enabled :></th>
-                    <th><: Version :></th>
-                    <th><: Service :></th>
-                    <th><: Security support :></th>
-                    <th><: Domains using it :></th>
-                </tr>
-                <@ VersionRows @>
-            </table>
-            <p><: Domains and subdomains can only choose enabled versions. If you disable a version, the domains that use it run on the default PHP until you enable it again; their choice is kept. Changes apply at the next daemon run (within 5 minutes). :></p>
-            <button class="button-loader btn btn-primary" type="submit" name="SaveVersions" value="1"><: Save :></button>
-            <@ CSFR_Tag @>
-        </form>
-    </div>
+    <style>
+    .pv { background: var(--sn-soft, #f4f6f9); border-radius: 8px; padding: 18px; margin-top: 10px; color: var(--sn-ink, #1f2933); }
+    .pv * { box-sizing: border-box; }
+    .pv-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+    .pv-card { background: var(--sn-card, #fff); border-radius: 6px; box-shadow: 0 1px 3px rgba(20,30,40,0.08); padding: 14px 16px; border-top: 3px solid var(--sn-accent, #447fb3); display: flex; flex-direction: column; gap: 8px; }
+    .pv-card.is-default { border-top-color: var(--sn-ok, #1e8a4c); }
+    .pv-card.is-off { border-top-color: var(--sn-line-strong, #cfd6de); }
+    .pv-card.is-off .pv-ver { color: var(--sn-muted, #6b7785); }
+    .pv-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .pv-ver { font-size: 20px; font-weight: 700; }
+    .pv-tag { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 9px; background: var(--sn-ok-soft, #e3f4ea); color: var(--sn-ok, #1e8a4c); }
+    .pv-card p { margin: 0; font-size: 13px; line-height: 1.45; color: var(--sn-muted, #6b7785); }
+    .pv-meta { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; margin-top: auto; font-size: 12px; color: var(--sn-muted, #6b7785); }
+    .pv-sup { font-weight: 600; padding: 1px 8px; border-radius: 9px; }
+    .pv-sup.ok { background: var(--sn-ok-soft, #e3f4ea); color: var(--sn-ok, #1e8a4c); }
+    .pv-sup.warn { background: var(--sn-warn-soft, #fdf1dc); color: var(--sn-warn, #a86b00); }
+    .pv-sup.bad { background: var(--sn-bad-soft, #fbe3e2); color: var(--sn-bad, #c62f2b); }
+    .pv-svc { display: inline-flex; align-items: center; gap: 5px; }
+    .pv-svc i { width: 8px; height: 8px; border-radius: 50%; background: var(--sn-line-strong, #cfd6de); }
+    .pv-svc.ok i { background: var(--sn-ok, #1e8a4c); }
+    .pv-svc.bad i { background: var(--sn-bad, #c62f2b); }
+    .pv-foot { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 14px; padding: 14px 16px; background: var(--sn-card, #fff); border-radius: 6px; box-shadow: 0 1px 3px rgba(20,30,40,0.08); }
+    .pv-foot p { flex: 1 1 300px; margin: 0; font-size: 12px; color: var(--sn-muted, #6b7785); line-height: 1.5; }
+    .pv-foot code { font-size: 11px; }
+    @media (max-width: 640px) { .pv { padding: 12px; } .pv-foot .btn { width: 100%; } }
+    </style>
+    <form class="pv" action="./?module=php_versions&amp;action=SaveVersions" method="post">
+        <div class="pv-cards"><@ VersionCards @></div>
+        <div class="pv-foot">
+            <% if HasExtra %><p><: A domain can only choose a version that is switched on. Switching one off keeps each domain's choice: they run on the default until it is switched on again. :></p>
+            <button class="btn btn-primary" type="submit" name="SaveVersions" value="1"><: Save :></button><% endif %>
+            <% if NoExtra %><p><: No extra PHP versions are installed. The installer can add them, and update-sentora-php.sh (in the installer's php-build folder) installs or updates one: :> <code>bash update-sentora-php.sh 8.4</code></p><% endif %>
+        </div>
+        <@ CSFR_Tag @>
+    </form>
 </div>

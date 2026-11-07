@@ -187,3 +187,37 @@ legend { color: var(--ml-ink); border-bottom-color: var(--ml-line); }
 /* Room under the last sidebar item, so it can be scrolled clear of the bottom edge (where
    Chrome shows a hovered link's address on top of it) */
 #menu-sidebar::after { content: ""; display: block; height: 96px; }
+
+/* Settings pages (ui_settingsform: Mail Admin, Apache Admin): tabs, then a row per setting */
+.sf { background: var(--sn-card, #fff); border-radius: 6px; box-shadow: 0 1px 3px rgba(20,30,40,0.08); color: var(--sn-ink, #1f2933); }
+.sf-tabs { display: flex; gap: 2px; flex-wrap: wrap; padding: 8px 10px 0; border-bottom: 1px solid var(--sn-line, #e6e9ee); }
+.sf-tab { border: 0; background: none; padding: 10px 14px; font-size: 14px; color: var(--sn-muted, #6b7785); border-bottom: 2px solid transparent; margin-bottom: -1px; cursor: pointer; }
+.sf-tab:hover { color: var(--sn-ink, #1f2933); }
+.sf-tab.active { color: var(--sn-accent, #447fb3); border-bottom-color: var(--sn-accent, #447fb3); font-weight: 600; }
+.sf-pane { padding: 4px 18px; }
+.sf-pane[hidden] { display: none; }
+.sf-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 340px); gap: 8px 24px; align-items: center; padding: 14px 0; border-bottom: 1px solid var(--sn-line, #e6e9ee); }
+.sf-row:last-child { border-bottom: 0; }
+.sf-row.is-wide { grid-template-columns: 1fr; }
+.sf-what label { display: block; margin: 0; font-size: 14px; font-weight: 600; }
+.sf-what small { display: block; margin-top: 3px; font-size: 12px; color: var(--sn-muted, #6b7785); line-height: 1.45; }
+.sf-what em { display: block; margin-top: 4px; font-style: normal; font-size: 12px; font-weight: 600; color: var(--sn-bad, #c62f2b); }
+.sf-row.is-bad .form-control { border-color: var(--sn-bad, #c62f2b); }
+.sf-range { font-size: 11px; font-weight: 400; color: var(--sn-muted, #6b7785); margin-left: 4px; }
+.sf-ctl { min-width: 0; justify-self: stretch; }
+.sf-num { display: flex; align-items: center; gap: 8px; }
+.sf-num input { max-width: 160px; }
+.sf-num span { font-size: 13px; color: var(--sn-muted, #6b7785); }
+.sf-code { width: 100%; font-family: SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; line-height: 1.5; resize: vertical; }
+.sf-switch { position: relative; display: block; width: 44px; height: 24px; margin: 0; cursor: pointer; }
+.sf-switch input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+.sf-toggle { position: absolute; inset: 0; border-radius: 12px; background: var(--sn-line-strong, #cfd6de); transition: background 0.15s; pointer-events: none; }
+.sf-toggle::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: transform 0.15s; box-shadow: 0 1px 2px rgba(0,0,0,0.25); }
+.sf-switch input:checked + .sf-toggle { background: var(--sn-accent, #447fb3); }
+.sf-switch input:checked + .sf-toggle::after { transform: translateX(20px); }
+.sf-switch input:focus-visible + .sf-toggle { outline: 2px solid var(--sn-accent, #447fb3); outline-offset: 2px; }
+.sf-foot { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 14px 18px; border-top: 1px solid var(--sn-line, #e6e9ee); background: var(--sn-soft, #f4f6f9); border-radius: 0 0 6px 6px; }
+.sf-foot .btn-primary { margin-left: auto; }
+.sf-dirty { font-size: 12px; font-weight: 600; color: var(--sn-warn, #a86b00); }
+.sf-hint { font-size: 12px; color: var(--sn-muted, #6b7785); }
+@media (max-width: 760px) { .sf-row { grid-template-columns: 1fr; } .sf-pane { padding: 4px 12px; } .sf-foot .btn-primary { margin-left: 0; width: 100%; } }

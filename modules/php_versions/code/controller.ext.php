@@ -7,64 +7,129 @@
  * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
  */
 /**
- * PHP Versions: choose which extra PHP versions domains may use.
- * The versions themselves are installed by the installer in /opt/sentora-php/.
+ * PHP Versions module (administrators): the PHP versions on the server (the default one Apache runs,
+ * and the extra ones installed in /opt/sentora-php), which of them domains may choose, how many
+ * domains use each, and how long each gets security fixes. The daemon starts and stops the PHP-FPM
+ * services and rewrites the vhosts within 5 minutes of a change.
  */
 class module_controller extends ctrl_module
 {
 
-    /** @var bool|null True when the choice was saved (shown by getResult()). */
+    /** @var bool|null True after a save (shown by getResult()). */
     static $ok;
 
     /**
-     * Return the table rows of PHP versions (template: <@ VersionRows @>).
+     * Escape a value for HTML.
      *
-     * The default version first, then each installed extra version with its enable
-     * checkbox, whether it runs, its support note and how many domains use it.
-     * @return string HTML <tr> rows.
+     * @param mixed $s The value (cast to string).
+     * @return string The escaped text.
      */
-    static function getVersionRows()
+    static function h($s)
     {
-        $nl = fs_filehandler::NewLine();
+        return htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
+    }
+
+    /**
+     * Translate and escape a text.
+     *
+     * @param string $s The English text.
+     * @return string The escaped translation.
+     */
+    static function t($s)
+    {
+        return self::h(ui_language::translate($s));
+    }
+
+    /**
+     * How long a version gets security fixes, as a badge.
+     *
+     * @param string $version For example '8.3'.
+     * @return string The HTML ('' when unknown).
+     */
+    static function Support($version)
+    {
+        $days = sys_phpversions::DaysLeft($version);
+        if ($days === null) {
+            return '';
+        }
+        $ends = sys_phpversions::$supportEnds[$version];
+        if ($days < 0) {
+            return '<span class="pv-sup bad">' . self::t('No security fixes since') . ' ' . self::h($ends) . '</span>';
+        }
+        return '<span class="pv-sup' . ($days <= 180 ? ' warn' : ' ok') . '">' . self::t('Security fixes until') . ' ' . self::h($ends) . ($days <= 180 ? ' (' . $days . ' ' . self::t('days') . ')' : '') . '</span>';
+    }
+
+    /**
+     * The versions as cards (<@ VersionCards @>): the default, then each installed extra version with its switch.
+     *
+     * @return string The HTML.
+     */
+    static function getVersionCards()
+    {
         $counts = sys_phpversions::UsageCounts();
         $enabled = sys_phpversions::Enabled();
         $default = sys_phpversions::DefaultVersion();
-
-        $html = '<tr><td><input type="checkbox" checked="checked" disabled="disabled" /></td>'
-            . '<td><strong>PHP ' . $default . '</strong> (' . ui_language::translate('default, used by the panel') . ')</td>'
-            . '<td>' . ui_language::translate('built into Apache') . '</td>'
-            . '<td>' . sys_phpversions::SupportNote($default) . '</td>'
-            . '<td>' . ui_language::translate('all other domains') . '</td></tr>' . $nl;
-
-        $installed = sys_phpversions::Installed();
-        if (count($installed) == 0) {
-            $html .= '<tr><td colspan="5">' . ui_language::translate('No extra PHP versions are installed on this server.') . '</td></tr>' . $nl;
-            return $html;
+        $used = 0;
+        foreach ($counts as $n) {
+            $used += (int) $n;
         }
-        foreach ($installed as $version) {
-            $on = in_array($version, $enabled, true);
-            $running = sys_phpversions::IsRunning($version);
-            $note = sys_phpversions::SupportNote($version);
-            $expired = isset(sys_phpversions::$supportEnds[$version]) && strtotime(sys_phpversions::$supportEnds[$version] . ' 23:59:59') < time();
-            $html .= '<tr>'
-                . '<td><input type="checkbox" name="inEnabled_' . str_replace('.', '_', $version) . '" value="1"' . ($on ? ' checked="checked"' : '') . ' /></td>'
-                . '<td>PHP ' . $version . '</td>'
-                . '<td>' . ($running ? ui_language::translate('running') : ui_language::translate('stopped')) . '</td>'
-                . '<td>' . ($expired ? '<span class="text-danger"><strong>' . $note . '</strong></span>' : $note) . '</td>'
-                . '<td>' . (isset($counts[$version]) ? $counts[$version] : 0) . '</td>'
-                . '</tr>' . $nl;
+        $out = '<div class="pv-card is-default"><div class="pv-head"><span class="pv-ver">PHP ' . self::h($default) . '</span><span class="pv-tag">' . self::t('Default') . '</span></div>'
+            . '<p>' . self::t('Built into Apache and used by the panel. Every domain that has not chosen another version runs on it.') . '</p>'
+            . '<div class="pv-meta">' . self::Support($default) . '<span>' . self::t('version') . ' ' . self::h(PHP_VERSION) . '</span></div></div>';
+        foreach (sys_phpversions::Installed() as $v) {
+            $on = in_array($v, $enabled, true);
+            $running = sys_phpversions::IsRunning($v);
+            $n = isset($counts[$v]) ? (int) $counts[$v] : 0;
+            $field = 'inEnabled_' . str_replace('.', '_', $v);
+            $out .= '<div class="pv-card' . ($on ? '' : ' is-off') . '"><div class="pv-head"><span class="pv-ver">PHP ' . self::h($v) . '</span>'
+                . '<label class="sf-switch" title="' . self::t('Domains may choose it') . '"><input type="checkbox" name="' . $field . '" value="1"' . ($on ? ' checked' : '') . ' aria-label="' . self::t('Domains may choose') . ' PHP ' . self::h($v) . '"><span class="sf-toggle"></span></label></div>'
+                . '<p>' . self::t($on ? 'Domains may choose it.' : 'Not offered to domains.') . ' '
+                . ($n ? $n . ' ' . self::t($n === 1 ? 'domain has chosen it' : 'domains have chosen it') . ($on ? '.' : ': ' . self::t($n === 1 ? 'it runs on the default until this is offered again.' : 'they run on the default until this is offered again.')) : self::t('No domain uses it.')) . '</p>'
+                . '<div class="pv-meta">' . self::Support($v) . '<span class="pv-svc ' . ($running ? 'ok' : ($on ? 'bad' : '')) . '"><i></i>sentora-php' . self::h($v) . '-fpm ' . self::t($running ? 'running' : 'stopped') . '</span></div></div>';
+        }
+        return $out;
+    }
+
+    /**
+     * Template flag <% if HasExtra %>: extra versions are installed.
+     *
+     * @return bool
+     */
+    static function getHasExtra()
+    {
+        return count(sys_phpversions::Installed()) > 0;
+    }
+
+    /**
+     * Template flag <% if NoExtra %>.
+     *
+     * @return bool
+     */
+    static function getNoExtra()
+    {
+        return !self::getHasExtra();
+    }
+
+    /**
+     * The old table rows (<@ VersionRows @>), kept for themes that use them.
+     *
+     * @return string The HTML.
+     */
+    static function getVersionRows()
+    {
+        $html = '';
+        foreach (sys_phpversions::Installed() as $version) {
+            $html .= '<tr><td><input type="checkbox" name="inEnabled_' . str_replace('.', '_', $version) . '" value="1"' . (sys_phpversions::IsEnabled($version) ? ' checked' : '') . '></td><td>PHP ' . self::h($version) . '</td></tr>';
         }
         return $html;
     }
 
     /**
-     * Handle the PHP versions form (POST): save which extra versions are enabled.
+     * Save which installed versions domains may choose, then let the daemon apply it.
      *
-     * Checks the CSFR token (dies when it is wrong), stores php_versions_enabled and sets
-     * apache_changed so the daemon rewrites the vhosts and starts/stops PHP-FPM.
      * @global runtime_controller $controller The request controller.
      * @global db_driver $zdbh The panel's database connection.
-     * @return bool Always true.
+     * @return bool
      */
     static function doSaveVersions()
     {
@@ -78,30 +143,25 @@ class module_controller extends ctrl_module
                 $chosen[] = $version;
             }
         }
-        $value = implode(',', $chosen);
-        $sql = $zdbh->prepare("UPDATE x_settings SET so_value_tx = :value WHERE so_name_vc = 'php_versions_enabled'");
-        $sql->bindParam(':value', $value);
-        $sql->execute();
+        $q = $zdbh->prepare("UPDATE x_settings SET so_value_tx = :value WHERE so_name_vc = 'php_versions_enabled'");
+        $q->execute(array(':value' => implode(',', $chosen)));
         // Rewrite the vhosts and start/stop PHP-FPM services at the next daemon run
-        $sql = $zdbh->prepare("UPDATE x_settings SET so_value_tx = 'true' WHERE so_name_vc = 'apache_changed'");
-        $sql->execute();
+        $zdbh->prepare("UPDATE x_settings SET so_value_tx = 'true' WHERE so_name_vc = 'apache_changed'")->execute();
         self::$ok = true;
         return true;
     }
 
     /**
-     * Return the message for the last action (template: <@ Result @>).
+     * The message after a save (<@ Result @>).
      *
-     * @return string|null The HTML message, or null when nothing was saved.
+     * @return string|null
      */
     static function getResult()
     {
         if (!fs_director::CheckForEmptyValue(self::$ok)) {
-            return ui_sysmessage::shout(ui_language::translate("PHP versions saved. They apply at the next daemon run (within 5 minutes)."), "zannounceok");
+            return ui_sysmessage::shout(ui_language::translate('Saved. The daemon starts or stops the PHP services and updates the websites within 5 minutes.'), 'zannounceok');
         }
-        return;
+        return null;
     }
 
 }
-
-?>

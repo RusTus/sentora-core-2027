@@ -1,0 +1,41 @@
+/* Apache Admin in the panel's style. The settings use the theme's settings form (.sf); colours come
+   from the theme's shared --sn-* variables, so it follows Light, Dark and Auto. */
+.aa { --aa-muted: var(--sn-muted, #6b7785); --aa-line: var(--sn-line, #e6e9ee); --aa-card: var(--sn-card, #fff); --aa-accent: var(--sn-accent, #447fb3); --aa-accent-soft: var(--sn-accent-soft, #e3edf6);
+      color: var(--sn-ink, #1f2933); background: var(--sn-soft, #f4f6f9); border-radius: 8px; padding: 18px; margin-top: 10px; }
+.aa * { box-sizing: border-box; }
+.aa-ico { width: 16px; height: 16px; flex: none; }
+.aa-ico-lg { width: 40px; height: 40px; padding: 8px; border-radius: 10px; flex: none; background: var(--aa-accent-soft); color: var(--aa-accent); }
+.aa-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 14px; }
+.aa-tile { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: var(--aa-card); border-radius: 6px; box-shadow: 0 1px 3px rgba(20,30,40,0.08); min-width: 0; }
+.aa-tile b { display: block; font-size: 17px; line-height: 1.2; }
+.aa-tile span { font-size: 12px; color: var(--aa-muted); }
+.aa-tile.ok .aa-ico-lg { background: var(--sn-ok-soft, #e3f4ea); color: var(--sn-ok, #1e8a4c); }
+.aa-tile.bad .aa-ico-lg { background: var(--sn-bad-soft, #fbe3e2); color: var(--sn-bad, #c62f2b); }
+.aa-tile.bad b { color: var(--sn-bad, #c62f2b); }
+.aa-cols { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 14px; align-items: start; }
+.aa-box { background: var(--aa-card); border-radius: 6px; box-shadow: 0 1px 3px rgba(20,30,40,0.08); padding: 16px 18px; min-width: 0; position: sticky; top: 12px; }
+.aa-box h4 { margin: 0 0 12px; font-size: 15px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; }
+.aa-sub { color: var(--aa-muted); font-size: 12px; margin: 0; }
+.aa-rows { display: grid; gap: 8px; }
+.aa-row { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border: 1px solid var(--aa-line); border-radius: 6px; }
+.aa-main { flex: 1; min-width: 0; }
+.aa-main b { font-size: 14px; overflow-wrap: anywhere; }
+.aa-main > span { font-size: 12px; color: var(--aa-muted); margin-left: 6px; }
+.aa-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.aa-chip { font-size: 11px; padding: 1px 8px; border-radius: 9px; background: var(--aa-accent-soft); color: var(--aa-accent); }
+.aa-chip.warn { background: var(--sn-warn-soft, #fdf1dc); color: var(--sn-warn, #a86b00); }
+.aa-pick { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--aa-line); }
+.aa-pick label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+.aa-pick > div { display: flex; gap: 6px; }
+.aa-pick select { flex: 1; min-width: 0; }
+.aa-force { display: inline-flex; align-items: center; gap: 6px; margin: 0; font-size: 12px; font-weight: 400; color: var(--aa-muted); cursor: pointer; }
+.aa-back { display: inline-flex; align-items: center; gap: 4px; margin-bottom: 12px; }
+.aa-vh { padding: 16px 18px 0; }
+.aa-vh h3 { margin: 0 0 4px; font-size: 20px; font-weight: 700; overflow-wrap: anywhere; }
+.aa-vh p { margin: 0; font-size: 12px; color: var(--aa-muted); line-height: 1.45; }
+.aa-dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; margin: 0; font-size: 13px; }
+.aa-dl dt { color: var(--aa-muted); font-weight: 400; }
+.aa-dl dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.aa-dl code { font-size: 12px; background: none; border: 0; padding: 0; color: inherit; }
+@media (max-width: 1000px) { .aa-cols { grid-template-columns: 1fr; } .aa-box { position: static; } }
+@media (max-width: 640px) { .aa { padding: 12px; } .aa-tiles { grid-template-columns: 1fr; } }
