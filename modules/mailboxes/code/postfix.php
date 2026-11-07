@@ -165,6 +165,29 @@ if (!fs_director::CheckForEmptyValue(self::$delete)) {
     $sql = $mail_db->prepare("DELETE FROM alias WHERE address=:mb_address_vc");
     $sql->bindParam(':mb_address_vc', $rowmailbox['mb_address_vc']);
     $sql->execute();
+    // the aliases that delivered to it, when asked to delete them too
+    $sql = $mail_db->prepare("DELETE FROM alias WHERE address=:address");
+    foreach (isset($dropAliasRows) ? $dropAliasRows : array() as $r) {
+        $sql->execute(array(':address' => $r['al_address_vc']));
+    }
+    // the distribution lists it was on, when asked to take it off them (this exact address only)
+    $get = $mail_db->prepare("SELECT goto FROM alias WHERE address=:address");
+    $set = $mail_db->prepare("UPDATE alias SET goto=:goto, modified=NOW() WHERE address=:address");
+    foreach (isset($leaveListRows) ? $leaveListRows : array() as $r) {
+        $get->execute(array(':address' => $r['dl_address_vc']));
+        $goto = $get->fetchColumn();
+        if ($goto === false) {
+            continue;
+        }
+        $keep = array();
+        foreach (explode(',', (string) $goto) as $a) {
+            $a = trim($a);
+            if ($a !== '' && strcasecmp($a, (string) $rowmailbox['mb_address_vc']) !== 0) {
+                $keep[] = $a;
+            }
+        }
+        $set->execute(array(':goto' => implode(',', $keep), ':address' => $r['dl_address_vc']));
+    }
 }
 
 //Saving PostFix Mailboxes

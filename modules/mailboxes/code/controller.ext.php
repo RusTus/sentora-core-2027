@@ -222,22 +222,40 @@ class module_controller extends ctrl_module
     /**
      * Delete a mailbox (mail server include file, then mark the row deleted).
      *
+     * Its own forwarders always go with it. When asked, the aliases that deliver to it are deleted
+     * and it is taken off the distribution lists it is a member of, so neither keeps bouncing.
+     *
      * @global db_driver $zdbh The panel's database connection.
      * @global runtime_controller $controller The request controller.
      * @param int|string $mid The mailbox ID.
+     * @param bool $dropAliases Optional. Also delete the account's aliases that deliver to it. Default false.
+     * @param bool $leaveLists Optional. Also take it off the account's distribution lists. Default false.
      * @return void
      */
-    static function ExecuteDeleteMailbox($mid)
+    static function ExecuteDeleteMailbox($mid, $dropAliases = false, $leaveLists = false)
     {
         global $zdbh;
         global $controller;
         runtime_hook::Execute('OnBeforeDeleteMailbox');
         self::$delete = true;
-        //$rowmailbox = $zdbh->query("SELECT * FROM x_mailboxes WHERE mb_id_pk=" . $mid . "")->Fetch();
         $numrows = $zdbh->prepare("SELECT * FROM x_mailboxes WHERE mb_id_pk=:mid");
         $numrows->bindParam(':mid', $mid);
         $numrows->execute();
         $rowmailbox = $numrows->fetch();
+        // what goes with it (used in the mail server specific file too)
+        $dropAliasRows = array();
+        if ($dropAliases) {
+            $q = $zdbh->prepare("SELECT al_id_pk, al_address_vc FROM x_aliases WHERE al_acc_fk = :u AND LOWER(al_destination_vc) = LOWER(:a) AND al_deleted_ts IS NULL");
+            $q->execute(array(':u' => (int) $rowmailbox['mb_acc_fk'], ':a' => $rowmailbox['mb_address_vc']));
+            $dropAliasRows = $q->fetchAll(PDO::FETCH_ASSOC);
+        }
+        $leaveListRows = array();
+        if ($leaveLists) {
+            $q = $zdbh->prepare("SELECT u.du_id_pk, l.dl_address_vc FROM x_distlistusers u JOIN x_distlists l ON l.dl_id_pk = u.du_distlist_fk
+                WHERE l.dl_acc_fk = :u AND LOWER(u.du_address_vc) = LOWER(:a) AND u.du_deleted_ts IS NULL AND l.dl_deleted_ts IS NULL");
+            $q->execute(array(':u' => (int) $rowmailbox['mb_acc_fk'], ':a' => $rowmailbox['mb_address_vc']));
+            $leaveListRows = $q->fetchAll(PDO::FETCH_ASSOC);
+        }
         // Include mail server specific file here.
         $MailServerFile = 'modules/' . $controller->GetControllerRequest('URL', 'module') . '/code/' . ctrl_options::GetSystemOption('mailserver_php');
         if (file_exists($MailServerFile)) {
@@ -247,7 +265,15 @@ class module_controller extends ctrl_module
         // its own forwarders went from Postfix with the mailbox: mark them deleted too, so they no
         // longer show in Forwarders (and count toward the limit) without working
         $fq = $zdbh->prepare("UPDATE x_forwarders SET fw_deleted_ts = :t WHERE fw_address_vc = :a AND fw_acc_fk = :u AND fw_deleted_ts IS NULL");
-        $fq->execute(array(':t' => time(), ':a' => $rowmailbox['mb_address_vc'], ':u' => (int) $rowmailbox['mb_acc_fk']));
+        $fq->execute(array(':t' => $time, ':a' => $rowmailbox['mb_address_vc'], ':u' => (int) $rowmailbox['mb_acc_fk']));
+        $aq = $zdbh->prepare("UPDATE x_aliases SET al_deleted_ts = :t WHERE al_id_pk = :id");
+        foreach ($dropAliasRows as $r) {
+            $aq->execute(array(':t' => $time, ':id' => (int) $r['al_id_pk']));
+        }
+        $lq = $zdbh->prepare("UPDATE x_distlistusers SET du_deleted_ts = :t WHERE du_id_pk = :id");
+        foreach ($leaveListRows as $r) {
+            $lq->execute(array(':t' => $time, ':id' => (int) $r['du_id_pk']));
+        }
         $sql = "UPDATE x_mailboxes SET mb_deleted_ts=:time WHERE mb_id_pk=:mid";
         $sql = $zdbh->prepare($sql);
         $sql->bindParam(':time', $time);
@@ -574,7 +600,7 @@ class module_controller extends ctrl_module
         if (!isset($formvars['inDelete']) || !ctrl_ownership::Owns('x_mailboxes', 'mb_id_pk', 'mb_acc_fk', $formvars['inDelete'], ' AND mb_deleted_ts IS NULL')) {
             return false;
         }
-        return self::ExecuteDeleteMailbox($formvars['inDelete']);
+        return self::ExecuteDeleteMailbox($formvars['inDelete'], !empty($formvars['inDropAliases']), !empty($formvars['inLeaveLists']));
     }
 
     /**
@@ -912,10 +938,14 @@ class module_controller extends ctrl_module
             $out .= '<li>' . self::t('Its forwarders go with it:') . ' <b>' . self::h(implode(', ', $l['forwards'])) . '</b></li>';
         }
         if ($l['aliases']) {
-            $out .= '<li class="mb-warnline">' . self::t('These aliases deliver to it and will stop working until you change or delete them in Aliases:') . ' <b>' . self::h(implode(', ', $l['aliases'])) . '</b></li>';
+            $out .= '<li class="mb-warnline">' . self::t('These aliases deliver to it:') . ' <b>' . self::h(implode(', ', $l['aliases'])) . '</b>'
+                . '<label class="mb-ask"><input type="checkbox" name="inDropAliases" value="1" checked> ' . self::t(count($l['aliases']) === 1 ? 'Delete this alias too' : 'Delete these aliases too')
+                . '<small>' . self::t(count($l['aliases']) === 1 ? 'Untick to keep it: it bounces until you point it at another mailbox in Aliases.' : 'Untick to keep them: they bounce until you point them at another mailbox in Aliases.') . '</small></label></li>';
         }
         if ($l['lists']) {
-            $out .= '<li class="mb-warnline">' . self::t('It is a member of these distribution lists, which will bounce for it:') . ' <b>' . self::h(implode(', ', $l['lists'])) . '</b></li>';
+            $out .= '<li class="mb-warnline">' . self::t('It is a member of these distribution lists:') . ' <b>' . self::h(implode(', ', $l['lists'])) . '</b>'
+                . '<label class="mb-ask"><input type="checkbox" name="inLeaveLists" value="1" checked> ' . self::t(count($l['lists']) === 1 ? 'Take it off this list too' : 'Take it off these lists too')
+                . '<small>' . self::t(count($l['lists']) === 1 ? 'Untick to leave it on: the list then bounces for it.' : 'Untick to leave it on: the lists then bounce for it.') . '</small></label></li>';
         }
         return $out . '</ul>';
     }

@@ -92,6 +92,9 @@
 .mb-confirm h4 .mb-ico { color: var(--mb-bad); width: 20px; height: 20px; }
 .mb-lose { margin: 0 0 12px; padding-left: 20px; font-size: 13px; line-height: 1.5; }
 .mb-warnline { color: var(--mb-warn); }
+.mb-ask { display: block; margin: 4px 0 2px; font-weight: 600; color: var(--mb-ink); cursor: pointer; }
+.mb-ask input { margin: 0 4px 0 0; vertical-align: -1px; }
+.mb-ask small { display: block; font-weight: 400; color: var(--mb-muted); padding-left: 20px; }
 .mb-confirm .mb-foot { margin-top: 0; }
 
 @media (max-width: 860px) { .mb-grid { grid-template-columns: 1fr; } }
