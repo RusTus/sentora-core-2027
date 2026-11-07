@@ -216,6 +216,13 @@ class module_controller extends ctrl_module
             self::$error = TRUE;
             return FALSE;
         }
+        // The panel's own address (and its www.) is taken: Apache would answer it with the
+        // panel, so the site would never work, and as a mail domain it clashes with the server's own name
+        $panelDomain = strtolower(trim((string) ctrl_options::GetSystemOption('sentora_domain')));
+        if ($panelDomain !== '' && ($domain === $panelDomain || $domain === 'www.' . $panelDomain)) {
+            self::$alreadyexists = TRUE;
+            return FALSE;
+        }
         // Check to see if the domain already exists in Sentora somewhere and redirect if it does....
         $sql = "SELECT COUNT(*) FROM x_vhosts WHERE vh_name_vc=:domain AND vh_deleted_ts IS NULL";
         $numrows = $zdbh->prepare($sql);
