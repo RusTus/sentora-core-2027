@@ -17,7 +17,7 @@ class system_logviewer_logs
         'Sentora panel' => array('/var/sentora/logs/*.log'),
         // the panel's own records: who logged in as whom (Shadowing), two-factor resets and recovery
         // codes used, and passwords shown (MySQL Users, Mailboxes ...)
-        'Panel security' => array('/var/lib/sentora/shadowing.log', '/var/lib/sentora/twofactor.log', '/var/lib/sentora/password-reveal.log'),
+        'Panel security' => array('/var/lib/sentora/shadowing.log', '/var/lib/sentora/twofactor.log', '/var/lib/sentora/password-reveal.log', '/var/lib/sentora/panel-update.log'),
         'Hosted domains' => array('/var/sentora/logs/domains/*/*.log'),
         'FTP (ProFTPD)' => array('/var/sentora/logs/proftpd/*.log'),
         'DNS (BIND)' => array('/var/sentora/logs/bind/*.log'),

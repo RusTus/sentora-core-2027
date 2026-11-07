@@ -16,7 +16,7 @@
 /**
  * Template tag <# ui_tpl_notice #>: the notices the logged-in account sees (see ctrl_notices).
  *
- * A notice is plain text: line breaks are kept, web addresses and [text](https://address) become
+ * A notice is plain text: line breaks are kept, web addresses, [text](https://address) and [text](./?module=name) become
  * links, **text** is bold and lines starting with "- " are a list. Notices saved by the old HTML
  * editor (they start with a tag such as <p>) are read as text, their tags removed.
  */
@@ -153,6 +153,10 @@ class ui_tpl_notice {
         // [text](https://address)
         $s = preg_replace_callback('#\[([^\]\n]+)\]\((https?://[^\s)]+)\)#i', function ($m) use ($hold) {
             return $hold('<a href="' . $m[2] . '" target="_blank" rel="noopener noreferrer">' . $m[1] . '</a>');
+        }, $s);
+        // [text](./?module=name): a page of the panel itself, opened in the same tab
+        $s = preg_replace_callback('#\[([^\]\n]+)\]\((\./\?module=[a-z0-9_]+(?:&amp;[a-z0-9_]+=[A-Za-z0-9_]*)*)\)#', function ($m) use ($hold) {
+            return $hold('<a href="' . $m[2] . '">' . $m[1] . '</a>');
         }, $s);
         // a bare address; the sentence's punctuation and quotes (escaped by now) stay outside the link
         $s = preg_replace_callback('#\bhttps?://[^\s<\x01]+#i', function ($m) use ($hold) {

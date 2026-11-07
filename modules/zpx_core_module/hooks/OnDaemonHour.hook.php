@@ -39,9 +39,9 @@ function SentoraUpdateNotice()
     list(, $tag, $date, $repo) = $m;
     $when = preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) ? date('j M Y', strtotime($date)) : '';
     $body = 'A newer version of the Sentora panel is published' . ($when !== '' ? ' (' . $when . ', release ' . $tag . ')' : ' (release ' . $tag . ')') . '. '
-        . 'To install it, run this as root on the server:' . "\n"
+        . '[Update from the panel](./?module=panel_update), or run this as root on the server\'s console:' . "\n"
         . '- **sentora-update**' . "\n"
-        . 'It backs the panel up first, shows each step, and checks the server when it is done. To go back: **sentora-update --rollback**.';
+        . 'Either way the panel is backed up first. If the panel does not answer afterwards, go back from the server\'s console, as root: **sentora-update --rollback**';
     if (preg_match('#^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$#', $repo)) {
         $body .= "\n" . 'What changed: [the change log](https://github.com/' . $repo . '/blob/master2027/CHANGELOG.md)';
     }

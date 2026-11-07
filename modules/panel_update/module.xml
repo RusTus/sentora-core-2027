@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<module>
+    <name>Panel Update</name>
+    <version>200</version>
+    <defaultcat>Server Admin</defaultcat>
+    <desc>Update the panel to the newest published release, or go back to the version before an update, from the panel. The same as sentora-update on the server's console.</desc>
+    <authorname>Sentora for Ubuntu 26.04</authorname>
+    <authoremail></authoremail>
+    <authorurl></authorurl>
+    <updateurl></updateurl>
+</module>

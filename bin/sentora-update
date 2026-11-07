@@ -8,6 +8,8 @@
 #                               "current" or "unknown" (exit 100, 0 or 2); never downloads the zip
 #   sentora-update --rollback   list the backups and restore one
 #   sentora-update --rollback /var/sentora/backups/panel-before-update-....tar.gz
+#   --force                     install the release again even when it is the one installed
+#   --from-panel                started from the panel (Admin > Panel Update, through zsudo): no questions
 #
 # What it does: downloads sentora-core-2027.zip from the "current" release of
 # github.com/RusTus/sentora-core-2027 (checked against the SHA-256 GitHub lists for
@@ -123,12 +125,14 @@ ui_end_step() { # [fail]
     [ $UI_STEP_WARN -eq 1 ] && { mark="$UI_WARNSIGN"; color="$C_YELLOW"; }
     [ -n "${1:-}" ] && { mark="$UI_CROSS"; color="$C_RED$C_BOLD"; }
     printf '  %s%s%s %s %s(%d:%02d)%s\n' "$color" "$mark" "$C_RESET" "$UI_TITLE" "$C_DIM" $(( took / 60 )) $(( took % 60 )) "$C_RESET" >&3
+    if [ -n "${1:-}" ]; then st end fail "$took"; elif [ $UI_STEP_WARN -eq 1 ]; then st end warn "$took"; else st end ok "$took"; fi
     UI_TITLE=""
 }
 ui_step() { # title
     ui_end_step
     UI_STEP=$(( UI_STEP + 1 )); [ $UI_STEP -gt $UI_TOTAL ] && UI_TOTAL=$UI_STEP
     UI_TITLE="$1"; UI_STEP_START=$(date +%s); UI_STEP_WARN=0
+    st step "$UI_STEP" "$UI_TOTAL" "$1"
     echo -e "\n-- $1  ($(date '+%H:%M:%S'))"   # in the log
     if [ $UI_TTY -eq 1 ]; then ui_ticker_start; else printf -- '-- [%d/%d] %s\n' "$UI_STEP" "$UI_TOTAL" "$1" >&3; fi
 }
@@ -150,12 +154,42 @@ ui_log_start() {
     UI_LOGGING=1
 }
 
+# The panel's view of a run (Admin > Panel Update reads it): one line per event, fields split by
+# tabs, in a folder only root may write. Started by st_init (update and rollback only).
+STATUS_DIR=/var/lib/sentora-update
+STATUS=""
+st_dir() {
+    mkdir -p "$STATUS_DIR" && [ -O "$STATUS_DIR" ] && [ ! -L "$STATUS_DIR" ] && chown root:root "$STATUS_DIR" && chmod 755 "$STATUS_DIR"
+}
+st() {
+    [ -n "$STATUS" ] || return 0
+    local f out=""
+    for f in "$@"; do f=${f//$'\t'/ }; f=${f//$'\n'/ }; f=${f//$'\r'/}; out+="${out:+$'\t'}$f"; done
+    printf '%s\n' "$out" >> "$STATUS"
+}
+# the backups, for the panel (their folder is root's only): name, size in bytes, time
+st_backups() {
+    st_dir || return 0
+    local f
+    for f in $(ls -1t "$BACKUPS"/panel-before-update-*.tar.gz 2> /dev/null); do
+        printf '%s\t%s\t%s\n' "$(basename "$f")" "$(stat -c %s "$f")" "$(stat -c %Y "$f")"
+    done > "$STATUS_DIR/backups.new"
+    chmod 644 "$STATUS_DIR/backups.new"; mv -f "$STATUS_DIR/backups.new" "$STATUS_DIR/backups"
+}
+st_init() { # mode
+    st_dir || return 0
+    rm -f "$STATUS_DIR/status.new"
+    printf 'start\t%s\t%s\t%s\n' "$1" "$(date +%s)" "$FROM" > "$STATUS_DIR/status.new" && chmod 644 "$STATUS_DIR/status.new" \
+        && mv -f "$STATUS_DIR/status.new" "$STATUS_DIR/status" && STATUS="$STATUS_DIR/status"
+}
+
 # say: a detail of the running step; warn: the same, in yellow, and the step ends with [ !! ]
-say()  { [ "$UI_LOGGING" = 1 ] && echo "$*"; if [ -n "$UI_TITLE" ]; then ui_line "         $C_DIM$*$C_RESET"; else ui_info "$*"; fi; }
-warn() { [ "$UI_LOGGING" = 1 ] && echo "WARNING: $*"; UI_STEP_WARN=1; UI_WARNS=$(( UI_WARNS + 1 )); if [ -n "$UI_TITLE" ]; then ui_line "         $C_YELLOW$*$C_RESET"; else ui_warn "$*"; fi; }
+say()  { st info "$*"; [ "$UI_LOGGING" = 1 ] && echo "$*"; if [ -n "$UI_TITLE" ]; then ui_line "         $C_DIM$*$C_RESET"; else ui_info "$*"; fi; }
+warn() { st warn "$*"; [ "$UI_LOGGING" = 1 ] && echo "WARNING: $*"; UI_STEP_WARN=1; UI_WARNS=$(( UI_WARNS + 1 )); if [ -n "$UI_TITLE" ]; then ui_line "         $C_YELLOW$*$C_RESET"; else ui_warn "$*"; fi; }
 # die: the step fails, and the screen says where it stopped and what to do
 die()  {
     [ "$UI_LOGGING" = 1 ] && echo "ERROR: $*"
+    st fail "$*" "${B:-}"
     if [ -n "$UI_TITLE" ]; then
         local at="$UI_TITLE"
         ui_end_step fail
@@ -176,16 +210,19 @@ flock -n 9 || die "another sentora-update is running"
 # services and jobs started from here must not keep the lock after this script ends
 systemctl() { command systemctl "$@" 9>&-; }
 
-MODE=update; YES=0; RESTORE=""
-case "${1:-}" in
-    --check) MODE=check ;;
-    --status) MODE=status ;;
-    --yes|-y) YES=1 ;;
-    --rollback) MODE=rollback; RESTORE="${2:-}" ;;
-    ""|--force) ;;
-    *) sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
-esac
-FORCE=0; [ "${1:-}" = "--force" ] && FORCE=1
+MODE=update; YES=0; RESTORE=""; FORCE=0; FROM=console
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --check) MODE=check ;;
+        --status) MODE=status ;;
+        --yes|-y) YES=1 ;;
+        --force) FORCE=1 ;;
+        --from-panel) FROM=panel; YES=1 ;;
+        --rollback) MODE=rollback; if [ -n "${2:-}" ] && [ "${2#-}" = "$2" ]; then RESTORE="$2"; shift; fi ;;
+        *) sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
+    esac
+    shift
+done
 
 need() { command -v "$1" > /dev/null || { say "Installing $2"; apt-get -qq -y install "$2" > /dev/null || die "could not install $2"; }; }
 
@@ -240,6 +277,7 @@ finish() {
 
 # the closing box: what happened, and how to go back
 summary() { # title backup
+    st done "$([ $UI_WARNS -gt 0 ] && echo warn || echo ok)" "$1" "$(cut -d' ' -f2- "$STATE" 2> /dev/null)" "${2:-}"
     echo >&3
     if [ $UI_WARNS -gt 0 ]; then
         ui_bar "$BG_WARN" "  $1, with $UI_WARNS warning(s)"
@@ -271,6 +309,8 @@ if [ "$MODE" = rollback ]; then
     [ -f "$RESTORE" ] || die "$RESTORE not found"
     ui_banner "Going back to $(basename "$RESTORE")"
     ui_log_start --rollback "$RESTORE"
+    st_init rollback
+    st backup "$RESTORE"
     UI_TOTAL=4
     ui_step "Unpacking the backup"
     need rsync rsync
@@ -340,9 +380,12 @@ INSTALLED=$(cut -d' ' -f2- "$STATE" 2> /dev/null)
 # --status: one line for the daemon (the panel's "update available" notice), nothing downloaded
 if [ "$MODE" = status ]; then
     release_lookup
-    if [ -z "$WANT" ]; then echo "unknown"; exit 2; fi
-    if [ "$WANT" = "$LAST" ]; then echo "current"; exit 0; fi
-    echo "available ${RTAG:-$TAG} ${PUBLISHED:--} ${URL:+-}${URL:-$REPO}"; exit 100
+    if [ -z "$WANT" ]; then ANSWER="unknown"; RC=2
+    elif [ "$WANT" = "$LAST" ]; then ANSWER="current"; RC=0
+    else ANSWER="available ${RTAG:-$TAG} ${PUBLISHED:--} ${URL:+-}${URL:-$REPO}"; RC=100; fi
+    # the answer and when, for Admin > Panel Update
+    if st_dir; then printf '%s %s\n' "$(date +%s)" "$ANSWER" > "$STATUS_DIR/available.new" && chmod 644 "$STATUS_DIR/available.new" && mv -f "$STATUS_DIR/available.new" "$STATUS_DIR/available"; st_backups; fi
+    echo "$ANSWER"; exit $RC
 fi
 
 # --check: on the screen, downloading only when GitHub does not list a checksum
@@ -372,7 +415,8 @@ fi
 
 # --- the update -------------------------------------------------------------------------------
 ui_banner "Updating the panel in $PANEL from ${URL:-$REPO, release $TAG}"
-ui_log_start "$@"
+ui_log_start "$MODE" "$FROM"
+st_init update
 UI_TOTAL=9
 TMP=$(mktemp -d); trap 'ui_ticker_stop; rm -rf "$TMP"' EXIT
 
@@ -401,6 +445,7 @@ else
 fi
 if [ "$SUM" = "$LAST" ] && [ $FORCE -eq 0 ]; then
     UI_TOTAL=$UI_STEP; ui_done
+    st done same "Already up to date" "${INSTALLED:-}" ""
     echo >&3; ui_bar "$BG_OK" "  Already up to date"; echo >&3
     printf '  Installed %s. Use %ssentora-update --force%s to install it again.\n\n' "${INSTALLED:-?}" "$C_BOLD" "$C_RESET" >&3
     exit 0
@@ -429,8 +474,10 @@ ui_step "Backing up the panel"
 B="$BACKUPS/panel-before-update-$(date +%Y%m%d-%H%M%S).tar.gz"
 tar -czf "$B" -C "$(dirname "$PANEL")" --exclude=panel/etc/tmp --exclude=panel/etc/apps/matomo/tmp "$(basename "$PANEL")" || { rm -f "$B"; B=""; die "the backup failed: nothing was changed"; }
 chmod 600 "$B"
+st backup "$B"
 say "$B ($(du -h "$B" | cut -f1))"
 ls -1t "$BACKUPS"/panel-before-update-*.tar.gz 2> /dev/null | tail -n +$((KEEP + 1)) | xargs -r rm -f
+st_backups
 
 ver() { grep -ho "$2" "$1" 2> /dev/null | head -1; }
 RC_BEFORE=$(ver "$PANEL/etc/apps/webmail/program/include/iniset.php" "RCMAIL_VERSION', '[^']*'")
@@ -565,6 +612,22 @@ NEWMODS=$( cd "$PANEL" && php -r '
 ' "$SRC_MODULES" 2>&1 ) || warn "could not register new modules"
 while IFS= read -r l; do [ -n "$l" ] && say "${l#  }"; done <<< "$NEWMODS"
 ui_step "Updating services and bundled apps"
+# zsudo (the panel's fixed list of root actions): its source comes with the core; build it again
+# when that source changed, so an update brings new actions (Panel Update, ftp-kick) to this server
+if [ -f "$PANEL/bin/zsudo.c" ]; then
+    ZS_NEW=$(sha256sum "$PANEL/bin/zsudo.c" | cut -d' ' -f1)
+    if [ "$ZS_NEW" != "$(cat /etc/sentora/zsudo.sha256 2> /dev/null)" ] || [ ! -u "$PANEL/bin/zsudo" ]; then
+        if ! command -v cc > /dev/null 2>&1; then
+            warn "zsudo was not rebuilt: no C compiler (apt-get install build-essential, then run sentora-update --force)"
+        elif cc -O2 -o "$TMP/zsudo" "$PANEL/bin/zsudo.c" > /dev/null 2>&1 \
+            && install -o root -g "$PANEL_USER" -m 4750 "$TMP/zsudo" "$PANEL/bin/zsudo"; then
+            echo "$ZS_NEW" > /etc/sentora/zsudo.sha256
+            say "zsudo rebuilt from the new source"
+        else
+            warn "zsudo did not compile: the old one is kept (see $LOG)"
+        fi
+    fi
+fi
 # --- SpamAV: SpamAssassin and ClamAV (the new installer installs them; older servers get them here)
 if [ -d "$PANEL/modules/spamav_admin" ] && { [ ! -x /usr/sbin/spamd ] || [ ! -x /usr/sbin/clamd ]; }; then
     say "Installing SpamAssassin and ClamAV (Admin > SpamAV Admin)"
@@ -606,5 +669,6 @@ echo "$SUM ${RTAG:+$RTAG, }$(date '+%Y-%m-%d %H:%M')" > "$STATE"
 say "PHP reloaded"
 # the administrators' "update available" notice is no longer true
 "$PANEL/bin/sentora-notice" withdraw sentora-update > /dev/null 2>&1 9>&- && say "the \"update available\" notice is taken away"
+if st_dir; then printf '%s current\n' "$(date +%s)" > "$STATUS_DIR/available"; chmod 644 "$STATUS_DIR/available"; fi
 finish
 summary "The panel is updated" "$B"

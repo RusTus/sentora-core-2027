@@ -13,7 +13,7 @@
  *     // take it away again
  *     ctrl_notices::Withdraw('quota-90-' . $uid);
  *
- * The text is plain: line breaks are kept, web addresses and [text](https://address) become links,
+ * The text is plain: line breaks are kept, web addresses, [text](https://address) and [text](./?module=name) (a panel page) become links,
  * **text** is bold and lines starting with "- " are a list (see ui_tpl_notice::Format()).
  * The hooks OnBeforeSendNotice and OnAfterSendNotice run around each save, with the notice in
  * ctrl_notices::$last. From the shell, sentora-notice (bin/sentora-notice) does the same.

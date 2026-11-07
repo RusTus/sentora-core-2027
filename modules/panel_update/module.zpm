@@ -1,0 +1,18 @@
+<div class="zmodule_content panel" id="zmodule_header_<@ ModuleName @>">
+    <div class="panel-heading">
+        <img src="<@ ModuleIcon @>" width="35" height="35" border="0" alt="<@ ModuleName @>">
+        <div class="zmodule_title"><@ ModuleName @></div>
+        <div class="zmodule_desc" id="zmodule_desc_<@ ModuleName @>"><: Update the panel to the newest release, watch each step, and go back to the version before an update. :></div>
+    </div>
+    <@ Result @>
+    <link rel="stylesheet" href="modules/panel_update/assets/update.css">
+    <div class="pu" id="pu" data-watch="<@ Watch @>" data-checked="<@ Checked @>" data-status="modules/panel_update/code/status.php" data-lost="<: The panel does not answer for a moment (PHP and Apache reload during an update). Still watching... :>">
+        <div class="pu-tiles" id="pu-tiles"><@ Tiles @></div>
+        <@ Run @>
+        <div class="pu-grid">
+            <@ UpdateCard @>
+            <@ BackupsCard @>
+        </div>
+    </div>
+</div>
+<script src="modules/panel_update/assets/update.js"></script>

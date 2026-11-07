@@ -1,0 +1,100 @@
+/* Panel Update in the panel's style: the theme's shared --sn-* variables (etc/styles/THEMES.md),
+   with these as the fallback, so it follows Light, Dark and Auto. */
+.pu { --pu-ink: var(--sn-ink, #1f2933); --pu-muted: var(--sn-muted, #6b7785); --pu-line: var(--sn-line, #e6e9ee);
+      --pu-card: var(--sn-card, #ffffff); --pu-bg: var(--sn-soft, #f4f6f9); --pu-accent: var(--sn-accent, #447fb3); --pu-accent-soft: var(--sn-accent-soft, #e3edf6);
+      --pu-ok: var(--sn-ok, #1e8a4c); --pu-ok-soft: var(--sn-ok-soft, #e3f4ea); --pu-warn: var(--sn-warn, #a86b00); --pu-warn-soft: var(--sn-warn-soft, #fdf1dc);
+      --pu-bad: var(--sn-bad, #c62f2b); --pu-bad-soft: var(--sn-bad-soft, #fbe4e3);
+      color: var(--pu-ink); background: var(--pu-bg); border-radius: 8px; padding: 18px; margin-top: 10px; }
+.pu * { box-sizing: border-box; }
+.pu-ico { width: 16px; height: 16px; flex: none; vertical-align: -3px; }
+.pu-ico-lg { width: 40px; height: 40px; padding: 8px; border-radius: 10px; flex: none; background: var(--pu-accent-soft); color: var(--pu-accent); }
+.pu-spin { animation: pu-spin 1s linear infinite; }
+@keyframes pu-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .pu-spin { animation: none; } }
+.pu-box { background: var(--pu-card); border-radius: 6px; box-shadow: 0 1px 3px rgba(20,30,40,0.08); padding: 16px 18px; min-width: 0; }
+.pu-box > h4, .pu-head h4 { margin: 0 0 10px; font-size: 15px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; }
+.pu-sub { color: var(--pu-muted); font-size: 12px; margin: 10px 0 0; line-height: 1.45; }
+.pu-sub code, .pu-what code { font-size: 12px; }
+.pu-lead { margin: 0 0 10px; line-height: 1.5; }
+.pu-lead .pu-ico { color: var(--pu-ok); }
+.pu-empty { color: var(--pu-muted); margin: 6px 0 0; }
+
+/* the three figures */
+.pu-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 14px; }
+.pu-tile { display: flex; gap: 12px; align-items: center; background: var(--pu-card); border-radius: 6px; box-shadow: 0 1px 3px rgba(20,30,40,0.08); padding: 12px 14px; min-width: 0; }
+.pu-tile > div { min-width: 0; }
+.pu-tile b { display: block; font-size: 18px; line-height: 1.25; }
+.pu-tile span { display: block; color: var(--pu-muted); font-size: 12px; overflow-wrap: anywhere; }
+.pu-tile form { margin-top: 6px; }
+.pu-tile.ok .pu-ico-lg { background: var(--pu-ok-soft); color: var(--pu-ok); }
+.pu-tile.warn .pu-ico-lg { background: var(--pu-warn-soft); color: var(--pu-warn); }
+.pu-tile.warn b { color: var(--pu-warn); }
+.pu-tile.bad .pu-ico-lg { background: var(--pu-bad-soft); color: var(--pu-bad); }
+
+/* the job: its steps, as on the console */
+#pu-run:not(:empty) { margin-bottom: 14px; }
+.pu-run.is-live { border-top: 3px solid var(--pu-accent); }
+.pu-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.pu-head small { color: var(--pu-muted); }
+.pu-bar { height: 8px; border-radius: 4px; background: var(--pu-line); overflow: hidden; margin-top: 4px; }
+.pu-bar i { display: block; height: 100%; background: var(--pu-accent); transition: width 0.4s; }
+.pu-steps { list-style: none; margin: 12px 0 0; padding: 0; }
+.pu-step { display: flex; gap: 10px; padding: 7px 0; border-top: 1px solid var(--pu-line); }
+.pu-step:first-child { border-top: 0; }
+.pu-step > .pu-ico { margin-top: 2px; }
+.pu-step > div { min-width: 0; flex: 1; }
+.pu-step-head { display: flex; justify-content: space-between; gap: 10px; }
+.pu-step-head small { color: var(--pu-muted); font-variant-numeric: tabular-nums; }
+.pu-step.is-ok > .pu-ico { color: var(--pu-ok); }
+.pu-step.is-warn > .pu-ico { color: var(--pu-warn); }
+.pu-step.is-fail > .pu-ico, .pu-step.is-fail b { color: var(--pu-bad); }
+.pu-step.is-running > .pu-ico { color: var(--pu-accent); }
+.pu-line { display: block; color: var(--pu-muted); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.pu-line.warn { color: var(--pu-warn); }
+.pu-wait, .pu-end { display: flex; gap: 12px; align-items: center; }
+.pu-wait b, .pu-end b { display: block; }
+.pu-wait span, .pu-end span { display: block; color: var(--pu-muted); font-size: 13px; }
+.pu-end { margin-top: 14px; padding: 12px 14px; border-radius: 6px; background: var(--pu-ok-soft); }
+.pu-end > div { flex: 1; min-width: 0; }
+.pu-end.ok .pu-ico-lg { background: var(--pu-card); color: var(--pu-ok); }
+.pu-end.warn { background: var(--pu-warn-soft); }
+.pu-end.warn .pu-ico-lg { background: var(--pu-card); color: var(--pu-warn); }
+.pu-end.fail { background: var(--pu-bad-soft); }
+.pu-end.fail .pu-ico-lg { background: var(--pu-card); color: var(--pu-bad); }
+.pu-end.fail b { color: var(--pu-bad); }
+.pu-run > .pu-end:first-child, .pu-run > .pu-wait:first-child { margin-top: 0; }
+.pu-lost { margin: 0 0 10px; padding: 8px 12px; border-radius: 6px; background: var(--pu-warn-soft); color: var(--pu-warn); font-size: 13px; }
+
+/* the console command that goes back (works when the panel does not) */
+.pu-console { display: flex; gap: 10px; margin-top: 12px; padding: 12px 14px; border-radius: 6px; background: var(--pu-warn-soft); border-left: 3px solid var(--pu-warn); }
+.pu-console > .pu-ico { color: var(--pu-warn); margin-top: 2px; }
+.pu-console > div { min-width: 0; flex: 1; }
+.pu-console span { display: block; font-size: 13px; line-height: 1.45; }
+.pu-console small { display: block; color: var(--pu-muted); font-size: 12px; margin-top: 4px; }
+.pu-cmd { display: block; margin-top: 6px; padding: 6px 10px; border-radius: 4px; background: #1f2933; color: #e6e9ee; font-size: 12.5px; cursor: copy; overflow-wrap: anywhere; white-space: normal; }
+.pu-cmd.copied { outline: 2px solid var(--pu-ok); }
+
+/* update and go back */
+.pu-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+.pu-what { margin: 0 0 4px; padding-left: 18px; font-size: 13px; line-height: 1.55; color: var(--pu-muted); }
+.pu-act { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; margin-top: 14px; }
+.pu-pw { flex: 1 1 200px; margin: 0; font-weight: normal; }
+.pu-pw span { display: block; font-size: 12px; color: var(--pu-muted); margin-bottom: 4px; }
+.pu-backups { list-style: none; margin: 10px 0 0; padding: 0; }
+.pu-backups li { border-top: 1px solid var(--pu-line); }
+.pu-backups li:first-child { border-top: 0; }
+.pu-backups summary { display: flex; gap: 10px; align-items: center; padding: 9px 0; cursor: pointer; list-style: none; }
+.pu-backups summary::-webkit-details-marker { display: none; }
+.pu-backups summary > .pu-ico { color: var(--pu-accent); }
+.pu-backups summary b { display: block; }
+.pu-backups summary small { display: block; color: var(--pu-muted); font-size: 12px; overflow-wrap: anywhere; }
+.pu-backups details.is-off summary { cursor: default; opacity: 0.7; }
+.pu-confirm { padding: 0 0 12px 26px; }
+.pu-confirm .pu-console { margin-top: 0; }
+
+@media (max-width: 900px) { .pu-grid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 640px) {
+    .pu { padding: 12px; }
+    .pu-tiles { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+    .pu-confirm { padding-left: 0; }
+}

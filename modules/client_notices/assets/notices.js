@@ -20,6 +20,7 @@
         var a = function (url, text) { return '<a href="' + url + '" target="_blank" rel="noopener noreferrer">' + text + '</a>'; };
         var s = esc(t.replace(/\r\n?/g, '\n').trim());
         s = s.replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/gi, function (m, text, url) { return hold(a(url, text)); });
+        s = s.replace(/\[([^\]\n]+)\]\((\.\/\?module=[a-z0-9_]+(?:&amp;[a-z0-9_]+=[A-Za-z0-9_]*)*)\)/g, function (m, text, url) { return hold('<a href="' + url + '">' + text + '</a>'); });
         s = s.replace(/\bhttps?:\/\/[^\s<\u0001]+/gi, function (url) {
             var tail = '', m;
             while ((m = url.match(/(&quot;|&#039;|&gt;|[.,;:!?)])$/))) { tail = m[1] + tail; url = url.slice(0, -m[1].length); }

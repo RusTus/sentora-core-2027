@@ -142,6 +142,14 @@ sentora-update --rollback   # list the backups and restore one
 
 It shows each step with a progress bar, like the installer, and keeps the details in `/var/sentora/logs/sentora-update.log`. Once an hour the panel checks for a newer release (GitHub's API only, nothing is downloaded) and shows administrators an "A panel update is available" notice. Closing the notice hides it until the next login, and it goes away once the panel is updated.
 
+The same can be done from the panel: **Admin > Server Admin > Panel Update** shows the installed and the published release, updates with **Update now** (after your panel password) and shows each step as it runs, and lists the backups with **Go back**. The panel asks root through `zsudo`, which runs `sentora-update` exactly as on the console. Every request is logged in `/var/lib/sentora/panel-update.log`. If the panel does not answer after an update, go back from the console, as root:
+
+```bash
+sentora-update --rollback
+```
+
+It lists the backups, newest first; run it again with the newest one (`sentora-update --rollback /var/sentora/backups/panel-before-update-<date>.tar.gz`).
+
 ## Backups and restore
 
 - **Client backups:** each account can back up its own websites, databases and mail from the panel.
