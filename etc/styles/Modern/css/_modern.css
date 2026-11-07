@@ -176,3 +176,10 @@ legend { color: var(--ml-ink); border-bottom-color: var(--ml-line); }
 .sn-notice-body a { color: inherit; text-decoration: underline; text-underline-offset: 2px; font-weight: 600; }
 .sn-notice-close { position: absolute; top: 8px; right: 8px; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 6px; background: none; color: var(--ml-muted); font-size: 20px; line-height: 28px; cursor: pointer; }
 .sn-notice-close:hover, .sn-notice-close:focus-visible { background: color-mix(in srgb, var(--nc) 20%, transparent); color: var(--ml-ink); }
+
+/* Shadowing: the bar while an administrator or reseller is logged in as a client (<# ui_tpl_shadowbar #>) */
+.zshadowbar { position: sticky; top: 0; z-index: 50; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 0 16px; padding: 10px 14px; border-radius: 6px;
+    background: color-mix(in srgb, var(--ml-amber) 22%, var(--ml-card)); border: 1px solid color-mix(in srgb, var(--ml-amber) 55%, var(--ml-card)); color: var(--ml-ink); font-size: 14px; }
+.zshadowbar-ico { width: 20px; height: 20px; flex: none; color: color-mix(in srgb, var(--ml-amber) 70%, var(--ml-ink)); }
+.zshadowbar span { flex: 1 1 260px; }
+.zshadowbar-back, .zshadowbar-back:hover, .zshadowbar-back:focus { background: var(--ml-ink); color: var(--ml-card) !important; border: 0; font-weight: 600; }

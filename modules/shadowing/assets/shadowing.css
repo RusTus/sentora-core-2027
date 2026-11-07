@@ -1,0 +1,45 @@
+/* Shadowing in the panel's style. Colours come from the theme's shared --sn-* variables
+   (etc/styles/THEMES.md), with these as the fallback, so it follows Light, Dark and Auto. */
+.sh { --sh-ink: var(--sn-ink, #1f2933); --sh-muted: var(--sn-muted, #6b7785); --sh-line: var(--sn-line, #e6e9ee);
+      --sh-card: var(--sn-card, #ffffff); --sh-bg: var(--sn-soft, #f4f6f9); --sh-accent: var(--sn-accent, #447fb3); --sh-accent-soft: var(--sn-accent-soft, #e3edf6);
+      color: var(--sh-ink); background: var(--sh-bg); border-radius: 8px; padding: 18px; margin-top: 10px; }
+.sh * { box-sizing: border-box; }
+.sh-ico { width: 16px; height: 16px; flex: none; }
+.sh-box { background: var(--sh-card); border-radius: 6px; box-shadow: 0 1px 3px rgba(20,30,40,0.08); padding: 16px 18px; min-width: 0; }
+.sh-box > h4, .sh-head h4 { margin: 0 0 12px; font-size: 15px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; }
+.sh-sub { color: var(--sh-muted); font-size: 12px; margin: 0; }
+.sh-cols { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 14px; align-items: start; }
+.sh-side { display: grid; gap: 14px; position: sticky; top: 12px; }
+.sh-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.sh-head h4 { margin: 0 6px 0 0; }
+.sh-resel { width: auto; max-width: 220px; }
+.sh-find { position: relative; flex: 1 1 220px; max-width: 340px; margin: 0; font-weight: 400; }
+.sh-find .sh-ico { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--sh-muted); pointer-events: none; }
+.sh-find input { padding-left: 32px; }
+.sh-rows { display: grid; gap: 8px; }
+.sh-row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--sh-line); border-radius: 6px; }
+.sh-row[hidden] { display: none; }
+.sh-row.is-off { background: var(--sh-bg); }
+.sh-avatar { width: 36px; height: 36px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; flex: none; background: var(--sh-accent-soft); color: var(--sh-accent); }
+.sh-row.is-off .sh-avatar { background: var(--sh-line); color: var(--sh-muted); }
+.sh-main { flex: 1; min-width: 0; }
+.sh-name { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.sh-name b { font-size: 15px; }
+.sh-name span { color: var(--sh-muted); font-size: 13px; }
+.sh-badge { font-style: normal; font-size: 11px; font-weight: 600; padding: 1px 8px; border-radius: 9px; }
+.sh-badge.off { background: var(--sn-warn-soft, #fdf1dc); color: var(--sn-warn, #a86b00); }
+.sh-sub, .sh-row .sh-sub { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 3px; font-size: 12px; color: var(--sh-muted); }
+.sh-chip { font-weight: 600; color: var(--sh-ink); }
+.sh-go { display: inline-flex; align-items: center; gap: 6px; flex: none; }
+.sh-nomatch { margin: 10px 0 0; color: var(--sh-muted); font-size: 13px; }
+.sh-empty { display: flex; flex-direction: column; gap: 4px; padding: 14px; border: 1px dashed var(--sh-line); border-radius: 6px; font-size: 13px; color: var(--sh-muted); }
+.sh-empty b { color: var(--sh-ink); font-size: 14px; }
+.sh-how { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.sh-how li { display: flex; gap: 10px; font-size: 13px; line-height: 1.45; }
+.sh-how .sh-ico { color: var(--sh-accent); margin-top: 2px; }
+.sh-recent { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 12px; }
+.sh-recent li { display: flex; gap: 10px; }
+.sh-when { color: var(--sh-muted); white-space: nowrap; font-variant-numeric: tabular-nums; min-width: 86px; }
+.sh-recent + .sh-none { display: none; }
+@media (max-width: 900px) { .sh-cols { grid-template-columns: 1fr; } .sh-side { position: static; } }
+@media (max-width: 640px) { .sh { padding: 12px; } .sh-row { flex-wrap: wrap; } .sh-main { flex-basis: calc(100% - 48px); } .sh-go { margin-left: 48px; } .sh-find { max-width: none; flex-basis: 100%; } }

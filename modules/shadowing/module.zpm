@@ -1,47 +1,66 @@
 <div class="zmodule_content panel" id="zmodule_header_<@ ModuleName @>">
     <div class="panel-heading">
         <img src="<@ ModuleIcon @>" width="35" height="35" border="0" alt="<@ ModuleName @>">
+        <div class="zmodule_title"><@ ModuleName @></div>
+        <div class="zmodule_desc" id="zmodule_desc_<@ ModuleName @>"><: Log in as one of your clients to see the panel as they do, and to help them with something. :></div>
+    </div>
+    <link rel="stylesheet" href="modules/shadowing/assets/shadowing.css">
 
-        <div class="zmodule_title">
-            <@ ModuleName @>
+    <div class="sh" id="sh">
+        <div class="sh-cols">
+            <form class="sh-box" action="./?module=shadowing&amp;action=ShadowUser" method="post">
+                <input type="hidden" name="inReturn" value="shadowing">
+                <div class="sh-head"><h4><: Log in as :></h4>
+                    <% if HasAccounts %>
+                    <% if IsAdmin %><select class="form-control sh-resel" id="sh-resel" aria-label="<: Show :>"><option value=""><: All accounts :></option><@ ResellerOptions @></select><% endif %>
+                    <label class="sh-find"><svg class="sh-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                        <input type="search" class="form-control" id="sh-find" placeholder="<: Search name, email or package :>" aria-label="<: Search accounts :>"></label>
+                    <% endif %>
+                </div>
+                <% if HasAccounts %>
+                <div class="sh-rows" id="sh-rows"><@ AccountRows @></div>
+                <p class="sh-nomatch" id="sh-nomatch" hidden><: No account matches. :></p>
+                <% endif %>
+                <% if NoAccounts %><div class="sh-empty"><b><: No clients yet :></b><span><: Clients you make in Manage Clients show here. :></span></div><% endif %>
+                <@ CSFR_Tag @>
+            </form>
+
+            <aside class="sh-side">
+                <div class="sh-box">
+                    <h4><: How it works :></h4>
+                    <ul class="sh-how">
+                        <li><svg class="sh-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
+                            <span><: You see the client's panel, with its modules and limits. :></span></li>
+                        <li><svg class="sh-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
+                            <span><: What you change, you change for the client: careful with deleting. :></span></li>
+                        <li><svg class="sh-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+                            <span><: A bar at the top of every page takes you back to your own account, on this page. :></span></li>
+                        <li><svg class="sh-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></svg>
+                            <span><: Each time is recorded: who, as whom, when and from where. :></span></li>
+                    </ul>
+                </div>
+                <div class="sh-box">
+                    <h4><% if IsAdmin %><: Recently :><% endif %><% if NoAdmin %><: You recently :><% endif %></h4>
+                    <@ Recent @>
+                    <p class="sh-sub sh-none"><: Nothing recorded yet. :></p>
+                </div>
+            </aside>
         </div>
-
-        <div class="zmodule_desc" id="zmodule_desc_<@ ModuleName @>"><@ ModuleDesc @></div>
-
     </div>
-
-
-    <div class="zgrid_wrapper">
-        <h2><: Select the client you wish to shadow :></h2>
-        <% if ShadowAccounts %>
-        <form action="./?module=shadowing&action=ShadowUser" method="post">
-            <table class="table table-striped">
-                <tr>
-                    <th><: Username :></th>
-                    <th><: Reseller :> <: (ID) :></th>
-                    <th><: Package :></th>
-                    <th><: Group :></th>
-                    <th><: Current Disk :></th>
-                    <th><: Current Bandwidth :></th>
-                    <th>&nbsp;</th>
-                </tr>
-                <% loop ShadowAccounts %>
-                <tr>
-                    <td><& clientusername &></td>
-                    <td><& resellername &> (<& resellerid &>)</td>
-                    <td><& packagename &></td>
-                    <td><& usergroup &></td>
-                    <td><& currentdisk &></td>
-                    <td><& currentbandwidth &></td>
-                    <td><button class="button-loader btn btn-primary" type="submit" name="inShadow_<& clientid &>" id="inShadow_<& clientid &>" value="inShadow_<& clientid &>"><: Shadow :></button></td>
-                </tr>
-                <% endloop %>
-            </table>
-            <@ CSFR_Tag @>
-        </form>
-        <% else %><!-- ELSE ShadowAccounts -->
-        <: You have no Clients at this time. :>
-        <% endif %><!-- END ShadowAccounts -->
-    </div>
-
 </div>
+<script>
+(function () {
+    'use strict';
+    var find = document.getElementById('sh-find'), resel = document.getElementById('sh-resel'); if (!find) { return; }
+    var rows = document.querySelectorAll('.sh-row'), nm = document.getElementById('sh-nomatch');
+    var apply = function () {
+        var q = find.value.trim().toLowerCase(), r = resel ? resel.value : '', n = 0;
+        Array.prototype.forEach.call(rows, function (row) {
+            var on = (q === '' || row.getAttribute('data-s').indexOf(q) >= 0) && (r === '' || row.getAttribute('data-r') === r);
+            row.hidden = !on; if (on) { n++; }
+        });
+        nm.hidden = n > 0;
+    };
+    find.addEventListener('input', apply); if (resel) { resel.addEventListener('change', apply); }
+})();
+</script>

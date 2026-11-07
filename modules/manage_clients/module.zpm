@@ -37,7 +37,7 @@
                 <b><: No clients yet :></b><span><: A client gets its own login to the panel, with the limits of the package you give it. :></span></div>
             <% endif %>
         </div>
-        <form id="mc-act" method="post" action="./?module=manage_clients&amp;action=EditClient"><@ CSFR_Tag @></form>
+        <form id="mc-act" method="post" action="./?module=manage_clients&amp;action=EditClient"><input type="hidden" name="inReturn" value="manage_clients"><@ CSFR_Tag @></form>
         <% endif %>
 
         <% if IsForm %>
@@ -110,7 +110,7 @@
                 <@ CSFR_Tag @>
             </form>
             <% if IsEdit %><aside class="mc-box mc-sum"><@ ClientSummary @></aside>
-            <form id="mc-act" method="post" action="./?module=manage_clients&amp;action=EditClient"><@ CSFR_Tag @></form><% endif %>
+            <form id="mc-act" method="post" action="./?module=manage_clients&amp;action=EditClient"><input type="hidden" name="inReturn" value="manage_clients"><@ CSFR_Tag @></form><% endif %>
         </div>
         <% endif %>
 

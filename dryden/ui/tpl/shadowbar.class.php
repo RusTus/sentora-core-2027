@@ -15,7 +15,7 @@
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  */
 /**
- * Template tag <# ui_tpl_shadowbar #>: the "end shadowing" bar.
+ * Template tag <# ui_tpl_shadowbar #>: the bar shown while shadowing, with the way back.
  */
 class ui_tpl_shadowbar {
 
@@ -25,13 +25,16 @@ class ui_tpl_shadowbar {
      * @return string|false The bar HTML, or false when the session is not a shadow session.
      */
     public static function Template() {
-		$shadoweduser = ctrl_users::GetUserDetail();
-		$shadowedusername = $shadoweduser['username'];
-        if (isset($_SESSION['ruid'])) {
-            return '<div class="zshadowbar" id="zshadowbar"><a href="./?returnsession=true"><button type="button" class="shadow-btn btn btn-danger"><: End shadowing :> <b>' . $shadowedusername . '</b> <: and return to your session. :></button></a></div>';
-        } else {
+        if (empty($_SESSION['ruid'])) {
             return false;
         }
+        $h = function ($v) { return htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8'); };
+        $as = ctrl_users::GetUserDetail();
+        $me = ctrl_users::GetUserDetail((int) $_SESSION['ruid']);
+        return '<div class="zshadowbar" id="zshadowbar" role="status"><svg class="zshadowbar-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+            . '<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>'
+            . '<span>' . $h(ui_language::translate('You are logged in as')) . ' <b>' . $h($as['username']) . '</b>: ' . $h(ui_language::translate('what you change here, you change for this client.')) . '</span>'
+            . '<a class="btn btn-sm zshadowbar-back" href="./?returnsession=true">' . $h(ui_language::translate('Back to')) . ' ' . $h($me['username']) . '</a></div>';
     }
 
 }

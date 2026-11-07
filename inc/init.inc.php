@@ -38,11 +38,17 @@ if (isset($_GET['logout'])) {
 }
 
 if (isset($_GET['returnsession'])) {
-    if (isset($_SESSION['ruid'])) {
+    // End shadowing: back to the account that started it, on the page it started from
+    $back = './';
+    if (!empty($_SESSION['ruid'])) {
         ctrl_auth::SetUserSession($_SESSION['ruid'], runtime_sessionsecurity::getSessionSecurityEnabled());
-        $_SESSION['ruid'] = null;
+        if (!empty($_SESSION['rreturn']) && preg_match('/^[a-z0-9_]{1,40}$/', (string) $_SESSION['rreturn'])) {
+            $back = './?module=' . $_SESSION['rreturn'];
+        }
     }
-    header("location: ./");
+    $_SESSION['ruid'] = null;
+    $_SESSION['rreturn'] = null;
+    header("location: " . $back);
     exit;
 }
 
