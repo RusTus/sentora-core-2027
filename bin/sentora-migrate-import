@@ -33,7 +33,8 @@
  * Manage Clients). Moved for it: its domains,
  * sub-domains and parked domains, their website files, DNS records, MySQL databases and users (with
  * their passwords, so the sites' settings keep working), FTP accounts, cron jobs, protected folders,
- * mailboxes (with their mail), aliases, forwarders and distribution lists. Never moved: the old
+ * mailboxes (with their mail, webmail address books, identities and settings, and Sieve filters and
+ * out-of-office replies), aliases, forwarders and distribution lists, and the account's own FAQ entries. Never moved: the old
  * panel itself (its modules, custom ones included, and add-ons, settings, themes and translations). A name that is already
  * taken on this server is skipped and reported. Laravel apps (Snipe-IT and the like) get their old
  * caches cleared (cached settings, when the app has a .env, and compiled templates), so they read
@@ -410,11 +411,11 @@ function cleanup()
     $done = true;
     // (not when it stopped before the old panel's copy was named: DROP DATABASE `` is an SQL error)
     if (is_string($TMPDB) && $TMPDB !== '') {
-        foreach (array('', '_mail', '_ftp') as $sfx) {
+        foreach (array('', '_mail', '_ftp', '_rc') as $sfx) {
             try { $zdbh->exec("DROP DATABASE IF EXISTS `" . $TMPDB . $sfx . "`"); } catch (Exception $e) { }
         }
     }
-    foreach (array($STAGE, $STAGE . '-htaccess') as $d) {
+    foreach (array($STAGE, $STAGE . '-htaccess', $STAGE . '-sieve') as $d) {
         if ($STAGE && is_dir($d)) {
             sh('rm -rf ' . q($d));
         }
@@ -458,6 +459,13 @@ if ($mailDump) {
     $zdbh->exec("CREATE DATABASE `{$TMPDB}_mail`");
     ui_info('its mail database');
     $HAVE_MAILDB = (load_dump($mailDump[0], $TMPDB . '_mail') === true);
+}
+$HAVE_RCDB = false;
+if (is_file($EXP . '/db/panel/roundcube.sql.gz')) {
+    $zdbh->exec("CREATE DATABASE `{$TMPDB}_rc`");
+    ui_info('its webmail database (address books, identities, settings)');
+    $HAVE_RCDB = (load_dump($EXP . '/db/panel/roundcube.sql.gz', $TMPDB . '_rc') === true);
+    $HAVE_RCDB || warn('the old webmail database did not load: address books and identities are not moved');
 }
 $HAVE_FTPDB = false;
 if ($ftpDump) {
@@ -883,6 +891,56 @@ if ($MADE['accounts']) {
     foreach ($MADE['packages'] as $n) { plan_item("package $n", 'with the old package\'s limits'); }
     foreach ($MADE['groups'] as $n) { plan_item("group $n", 'its modules that exist here'); }
 }
+// --- webmail data, mail filters and FAQs (counted for the plan; moved after the mailboxes) -----------
+$MBOXES = array_map(function ($m) { return strtolower((string) $m['mb_address_vc']); }, $plan['mail']);
+$RCNEW = 'sentora_roundcube';
+$rcOld = array();   // address => old Roundcube user_id
+if ($HAVE_RCDB && $MBOXES) {
+    foreach ($old("SELECT user_id, LOWER(username) AS u FROM `{$TMPDB}_rc`.users") as $r) {
+        if (in_array($r['u'], $MBOXES, true) && !isset($rcOld[$r['u']])) {
+            $rcOld[$r['u']] = (int) $r['user_id'];
+        }
+    }
+}
+$RCHAVE = (int) $zdbh->query("SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = '$RCNEW' AND TABLE_NAME = 'users'")->fetchColumn() > 0;
+// the old filters: where each mailbox's are in the packed Sieve folder
+$SIEVETAR = $EXP . '/mail/sieve.tar.gz';
+$sieveBase = rtrim((string) ($M['sieve_base'] ?? ''), '/');
+$sievePath = function ($pattern, $addr) {
+    list($local, $dom) = array_pad(explode('@', $addr, 2), 2, '');
+    return str_replace(array('%Lu', '%Ld', '%Ln', '%u', '%d', '%n', '%%'), array($addr, $dom, $local, $addr, $dom, $local, '%'), (string) $pattern);
+};
+$sieveOld = array();   // address => array('dir' => old scripts folder, 'active' => old active script)
+if ($sieveBase !== '' && is_file($SIEVETAR) && $MBOXES) {
+    $dirPat = (string) ($M['sieve_dir'] ?? '') !== '' ? $M['sieve_dir'] : $sieveBase . '/%d/%n/';
+    $actPat = (string) ($M['sieve'] ?? '') !== '' ? $M['sieve'] : $sieveBase . '/%d/%n/dovecot.sieve';
+    sh('tar -tzf ' . q($SIEVETAR), $listing);
+    $packed = array_flip(array_map(function ($l) { return '/' . rtrim($l, '/'); }, array_filter(explode("\n", (string) $listing))));
+    $parent = rtrim(dirname($sieveBase), '/');
+    foreach ($MBOXES as $a) {
+        $dir = rtrim($sievePath($dirPat, $a), '/');
+        $act = $sievePath($actPat, $a);
+        $inTar = function ($path) use ($packed, $parent) { return isset($packed[substr($path, strlen($parent))]); };
+        if (strpos($dir, $sieveBase . '/') === 0 && $inTar($dir) || strpos($act, $sieveBase . '/') === 0 && $inTar($act)) {
+            $sieveOld[$a] = array('dir' => $dir, 'active' => $act);
+        }
+    }
+}
+// the account's own FAQ entries (not the old panel's standard ones: this panel has its own)
+$STOCKFAQ = array('How can I update my personal contact details?', 'How do I change my password?',
+    'I don&#39;t think one of the services(Apache, MySQL, FTP, etc) are running. Is there any easy way to check?',
+    'How can I set my domain to work with my Sentora Account?', 'How can I create a MySQL Database?', 'What is phpMyAdmin?',
+    'How do I create FTP Accounts?', 'How do I create an E-Mail Account?', 'How do I create a Mail Alias?', 'How can I create a Mailing List?',
+    'How do I use Mail Forwards?', 'What are Subdomains?', 'How can I view how much Data I have used?', 'How can I access Webmail?');
+$FAQS = array();
+try {
+    foreach ($old("SELECT * FROM `$O`.x_faqs WHERE fq_acc_fk = :a AND fq_deleted_ts IS NULL", array(':a' => $OLDID)) as $f) {
+        if (!in_array((string) $f['fq_question_tx'], $STOCKFAQ, true)
+            && !($NEWID && $taken("SELECT COUNT(*) FROM x_faqs WHERE fq_acc_fk = :a AND fq_question_tx = :q AND fq_deleted_ts IS NULL", array(':a' => $NEWID, ':q' => $f['fq_question_tx'])))) {
+            $FAQS[] = $f;
+        }
+    }
+} catch (Exception $e) { }
 plan_head('Domains', count($plan['domains']));
 foreach ($plan['domains'] as $v) {
     plan_item($v['vh_name_vc'], 'public_html' . $v['vh_directory_vc']);
@@ -897,6 +955,9 @@ plan_head('Also', null);
 plan_item('website files', is_file($filesTar) ? hsize(filesize($filesTar)) . ' packed, ' . ($opt['overwrite'] ? 'replacing' : 'keeping') . ' files already there' : 'NOT IN THE EXPORT');
 plan_item('FTP accounts (' . count($plan['ftp']) . ')', implode(', ', array_column($plan['ftp'], 'ft_user_vc')));
 plan_item('mailboxes (' . count($plan['mail']) . ')', implode(', ', array_column($plan['mail'], 'mb_address_vc')));
+plan_item('webmail data (' . count($rcOld) . ')', $rcOld ? 'address books, identities and signatures, settings of ' . implode(', ', array_keys($rcOld)) : ($HAVE_RCDB ? '' : 'not in the export'));
+plan_item('mail filters (' . count($sieveOld) . ')', $sieveOld ? 'filters and out-of-office replies of ' . implode(', ', array_keys($sieveOld)) : (is_file($SIEVETAR) ? '' : 'not in the export'));
+plan_item('FAQ entries (' . count($FAQS) . ')', count($FAQS) ? 'written on the old panel by ' . $OLDU : '');
 plan_item('DNS records (' . $dnsCount . ')', $dnsCount && $OLDIP !== '' && !$opt['keep-ip'] ? "those pointing to $OLDIP get $NEWIP" : '');
 plan_item('cron jobs (' . $counts['x_cronjobs'] . '), protected folders (' . $counts['x_htaccess'] . ')', '');
 plan_item('aliases (' . $counts['x_aliases'] . '), forwarders (' . $counts['x_forwarders'] . '), lists (' . $counts['x_distlists'] . ')', '');
@@ -1337,6 +1398,96 @@ if ($plan['mail'] || $counts['x_aliases'] || $counts['x_forwarders'] || $counts[
     }
 }
 ui_info("$nm mailbox(es)" . ($nm ? ' with their mail and passwords' : ''));
+
+// webmail data: Roundcube's user and what hangs on it (new IDs here); a mailbox that already used
+// webmail here keeps what it has
+if ($rcOld && $RCHAVE) {
+    $mailHost = (string) $zdbh->query("SELECT mail_host FROM `$RCNEW`.users ORDER BY user_id LIMIT 1")->fetchColumn() ?: 'localhost';
+    $copy = function ($table, $row, $skip) use ($cols, $RCNEW) {
+        static $colCache = array();
+        if (!isset($colCache[$table])) { $colCache[$table] = $cols($RCNEW, $table); }
+        $row = array_diff_key(array_intersect_key($row, array_flip($colCache[$table])), array_flip($skip));
+        if (!$row) { return 0; }
+        $GLOBALS['zdbh']->prepare("INSERT INTO `$RCNEW`.`$table` (`" . implode('`,`', array_keys($row)) . "`) VALUES (" . implode(',', array_fill(0, count($row), '?')) . ")")->execute(array_values($row));
+        return (int) $GLOBALS['zdbh']->lastInsertId();
+    };
+    $rcDone = array(); $rcKept = array();
+    foreach ($rcOld as $addr => $ouid) {
+        if ($taken("SELECT COUNT(*) FROM `$RCNEW`.users WHERE LOWER(username) = :u", array(':u' => $addr))) { $rcKept[] = $addr; continue; }
+        try {
+            $u = $old("SELECT * FROM `{$TMPDB}_rc`.users WHERE user_id = :i", array(':i' => $ouid))[0];
+            $u['mail_host'] = $mailHost;
+            $nuid = $copy('users', $u, array('user_id'));
+            foreach ($old("SELECT * FROM `{$TMPDB}_rc`.identities WHERE user_id = :i AND del = 0", array(':i' => $ouid)) as $r) { $r['user_id'] = $nuid; $copy('identities', $r, array('identity_id')); }
+            $cmap = array(); $gmap = array();
+            foreach ($old("SELECT * FROM `{$TMPDB}_rc`.contacts WHERE user_id = :i AND del = 0", array(':i' => $ouid)) as $r) { $r['user_id'] = $nuid; $cmap[(int) $r['contact_id']] = $copy('contacts', $r, array('contact_id')); }
+            foreach ($old("SELECT * FROM `{$TMPDB}_rc`.contactgroups WHERE user_id = :i AND del = 0", array(':i' => $ouid)) as $r) { $r['user_id'] = $nuid; $gmap[(int) $r['contactgroup_id']] = $copy('contactgroups', $r, array('contactgroup_id')); }
+            if ($gmap) {
+                foreach ($old("SELECT * FROM `{$TMPDB}_rc`.contactgroupmembers WHERE contactgroup_id IN (" . implode(',', array_map('intval', array_keys($gmap))) . ")") as $r) {
+                    if (isset($cmap[(int) $r['contact_id']])) { $r['contactgroup_id'] = $gmap[(int) $r['contactgroup_id']]; $r['contact_id'] = $cmap[(int) $r['contact_id']]; $copy('contactgroupmembers', $r, array()); }
+                }
+            }
+            foreach (array('responses' => 'response_id', 'collected_addresses' => 'address_id') as $t => $pk) {
+                if ($cols($TMPDB . '_rc', $t) && $cols($RCNEW, $t)) {
+                    foreach ($old("SELECT * FROM `{$TMPDB}_rc`.`$t` WHERE user_id = :i", array(':i' => $ouid)) as $r) { $r['user_id'] = $nuid; try { $copy($t, $r, array($pk)); } catch (Exception $e) { } }
+                }
+            }
+            $rcDone[] = $addr;
+        } catch (Exception $e) {
+            warn("webmail data of $addr not moved: " . $e->getMessage());
+        }
+    }
+    $rcDone && ui_info('webmail data (address books, identities, settings): ' . implode(', ', $rcDone));
+    $rcKept && warn('webmail data not moved for ' . implode(', ', $rcKept) . ': these mailboxes have used webmail here already (theirs is kept)');
+}
+
+// mail filters: each mailbox's old Sieve scripts into its folder here (<domain>/.home/<user>/sieve), the
+// active one linked as dovecot.sieve; a mailbox that has filters here already keeps them
+if ($sieveOld) {
+    $stg = $STAGE . '-sieve';
+    @mkdir($stg, 0700, true);
+    sh('tar -xzf ' . q($SIEVETAR) . ' -C ' . q($stg) . ' --no-same-owner', $o) || warn('the mail filters did not unpack completely: ' . substr($o, 0, 200));
+    $parent = rtrim(dirname($sieveBase), '/');
+    $sDone = array(); $sKept = array();
+    foreach ($sieveOld as $addr => $p) {
+        list($local, $dom) = explode('@', $addr, 2);
+        $home = '/var/sentora/vmail/' . $dom . '/.home/' . $local;
+        if (is_dir($home . '/sieve') && glob($home . '/sieve/*.sieve') || file_exists($home . '/dovecot.sieve')) { $sKept[] = $addr; continue; }
+        @mkdir($home . '/sieve', 0700, true);
+        $oldDir = $stg . substr($p['dir'], strlen($parent));
+        $oldAct = $stg . substr($p['active'], strlen($parent));
+        foreach (glob($oldDir . '/*.sieve') ?: array() as $f) {
+            if (is_file($f) && !is_link($f)) { copy($f, $home . '/sieve/' . basename($f)); }
+        }
+        $active = '';
+        if (is_link($oldAct)) {
+            $t = basename((string) readlink($oldAct));
+            if (is_file($home . '/sieve/' . $t)) { $active = $t; }
+        } elseif (is_file($oldAct)) {
+            copy($oldAct, $home . '/sieve/migrated.sieve');
+            $active = 'migrated.sieve';
+        }
+        if ($active !== '') {
+            @symlink('sieve/' . $active, $home . '/dovecot.sieve');
+        }
+        sh('chown -R vmail:mail ' . q('/var/sentora/vmail/' . $dom . '/.home'), $o) || warn("the mail filters of $addr could not be given to the mail user (vmail): " . substr($o, 0, 120));
+        $sDone[] = $addr;
+    }
+    $sDone && ui_info('mail filters and out-of-office replies: ' . implode(', ', $sDone));
+    $sKept && warn('mail filters not moved for ' . implode(', ', $sKept) . ': these mailboxes have filters here already (theirs are kept)');
+}
+
+// the account's own FAQ entries
+if ($FAQS) {
+    $nf = 0;
+    foreach ($FAQS as $f) {
+        if ($taken("SELECT COUNT(*) FROM x_faqs WHERE fq_acc_fk = :a AND fq_question_tx = :q AND fq_deleted_ts IS NULL", array(':a' => $NEWID, ':q' => $f['fq_question_tx']))) { continue; }
+        $zdbh->prepare("INSERT INTO x_faqs (fq_acc_fk, fq_question_tx, fq_answer_tx, fq_global_in, fq_created_ts) VALUES (?,?,?,?,?)")
+            ->execute(array($NEWID, $f['fq_question_tx'], $f['fq_answer_tx'], (int) $f['fq_global_in'], $f['fq_created_ts'] ?: time()));
+        $nf++;
+    }
+    ui_info("$nf FAQ entr" . ($nf === 1 ? 'y' : 'ies') . ' (written on the old panel)');
+}
 
 // --- let the daemon build it all ------------------------------------------------------------------
 $zdbh->exec("UPDATE x_settings SET so_value_tx = 'true' WHERE so_name_vc = 'apache_changed'");

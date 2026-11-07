@@ -14,6 +14,8 @@
 #   db/sites/<name>.sql.gz       every database the panel lists for an account
 #   files/<account>.tar.gz       every account's folder (websites and the files in it)
 #   mail/<domain>.tar.gz         every domain's mailboxes (unless --no-mail)
+#   mail/sieve.tar.gz            the mailboxes' filters and out-of-office replies (Sieve), when kept apart
+#   db/panel/roundcube.sql.gz    webmail's database: address books, identities and signatures, settings
 #   SHA256SUMS                   to check the copy on the new server
 #   export.log
 #
@@ -183,6 +185,22 @@ for db in "$DBNAME" sentora_postfix sentora_proftpd zpanel_postfix zpanel_proftp
     dump "$db" "$OUT/db/panel/$db.sql.gz"
 done
 [ -f "$OUT/db/panel/$DBNAME.sql.gz" ] || stop "the panel's own database ($DBNAME) could not be exported"
+# Roundcube's database (webmail address books, identities and signatures, settings): its name from
+# Roundcube's own settings, else the usual names
+RCDB=""
+for f in "$PANEL/etc/apps/webmail/config/config.inc.php" "$PANEL/etc/apps/webmail/config/db.inc.php"; do
+    [ -f "$f" ] || continue
+    RCDB=$(grep -E "db_dsnw" "$f" | grep -v '^[[:space:]]*//' | head -1 | sed -n 's|.*/\([A-Za-z0-9_]\{1,64\}\)['"'"'"].*|\1|p')
+    [ -n "$RCDB" ] && break
+done
+for db in "$RCDB" sentora_roundcube roundcube; do
+    if [ -n "$db" ] && [ -n "$(sql "SHOW DATABASES LIKE '$db'")" ]; then
+        dump "$db" "$OUT/db/panel/roundcube.sql.gz" && RCDB=$db
+        break
+    fi
+    RCDB=""
+done
+[ -n "$RCDB" ] || say "webmail (Roundcube): no database found, its address books are not in the export"
 
 ui_step "The accounts' databases"
 NDB=0
@@ -231,6 +249,31 @@ if [ "$MAIL" = yes ] && [ -d "$VMAIL" ]; then
     done
 fi
 [ "$NMAIL" -gt 0 ] || say "$( [ "$MAIL" = yes ] && echo 'no mailboxes' || echo 'left out (--no-mail)')"
+# The mailboxes' filters and out-of-office replies (Sieve scripts, made in webmail): where Dovecot keeps
+# them (Sentora: /var/sentora/sieve/<domain>/<user>/); inside the mail folders they are packed above already
+SIEVE=""; SIEVEDIR=""; SBASE=""
+if [ "$MAIL" = yes ]; then
+    if command -v doveconf > /dev/null 2>&1; then
+        SIEVE=$(doveconf -h plugin/sieve 2> /dev/null || true)
+        SIEVEDIR=$(doveconf -h plugin/sieve_dir 2> /dev/null || true)
+    fi
+    for pat in "$SIEVEDIR" "$SIEVE"; do
+        case "$pat" in
+            /*%*) b="${pat%%%*}"; SBASE="${b%/}"; break ;;
+        esac
+    done
+    [ -n "$SBASE" ] || { [ -d "$DATA/sieve" ] && SBASE="$DATA/sieve"; }
+    case "$SBASE" in "$VMAIL"|"$VMAIL"/*) SBASE="" ;; esac
+    if [ -n "$SBASE" ] && [ -d "$SBASE" ]; then
+        if tar -C "$(dirname "$SBASE")" --numeric-owner -czf "$OUT/mail/sieve.tar.gz" "$(basename "$SBASE")" 2>> "$LOGF"; then
+            say "mail filters (Sieve): $SBASE"
+        else
+            warn "the mail filters in $SBASE were not packed completely (see export.log)"
+        fi
+    else
+        SBASE=""
+    fi
+fi
 
 # --- what is in it --------------------------------------------------------------------------------
 ui_step "The manifest and checksums"
@@ -246,6 +289,10 @@ ui_step "The manifest and checksums"
     echo "mail=$MAIL"
     echo "php=$(php -r 'echo PHP_VERSION;' 2> /dev/null)"
     echo "mysql=$(sql "SELECT VERSION()")"
+    echo "roundcube_db=$RCDB"
+    echo "sieve=$SIEVE"
+    echo "sieve_dir=$SIEVEDIR"
+    echo "sieve_base=$SBASE"
     sql "SELECT a.ac_user_vc, (SELECT COUNT(*) FROM $DBNAME.x_vhosts v WHERE v.vh_acc_fk = a.ac_id_pk AND v.vh_deleted_ts IS NULL)
          FROM $DBNAME.x_accounts a WHERE a.ac_deleted_ts IS NULL ORDER BY a.ac_user_vc" | while IFS=$'\t' read -r u n; do
         echo "account=$u domains=$n: $(sql "SELECT GROUP_CONCAT(vh_name_vc ORDER BY vh_name_vc SEPARATOR ' ') FROM $DBNAME.x_vhosts v JOIN $DBNAME.x_accounts a ON a.ac_id_pk = v.vh_acc_fk WHERE a.ac_user_vc = '$u' AND v.vh_deleted_ts IS NULL")"
