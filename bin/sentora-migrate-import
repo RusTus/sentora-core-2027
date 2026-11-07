@@ -26,7 +26,9 @@
  * their passwords, so the sites' settings keep working), FTP accounts, cron jobs, protected folders,
  * mailboxes (with their mail), aliases, forwarders and distribution lists. Never moved: the old
  * panel itself (its modules, custom ones included, and add-ons, settings, themes and translations). A name that is already
- * taken on this server is skipped and reported. Before anything is changed, the panel's databases
+ * taken on this server is skipped and reported. Laravel apps (Snipe-IT and the like) get their old
+ * caches cleared (cached settings, when the app has a .env, and compiled templates), so they read
+ * their .env again here. Before anything is changed, the panel's databases
  * are saved in /var/sentora/backups/pre-migrate-<date>/. Log: /var/sentora/logs/migrate-import.log
  *
  * @package Sentora
@@ -423,6 +425,58 @@ foreach (array('x_cronjobs' => 'ct', 'x_aliases' => 'al', 'x_forwarders' => 'fw'
 $dnsCount = count($old("SELECT 1 FROM `$O`.x_dns WHERE dn_acc_fk = :a AND dn_deleted_ts IS NULL", array(':a' => $OLDID)));
 $filesTar = $EXP . '/files/' . $OLDU . '.tar.gz';
 
+// --- Laravel sites: the caches that hold the old server's settings ----------------------------------
+/**
+ * Clear the caches of the Laravel (and Lumen) apps under a folder that were made on the old server,
+ * so each app reads its .env again and compiles its templates here. Only caches Laravel rebuilds by
+ * itself are removed, and nothing of the app is run:
+ *   - the cached settings (bootstrap/cache/config.php; storage/framework/config.php in Laravel 5.0),
+ *     which hold the old server's settings and paths, and win over .env. Kept when the app has no
+ *     .env (an app deployed with its settings cached and .env removed would lose them). Not kept as
+ *     a copy: it holds the database password.
+ *   - the compiled templates (storage/framework/views/*.php; app/storage/views in Laravel 4).
+ * An app is a folder with both artisan and bootstrap/app.php; vendor/ and node_modules/ are skipped,
+ * and symbolic links are not followed.
+ *
+ * @param string $root The folder (an account's public_html).
+ * @return string[] One line per app, for the output.
+ */
+function laravel_caches($root)
+{
+    $out = array();
+    sh('find ' . q($root) . ' -maxdepth 6 \( -name vendor -o -name node_modules \) -prune -o -type f -name artisan -print', $o);
+    foreach (array_filter(explode("\n", (string) $o)) as $artisan) {
+        $app = dirname($artisan);
+        if (!is_file($app . '/bootstrap/app.php') || is_link($app . '/bootstrap') || is_link($app . '/storage')) {
+            continue;
+        }
+        $rel = ltrim(substr($app, strlen($root)), '/');
+        $rel = $rel === '' ? 'public_html' : $rel;
+        $did = array();
+        $kept = '';
+        foreach (array('bootstrap/cache/config.php', 'storage/framework/config.php') as $c) {
+            if (is_file($app . '/' . $c) && !is_link($app . '/' . $c)) {
+                if (is_file($app . '/.env')) {
+                    @unlink($app . '/' . $c) && $did[] = 'cached settings';
+                } else {
+                    $kept = '; its cached settings kept (it has no .env, so they may be its only settings)';
+                }
+            }
+        }
+        $n = 0;
+        foreach (array('storage/framework/views', 'app/storage/views') as $v) {
+            if (is_dir($app . '/' . $v) && !is_link($app . '/' . $v)) {
+                foreach (glob($app . '/' . $v . '/*.php') ?: array() as $f) {
+                    if (is_file($f) && !is_link($f) && @unlink($f)) { $n++; }
+                }
+            }
+        }
+        if ($n) { $did[] = "$n compiled template(s)"; }
+        $out[] = 'Laravel app ' . $rel . ': ' . ($did ? 'cleared ' . implode(' and ', $did) . ' (rebuilt on its next page)' : 'no old caches') . $kept;
+    }
+    return $out;
+}
+
 // --- the websites' .htaccess files: the lines this server refuses with error 500 ---------------------
 /**
  * Each .htaccess under a folder that has lines this server refuses (sys_htaccessfix).
@@ -626,6 +680,9 @@ if (is_file($filesTar)) {
             if ($n) { ui_info("$n .htaccess/.htpasswd file(s): $OLDHOME changed to $NEWHOME"); }
         }
         ui_info('into ' . $NEWHOME . '/public_html');
+        foreach (laravel_caches($NEWHOME . '/public_html') as $line) {
+            ui_info($line);
+        }
         if ($opt['allow-symlinks']) {
             // the domains whose folder holds an .htaccess that uses FollowSymLinks
             sh('grep -rliE --include=.htaccess "^[[:space:]]*Options[[:space:]].*FollowSymLinks" ' . q($NEWHOME . '/public_html'), $o);
