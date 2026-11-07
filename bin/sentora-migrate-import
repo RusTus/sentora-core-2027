@@ -258,19 +258,10 @@ foreach (array($OLDU, $NEWU) as $u) {
 
 ui_banner(($APPLY ? 'Moving ' : 'What moving would do (nothing changes until --yes): ') . "$OLDU from " . $M['server'] . ' (Sentora ' . $M['sentora'] . ")"
     . ($NEWU !== $OLDU ? " into $NEWU" : ''));
-$UI['total'] = $APPLY ? 13 : 3;
+$UI['total'] = $APPLY ? 14 : 4;
 ui_logline('===== ' . ($APPLY ? 'moving ' : 'dry run ') . "$OLDU into $NEWU from $EXP");
-// the checksums of the copy
-ui_step('Checking the copy against its checksums');
-if (is_file($EXP . '/SHA256SUMS')) {
-    if (!sh('cd ' . q($EXP) . ' && sha256sum --quiet -c SHA256SUMS', $o)) {
-        stop("the export does not match its checksums (copied incompletely?): " . substr($o, 0, 300));
-    }
-} else {
-    warn('the export has no checksums (SHA256SUMS): not checked');
-}
-
-// --- this server -------------------------------------------------------------------------------------
+// --- this server first: a missing account or PHP version stops at once, not after the checksums ------
+ui_step('Checking this server');
 global $zdbh;
 $q = $zdbh->prepare("SELECT ac_id_pk FROM x_accounts WHERE ac_user_vc = :u AND ac_deleted_ts IS NULL");
 $q->execute(array(':u' => $NEWU));
@@ -291,6 +282,16 @@ if ($PHPV !== '' && !is_dir('/opt/sentora-php/' . $PHPV)) {
     stop("PHP $PHPV is not installed here: add it with   sentora-php-install $PHPV   (or use --php default for this server's own PHP).");
 }
 
+// the checksums of the copy
+ui_step('Checking the copy against its checksums');
+if (is_file($EXP . '/SHA256SUMS')) {
+    if (!sh('cd ' . q($EXP) . ' && sha256sum --quiet -c SHA256SUMS', $o)) {
+        stop("the export does not match its checksums (copied incompletely?): " . substr($o, 0, 300));
+    }
+} else {
+    warn('the export has no checksums (SHA256SUMS): not checked');
+}
+
 // MySQL as the panel's root user, from an option file
 include 'cnf/db.php';
 $MYCNF = tempnam('/root', '.migrate-my');
@@ -307,8 +308,11 @@ function cleanup()
         return;
     }
     $done = true;
-    foreach (array('', '_mail', '_ftp') as $sfx) {
-        try { $zdbh->exec("DROP DATABASE IF EXISTS `" . $TMPDB . $sfx . "`"); } catch (Exception $e) { }
+    // (not when it stopped before the old panel's copy was named: DROP DATABASE `` is an SQL error)
+    if (is_string($TMPDB) && $TMPDB !== '') {
+        foreach (array('', '_mail', '_ftp') as $sfx) {
+            try { $zdbh->exec("DROP DATABASE IF EXISTS `" . $TMPDB . $sfx . "`"); } catch (Exception $e) { }
+        }
     }
     foreach (array($STAGE, $STAGE . '-htaccess') as $d) {
         if ($STAGE && is_dir($d)) {
