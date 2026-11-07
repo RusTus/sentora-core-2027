@@ -32,6 +32,9 @@ class module_controller extends ctrl_module
     /** @var bool|null True when the domain is not one of the account's own (shown by getResult()). */
     static $baddomain;
 
+    /** @var bool|null True when a mailbox with that address was just deleted and its mail is still being removed (shown by getResult()). */
+    static $beingremoved;
+
     /** @var bool|null True after a mailbox change was saved (shown by getResult()). */
     static $ok;
     /** @var bool|null True when the password was left blank. */
@@ -380,6 +383,17 @@ class module_controller extends ctrl_module
         if (!$own) {
             self::$baddomain = true;
             return false;
+        }
+        // A mailbox deleted moments ago keeps its mail until the daemon removes it (within 5
+        // minutes): a new mailbox with that address now would get the old mail, or lose its own
+        $pc = (int) $zdbh->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'x_mailboxes' AND COLUMN_NAME = 'mb_purged_in'")->fetchColumn();
+        if ($pc > 0) {
+            $q = $zdbh->prepare("SELECT COUNT(*) FROM x_mailboxes WHERE mb_address_vc = :a AND mb_deleted_ts IS NOT NULL AND mb_purged_in = 0");
+            $q->execute(array(':a' => $fulladdress));
+            if ((int) $q->fetchColumn() > 0) {
+                self::$beingremoved = true;
+                return false;
+            }
         }
         $sql = "SELECT * FROM x_mailboxes WHERE mb_address_vc=:fulladdress AND mb_deleted_ts IS NULL";
         $numrows = $zdbh->prepare($sql);
@@ -893,7 +907,7 @@ class module_controller extends ctrl_module
         }
         $links = self::Links();
         $l = isset($links[strtolower($cur[0]['address'])]) ? $links[strtolower($cur[0]['address'])] : array('aliases' => array(), 'forwards' => array(), 'lists' => array());
-        $out = '<ul class="mb-lose"><li>' . self::t('It stops receiving mail and can no longer be logged in to. The mail stored in it stays on the server until the administrator removes it.') . '</li>';
+        $out = '<ul class="mb-lose"><li>' . self::t('It stops receiving mail and can no longer be logged in to. The mail stored in it, its mail filters and its spam settings are removed from the server within 5 minutes: this can not be undone.') . '</li>';
         if ($l['forwards']) {
             $out .= '<li>' . self::t('Its forwarders go with it:') . ' <b>' . self::h(implode(', ', $l['forwards'])) . '</b></li>';
         }
@@ -989,6 +1003,9 @@ class module_controller extends ctrl_module
      */
     static function getResult()
     {
+        if (!fs_director::CheckForEmptyValue(self::$beingremoved)) {
+            return ui_sysmessage::shout(ui_language::translate("A mailbox with that address was just deleted and its mail is being removed. Try again in 5 minutes."), "zannounceerror");
+        }
         if (!fs_director::CheckForEmptyValue(self::$baddomain)) {
             return ui_sysmessage::shout(ui_language::translate("Choose one of your own domains for the mailbox."), "zannounceerror");
         }
