@@ -6,7 +6,7 @@
     </div>
     <% if IsModServerStatus %>
     <link rel="stylesheet" href="<@ Assets @>status.css">
-    <div class="as" id="as" data-url="modules/apache_status/code/status.php">
+    <div class="as" id="as" data-url="modules/apache_status/code/status.php" data-texts="<@ Texts @>">
         <div class="as-error" id="as-error"></div>
         <div class="as-head">
             <div>
@@ -127,7 +127,7 @@
                 <div class="as-panel"><h4><: Since the last restart :></h4><dl class="as-dl" id="as-dl-totals"></dl></div>
                 <div class="as-panel as-wide">
                     <h4><: Status summary :></h4>
-                    <div class="as-sub"><: As Apache reports it (server-status?auto). The load averages are on Server Monitor. :></div>
+                    <div class="as-sub"><: As Apache reports it :> (server-status?auto). <: The load averages are on Server Monitor. :></div>
                     <pre class="as-raw" id="as-raw"></pre>
                 </div>
             </div>

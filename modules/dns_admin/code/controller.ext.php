@@ -832,8 +832,10 @@ class module_controller extends ctrl_module
         $total = $numtotalrecords;
         $active = $numactiverecords;
         $deleted = $total - $active;
-        $line = "<h2>DNS Database Usage</h2>";
-        $line .= "<img src=\"etc/lib/pChart2/sentora/z3DPie.php?score=" . $active . "::" . $deleted . "&labels=Active Domain Records:   " . $active . "::Deleted Domain Records: " . $deleted . "&legendfont=verdana&legendfontsize=8&imagesize=240::200&chartsize=120::90&radius=100&legendsize=10::160\"/>";
+        $line = "<h2>" . ui_language::translate("DNS Database Usage") . "</h2>";
+        // the chart's labels translated (the numbers put in after), URL-encoded for the image address
+        $labels = rawurlencode(ui_language::translate("Active Domain Records") . ":   " . $active . "::" . ui_language::translate("Deleted Domain Records") . ": " . $deleted);
+        $line .= "<img src=\"etc/lib/pChart2/sentora/z3DPie.php?score=" . $active . "::" . $deleted . "&labels=" . $labels . "&legendfont=verdana&legendfontsize=8&imagesize=240::200&chartsize=120::90&radius=100&legendsize=10::160\"/>";
         return $line;
     }
 
@@ -909,7 +911,7 @@ class module_controller extends ctrl_module
         $SRVrecords = $numSRVrecords;
         $SPFrecords = $numSPFrecords;
         $NSrecords = $numNSrecords;
-        $line = "<h2>Record Types Usage</h2>";
+        $line = "<h2>" . ui_language::translate("Record Types Usage") . "</h2>";
         $line .= "<img src=\"etc/lib/pChart2/sentora/z3DPie.php?score=" . $Arecords . "::" . $NSrecords . "::" . $MXrecords . "::" . $SPFrecords . "::" . $TXTrecords . "::" . $SRVrecords . "::" . $CNAMErecords . "::" . $AAAArecords . "&labels=A: " . $Arecords . "::NS: " . $NSrecords . "::MX: " . $MXrecords . "::SPF: " . $SPFrecords . "::TXT: " . $TXTrecords . "::SRV: " . $SRVrecords . "::CNAME: " . $CNAMErecords . "::AAAA: " . $AAAArecords . "&legendfont=verdana&legendfontsize=8&imagesize=320::200&chartsize=120::90&radius=100&legendsize=250::25\"/>";
         return $line;
     }

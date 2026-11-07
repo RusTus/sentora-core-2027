@@ -51,6 +51,35 @@ class ui_language {
     }
 
     /**
+     * Use an account's language for the rest of this request (translate() otherwise works it out
+     * from the logged-in account; without one, English).
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $uid The account ID (0: English).
+     * @return string The language code used, for example 'de'.
+     */
+    static function ForAccount($uid)
+    {
+        global $zdbh;
+        $code = 'en';
+        if ((int) $uid > 0 && isset($zdbh)) {
+            $sql = $zdbh->prepare('SELECT ud_language_vc FROM x_profiles WHERE ud_user_fk = :uid');
+            $sql->execute(array(':uid' => (int) $uid));
+            $lang = (string) $sql->fetchColumn();
+            // only a language the panel has a column for (anything else, from an old or
+            // hand-edited profile, falls back to English)
+            if (preg_match('/^[a-z]{2}$/', $lang) && in_array($lang, self::Languages(), true)) {
+                $code = $lang;
+            }
+        }
+        if (self::$LangCol !== 'tr_' . $code . '_tx') {
+            self::$cache = array();
+        }
+        self::$LangCol = 'tr_' . $code . '_tx';
+        return $code;
+    }
+
+    /**
      * Used to translate a text string into the language preference of the user.
      * @author Pascal Peyremorte (ppeyremorte@sentora.org)
      * @global db_driver $zdbh The ZPX database handle.
@@ -70,19 +99,14 @@ class ui_language {
         global $zdbh, $controller;
         $message = (string) $message;
         if (empty(self::$LangCol)) {
-            $code = 'en';
-            $uid = (isset($controller) && is_object($controller)) ? (int) ctrl_auth::CurrentUserID() : 0;
-            if ($uid > 0 && isset($zdbh)) {
-                $sql = $zdbh->prepare('SELECT ud_language_vc FROM x_profiles WHERE ud_user_fk = :uid');
-                $sql->execute(array(':uid' => $uid));
-                $lang = (string) $sql->fetchColumn();
-                // only a language the panel has a column for (anything else, from an old or
-                // hand-edited profile, falls back to English)
-                if (preg_match('/^[a-z]{2}$/', $lang) && in_array($lang, self::Languages(), true)) {
-                    $code = $lang;
-                }
+            // the panel's pages: the request controller; the small endpoints a page calls in the
+            // background (JSON, downloads) have none, but their session says who is asking
+            if (isset($controller) && is_object($controller)) {
+                $uid = (int) ctrl_auth::CurrentUserID();
+            } else {
+                $uid = isset($_SESSION['zpuid']) ? (int) $_SESSION['zpuid'] : 0;
             }
-            self::$LangCol = 'tr_' . $code . '_tx';
+            self::ForAccount($uid);
         }
         if (self::$LangCol === 'tr_en_tx' || trim($message) === '') {
             return $message; // no translation required, English used

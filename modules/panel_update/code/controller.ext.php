@@ -36,11 +36,12 @@ class module_controller extends ctrl_module
      * @param string $type 'ok', 'warn' or 'fail'.
      * @param string $text The text (English; translated when shown).
      * @param string $extra Optional. More text, not translated (a command). Default ''.
+     * @param string $value Optional. A value put in place of %s in the translated text. Default ''.
      * @return void
      */
-    static function Flash($type, $text, $extra = '')
+    static function Flash($type, $text, $extra = '', $value = '')
     {
-        $_SESSION['pu_msg'] = array($type, $text, $extra);
+        $_SESSION['pu_msg'] = array($type, $text, $extra, $value);
     }
 
     /**
@@ -65,7 +66,7 @@ class module_controller extends ctrl_module
         if ($rc === 2) {
             self::Flash('fail', 'This server\'s zsudo does not know this action yet. Run sentora-update once on the server\'s console, as root: it builds the new zsudo, and then this works from here.', 'sentora-update');
         } else {
-            self::Flash('fail', 'The server did not take the job (zsudo answered ' . (int) $rc . '). Nothing was changed. Check that the at service runs (systemctl status atd), or use the console.');
+            self::Flash('fail', 'The server did not take the job (zsudo answered %s). Nothing was changed. Check that the at service runs (systemctl status atd), or use the console.', '', (string) (int) $rc);
         }
     }
 
@@ -181,8 +182,13 @@ class module_controller extends ctrl_module
             return '';
         }
         list($type, $text, $extra) = $msg;
+        $value = isset($msg[3]) ? (string) $msg[3] : '';
         $cls = array('ok' => 'alert-success', 'warn' => 'alert-warning', 'fail' => 'alert-danger');
-        return '<div class="alert ' . (isset($cls[$type]) ? $cls[$type] : 'alert-info') . '" role="status">' . panel_update_view::t($text)
+        $shown = panel_update_view::t($text);
+        if ($value !== '') {
+            $shown = str_replace('%s', panel_update_view::h($value), $shown);
+        }
+        return '<div class="alert ' . (isset($cls[$type]) ? $cls[$type] : 'alert-info') . '" role="status">' . $shown
             . ($extra !== '' ? ' <code>' . panel_update_view::h($extra) . '</code>' : '') . '</div>';
     }
 
@@ -209,16 +215,19 @@ class module_controller extends ctrl_module
         $wait = $checking > 0 && $a['checked'] < $checking && time() - $checking < 60;
         $ver = panel_update_state::Version();
         $inst = panel_update_state::Installed();
+        $release = ($a['tag'] !== '' ? ui_language::translate('release') . ' ' . $a['tag'] : '') . ($a['date'] !== '' ? ', ' . date('j M Y', strtotime($a['date'])) : '');
         $pub = array(
-            'available' => array('warn', 'cloud', 'Update available', ($a['tag'] !== '' ? 'release ' . $a['tag'] : '') . ($a['date'] !== '' ? ', ' . date('j M Y', strtotime($a['date'])) : '')),
+            'available' => array('warn', 'cloud', 'Update available', ''),
             'current' => array('ok', 'ok', 'Up to date', 'the newest release is installed'),
             'unknown' => array('bad', 'warn', 'Could not check', 'GitHub did not answer; it tries again within the hour'),
             'never' => array('', 'clock', 'Not checked yet', 'the daemon checks once an hour'),
         );
         $p = $pub[$a['state']];
+        // the published release is a value (tag and date): shown as it is, not translated as a whole
+        $sub = ($a['state'] === 'available') ? $release : ($p[3] !== '' ? ui_language::translate($p[3]) : '');
         return '<div class="pu-tile">' . $v::Icon('box', 'pu-ico-lg') . '<div><b>Sentora-' . $v::h($ver !== '' ? $ver : '?') . '</b><span>'
             . $v::t('installed') . ($inst !== '' ? ': ' . $v::h($inst) : '') . '</span></div></div>'
-            . '<div class="pu-tile ' . $p[0] . '">' . $v::Icon($p[1], 'pu-ico-lg') . '<div><b>' . $v::t($p[2]) . '</b><span>' . $v::h($p[3] !== '' ? ui_language::translate($p[3]) : '') . '</span></div></div>'
+            . '<div class="pu-tile ' . $p[0] . '">' . $v::Icon($p[1], 'pu-ico-lg') . '<div><b>' . $v::t($p[2]) . '</b><span>' . $v::h($sub) . '</span></div></div>'
             . '<div class="pu-tile">' . $v::Icon($wait ? 'run' : 'clock', 'pu-ico-lg' . ($wait ? ' pu-spin' : '')) . '<div><b>' . ($wait ? $v::t('Checking') : ($a['checked'] ? $v::Ago($a['checked']) : $v::t('never'))) . '</b><span>'
             . $v::t('last checked with GitHub') . '</span>'
             . '<form method="post" action="./?module=panel_update&amp;action=CheckNow"><button class="btn btn-default btn-xs" type="submit"' . ($wait ? ' disabled' : '') . '>' . $v::t('Check now') . '</button>'
@@ -264,7 +273,7 @@ class module_controller extends ctrl_module
         if ($a['state'] === 'current') {
             $out .= '<p class="pu-lead">' . $v::Icon('ok') . ' ' . $v::t('The panel is up to date.') . '</p>';
         } elseif ($a['state'] === 'available') {
-            $out .= '<p class="pu-lead">' . $v::t('A newer panel is published') . ': <b>' . $v::h(($a['tag'] !== '' ? 'release ' . $a['tag'] : '') . ($a['date'] !== '' ? ', ' . date('j M Y', strtotime($a['date'])) : '')) . '</b>'
+            $out .= '<p class="pu-lead">' . $v::t('A newer panel is published') . ': <b>' . $v::h(($a['tag'] !== '' ? ui_language::translate('release') . ' ' . $a['tag'] : '') . ($a['date'] !== '' ? ', ' . date('j M Y', strtotime($a['date'])) : '')) . '</b>'
                 . ($a['repo'] !== '' ? ' &middot; <a href="https://github.com/' . $v::h($a['repo']) . '/blob/master2027/CHANGELOG.md" target="_blank" rel="noopener noreferrer">' . $v::t('what changed') . '</a>' : '') . '</p>';
         } else {
             $out .= '<p class="pu-lead">' . $v::t('It is not known yet whether a newer panel is published. Updating anyway is safe: when the newest release is already installed, nothing is changed.') . '</p>';

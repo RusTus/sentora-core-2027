@@ -54,9 +54,9 @@ class module_controller extends ctrl_module
         }
         $ends = sys_phpversions::$supportEnds[$version];
         if ($days < 0) {
-            return '<span class="pv-sup bad">' . self::t('No security fixes since') . ' ' . self::h($ends) . '</span>';
+            return '<span class="pv-sup bad">' . str_replace('%s', self::h($ends), self::t('No security fixes since %s')) . '</span>';
         }
-        return '<span class="pv-sup' . ($days <= 180 ? ' warn' : ' ok') . '">' . self::t('Security fixes until') . ' ' . self::h($ends) . ($days <= 180 ? ' (' . $days . ' ' . self::t('days') . ')' : '') . '</span>';
+        return '<span class="pv-sup' . ($days <= 180 ? ' warn' : ' ok') . '">' . str_replace('%s', self::h($ends), self::t('Security fixes until %s')) . ($days <= 180 ? ' ' . str_replace('%d', (string) (int) $days, self::t('(%d days)')) : '') . '</span>';
     }
 
     /**
@@ -82,9 +82,9 @@ class module_controller extends ctrl_module
             $n = isset($counts[$v]) ? (int) $counts[$v] : 0;
             $field = 'inEnabled_' . str_replace('.', '_', $v);
             $out .= '<div class="pv-card' . ($on ? '' : ' is-off') . '"><div class="pv-head"><span class="pv-ver">PHP ' . self::h($v) . '</span>'
-                . '<label class="sf-switch" title="' . self::t('Domains may choose it') . '"><input type="checkbox" name="' . $field . '" value="1"' . ($on ? ' checked' : '') . ' aria-label="' . self::t('Domains may choose') . ' PHP ' . self::h($v) . '"><span class="sf-toggle"></span></label></div>'
+                . '<label class="sf-switch" title="' . self::t('Domains may choose it') . '"><input type="checkbox" name="' . $field . '" value="1"' . ($on ? ' checked' : '') . ' aria-label="' . str_replace('%s', self::h($v), self::t('Domains may choose PHP %s')) . '"><span class="sf-toggle"></span></label></div>'
                 . '<p>' . self::t($on ? 'Domains may choose it.' : 'Not offered to domains.') . ' '
-                . ($n ? $n . ' ' . self::t($n === 1 ? 'domain has chosen it' : 'domains have chosen it') . ($on ? '.' : ': ' . self::t($n === 1 ? 'it runs on the default until this is offered again.' : 'they run on the default until this is offered again.')) : self::t('No domain uses it.')) . '</p>'
+                . ($n ? ($n === 1 ? self::t('1 domain has chosen it') : str_replace('%d', (string) $n, self::t('%d domains have chosen it'))) . ($on ? '.' : ': ' . self::t($n === 1 ? 'it runs on the default until this is offered again.' : 'they run on the default until this is offered again.')) : self::t('No domain uses it.')) . '</p>'
                 . '<div class="pv-meta">' . self::Support($v) . '<span class="pv-svc ' . ($running ? 'ok' : ($on ? 'bad' : '')) . '"><i></i>sentora-php' . self::h($v) . '-fpm ' . self::t($running ? 'running' : 'stopped') . '</span></div></div>';
         }
         return $out;

@@ -13,7 +13,7 @@
  */
 class module_controller extends ctrl_module
 {
-    /** @var array<int, array{0: string, 1: string}> Messages for getResult(): array('ok' or 'error', English text). */
+    /** @var array<int, array{0: string, 1: string, 2?: bool}> Messages for getResult(): array('ok' or 'error', English text), or with true third: the text already translated. */
     static $msg = array();
 
     /** @var array<string, string>|null The settings as posted when saving was refused, so the form shows what was typed. */
@@ -88,11 +88,11 @@ class module_controller extends ctrl_module
             if ($ok) {
                 $clean[$name] = $val;
             } else {
-                $errors[] = $val;
+                $errors[] = array(self::CleanError($name, $d, $val), true);
             }
         }
         if ($section === 'spamassassin' && isset($clean['sa_reject_score'], $clean['sa_required_score']) && (float) $clean['sa_reject_score'] > 0 && (float) $clean['sa_reject_score'] <= (float) $clean['sa_required_score']) {
-            $errors[] = 'Reject at score must be above the spam score (or 0).';
+            $errors[] = array('Reject at score must be above the spam score (or 0).', false);
         }
         if ($errors) {
             // keep what was typed for the form
@@ -103,7 +103,7 @@ class module_controller extends ctrl_module
                 }
             }
             foreach ($errors as $e) {
-                self::$msg[] = array('error', $e);
+                self::$msg[] = array('error', $e[0], $e[1]);
             }
             return;
         }
@@ -112,6 +112,48 @@ class module_controller extends ctrl_module
             $up->execute(array(':v' => $val, ':n' => $name));
         }
         self::$msg[] = array('ok', ($section === 'clamav' ? 'ClamAV' : 'SpamAssassin') . ' settings saved. The daemon applies them within 5 minutes.');
+    }
+
+    /**
+     * Say in the account's language why a value was refused (sys_spamav::Clean() gives it in
+     * English with the setting's label and the limits in it, which are not translated as a whole).
+     *
+     * @param string $name The setting name.
+     * @param array<int, mixed> $d The setting's definition from sys_spamav::Definitions().
+     * @param string $english Clean()'s message (shown as it is when its form is not known).
+     * @return string The translated message (plain text, not escaped).
+     */
+    static function CleanError($name, $d, $english)
+    {
+        $label = self::t($d[1]);
+        $prefix = $d[1] . ': ';
+        if (strpos($english, $prefix) !== 0) {
+            return $english;
+        }
+        $rest = substr($english, strlen($prefix));
+        $fill = function ($text, $values) use ($label) {
+            return str_replace(array_merge(array('%label%'), array_keys($values)), array_merge(array($label), array_values($values)), self::t($text));
+        };
+        if ($d[2] === 'int' && $rest === 'a whole number from ' . $d[5][0] . ' to ' . $d[5][1] . '.') {
+            return $fill('%label%: a whole number from %min% to %max%.', array('%min%' => $d[5][0], '%max%' => $d[5][1]));
+        }
+        if ($d[2] === 'float' && $rest === 'a number from ' . $d[5][0] . ' to ' . $d[5][1] . '.') {
+            return $fill('%label%: a number from %min% to %max%.', array('%min%' => $d[5][0], '%max%' => $d[5][1]));
+        }
+        if ($rest === 'choose one of the options.') {
+            return $fill('%label%: choose one of the options.', array());
+        }
+        if ($d[2] === 'text' && $rest === 'at most ' . $d[5][0] . ' characters, on one line.') {
+            return $fill('%label%: at most %max% characters, on one line.', array('%max%' => $d[5][0]));
+        }
+        if ($rest === 'at most 500 lines.') {
+            return $fill('%label%: at most %max% lines.', array('%max%' => '500'));
+        }
+        if (preg_match('/^"(.*)" is not (a network like 192\.0\.2\.0\/24\.|an address or a pattern like \*@example\.com\.)$/s', $rest, $m)) {
+            $text = ($name === 'sa_trusted_networks') ? '%label%: "%value%" is not a network like 192.0.2.0/24.' : '%label%: "%value%" is not an address or a pattern like *@example.com.';
+            return $fill($text, array('%value%' => $m[1]));
+        }
+        return $english;
     }
 
     /**
@@ -416,15 +458,16 @@ class module_controller extends ctrl_module
                 'Update spam rules' => array('Updating spam rules', 'Spam rules updated', 'Spam rule update failed'),
                 'Restart the scanners' => array('Restarting the scanners', 'Scanners restarted', 'Restart failed'),
             );
-            $j = isset($jobs[$r['what']]) ? $jobs[$r['what']] : array($r['what'], $r['what'] . ': done', $r['what'] . ': failed');
+            // a job this page does not know is named as the daemon wrote it (not translated)
+            $j = isset($jobs[$r['what']]) ? array_map(array(__CLASS__, 't'), $jobs[$r['what']]) : array($r['what'], $r['what'] . ': ' . self::t('done'), $r['what'] . ': ' . self::t('failed'));
             $when = date('H:i', (int) $r['time']) . (date('Y-m-d', (int) $r['time']) !== date('Y-m-d') ? ' ' . date('Y-m-d', (int) $r['time']) : '');
             $by = self::t('by') . ' ' . $r['by'] . ', ' . $when;
             if ($r['ok'] === null) {
-                $last = '<div class="sa-job run"><span class="sa-spin" aria-hidden="true"></span><b>' . self::h(self::t($j[0])) . '&hellip;</b><span>' . self::h(self::t('started') . ' ' . $by . '. ' . self::t('This can take a few minutes; reload the page to see when it is done.')) . '</span></div>';
+                $last = '<div class="sa-job run"><span class="sa-spin" aria-hidden="true"></span><b>' . self::h($j[0]) . '&hellip;</b><span>' . self::h(self::t('started') . ' ' . $by . '. ' . self::t('This can take a few minutes; reload the page to see when it is done.')) . '</span></div>';
             } elseif ($r['ok']) {
-                $last = '<div class="sa-job ok"><span class="sa-dot up"></span><b>' . self::h(self::t($j[1])) . '</b><span>' . self::h($by) . '</span></div>';
+                $last = '<div class="sa-job ok"><span class="sa-dot up"></span><b>' . self::h($j[1]) . '</b><span>' . self::h($by) . '</span></div>';
             } else {
-                $last = '<div class="sa-job bad"><span class="sa-dot down"></span><b>' . self::h(self::t($j[2])) . '</b><span>' . self::h($by . ': ' . preg_replace('/^Failed:\s*/i', '', (string) $r['text'])) . '</span></div>';
+                $last = '<div class="sa-job bad"><span class="sa-dot down"></span><b>' . self::h($j[2]) . '</b><span>' . self::h($by . ': ' . preg_replace('/^Failed:\s*/i', '', (string) $r['text'])) . '</span></div>';
             }
         }
         return '<div class="sa-jobbar">' . $last . '<span class="sa-checked">' . ($s !== null && isset($s['time']) ? self::h(self::t('Checked by the daemon at') . ' ' . date('H:i', (int) $s['time'])) : '') . '</span>'
@@ -537,6 +580,26 @@ class module_controller extends ctrl_module
     }
 
     /**
+     * The question asked before restarting the scanners (template data attribute <@ RestartConfirm @>).
+     *
+     * @return string The translated text, escaped for an HTML attribute.
+     */
+    static function getRestartConfirm()
+    {
+        return self::h(self::t('Restart ClamAV and SpamAssassin? Mail waits a moment while they start again.'));
+    }
+
+    /**
+     * The introduction of the spam filtering tab (<@ SpamIntro @>).
+     *
+     * @return string The translated text, escaped.
+     */
+    static function getSpamIntro()
+    {
+        return self::h(self::t('Spam filtering for incoming mail. Mailbox owners can fine-tune it for their own mailboxes in Mail > SpamAV if you allow it.'));
+    }
+
+    /**
      * Whether ClamAV and SpamAssassin are switched on, for the tab labels (<@ ClamState @>, <@ SpamState @>).
      *
      * @return string A small dot.
@@ -565,7 +628,7 @@ class module_controller extends ctrl_module
     {
         $out = '';
         foreach (self::$msg as $m) {
-            $out .= ui_sysmessage::shout(self::h(self::t($m[1])), $m[0] === 'ok' ? 'zannounceok' : 'zannounceerror');
+            $out .= ui_sysmessage::shout(self::h(!empty($m[2]) ? $m[1] : self::t($m[1])), $m[0] === 'ok' ? 'zannounceok' : 'zannounceerror');
         }
         return $out;
     }

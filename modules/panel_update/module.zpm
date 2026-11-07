@@ -6,7 +6,7 @@
     </div>
     <@ Result @>
     <link rel="stylesheet" href="modules/panel_update/assets/update.css">
-    <div class="pu" id="pu" data-watch="<@ Watch @>" data-checked="<@ Checked @>" data-status="modules/panel_update/code/status.php" data-lost="<: The panel does not answer for a moment (PHP and Apache reload during an update). Still watching... :>">
+    <div class="pu" id="pu" data-watch="<@ Watch @>" data-checked="<@ Checked @>" data-status="modules/panel_update/code/status.php" data-copy-label="<: Copy :>" data-lost="<: The panel does not answer for a moment (PHP and Apache reload during an update). Still watching... :>">
         <div class="pu-tiles" id="pu-tiles"><@ Tiles @></div>
         <@ Run @>
         <div class="pu-grid">

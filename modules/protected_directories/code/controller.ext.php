@@ -27,7 +27,7 @@ class module_controller extends ctrl_module
     const BEGIN = '# BEGIN Sentora protected directory (managed by the panel: do not edit this block)';
     const END = '# END Sentora protected directory';
 
-    /** @var string[] Success messages for getResult(). */
+    /** @var string[] Success messages for getResult() (translated; escaped when shown). */
     static $messages = array();
     /** @var string[] Error messages for getResult() (translated and escaped when shown). */
     static $errors = array();
@@ -301,7 +301,7 @@ class module_controller extends ctrl_module
         }
         $zdbh->prepare("UPDATE x_htpasswd_file SET x_htpasswd_file_message = :m WHERE x_htpasswd_file_id = :id AND x_htpasswd_sentora_user_id = :u")
             ->execute(array(':m' => $message, ':id' => (int) $row['x_htpasswd_file_id'], ':u' => (int) self::Me()['userid']));
-        self::$messages[] = 'The message has been changed.';
+        self::$messages[] = ui_language::translate('The message has been changed.');
     }
 
     /**
@@ -374,7 +374,7 @@ class module_controller extends ctrl_module
         $zdbh->prepare("INSERT INTO x_htpasswd_mapper (x_htpasswd_file_id, x_htpasswd_user_id) VALUES (:f, :u)")
             ->execute(array(':f' => (int) $row['x_htpasswd_file_id'], ':u' => (int) $zdbh->lastInsertId()));
         if (self::WritePasswd($row)) {
-            self::$messages[] = 'User ' . $name . ' can now open the folder.';
+            self::$messages[] = str_replace('%s', $name, ui_language::translate('User %s can now open the folder.'));
         }
     }
 
@@ -419,7 +419,7 @@ class module_controller extends ctrl_module
         $zdbh->prepare("UPDATE x_htpasswd_user SET x_htpasswd_user_password = :p WHERE x_htpasswd_user_id = :id AND x_htpasswd_sentora_user_id = :u")
             ->execute(array(':p' => password_hash($pass, PASSWORD_BCRYPT), ':id' => (int) $u['x_htpasswd_user_id'], ':u' => (int) self::Me()['userid']));
         if (self::WritePasswd($row)) {
-            self::$messages[] = 'The password of ' . $u['x_htpasswd_user_username'] . ' has been changed.';
+            self::$messages[] = str_replace('%s', $u['x_htpasswd_user_username'], ui_language::translate('The password of %s has been changed.'));
         }
     }
 
@@ -443,7 +443,7 @@ class module_controller extends ctrl_module
         $zdbh->prepare("UPDATE x_htpasswd_user SET x_htpasswd_user_deleted = :t WHERE x_htpasswd_user_id = :id AND x_htpasswd_sentora_user_id = :u")
             ->execute(array(':t' => time(), ':id' => (int) $u['x_htpasswd_user_id'], ':u' => (int) self::Me()['userid']));
         if (self::WritePasswd($row)) {
-            self::$messages[] = 'User ' . $u['x_htpasswd_user_username'] . ' has been removed.';
+            self::$messages[] = str_replace('%s', $u['x_htpasswd_user_username'], ui_language::translate('User %s has been removed.'));
         }
     }
 
@@ -642,7 +642,7 @@ class module_controller extends ctrl_module
                 . '<div class="pd-path"><svg class="pd-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>'
                 . self::PathHtml(self::Shown($r)) . '</div>'
                 . '<div class="pd-meta"><span title="' . $t('Message in the login box') . '">&ldquo;' . self::h($r['x_htpasswd_file_message']) . '&rdquo;</span>'
-                . ($n ? '<span class="pd-users">' . $n . ' ' . $t($n === 1 ? 'user' : 'users') . ': ' . self::h(implode(', ', $names)) . ($n > 4 ? ', &hellip;' : '') . '</span>'
+                . ($n ? '<span class="pd-users">' . str_replace('%d', (string) $n, $t($n === 1 ? '1 user' : '%d users')) . ': ' . self::h(implode(', ', $names)) . ($n > 4 ? ', &hellip;' : '') . '</span>'
                     : '<span class="pd-pill warn">' . $t('No users yet: nobody can open it') . '</span>')
                 . '</div></div>'
                 . '<div class="pd-act"><a class="btn btn-primary btn-sm" href="./?module=protected_directories&amp;control=Edit&amp;id=' . $id . '">'

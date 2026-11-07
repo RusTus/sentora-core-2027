@@ -407,10 +407,10 @@ class module_controller extends ctrl_module
         if ($s < 60) {
             return ui_language::translate('just now');
         }
-        foreach (array(array(86400, 'day', 'days'), array(3600, 'hour', 'hours'), array(60, 'minute', 'minutes')) as $u) {
+        foreach (array(array(86400, '1 day ago', '%d days ago'), array(3600, '1 hour ago', '%d hours ago'), array(60, '1 minute ago', '%d minutes ago')) as $u) {
             if ($s >= $u[0]) {
                 $n = (int) floor($s / $u[0]);
-                return $n . ' ' . ui_language::translate($n === 1 ? $u[1] : $u[2]) . ' ' . ui_language::translate('ago');
+                return str_replace('%d', (string) $n, ui_language::translate($n === 1 ? $u[1] : $u[2]));
             }
         }
         return '';
@@ -435,9 +435,9 @@ class module_controller extends ctrl_module
             return '<div class="bk-card" style="--c:' . $color . '">' . self::Icon($icon) . '<div><div class="bk-card-label">' . self::t($label) . '</div>'
                 . '<div class="bk-card-value">' . $value . '</div><div class="bk-card-detail">' . $detail . '</div></div></div>';
         };
-        $out = $card('archive', '#447fb3', 'Backups kept', (string) count($files), count($files) ? self::h(fs_director::ShowHumanFileSize($total)) . ' ' . self::t('in all') : self::t('none yet'));
+        $out = $card('archive', '#447fb3', 'Backups kept', (string) count($files), count($files) ? str_replace('%s', self::h(fs_director::ShowHumanFileSize($total)), self::t('%s in all')) : self::t('none yet'));
         $out .= $card('clock', '#2db87d', 'Latest backup', $latest ? self::h(self::Ago($latest['mtime'])) : '–', $latest ? self::h(date('Y-m-d H:i', $latest['mtime'])) : self::t('make one below'));
-        $out .= $card('trash', '#f5a623', 'Kept for', $purge ? self::h($purge) . ' ' . self::t('days') : self::t('Until deleted'), $purge ? self::t('older backups are deleted automatically') : self::t('backups are not deleted automatically'));
+        $out .= $card('trash', '#f5a623', 'Kept for', $purge ? str_replace('%s', self::h($purge), self::t('%s days')) : self::t('Until deleted'), $purge ? self::t('older backups are deleted automatically') : self::t('backups are not deleted automatically'));
         if (sys_clientftp::Allowed()) {
             $c = sys_clientftp::Get($me['userid']);
             $st = sys_clientftp::Status($me['userid']);
@@ -547,7 +547,8 @@ class module_controller extends ctrl_module
 
     // --- copy to the client's own FTP server (sys_clientftp; uploads run by the daemon) ----------
 
-    /** @var string[] Errors from the FTP settings form (untranslated). */
+    /** @var array<int, string|array{0: string, 1: string}> Errors from the FTP settings form: English text, or
+     *       array(English text with %s, the translated value for %s). Translated when shown. */
     static $ftpErrors = array();
     /** @var bool True after the FTP settings were saved. */
     static $ftpSaved = false;
@@ -604,7 +605,12 @@ class module_controller extends ctrl_module
         if ($pw !== '' && (strlen($pw) > 256 || preg_match('/[\x00-\x1f\x7f]/', $pw))) { $e[] = 'The password may not contain control characters (256 characters at most).'; }
         if ($v['bf_host_vc'] !== '' && $e === array()) {
             list($ip, $why) = sys_clientftp::ResolveTarget($v['bf_host_vc'], $v['bf_port_in']);
-            if ($ip === false) { $e[] = 'That server can not be used: ' . $why . '.'; }
+            if ($ip === false) {
+                // the reason translated too; an address in it goes in after translating
+                $why = preg_match('/^that address \((.*)\) is not allowed$/', (string) $why, $m)
+                    ? str_replace('%s', $m[1], ui_language::translate('that address (%s) is not allowed')) : ui_language::translate((string) $why);
+                $e[] = array('That server can not be used: %s.', $why);
+            }
         }
         if ($e) {
             self::$ftpErrors = $e;
@@ -738,7 +744,8 @@ class module_controller extends ctrl_module
     static function getResult()
     {
         foreach (self::$ftpErrors as $e) {
-            return ui_sysmessage::shout(htmlspecialchars(ui_language::translate($e), ENT_QUOTES, 'UTF-8'), 'zannounceerror');
+            $text = is_array($e) ? str_replace('%s', $e[1], ui_language::translate($e[0])) : ui_language::translate($e);
+            return ui_sysmessage::shout(htmlspecialchars($text, ENT_QUOTES, 'UTF-8'), 'zannounceerror');
         }
         if (self::$ftpSaved) {
             return ui_sysmessage::shout(ui_language::translate('Your FTP backup settings have been saved.'), 'zannounceok');
@@ -747,13 +754,13 @@ class module_controller extends ctrl_module
             return ui_sysmessage::shout(ui_language::translate(self::$ftpQueued === 'check' ? 'Connection test queued: the result appears below within 5 minutes.' : 'Upload queued: it starts within 5 minutes; the result appears below when it is done.'), 'zannounceok');
         }
         if (!fs_director::CheckForEmptyValue(self::$filenotexist)) {
-            return ui_sysmessage::shout("There was an error saving your backup!", "zannounceerror");
+            return ui_sysmessage::shout(ui_language::translate("There was an error saving your backup!"), "zannounceerror");
         }
         if (!fs_director::CheckForEmptyValue(self::$deleteok)) {
-            return ui_sysmessage::shout("Backup deleted successfully!", "zannounceok");
+            return ui_sysmessage::shout(ui_language::translate("Backup deleted successfully!"), "zannounceok");
         }
         if (!fs_director::CheckForEmptyValue(self::$backupok)) {
-            return ui_sysmessage::shout("Backup completed successfully!", "zannounceok");
+            return ui_sysmessage::shout(ui_language::translate("Backup completed successfully!"), "zannounceok");
         }
         return;
     }

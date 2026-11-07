@@ -49,7 +49,7 @@ class panel_update_state
         if (!$user || (int) $user['usergroupid'] !== 1) {
             http_response_code(403);
             header('Content-Type: text/plain; charset=utf-8');
-            exit('Panel Update is only available to panel administrators.');
+            exit(ui_language::translate('Panel Update is only available to panel administrators.'));
         }
         $user['pu_asked'] = $asked;
         return $user;

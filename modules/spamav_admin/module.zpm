@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="modules/spamav_admin/assets/spamav_admin.css">
 
     <% if Admin %>
-    <div class="sa" id="sa" data-open="<@ OpenTab @>" data-unsaved="<: You have changes that are not saved. :>" data-restart="<: Restart ClamAV and SpamAssassin? Mail waits a moment while they start again. :>">
+    <div class="sa" id="sa" data-open="<@ OpenTab @>" data-unsaved="<: You have changes that are not saved. :>" data-restart="<@ RestartConfirm @>">
         <div class="sa-tabs" role="tablist">
             <button type="button" class="sa-tab" role="tab" data-tab="overview"><svg class="sa-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg><: Overview :></button>
             <button type="button" class="sa-tab" role="tab" data-tab="clamav"><@ ClamState @><: Virus scanning :> <small>ClamAV</small></button>
@@ -38,7 +38,7 @@
 
         <section class="sa-pane" data-pane="spamassassin" role="tabpanel">
             <div class="sa-card">
-                <p class="sa-intro"><: Spam filtering for incoming mail. Mailbox owners can fine-tune it for their own mailboxes in Mail > SpamAV if you allow it. :></p>
+                <p class="sa-intro"><@ SpamIntro @></p>
                 <@ SpamForm @>
             </div>
         </section>

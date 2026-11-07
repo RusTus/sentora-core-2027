@@ -22,9 +22,16 @@ header('X-Content-Type-Options: nosniff');
 header('X-Frame-Options: SAMEORIGIN');
 header("Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'");
 header('Cache-Control: no-store');
+// no panel controller here: the account's own language for ui_language::translate()
+if ($user) {
+    $lq = $zdbh->prepare('SELECT ud_language_vc FROM x_profiles WHERE ud_user_fk = :u');
+    $lq->execute(array(':u' => $uid));
+    $lang = (string) $lq->fetchColumn();
+    ui_language::$LangCol = 'tr_' . (in_array($lang, ui_language::Languages(), true) ? $lang : 'en') . '_tx';
+}
 if (!$user || (int) $user['usergroupid'] !== 1) {
     http_response_code(403);
-    exit('<p>The BIND log is only available to panel administrators.</p>');
+    exit('<p>' . htmlspecialchars(ui_language::translate('The BIND log is only available to panel administrators.'), ENT_QUOTES, 'UTF-8') . '</p>');
 }
 
 $bindlog = '/var/sentora/logs/bind/bind.log';
@@ -44,7 +51,7 @@ if (is_file($bindlog) && !is_link($bindlog) && ($fh = @fopen($bindlog, 'rb'))) {
     fclose($fh);
 }
 $view = isset($_POST['inViewErrors']) ? 'errors' : (isset($_POST['inViewWarnings']) ? 'warnings' : 'all');
-$titles = array('errors' => 'BIND errors', 'warnings' => 'BIND warnings', 'all' => 'BIND log (the last 2000 lines)');
+$titles = array('errors' => ui_language::translate('BIND errors'), 'warnings' => ui_language::translate('BIND warnings'), 'all' => ui_language::translate('BIND log (the last 2000 lines)'));
 $h = function ($s) { return htmlspecialchars($s, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); };
 ?><!DOCTYPE html>
 <html><head><meta charset="utf-8"><title><?php echo $h($titles[$view]); ?></title>
@@ -64,7 +71,7 @@ foreach ($lines as $l) {
     $shown++;
 }
 if ($shown === 0) {
-    echo '<p>' . ($lines ? 'Nothing to show.' : 'The log is empty or can not be read.') . '</p>';
+    echo '<p>' . $h(ui_language::translate($lines ? 'Nothing to show.' : 'The log is empty or can not be read.')) . '</p>';
 }
 ?>
 </body></html>

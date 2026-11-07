@@ -194,13 +194,29 @@ class module_controller extends ctrl_module
         if ($s < 60) {
             return ui_language::translate('just now');
         }
-        foreach (array(array(86400, 'day', 'days'), array(3600, 'hour', 'hours'), array(60, 'minute', 'minutes')) as $u) {
+        foreach (array(array(86400, '1 day ago', '%d days ago'), array(3600, '1 hour ago', '%d hours ago'), array(60, '1 minute ago', '%d minutes ago')) as $u) {
             if ($s >= $u[0]) {
                 $n = (int) floor($s / $u[0]);
-                return $n . ' ' . ui_language::translate($n === 1 ? $u[1] : $u[2]) . ' ' . ui_language::translate('ago');
+                return str_replace('%d', (string) $n, ui_language::translate($n === 1 ? $u[1] : $u[2]));
             }
         }
         return '';
+    }
+
+    /**
+     * Translate a text with %s in it, then put the values in, each in place of the next %s
+     * (the values are not translated and never stored in x_translations).
+     *
+     * @param string $text The English text, for example 'Restore of %s from %s queued.'.
+     * @param string[] $values The values, in order.
+     * @return string The translated text with the values (not escaped).
+     */
+    static function Fill($text, array $values)
+    {
+        $i = 0;
+        return (string) preg_replace_callback('/%s/', function () use (&$i, $values) {
+            return isset($values[$i]) ? (string) $values[$i++] : '';
+        }, ui_language::translate($text));
     }
 
     /**
@@ -256,7 +272,7 @@ class module_controller extends ctrl_module
         };
         $out = $card('users', '#447fb3', 'Client backups', $opt('disk_bu') ? self::t('On') : self::t('Off'),
             $opt('schedule_bu') ? self::t('plus a daily backup of every account') : self::t('made by clients on their Backup page'));
-        $out .= $card('trash', '#f5a623', 'Kept for', $opt('purge_bu') ? self::h(ctrl_options::GetSystemOption('purge_date')) . ' ' . self::t('days') : self::t('Until deleted'),
+        $out .= $card('trash', '#f5a623', 'Kept for', $opt('purge_bu') ? str_replace('%s', self::h(ctrl_options::GetSystemOption('purge_date')), self::t('%s days')) : self::t('Until deleted'),
             $opt('purge_bu') ? self::t('older client backups are deleted') : self::t('client backups are not deleted automatically'));
         $o = self::Offsite();
         $st = json_decode((string) @file_get_contents('/var/lib/sentora/offsite-backup.json'), true);
@@ -274,7 +290,7 @@ class module_controller extends ctrl_module
         } else {
             $cat = self::RestoreJson(self::RESTORE_CATALOG);
             $n = count((array) ($cat['snapshots'] ?? array()));
-            $out .= $card('restore', '#8e6bd8', 'Restore', $n ? $n . ' ' . self::t($n === 1 ? 'snapshot' : 'snapshots') : self::t('Ready'), $n ? self::t('on the backup machine') : self::t('read the backups to list them'));
+            $out .= $card('restore', '#8e6bd8', 'Restore', $n ? str_replace('%d', (string) $n, self::t($n === 1 ? '1 snapshot' : '%d snapshots')) : self::t('Ready'), $n ? self::t('on the backup machine') : self::t('read the backups to list them'));
         }
         return $out;
     }
@@ -554,7 +570,7 @@ class module_controller extends ctrl_module
      *
      * Sends a Location header and exits.
      *
-     * @param string $message The message to show after the redirect.
+     * @param string $message The message to show after the redirect (already translated).
      * @param string $snap Optional. The snapshot ('server/date') to open again. Default ''.
      * @return void Never returns (exit).
      */
@@ -595,7 +611,7 @@ class module_controller extends ctrl_module
     {
         runtime_csfr::Protect();
         if (self::RestoreQueue(array('action' => 'list'))) {
-            self::RestoreDone('Reading the backups: the list appears here within 5 minutes.');
+            self::RestoreDone(ui_language::translate('Reading the backups: the list appears here within 5 minutes.'));
         }
     }
 
@@ -637,7 +653,7 @@ class module_controller extends ctrl_module
             $parts[] = 'exact';
         }
         if (self::RestoreQueue(array('action' => 'account', 'server' => $snap['server'], 'date' => $snap['date'], 'username' => $user, 'parts' => $parts))) {
-            self::RestoreDone('Restore of ' . $user . ' from ' . $snap['date'] . ' queued: it starts within 5 minutes. Its progress shows here.', $snap['server'] . '/' . $snap['date']);
+            self::RestoreDone(self::Fill('Restore of %s from %s queued: it starts within 5 minutes. Its progress shows here.', array($user, $snap['date'])), $snap['server'] . '/' . $snap['date']);
         }
     }
 
@@ -665,7 +681,7 @@ class module_controller extends ctrl_module
             return;
         }
         if (self::RestoreQueue(array('action' => 'full', 'server' => $snap['server'], 'date' => $snap['date']))) {
-            self::RestoreDone('Full restore from ' . $snap['server'] . ' ' . $snap['date'] . ' queued: it starts within 5 minutes. Its progress shows here.', $snap['server'] . '/' . $snap['date']);
+            self::RestoreDone(self::Fill('Full restore from %s %s queued: it starts within 5 minutes. Its progress shows here.', array($snap['server'], $snap['date'])), $snap['server'] . '/' . $snap['date']);
         }
     }
 
@@ -781,7 +797,8 @@ class module_controller extends ctrl_module
             unset($_SESSION['bk_restore_msg']);
         }
         if (self::$flash !== '') {
-            return ui_sysmessage::shout(htmlspecialchars(ui_language::translate(self::$flash), ENT_QUOTES, 'UTF-8'), 'zannounceok');
+            // translated when it was made (RestoreDone())
+            return ui_sysmessage::shout(htmlspecialchars(self::$flash, ENT_QUOTES, 'UTF-8'), 'zannounceok');
         }
         foreach (self::$restoreMsg as $m) {
             return ui_sysmessage::shout(htmlspecialchars(ui_language::translate($m[1]), ENT_QUOTES, 'UTF-8'), $m[0] === 'ok' ? 'zannounceok' : 'zannounceerror');

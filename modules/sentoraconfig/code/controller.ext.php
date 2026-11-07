@@ -360,7 +360,8 @@ class module_controller extends ctrl_module
             }
             $err = self::Check($row, $f, $value);
             if ($err !== '') {
-                self::$errors[] = $label . ': ' . ui_language::translate($err);
+                // the limits are put in after translating, so the text is one row in x_translations
+                self::$errors[] = $label . ': ' . str_replace(array('%min%', '%max%'), array((string) (int) ($f['min'] ?? 0), (string) (int) ($f['max'] ?? 0)), ui_language::translate($err));
                 continue;
             }
             if ($value === (string) $row['so_value_tx']) {
@@ -387,7 +388,7 @@ class module_controller extends ctrl_module
      * @param array<string, mixed> $row The setting's x_settings row.
      * @param array<string, mixed> $f The setting's entry in Fields().
      * @param string $value The posted value.
-     * @return string Empty when it is fine, else why not (untranslated).
+     * @return string Empty when it is fine, else why not (untranslated; %min% and %max% stand for the field's limits).
      */
     static function Check($row, $f, $value)
     {
@@ -396,7 +397,7 @@ class module_controller extends ctrl_module
         }
         $type = isset($f['type']) ? $f['type'] : '';
         if ($type === 'number' && (!ctype_digit($value) || (isset($f['min']) && (int) $value < $f['min']) || (isset($f['max']) && (int) $value > $f['max']))) {
-            return 'must be a whole number from ' . (int) $f['min'] . ' to ' . (int) $f['max'] . '.';
+            return 'must be a whole number from %min% to %max%.';
         }
         if ($type === 'email' && !preg_match('/^[^@\s<>"]+@[^@\s<>"]+$/', $value)) {
             return 'not an email address.';
@@ -446,6 +447,16 @@ class module_controller extends ctrl_module
             $sql->execute();
             self::$done = 'daemon';
         }
+    }
+
+    /**
+     * The question asked before queueing a full daemon run (template data attribute <@ ResetConfirm @>).
+     *
+     * @return string The translated text, escaped for an HTML attribute.
+     */
+    static function getResetConfirm()
+    {
+        return htmlspecialchars(ui_language::translate('Queue a full daemon run? Every daily, weekly and monthly job runs again within 5 minutes.'), ENT_QUOTES, 'UTF-8');
     }
 
     /**

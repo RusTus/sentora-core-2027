@@ -147,7 +147,7 @@ class module_controller extends ctrl_module
                 . '<div class="pm-name"><code data-copy="' . self::h($name) . '">' . $nameHtml . '</code>'
                 . '<button type="button" class="btn btn-default btn-xs pm-copy" data-done="' . self::t('Copied') . '">' . self::t('Copy') . '</button></div>'
                 . '<div class="pm-dbs">' . ($dbs !== '' ? $dbs : '<span class="pm-none">' . self::t('no database yet') . '</span>') . '</div>'
-                . ($remote ? '<p class="pm-warn">' . self::t('This user may only log in from') . ' ' . self::h($u['access']) . ': ' . self::t('phpMyAdmin runs on this server, so it can not log in here.') . '</p>' : '')
+                . ($remote ? '<p class="pm-warn">' . str_replace('%s', self::h($u['access']), self::t('This user may only log in from %s: phpMyAdmin runs on this server, so it can not log in here.')) . '</p>' : '')
                 . '</div>'
                 . ($show ? '<form method="post" action="./?module=mysql_users&amp;action=EditUser" class="pm-show">' . runtime_csfr::Token()
                     . '<button class="btn btn-default btn-sm" type="submit" name="inShow_' . $u['id'] . '" value="' . $u['id'] . '"><svg class="pm-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>' . self::t('Show password') . '</button></form>' : '')

@@ -178,7 +178,7 @@ class module_controller extends ctrl_module
             $isOpen = $ready && $d['domain'] === $open;
             $rows .= '<div class="mt-dom' . ($isOpen ? ' open' : '') . '" data-s="' . $dom . '"><div class="mt-dom-row">'
                 . '<div class="mt-dom-name">' . $globe . '<b>' . $dom . '</b>'
-                . ($ready ? '<span class="mt-id">' . $t('site') . ' ' . (int) $d['idsite'] . '</span>' : '<span class="mt-pill wait">' . $t('Being set up (within 5 minutes)') . '</span>') . '</div>';
+                . ($ready ? '<span class="mt-id">' . str_replace('%d', (string) (int) $d['idsite'], $t('site %d')) . '</span>' : '<span class="mt-pill wait">' . $t('Being set up (within 5 minutes)') . '</span>') . '</div>';
             if ($ready) {
                 $rows .= '<form class="mt-src" action="./?module=matomo&amp;action=SetSource" method="post">'
                     . '<input type="hidden" name="inDomain" value="' . $dom . '">' . runtime_csfr::Token()

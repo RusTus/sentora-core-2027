@@ -11,7 +11,7 @@
 class module_controller extends ctrl_module
 {
     /**
-     * @var array<int, array<int, string>> Messages for getResult(): array('ok'|'error', English text).
+     * @var array<int, array<int, mixed>> Messages for getResult(): array('ok'|'error', English text), or with true third: the text already translated.
      */
     static $msg = array();
 
@@ -122,7 +122,9 @@ class module_controller extends ctrl_module
                     continue;
                 }
                 if (!sys_spamav::ValidSenderPattern($line)) {
-                    self::$msg[] = array('error', $label . ': "' . substr($line, 0, 60) . '" is not an address or a pattern like *@example.com.');
+                    // the list's name and the line are put in after translating
+                    self::$msg[] = array('error', str_replace(array('%list%', '%value%'), array(self::t($label), substr($line, 0, 60)),
+                        self::t('%list%: "%value%" is not an address or a pattern like *@example.com.')), true);
                     return;
                 }
                 $out[$line] = true;
@@ -138,7 +140,7 @@ class module_controller extends ctrl_module
             ':e' => !empty($f['inEnabled']) ? 1 : 0, ':s' => $score === '' ? null : $score, ':ac' => $action === '' ? null : $action,
             ':d' => !empty($f['inDeleteHigh']) ? 1 : 0, ':al' => $lists['inAllow'], ':bl' => $lists['inBlock']));
         self::$posted = null;
-        self::$msg[] = array('ok', 'Spam settings for ' . $box . ' saved. They apply within 5 minutes.');
+        self::$msg[] = array('ok', str_replace('%s', $box, self::t('Spam settings for %s saved. They apply within 5 minutes.')), true);
     }
 
     /**
@@ -311,11 +313,12 @@ class module_controller extends ctrl_module
             $opts .= '<option value="' . self::h($k) . '"' . ((string) $k === (string) $p['score'] ? ' selected' : '') . '>' . self::h(self::t($l)) . '</option>';
         }
         $def = sys_spamav::Get('sa_default_action') === 'inbox' ? 'the inbox' : 'the Spam folder';
+        // translated here: the subject tag is the administrator's setting, not translated with the text
         $tag = (string) sys_spamav::Get('sa_subject_tag') !== '' ? self::t('The subject starts with') . ' ' . sys_spamav::Get('sa_subject_tag') : self::t('Marked in its headers only');
         $where = '';
-        foreach (array('' => array('Server default', 'Now ' . $def), 'folder' => array('Spam folder', 'Out of the way, still there to check'), 'inbox' => array('Inbox, marked', $tag)) as $k => $l) {
+        foreach (array('' => array('Server default', self::t('Now ' . $def)), 'folder' => array('Spam folder', self::t('Out of the way, still there to check')), 'inbox' => array('Inbox, marked', $tag)) as $k => $l) {
             $where .= '<label class="sv-choice"><input type="radio" name="inAction" value="' . self::h($k) . '"' . ((string) $k === (string) $p['action'] ? ' checked' : '') . $dis . '>'
-                . '<span><b>' . self::h(self::t($l[0])) . '</b><small>' . self::h(self::t($l[1])) . '</small></span></label>';
+                . '<span><b>' . self::h(self::t($l[0])) . '</b><small>' . self::h($l[1]) . '</small></span></label>';
         }
         $sw = function ($name, $on, $label, $help) use ($dis, $id) {
             return '<div class="sv-switchrow"><div><label for="' . $id . $name . '">' . self::h(self::t($label)) . '</label><small>' . self::h(self::t($help)) . '</small></div>'
@@ -472,7 +475,7 @@ class module_controller extends ctrl_module
     {
         $out = '';
         foreach (self::$msg as $m) {
-            $out .= ui_sysmessage::shout(self::h(self::t($m[1])), $m[0] === 'ok' ? 'zannounceok' : 'zannounceerror');
+            $out .= ui_sysmessage::shout(self::h(!empty($m[2]) ? $m[1] : self::t($m[1])), $m[0] === 'ok' ? 'zannounceok' : 'zannounceerror');
         }
         return $out;
     }

@@ -24,11 +24,16 @@ if (!$user) {
     http_response_code(403);
     exit('{"error":"Please log in."}');
 }
+// no panel controller here: the account's own language for ui_language::translate()
+$lq = $zdbh->prepare('SELECT ud_language_vc FROM x_profiles WHERE ud_user_fk = :u');
+$lq->execute(array(':u' => $uid));
+$lang = (string) $lq->fetchColumn();
+ui_language::$LangCol = 'tr_' . (in_array($lang, ui_language::Languages(), true) ? $lang : 'en') . '_tx';
 $rel = isset($_GET['p']) ? (string) $_GET['p'] : '';
 $dir = pd_safe::ResolveDir($user['username'], $rel);
 if ($dir === false) {
     http_response_code(404);
-    exit('{"error":"That folder can not be opened."}');
+    exit(json_encode(array('error' => ui_language::translate('That folder can not be opened.'))));
 }
 
 // folders the account already protects
@@ -46,7 +51,7 @@ $out = array();
 $names = @scandir($dir);
 if ($names === false) {
     http_response_code(403);
-    exit('{"error":"That folder can not be read."}');
+    exit(json_encode(array('error' => ui_language::translate('That folder can not be read.'))));
 }
 natcasesort($names);
 foreach ($names as $name) {

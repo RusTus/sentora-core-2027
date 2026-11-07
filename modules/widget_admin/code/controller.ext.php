@@ -39,7 +39,7 @@ class module_controller extends ctrl_module
     const RESULTS = '/var/lib/sentora/widget-results.json';
     const MAX_ZIP = 524288;
 
-    /** @var array<int, array{0: string, 1: string}> Messages for getResult(): array('ok'|'error', English text). */
+    /** @var array<int, array{0: string, 1: string, 2?: string}> Messages for getResult(): array('ok'|'error', English text, and the value for its %s). */
     static $msg = array();
 
     /**
@@ -130,7 +130,7 @@ class module_controller extends ctrl_module
         // every dashboard goes back to the default widgets (each account's next page)
         $zdbh->exec("CREATE TABLE IF NOT EXISTS x_dashboard (dw_acc_fk INT NOT NULL PRIMARY KEY, dw_widgets_tx TEXT NOT NULL) DEFAULT CHARSET=utf8");
         $n = $zdbh->exec("DELETE FROM x_dashboard");
-        self::$msg[] = array('ok', 'Every dashboard now shows the default widgets (' . (int) $n . ' arranged dashboard(s) reset).');
+        self::$msg[] = array('ok', 'Every dashboard now shows the default widgets (%s arranged dashboard(s) reset).', (string) (int) $n);
     }
 
     /**
@@ -158,7 +158,7 @@ class module_controller extends ctrl_module
         }
         $check = dashboard_widgets::CheckPackage($file['tmp_name']);
         if (is_string($check)) {
-            self::$msg[] = array('error', 'That package can not be used: ' . $check);
+            self::$msg[] = array('error', 'That package can not be used: %s', $check);
             return;
         }
         $token = bin2hex(random_bytes(8));
@@ -169,7 +169,7 @@ class module_controller extends ctrl_module
         $me = ctrl_users::GetUserDetail();
         file_put_contents(self::QUEUE . 'widget-queue-' . $token . '.json', json_encode(array('action' => 'install', 'id' => $check['id'],
             'name' => $check['name'], 'version' => $check['version'], 'by' => $me['username'], 'time' => time())));
-        self::$msg[] = array('ok', 'Widget "' . $check['name'] . '" is queued: the daemon checks and installs it within 5 minutes.');
+        self::$msg[] = array('ok', 'Widget "%s" is queued: the daemon checks and installs it within 5 minutes.', (string) $check['name']);
     }
 
     /**
@@ -195,7 +195,7 @@ class module_controller extends ctrl_module
         $me = ctrl_users::GetUserDetail();
         file_put_contents(self::QUEUE . 'widget-queue-' . bin2hex(random_bytes(8)) . '.json', json_encode(array('action' => 'remove', 'id' => $id,
             'name' => $up[$id]['name'], 'by' => $me['username'], 'time' => time())));
-        self::$msg[] = array('ok', 'Widget "' . $up[$id]['name'] . '" is queued for removal (within 5 minutes).');
+        self::$msg[] = array('ok', 'Widget "%s" is queued for removal (within 5 minutes).', (string) $up[$id]['name']);
     }
 
     /**
@@ -289,11 +289,11 @@ class module_controller extends ctrl_module
         if ($pending || is_array($res)) {
             $out .= '<div class="wa-results"><h5>' . $t('Recent uploads') . '</h5>';
             foreach ($pending as $p) {
-                $out .= '<div class="bk-state info"><span class="label label-warning">' . $t('queued') . '</span><div><b>' . self::h(($p['action'] === 'remove' ? 'Remove ' : 'Install ') . $p['name']) . '</b><span class="bk-sub">'
+                $out .= '<div class="bk-state info"><span class="label label-warning">' . $t('queued') . '</span><div><b>' . str_replace('%s', self::h($p['name']), $t($p['action'] === 'remove' ? 'Remove %s' : 'Install %s')) . '</b><span class="bk-sub">'
                     . self::h(date('Y-m-d H:i', (int) $p['time']) . ', ' . $p['by']) . ' · ' . $t('the daemon does it within 5 minutes') . '</span></div></div>';
             }
             foreach (array_slice(is_array($res) ? array_reverse($res) : array(), 0, 8) as $r) {
-                $out .= '<div class="bk-state">' . ($r['ok'] ? '<span class="label label-success">OK</span>' : '<span class="label label-danger">' . $t('FAILED') . '</span>') . '<div><b>'
+                $out .= '<div class="bk-state">' . ($r['ok'] ? '<span class="label label-success">' . $t('OK') . '</span>' : '<span class="label label-danger">' . $t('FAILED') . '</span>') . '<div><b>'
                     . self::h($r['text']) . '</b><span class="bk-sub">' . self::h(date('Y-m-d H:i', (int) $r['time']) . ', ' . $r['by']) . '</span></div></div>';
             }
             $out .= '</div>';
@@ -310,7 +310,8 @@ class module_controller extends ctrl_module
     {
         $out = '';
         foreach (self::$msg as $m) {
-            $out .= ui_sysmessage::shout(self::h(ui_language::translate($m[1])), $m[0] === 'ok' ? 'zannounceok' : 'zannounceerror');
+            $text = self::h(ui_language::translate($m[1]));
+            $out .= ui_sysmessage::shout(isset($m[2]) ? str_replace('%s', self::h($m[2]), $text) : $text, $m[0] === 'ok' ? 'zannounceok' : 'zannounceerror');
         }
         return $out;
     }

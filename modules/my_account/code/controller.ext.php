@@ -381,6 +381,16 @@ class module_controller extends ctrl_module
     }
 
     /**
+     * Return the help next to the secret of a pending setup, translated and HTML-escaped (<@ TwoFactorKeyHelp @>).
+     *
+     * @return string The text.
+     */
+    static function getTwoFactorKeyHelp()
+    {
+        return htmlspecialchars(ui_language::translate('Can not scan it? Add an account in the app with this key (time based):'), ENT_QUOTES, 'UTF-8');
+    }
+
+    /**
      * Return the otpauth:// URI of a pending setup, HTML-escaped (<@ TwoFactorUri @>).
      *
      * @return string The URI, or '' when no setup is pending.

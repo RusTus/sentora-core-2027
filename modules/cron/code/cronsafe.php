@@ -103,7 +103,8 @@ class cron_safe
      * Works out the result of a run from its log.
      *
      * @param string $text The log text (from ReadLog()).
-     * @return array{0: string, 1: string} array(state ok|error|timeout|running, short English text).
+     * @return array{0: string, 1: string, 2?: int} array(state ok|error|timeout|running, short English text to translate,
+     *         and for an error code the code, which takes the place of %d in the text).
      */
     static function LogResult($text)
     {
@@ -115,7 +116,7 @@ class cron_safe
             if ($code === 124 || $code === 137) {
                 return array('timeout', 'stopped: it ran longer than the server allows');
             }
-            return array('error', 'ended with error code ' . $code);
+            return array('error', 'ended with error code %d', $code);
         }
         return preg_match('/^Started /', ltrim(preg_replace('/^\[\.\.\..*\n/', '', $text))) ? array('running', 'running now, or stopped without finishing') : array('error', 'no result');
     }

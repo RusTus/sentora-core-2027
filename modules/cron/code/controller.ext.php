@@ -46,7 +46,8 @@ class module_controller extends ctrl_module
     const MAX_JOBS = 50;
 
     /**
-     * @var array<int, array<int, string>> Messages for getResult(): array('ok'|'error', English text).
+     * @var array<int, array<int, mixed>> Messages for getResult(): array('ok'|'error', English text, optional values
+     *      that take the place of each %s in the translated text, in order).
      */
     static $msg = array();
 
@@ -245,9 +246,9 @@ class module_controller extends ctrl_module
         } elseif ($a < 172800) {
             $w = floor($a / 3600) . ' h';
         } else {
-            $w = floor($a / 86400) . ' ' . self::t('days');
+            $w = str_replace('%d', (string) floor($a / 86400), self::t('%d days'));
         }
-        return $d >= 0 ? self::t('in') . ' ' . $w : $w . ' ' . self::t('ago');
+        return str_replace('%s', $w, self::t($d >= 0 ? 'in %s' : '%s ago'));
     }
 
     /**
@@ -255,7 +256,7 @@ class module_controller extends ctrl_module
      *
      * @param array<string, mixed> $row The x_cronjobs row.
      * @param int $bytes Optional. How much of the log to read. Default 4096.
-     * @return array{0: string, 1: string, 2: int, 3: string}|null array(state ok|error|timeout|running, short text, time, log text), or null when it has not run.
+     * @return array{0: string, 1: string, 2: int, 3: string}|null array(state ok|error|timeout|running, short text (translated), time, log text), or null when it has not run.
      */
     static function LastRun($row, $bytes = 4096)
     {
@@ -264,8 +265,10 @@ class module_controller extends ctrl_module
         if ($log === false) {
             return null;
         }
-        list($state, $text) = cron_safe::LogResult($log[0]);
-        return array($state, $text, (int) $log[1], $log[0]);
+        $result = cron_safe::LogResult($log[0]);
+        // the short text translated, with the exit code (if any) put in afterwards
+        $text = str_replace('%d', isset($result[2]) ? (string) $result[2] : '', self::t($result[1]));
+        return array($result[0], $text, (int) $log[1], $log[0]);
     }
 
     /**
@@ -301,9 +304,10 @@ class module_controller extends ctrl_module
             $out .= '<div class="cr-tile ' . $t[2] . '"><svg class="cr-ico-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' . $t[3] . '</svg>'
                 . '<div><b>' . $t[1] . '</b><span>' . self::h(self::t($t[0])) . '</span></div></div>';
         }
-        $note = self::t('Tasks run at most every') . ' ' . $lim['cron_min_interval'] . ' ' . self::t($lim['cron_min_interval'] == 1 ? 'minute' : 'minutes')
-            . ' ' . self::t('and are stopped after') . ' ' . $lim['cron_max_runtime'] . ' ' . self::t('minutes') . '. ' . self::t('A run is skipped while the previous one is still running.')
-            . ($never ? ' ' . $never . ' ' . self::t($never === 1 ? 'task has not run yet.' : 'tasks have not run yet.') : '');
+        $every = self::t($lim['cron_min_interval'] == 1 ? 'Tasks run at most every %d minute and are stopped after %d minutes.' : 'Tasks run at most every %d minutes and are stopped after %d minutes.');
+        $every = preg_replace('/%d/', (string) (int) $lim['cron_max_runtime'], preg_replace('/%d/', (string) (int) $lim['cron_min_interval'], $every, 1), 1);
+        $note = $every . ' ' . self::t('A run is skipped while the previous one is still running.')
+            . ($never ? ' ' . str_replace('%d', (string) $never, self::t($never === 1 ? '%d task has not run yet.' : '%d tasks have not run yet.')) : '');
         return '<div class="cr-tiles">' . $out . '</div><p class="cr-note">' . self::h($note) . '</p>';
     }
 
@@ -355,21 +359,22 @@ class module_controller extends ctrl_module
             $slower = sys_accountphp::CronEvery($timing) < $min;
             $last = self::LastRun($r, $logId === $id ? 65536 : 4096);
             $dir = dirname($path);
+            $label = cron_safe::TimingLabel($timing);
             if ($last === null) {
                 $lastHtml = '<span class="cr-state none">' . self::h(self::t('Not run yet')) . '</span>';
             } else {
                 $st = isset($states[$last[0]]) ? $states[$last[0]] : array('Problem', 'bad');
                 $lastHtml = '<span class="cr-state ' . $st[1] . '">' . self::h(self::t($st[0])) . '</span>'
                     . '<span class="cr-when" title="' . self::h(date('Y-m-d H:i', $last[2])) . '">' . self::h(self::Ago($last[2])) . '</span>'
-                    . ($last[0] !== 'ok' ? '<small>' . self::h(self::t($last[1])) . '</small>' : '');
+                    . ($last[0] !== 'ok' ? '<small>' . self::h($last[1]) . '</small>' : '');
             }
             $out .= '<div class="cr-task' . ($last !== null && in_array($last[0], array('error', 'timeout'), true) ? ' is-bad' : '') . '" id="task' . $id . '">'
                 . '<div class="cr-task-row">'
                 . '<div class="cr-task-main"><div class="cr-path"><svg class="cr-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>'
                 . '<span class="cr-dir">' . self::h($dir) . '/</span><b>' . self::h(basename($path)) . '</b></div>'
                 . ($r['ct_description_tx'] !== '' && $r['ct_description_tx'] !== null ? '<p class="cr-desc">' . self::h($r['ct_description_tx']) . '</p>' : '')
-                . '<div class="cr-meta"><span class="cr-every">' . self::h(self::t(cron_safe::TimingLabel($timing))) . '</span>'
-                . ($slower ? '<span class="cr-slow" title="' . self::h(self::t('This server runs tasks at most every') . ' ' . $min . ' ' . self::t('minutes')) . '">' . self::h(self::t('runs every') . ' ' . $min . ' min') . '</span>' : '')
+                . '<div class="cr-meta"><span class="cr-every">' . self::h($label === $timing ? $timing : self::t($label)) . '</span>'
+                . ($slower ? '<span class="cr-slow" title="' . self::h(str_replace('%d', (string) $min, self::t('This server runs tasks at most every %d minutes'))) . '">' . self::h(str_replace('%d', (string) $min, self::t('runs every %d min'))) . '</span>' : '')
                 . '<span>' . self::h(self::PhpFor($me['userid'], $me['username'], (string) $r['ct_fullpath_vc'])) . '</span>'
                 . ($next !== false ? '<span title="' . self::h(date('Y-m-d H:i', $next)) . '">' . self::h(self::t('Next') . ': ' . date(date('Y-m-d', $next) === date('Y-m-d') ? 'H:i' : 'D j M H:i', $next) . ' (' . self::Ago($next) . ')') . '</span>' : '')
                 . '</div></div>'
@@ -472,7 +477,7 @@ class module_controller extends ctrl_module
         }
         $zdbh->prepare("UPDATE x_cronjobs SET ct_timing_vc = :t, ct_description_tx = :d WHERE ct_id_pk = :id AND ct_acc_fk = :a")
             ->execute(array(':t' => $timing, ':d' => $desc, ':id' => $id, ':a' => (int) $me['userid']));
-        self::$msg[] = array('ok', 'Task changed: ' . strtolower(self::t(cron_safe::Timings()[$timing])) . '. The change applies within 5 minutes.');
+        self::$msg[] = array('ok', 'Task changed: %s. The change applies within 5 minutes.', array(strtolower(self::t(cron_safe::Timings()[$timing]))));
     }
 
     /**
@@ -522,7 +527,7 @@ class module_controller extends ctrl_module
         $q = $zdbh->prepare("SELECT COUNT(*) FROM x_cronjobs WHERE ct_acc_fk = :a AND ct_deleted_ts IS NULL");
         $q->execute(array(':a' => (int) $me['userid']));
         if ((int) $q->fetchColumn() >= self::MAX_JOBS) {
-            self::$msg[] = array('error', 'You have the most tasks an account can have (' . self::MAX_JOBS . '). Delete one first.');
+            self::$msg[] = array('error', 'You have the most tasks an account can have (%s). Delete one first.', array(self::MAX_JOBS));
             return;
         }
         $q = $zdbh->prepare("SELECT COUNT(*) FROM x_cronjobs WHERE ct_acc_fk = :a AND ct_fullpath_vc = :f AND ct_timing_vc = :t AND ct_deleted_ts IS NULL");
@@ -533,7 +538,7 @@ class module_controller extends ctrl_module
         }
         $zdbh->prepare("INSERT INTO x_cronjobs (ct_acc_fk, ct_script_vc, ct_description_tx, ct_timing_vc, ct_fullpath_vc, ct_created_ts) VALUES (:a, :s, :d, :t, :f, :c)")
             ->execute(array(':a' => (int) $me['userid'], ':s' => $rel, ':d' => $desc, ':t' => $timing, ':f' => $full, ':c' => time()));
-        self::$msg[] = array('ok', 'Scheduled: public_html/' . $rel . ', ' . strtolower(self::t(cron_safe::Timings()[$timing])) . '. It starts within 5 minutes.');
+        self::$msg[] = array('ok', 'Scheduled: %s, %s. It starts within 5 minutes.', array('public_html/' . $rel, strtolower(self::t(cron_safe::Timings()[$timing]))));
     }
 
     /**
@@ -566,7 +571,19 @@ class module_controller extends ctrl_module
     {
         $out = '';
         foreach (self::$msg as $m) {
-            $out .= ui_sysmessage::shout(self::h(self::t($m[1])), $m[0] === 'ok' ? 'zannounceok' : 'zannounceerror');
+            $text = self::h(self::t($m[1]));
+            // the values (a path, a number) go in after translating, each in place of the next %s
+            $at = 0;
+            foreach (isset($m[2]) ? (array) $m[2] : array() as $v) {
+                $p = strpos($text, '%s', $at);
+                if ($p === false) {
+                    break;
+                }
+                $v = self::h($v);
+                $text = substr_replace($text, $v, $p, 2);
+                $at = $p + strlen($v);
+            }
+            $out .= ui_sysmessage::shout($text, $m[0] === 'ok' ? 'zannounceok' : 'zannounceerror');
         }
         return $out;
     }

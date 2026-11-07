@@ -20,24 +20,27 @@ header('X-Frame-Options: SAMEORIGIN');
 header("Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'");
 if (!$log) {
     http_response_code(404);
-    exit('Unknown log.');
+    exit(ui_language::translate('Unknown log.'));
 }
 $h = function ($s) {
     return htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
+};
+$t = function ($s) use ($h) {
+    return $h(ui_language::translate($s));
 };
 ?><!DOCTYPE html>
 <html lang="en" class="lv-window<?php echo $dark ? ' lv-dark' : ''; ?>">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title><?php echo $h(basename($log['path'])); ?> - System Log Viewer</title>
+<title><?php echo $h(basename($log['path'])); ?> - <?php echo $t('System Log Viewer'); ?></title>
 <link rel="stylesheet" href="../assets/logviewer.css">
 </head>
 <body>
-<div class="lv" id="lv" data-read="read.php" data-id="<?php echo $h($log['id']); ?>" data-path="<?php echo $h($log['path']); ?>" data-group="<?php echo $h($log['group']); ?>"
+<div class="lv" id="lv" data-read="read.php" data-id="<?php echo $h($log['id']); ?>" data-path="<?php echo $h($log['path']); ?>" data-group="<?php echo $t($log['group']); ?>"
      data-readable="<?php echo $log['readable'] ? '1' : '0'; ?>"
-     data-locked="The panel can not read this log: it belongs to root or the adm group, and the panel runs as its own user, with no more rights than it needs. Read it on the server as root, for example:"
-     data-rotated="The log was rotated or truncated; showing its end." data-ago="ago" data-lines="lines" data-shown="shown">
+     data-locked="<?php echo $t('The panel can not read this log: it belongs to root or the adm group, and the panel runs as its own user, with no more rights than it needs. Read it on the server as root, for example:'); ?>"
+     data-rotated="<?php echo $t('The log was rotated or truncated; showing its end.'); ?>" data-ago="<?php echo $t('ago'); ?>" data-lines="<?php echo $t('lines'); ?>" data-shown="<?php echo $t('shown'); ?>">
     <section class="lv-main">
         <div class="lv-head">
             <div class="lv-title">
@@ -45,17 +48,17 @@ $h = function ($s) {
                 <div><b class="lv-path"></b><span class="lv-meta"></span></div>
             </div>
             <div class="lv-tools">
-                <span class="lv-live"><i></i><span class="lv-live-text">Live</span></span>
+                <span class="lv-live"><i></i><span class="lv-live-text"><?php echo $t('Live'); ?></span></span>
                 <label class="lv-filter"><svg class="lv-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></svg>
-                    <input type="search" class="lv-filter-input" placeholder="Show lines with..." aria-label="Show only lines with this text"></label>
-                <label class="lv-check"><input type="checkbox" class="lv-follow" checked> Follow</label>
-                <label class="lv-check"><input type="checkbox" class="lv-wrap"> Wrap</label>
-                <button type="button" class="lv-btn lv-pause" data-resume="Resume">Pause</button>
-                <button type="button" class="lv-btn lv-clear" title="Clear the screen (the log itself is not changed)">Clear</button>
+                    <input type="search" class="lv-filter-input" placeholder="<?php echo $t('Show lines with...'); ?>" aria-label="<?php echo $t('Show only lines with this text'); ?>"></label>
+                <label class="lv-check"><input type="checkbox" class="lv-follow" checked> <?php echo $t('Follow'); ?></label>
+                <label class="lv-check"><input type="checkbox" class="lv-wrap"> <?php echo $t('Wrap'); ?></label>
+                <button type="button" class="lv-btn lv-pause" data-resume="<?php echo $t('Resume'); ?>"><?php echo $t('Pause'); ?></button>
+                <button type="button" class="lv-btn lv-clear" title="<?php echo $t('Clear the screen (the log itself is not changed)'); ?>"><?php echo $t('Clear'); ?></button>
             </div>
         </div>
         <div class="lv-out" tabindex="0"></div>
-        <div class="lv-foot"><span class="lv-count"></span><span class="lv-legend"><i class="bad"></i>errors <i class="warn"></i>warnings</span></div>
+        <div class="lv-foot"><span class="lv-count"></span><span class="lv-legend"><i class="bad"></i><?php echo $t('errors'); ?> <i class="warn"></i><?php echo $t('warnings'); ?></span></div>
     </section>
 </div>
 <script src="../assets/logviewer.js"></script>

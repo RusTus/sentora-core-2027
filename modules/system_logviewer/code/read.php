@@ -18,11 +18,11 @@ header('X-Content-Type-Options: nosniff');
 $log = system_logviewer_logs::Get(isset($_GET['id']) ? (string) $_GET['id'] : '');
 if (!$log) {
     http_response_code(404);
-    exit(json_encode(array('error' => 'Unknown log.')));
+    exit(json_encode(array('error' => ui_language::translate('Unknown log.'))));
 }
 if (!$log['readable']) {
     http_response_code(403);
-    exit(json_encode(array('error' => 'The web server can not read this log.')));
+    exit(json_encode(array('error' => ui_language::translate('The web server can not read this log.'))));
 }
 
 $chunk = 65536;

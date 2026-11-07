@@ -4,15 +4,24 @@
     'use strict';
     var root = document.getElementById('as');
     if (!root) { return; }
+    // the page's texts in the account's language (data-texts: English => translation, from the controller)
+    var L = {};
+    try { L = JSON.parse(root.getAttribute('data-texts') || '{}') || {}; } catch (e) { L = {}; }
+    // t('English %s text', value, ...): the translation, with each %s replaced in turn
+    function t(s) {
+        var r = L[s] || s;
+        for (var i = 1; i < arguments.length; i++) { var a = String(arguments[i]); r = r.replace('%s', function () { return a; }); }
+        return r;
+    }
     var URL = root.getAttribute('data-url');
     var WINDOW = 10 * 60;                         // seconds of history in the charts
     var C = { blue: '#447fb3', red: '#ff6854', green: '#2db87d', amber: '#f5a623', purple: '#8e6bd8', teal: '#1fa2b5', grey: '#9aa5b1' };
     // the scoreboard: one character per worker slot
     var STATES = [
-        ['_', 'Waiting for a connection', C.green], ['R', 'Reading the request', C.blue], ['W', 'Sending the reply', C.purple],
-        ['K', 'Keep-alive', C.amber], ['C', 'Closing the connection', C.red], ['S', 'Starting up', C.teal],
-        ['D', 'DNS lookup', '#5b6cc4'], ['L', 'Logging', '#c0699b'], ['G', 'Finishing gracefully', '#8a7a5c'],
-        ['I', 'Idle cleanup', '#6f8f6a'], ['.', 'Open slot, no process', null]];
+        ['_', t('Waiting for a connection'), C.green], ['R', t('Reading the request'), C.blue], ['W', t('Sending the reply'), C.purple],
+        ['K', t('Keep-alive'), C.amber], ['C', t('Closing the connection'), C.red], ['S', t('Starting up'), C.teal],
+        ['D', t('DNS lookup'), '#5b6cc4'], ['L', t('Logging'), '#c0699b'], ['G', t('Finishing gracefully'), '#8a7a5c'],
+        ['I', t('Idle cleanup'), '#6f8f6a'], ['.', t('Open slot, no process'), null]];
     var STATE = {};
     STATES.forEach(function (s) { STATE[s[0]] = { label: s[1], color: s[2] }; });
     var interval = 5000, timer = null, paused = false, prev = null, cur = null, hist = [];
@@ -77,7 +86,7 @@
         }
         for (var m = 0; m <= 5; m++) {
             var tt = svgEl('text', { x: pl + iw * m / 5, y: h - 4, 'text-anchor': m === 0 ? 'start' : (m === 5 ? 'end' : 'middle') });
-            tt.textContent = m === 5 ? 'now' : '-' + Math.round(WINDOW / 60 * (5 - m) / 5) + 'm'; ax.appendChild(tt);
+            tt.textContent = m === 5 ? t('now') : '-' + Math.round(WINDOW / 60 * (5 - m) / 5) + 'm'; ax.appendChild(tt);
         }
         svg.appendChild(g); svg.appendChild(ax);
         for (var s2 = series.length - 1; s2 >= 0; s2--) {
@@ -167,28 +176,28 @@
 
         // header
         $('as-version').textContent = S.version || 'Apache';
-        $('as-ident').textContent = [S.mpm ? S.mpm + ' MPM' : '', S.built ? 'built ' + S.built : ''].filter(Boolean).join(' · ');
-        $('as-uptime').textContent = (S.uptime !== null ? 'up ' + fmtUptime(S.uptime) : '') + (S.restart ? ' · restarted ' + S.restart : '');
+        $('as-ident').textContent = [S.mpm ? S.mpm + ' MPM' : '', S.built ? t('built %s', S.built) : ''].filter(Boolean).join(' · ');
+        $('as-uptime').textContent = (S.uptime !== null ? t('up %s', fmtUptime(S.uptime)) : '') + (S.restart ? ' · ' + t('restarted %s', S.restart) : '');
 
         // cards
         $('as-rps').textContent = fmtRps(rps) + '/s';
-        $('as-rps-d').textContent = 'average ' + fmtRps(n0(T.reqPerSec)) + '/s · ' + fmtNum(T.accesses) + ' since the restart';
+        $('as-rps-d').textContent = t('average %s', fmtRps(n0(T.reqPerSec)) + '/s') + ' · ' + t('%s since the restart', fmtNum(T.accesses));
         $('as-bps').textContent = fmtRate(bps);
-        $('as-bps-d').textContent = 'average ' + fmtRate(n0(T.bytesPerSec)) + ' · ' + fmtBytes(n0(T.kbytes) * 1024) + ' since the restart';
+        $('as-bps-d').textContent = t('average %s', fmtRate(n0(T.bytesPerSec))) + ' · ' + t('%s since the restart', fmtBytes(n0(T.kbytes) * 1024));
         $('as-ms').textContent = T.msPerReq === null && !live ? '–' : fmtMs(ms);
-        $('as-ms-d').textContent = (T.msPerReq !== null ? 'average ' + fmtMs(n0(T.msPerReq)) : 'not reported') + ' · ' + fmtBytes(n0(T.bytesPerReq)) + ' per request';
+        $('as-ms-d').textContent = (T.msPerReq !== null ? t('average %s', fmtMs(n0(T.msPerReq))) : t('not reported')) + ' · ' + t('%s per request', fmtBytes(n0(T.bytesPerReq)));
         $('as-busy').textContent = busy + ' / ' + (busy + idle);
-        $('as-busy-d').textContent = idle + ' idle' + (W.graceful ? ' · ' + W.graceful + ' finishing' : '') + (W.processes !== null ? ' · ' + W.processes + (W.processes === 1 ? ' process' : ' processes') : '');
+        $('as-busy-d').textContent = t('%s idle', idle) + (W.graceful ? ' · ' + t('%s finishing', W.graceful) : '') + (W.processes !== null ? ' · ' + (W.processes === 1 ? t('1 process') : t('%s processes', W.processes)) : '');
         $('as-conn').textContent = Cn.total !== null ? fmtNum(Cn.total) : '–';
-        $('as-conn-d').textContent = Cn.total !== null ? 'writing ' + n0(Cn.writing) + ' · keep-alive ' + n0(Cn.keepAlive) + ' · closing ' + n0(Cn.closing) : 'reported by the event MPM only';
+        $('as-conn-d').textContent = Cn.total !== null ? t('writing %s · keep-alive %s · closing %s', n0(Cn.writing), n0(Cn.keepAlive), n0(Cn.closing)) : t('reported by the event MPM only');
         $('as-cpu').textContent = T.cpu.load !== null ? pct(T.cpu.load) : '–';
-        $('as-cpu-d').textContent = T.cpu.user !== null ? 'user ' + T.cpu.user.toFixed(2) + ' s · system ' + n0(T.cpu.system).toFixed(2) + ' s'
-            + (n0(T.cpu.childrenUser) + n0(T.cpu.childrenSystem) ? ' · children ' + (n0(T.cpu.childrenUser) + n0(T.cpu.childrenSystem)).toFixed(2) + ' s' : '') : 'not reported';
+        $('as-cpu-d').textContent = T.cpu.user !== null ? t('user %s s · system %s s', T.cpu.user.toFixed(2), n0(T.cpu.system).toFixed(2))
+            + (n0(T.cpu.childrenUser) + n0(T.cpu.childrenSystem) ? ' · ' + t('children %s s', (n0(T.cpu.childrenUser) + n0(T.cpu.childrenSystem)).toFixed(2)) : '') : t('not reported');
         drawOverview();
 
         // worker slots
         var slots = W.slots || 0, open = n0(states['.']);
-        $('as-slots-sub').textContent = slots + ' slots · ' + (slots - open) + ' with a process · ' + open + ' open';
+        $('as-slots-sub').textContent = t('%s slots · %s with a process · %s open', slots, slots - open, open);
         $('as-statebar').innerHTML = STATES.filter(function (s) { return s[2] && states[s[0]]; }).map(function (s) {
             return '<span style="width:' + (states[s[0]] / slots * 100).toFixed(2) + '%;background:' + s[2] + '" title="' + esc(s[1] + ': ' + states[s[0]]) + '"></span>';
         }).join('');
@@ -197,9 +206,9 @@
 
         // hints
         var hints = [], load = busy + idle ? busy / (busy + idle) * 100 : 0;
-        if (load >= 95) { hints.push(['bad', 'Almost every worker is busy (' + pct(load) + '). New requests wait for one to come free: raise MaxRequestWorkers, or find what holds them (Requests tab).']); }
-        else if (load >= 85) { hints.push(['warn', 'Most workers are busy (' + pct(load) + '). If this lasts, Apache will soon make requests wait.']); }
-        if (slots && open / slots >= 0.85 && busy + idle > 0) { hints.push(['info', pct(open / slots * 100) + ' of the worker slots have no process. That is normal on a quiet server: Apache starts more when traffic grows.']); }
+        if (load >= 95) { hints.push(['bad', t('Almost every worker is busy (%s). New requests wait for one to come free: raise MaxRequestWorkers, or find what holds them (Requests tab).', pct(load))]); }
+        else if (load >= 85) { hints.push(['warn', t('Most workers are busy (%s). If this lasts, Apache will soon make requests wait.', pct(load))]); }
+        if (slots && open / slots >= 0.85 && busy + idle > 0) { hints.push(['info', t('%s of the worker slots have no process. That is normal on a quiet server: Apache starts more when traffic grows.', pct(open / slots * 100))]); }
         $('as-hints').innerHTML = hints.map(function (h) { return '<div class="as-hint ' + h[0] + '">' + esc(h[1]) + '</div>'; }).join('');
 
         drawRequests();
@@ -219,18 +228,18 @@
         spark('as-busy-s', H(function (p) { return p.busy; }), C.green, Math.max.apply(null, H(function (p) { return p.busy + p.idle; }).concat([1])));
         spark('as-conn-s', H(function (p) { return p.conn; }), C.amber);
         spark('as-cpu-s', H(function (p) { return p.cpu; }), C.red);
-        var rpsS = [{ name: 'Requests per second', color: C.blue, values: H(function (p) { return p.rps; }) }];
+        var rpsS = [{ name: t('Requests per second'), color: C.blue, values: H(function (p) { return p.rps; }) }];
         legend('as-rps-l', rpsS);
         chart($('as-rps-c'), times, rpsS, { min: 1, fmt: function (v) { return v ? fmtRps(v) : '0'; } });
-        var wkS = [{ name: 'Busy', color: C.green, values: H(function (p) { return p.busy; }) },
-                   { name: 'Idle', color: C.grey, values: H(function (p) { return p.idle; }) }];
+        var wkS = [{ name: t('Busy'), color: C.green, values: H(function (p) { return p.busy; }) },
+                   { name: t('Idle'), color: C.grey, values: H(function (p) { return p.idle; }) }];
         legend('as-wk-l', wkS);
         chart($('as-wk-c'), times, wkS, { stack: true, whole: true, fmt: function (v) { return String(Math.round(v)); } });
-        var bpsS = [{ name: 'Sent', color: C.teal, values: H(function (p) { return p.bps; }) }];
+        var bpsS = [{ name: t('Sent'), color: C.teal, values: H(function (p) { return p.bps; }) }];
         legend('as-bps-l', bpsS);
         chart($('as-bps-c'), times, bpsS, { min: 1024, fmt: function (v) { return v ? fmtRate(v) : '0'; } });
-        var cnS = [{ name: 'Open', color: C.amber, values: H(function (p) { return p.conn; }) },
-                   { name: 'Without a thread', color: C.purple, values: H(function (p) { return p.async; }) }];
+        var cnS = [{ name: t('Open'), color: C.amber, values: H(function (p) { return p.conn; }) },
+                   { name: t('Without a thread'), color: C.purple, values: H(function (p) { return p.async; }) }];
         legend('as-cn-l', cnS);
         chart($('as-cn-c'), times, cnS, { fill: true, whole: true, fmt: function (v) { return String(Math.round(v)); } });
     }
@@ -254,7 +263,8 @@
             var x = key(a), y = key(b), c = (typeof x === 'number' && typeof y === 'number') ? x - y : String(x).localeCompare(String(y), undefined, { numeric: true });
             return sortAsc ? c : -c;
         });
-        $('as-req-count').textContent = rows.length + (rows.length === 1 ? ' request' : ' requests') + (show === 'active' ? ' running' : '') + ' · ' + all.length + ' slots listed';
+        $('as-req-count').textContent = (show === 'active' ? (rows.length === 1 ? t('1 request running') : t('%s requests running', rows.length))
+            : (rows.length === 1 ? t('1 request') : t('%s requests', rows.length))) + ' · ' + t('%s slots listed', all.length);
         $('as-req-body').innerHTML = rows.map(function (r) {
             var req = r.method ? '<span class="as-method">' + esc(r.method) + '</span>' + esc(r.uri) : esc(r.request);
             return '<tr><td>' + stateCell(r.mode) + '</td><td>' + esc(r.client) + '</td><td>' + esc(r.vhost) + '</td>'
@@ -262,15 +272,15 @@
                 + '<td class="num">' + fmtSecs(r.ss) + '</td><td class="num">' + (r.req || !isActive(r) ? fmtMs(r.req) : '–') + '</td><td class="num">' + r.cpu.toFixed(2) + '</td>'
                 + '<td class="num">' + esc(r.pid) + '</td><td class="num">' + esc(r.srv) + '</td>'
                 + '<td class="num">' + r.acc.conn + ' / ' + r.acc.child + ' / ' + r.acc.slot + '</td>'
-                + '<td class="num" title="' + esc('connection ' + fmtBytes(r.connKb * 1024) + ' · child process ' + fmtBytes(r.childMb * 1048576) + ' · slot ' + fmtBytes(r.slotMb * 1048576)) + '">'
+                + '<td class="num" title="' + esc(t('connection %s · child process %s · slot %s', fmtBytes(r.connKb * 1024), fmtBytes(r.childMb * 1048576), fmtBytes(r.slotMb * 1048576))) + '">'
                 + fmtBytes(r.slotMb * 1048576) + '</td></tr>';
-        }).join('') || '<tr><td class="empty" colspan="12">' + (cur.requests && cur.requests.length ? (f ? 'Nothing matches the filter.' : 'No request is running right now.')
-            : 'Apache did not list its worker slots. They need ExtendedStatus On.') + '</td></tr>';
+        }).join('') || '<tr><td class="empty" colspan="12">' + (cur.requests && cur.requests.length ? (f ? t('Nothing matches the filter.') : t('No request is running right now.'))
+            : t('Apache did not list its worker slots. They need ExtendedStatus On.')) + '</td></tr>';
     }
 
     /* ---- analysis -------------------------------------------------------- */
     function rank(id, list, color, fmt, none) {
-        if (!list.length) { $(id).innerHTML = '<p class="as-note">' + esc(none || 'Nothing to count yet.') + '</p>'; return; }
+        if (!list.length) { $(id).innerHTML = '<p class="as-note">' + esc(none || t('Nothing to count yet.')) + '</p>'; return; }
         var max = list[0][1] || 1;
         $(id).innerHTML = '<table class="as-rank">' + list.map(function (e) {
             return '<tr><td class="n">' + (fmt ? fmt(e[1]) : e[1]) + '</td><td class="lbl" title="' + esc(e[0]) + '">' + esc(e[0]) + '</td>'
@@ -291,7 +301,7 @@
         rank('as-top-method', top(rows, function (r) { return r.method; }, 10), C.amber);
         var longest = rows.filter(function (r) { return r.req > 0; }).sort(function (a, b) { return b.req - a.req; }).slice(0, 25)
             .map(function (r) { return [(r.vhost ? r.vhost + '  ' : '') + r.request, r.req]; });
-        rank('as-longest', longest, C.red, function (v) { return fmtMs(v); }, 'Every request took under a millisecond.');
+        rank('as-longest', longest, C.red, function (v) { return fmtMs(v); }, t('Every request took under a millisecond.'));
     }
 
     /* ---- workers --------------------------------------------------------- */
@@ -300,7 +310,7 @@
         var sb = cur.workers.scoreboard || '', html = '';
         for (var i = 0; i < sb.length; i++) {
             var s = STATE[sb[i]] || { label: sb[i], color: C.grey };
-            html += '<i' + (s.color ? ' style="background:' + s.color + '"' : '') + ' title="Slot ' + i + ': ' + esc(s.label) + '"></i>';
+            html += '<i' + (s.color ? ' style="background:' + s.color + '"' : '') + ' title="' + esc(t('Slot %s: %s', i, s.label)) + '"></i>';
         }
         $('as-scoreboard').innerHTML = html;
         var states = cur.workers.states || {};
@@ -317,16 +327,16 @@
     /* ---- server ---------------------------------------------------------- */
     function drawServer() {
         var S = cur.server, T = cur.totals, cpu = T.cpu;
-        dl('as-dl-server', [['Version', S.version], ['MPM', S.mpm], ['Built', S.built], ['Restarted', S.restart],
-            ['Up for', S.uptime !== null ? fmtUptime(S.uptime) : null], ['Config generation', S.configGeneration], ['MPM generation', S.mpmGeneration],
-            ['Processes', cur.workers.processes], ['Stopping', cur.workers.stopping]]);
-        dl('as-dl-totals', [['Requests', fmtNum(T.accesses)], ['Sent', fmtBytes(n0(T.kbytes) * 1024)],
-            ['Requests per second', T.reqPerSec !== null ? fmtRps(T.reqPerSec) : null], ['Sent per second', T.bytesPerSec !== null ? fmtRate(T.bytesPerSec) : null],
-            ['Per request', T.bytesPerReq !== null ? fmtBytes(T.bytesPerReq) : null], ['Time per request', T.msPerReq !== null ? fmtMs(T.msPerReq) : null],
-            ['Time serving', T.durationMs !== null ? fmtSecs(Math.round(T.durationMs / 1000)) : null],
-            ['CPU, user', cpu.user !== null ? cpu.user.toFixed(2) + ' s' : null], ['CPU, system', cpu.system !== null ? cpu.system.toFixed(2) + ' s' : null],
-            ['CPU, child processes', cpu.childrenUser !== null ? (n0(cpu.childrenUser) + n0(cpu.childrenSystem)).toFixed(2) + ' s' : null],
-            ['CPU load', cpu.load !== null ? pct(cpu.load) : null]]);
+        dl('as-dl-server', [[t('Version'), S.version], ['MPM', S.mpm], [t('Built'), S.built], [t('Restarted'), S.restart],
+            [t('Up for'), S.uptime !== null ? fmtUptime(S.uptime) : null], [t('Config generation'), S.configGeneration], [t('MPM generation'), S.mpmGeneration],
+            [t('Processes'), cur.workers.processes], [t('Stopping'), cur.workers.stopping]]);
+        dl('as-dl-totals', [[t('Requests'), fmtNum(T.accesses)], [t('Sent'), fmtBytes(n0(T.kbytes) * 1024)],
+            [t('Requests per second'), T.reqPerSec !== null ? fmtRps(T.reqPerSec) : null], [t('Sent per second'), T.bytesPerSec !== null ? fmtRate(T.bytesPerSec) : null],
+            [t('Per request'), T.bytesPerReq !== null ? fmtBytes(T.bytesPerReq) : null], [t('Time per request'), T.msPerReq !== null ? fmtMs(T.msPerReq) : null],
+            [t('Time serving'), T.durationMs !== null ? fmtSecs(Math.round(T.durationMs / 1000)) : null],
+            [t('CPU, user'), cpu.user !== null ? cpu.user.toFixed(2) + ' s' : null], [t('CPU, system'), cpu.system !== null ? cpu.system.toFixed(2) + ' s' : null],
+            [t('CPU, child processes'), cpu.childrenUser !== null ? (n0(cpu.childrenUser) + n0(cpu.childrenSystem)).toFixed(2) + ' s' : null],
+            [t('CPU load'), cpu.load !== null ? pct(cpu.load) : null]]);
         $('as-raw').textContent = cur.raw;
     }
 
@@ -376,7 +386,7 @@
                 });
             })
             .then(function (d) { $('as-error').style.display = 'none'; update(d); })
-            .catch(function (e) { $('as-error').textContent = 'Could not read Apache\'s status: ' + e.message + ' Retrying…'; $('as-error').style.display = 'block'; })
+            .catch(function (e) { $('as-error').textContent = t('Could not read Apache\'s status: %s Retrying…', e.message); $('as-error').style.display = 'block'; })
             .then(schedule);
     }
     function schedule() {
@@ -385,7 +395,7 @@
     }
     $('as-interval').addEventListener('change', function () { interval = +this.value; schedule(); });
     $('as-pause').addEventListener('click', function () {
-        paused = !paused; this.textContent = paused ? 'Resume' : 'Pause';
+        paused = !paused; this.textContent = paused ? t('Resume') : t('Pause');
         $('as-live').classList.toggle('paused', paused); if (!paused) { prev = null; poll(); } else { clearTimeout(timer); }
     });
     document.addEventListener('visibilitychange', function () { if (!document.hidden && !paused) { prev = null; poll(); } });

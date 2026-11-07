@@ -21,6 +21,7 @@ include($_SERVER["DOCUMENT_ROOT"] . 'dryden/ctrl/users.class.php');
 include($_SERVER["DOCUMENT_ROOT"] . 'dryden/fs/director.class.php');
 include($_SERVER["DOCUMENT_ROOT"] . 'inc/dbc.inc.php');
 include($_SERVER["DOCUMENT_ROOT"] . 'dryden/sys/backup.class.php');
+include($_SERVER["DOCUMENT_ROOT"] . 'dryden/ui/language.class.php');
 
 try {
     $zdbh = new db_driver("mysql:host=" . $host . ";dbname=" . $dbname . "", $user, $pass);
@@ -35,6 +36,14 @@ if (isset($_GET['id'])) {
 }
 
 session_start();
+// no panel controller here: the logged-in account's own language for ui_language::translate()
+$lang = '';
+if (!empty($_SESSION['zpuid'])) {
+	$lq = $zdbh->prepare('SELECT ud_language_vc FROM x_profiles WHERE ud_user_fk = :u');
+	$lq->execute(array(':u' => (int) $_SESSION['zpuid']));
+	$lang = (string) $lq->fetchColumn();
+}
+ui_language::$LangCol = 'tr_' . (in_array($lang, ui_language::Languages(), true) ? $lang : 'en') . '_tx';
 // Strict: a missing session id must never match (loose == let null equal null)
 if (!empty($_SESSION['zpuid']) && ctype_digit((string) $userid) && (int) $_SESSION['zpuid'] === (int) $userid) {
 	$currentuser = ctrl_users::GetUserDetail($userid);
@@ -57,8 +66,8 @@ if (!empty($_SESSION['zpuid']) && ctype_digit((string) $userid) && (int) $_SESSI
 		exit;
 	}
 	http_response_code(404);
-	echo '<h2>ERROR:</h2>That backup was not found. It may have been removed; make a new one.';
+	echo '<h2>' . htmlspecialchars(ui_language::translate('ERROR:'), ENT_QUOTES, 'UTF-8') . '</h2>' . htmlspecialchars(ui_language::translate('That backup was not found. It may have been removed; make a new one.'), ENT_QUOTES, 'UTF-8');
 } else {
 	http_response_code(403);
-	echo '<h2>Unauthorized Access!</h2>You have no permission to view this module.';
+	echo '<h2>' . htmlspecialchars(ui_language::translate('Unauthorized Access!'), ENT_QUOTES, 'UTF-8') . '</h2>' . htmlspecialchars(ui_language::translate('You have no permission to view this module.'), ENT_QUOTES, 'UTF-8');
 }

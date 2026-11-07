@@ -106,6 +106,8 @@ class module_controller extends ctrl_module
     static function getOverall()
     {
         $t = function ($s) { return htmlspecialchars(ui_language::translate($s), ENT_QUOTES, 'UTF-8'); };
+        // put numbers into a translated text's %d places, in order
+        $n = function ($text, ...$nums) { foreach ($nums as $x) { $text = preg_replace('/%d/', (string) (int) $x, $text, 1); } return $text; };
         $up = 0;
         $all = 0;
         $down = array();
@@ -123,8 +125,8 @@ class module_controller extends ctrl_module
         return '<div class="sv-overall ' . ($ok ? 'ok' : 'bad') . '">'
             . '<svg class="sv-ico-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
             . ($ok ? '<circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/>' : '<path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/>') . '</svg>'
-            . '<div><b>' . ($ok ? $t('All services are answering') : $t(count($down) === 1 ? '1 service is not answering' : count($down) . ' services are not answering')) . '</b>'
-            . '<span>' . ($ok ? $up . ' ' . $t('of') . ' ' . $all . ' ' . $t('ports open on this server.') : htmlspecialchars(implode(', ', $down), ENT_QUOTES, 'UTF-8') . ' &middot; ' . $up . ' ' . $t('of') . ' ' . $all . ' ' . $t('answer.')) . '</span></div>'
+            . '<div><b>' . ($ok ? $t('All services are answering') : (count($down) === 1 ? $t('1 service is not answering') : str_replace('%d', (string) count($down), $t('%d services are not answering')))) . '</b>'
+            . '<span>' . ($ok ? $n($t('%d of %d ports open on this server.'), $up, $all) : htmlspecialchars(implode(', ', $down), ENT_QUOTES, 'UTF-8') . ' &middot; ' . $n($t('%d of %d answer.'), $up, $all)) . '</span></div>'
             . '<div class="sv-checked"><span>' . $t('Checked at') . ' ' . date('H:i:s') . '</span>'
             . '<a class="btn btn-default btn-sm" href="./?module=services"><svg class="sv-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>' . $t('Check again') . '</a></div>'
             . '</div>';
@@ -152,7 +154,7 @@ class module_controller extends ctrl_module
                     . '<span class="sv-state">' . $t($r[3] ? 'Open' : 'Closed') . ($r[3] ? '<small>' . ($r[4] < 1 ? '&lt;1' : round($r[4])) . ' ms</small>' : '') . '</span></li>';
             }
             $out .= '<div class="sv-card"><div class="sv-card-head"><h4>' . $t($group) . '</h4>'
-                . '<span class="sv-pill ' . ($down ? 'bad' : 'ok') . '">' . ($down ? $down . ' ' . $t('down') : $t('All open')) . '</span></div>'
+                . '<span class="sv-pill ' . ($down ? 'bad' : 'ok') . '">' . ($down ? str_replace('%d', (string) $down, $t('%d down')) : $t('All open')) . '</span></div>'
                 . '<ul class="sv-list">' . $rows . '</ul></div>';
         }
         return $out;
@@ -172,7 +174,7 @@ class module_controller extends ctrl_module
             return ui_language::translate($d >= 0 ? 'in under a minute' : 'just now');
         }
         $w = $a < 3600 ? floor($a / 60) . ' min' : ($a < 172800 ? floor($a / 3600) . ' h' : floor($a / 86400) . ' ' . ui_language::translate('days'));
-        return $d >= 0 ? ui_language::translate('in') . ' ' . $w : $w . ' ' . ui_language::translate('ago');
+        return str_replace('%s', $w, ui_language::translate($d >= 0 ? 'in %s' : '%s ago'));
     }
 
     /**
@@ -189,7 +191,7 @@ class module_controller extends ctrl_module
         $last = (int) ctrl_options::GetSystemOption('daemon_lastrun');
         $next = self::NextRun();
         $tiles = array(
-            array('Server uptime', $up > 0 ? self::Span($up) : sys_monitoring::ServerUptime(), $up > 0 ? $t('since') . ' ' . $h(date($df, time() - (int) $up)) : '', '<path d="M12 2v4M12 18v4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M2 12h4M18 12h4M4.9 19.1l2.8-2.8M16.3 7.7l2.8-2.8"/>'),
+            array('Server uptime', $up > 0 ? self::Span($up) : sys_monitoring::ServerUptime(), $up > 0 ? str_replace('%s', $h(date($df, time() - (int) $up)), $t('since %s')) : '', '<path d="M12 2v4M12 18v4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M2 12h4M18 12h4M4.9 19.1l2.8-2.8M16.3 7.7l2.8-2.8"/>'),
             array('Daemon last ran', $last > 0 ? self::Ago($last) : ui_language::translate('Not since the last reset'), $last > 0 ? $h(date($df, $last)) : $t('A full run was queued in Sentora Config.'), '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/>'),
             array('Daemon runs next', self::Ago($next), $h(date($df, $next)), '<path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/>'),
         );

@@ -7,7 +7,7 @@
     <@ Result @>
     <link rel="stylesheet" href="modules/sentoraconfig/assets/config.css">
 
-    <div class="sc" id="sc" data-unsaved="<: You have changes that are not saved. :>" data-reset="<: Queue a full daemon run? Every daily, weekly and monthly job runs again within 5 minutes. :>">
+    <div class="sc" id="sc" data-unsaved="<: You have changes that are not saved. :>" data-reset="<@ ResetConfirm @>">
         <div class="sc-tiles"><@ Summary @></div>
 
         <div class="sc-card">

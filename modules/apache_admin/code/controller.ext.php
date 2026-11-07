@@ -124,7 +124,7 @@ class module_controller extends ctrl_module
      * The domains (and sub-domains and parked domains), with their owner and what they override.
      *
      * @global db_driver $zdbh The panel's database connection.
-     * @return array<int, array<string, mixed>> The x_vhosts rows plus 'owner' and 'overrides' (labels).
+     * @return array<int, array<string, mixed>> The x_vhosts rows plus 'owner' and 'overrides' (each an English label, with %s, and the value for it).
      */
     static function Vhosts()
     {
@@ -135,25 +135,25 @@ class module_controller extends ctrl_module
             foreach ($rows as &$r) {
                 $o = array();
                 if ((int) $r['vh_enabled_in'] === 0) {
-                    $o[] = 'Switched off';
+                    $o[] = array('Switched off', '');
                 }
                 if ((int) $r['vh_obasedir_in'] === 0) {
-                    $o[] = 'open_basedir off';
+                    $o[] = array('open_basedir off', '');
                 }
                 if ((string) $r['vh_custom_port_in'] !== '' && $r['vh_custom_port_in'] !== null) {
-                    $o[] = 'Port ' . (int) $r['vh_custom_port_in'];
+                    $o[] = array('Port %s', (string) (int) $r['vh_custom_port_in']);
                 }
                 if ((int) $r['vh_portforward_in'] === 1) {
-                    $o[] = 'Port 80 forwarded';
+                    $o[] = array('Port 80 forwarded', '');
                 }
                 if ((string) $r['vh_custom_ip_vc'] !== '') {
-                    $o[] = 'IP ' . $r['vh_custom_ip_vc'];
+                    $o[] = array('IP %s', (string) $r['vh_custom_ip_vc']);
                 }
                 if ((string) $r['vh_ssl_tx'] !== '' || (string) $r['vh_ssl_port_in'] !== '') {
-                    $o[] = 'SSL';
+                    $o[] = array('SSL', '');
                 }
                 if (trim((string) $r['vh_custom_tx']) !== '') {
-                    $o[] = 'Extra directives';
+                    $o[] = array('Extra directives', '');
                 }
                 $r['overrides'] = $o;
             }
@@ -232,8 +232,8 @@ class module_controller extends ctrl_module
         $when = strtolower($changed) === 'true' ? ui_language::translate('Being written: within 5 minutes')
             : (ctype_digit($changed) && (int) $changed > 0 ? ui_language::translate('Written') . ' ' . date('j M, H:i', (int) $changed) : ui_language::translate('Up to date'));
         return '<div class="aa-tile ' . ($up ? 'ok' : 'bad') . '">' . $ico($up ? '<circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/>' : '<circle cx="12" cy="12" r="9"/><path d="M15 9l-6 6M9 9l6 6"/>')
-            . '<div><b>' . self::t($up ? 'Running' : 'Not answering') . '</b><span>Apache, ' . self::t('port') . ' ' . ($port > 0 ? $port : 80) . '</span></div></div>'
-            . '<div class="aa-tile">' . $ico('<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>') . '<div><b>' . $n . '</b><span>' . self::t('domains') . ', ' . $over . ' ' . self::t('with their own settings') . '</span></div></div>'
+            . '<div><b>' . self::t($up ? 'Running' : 'Not answering') . '</b><span>' . str_replace('%d', (string) ($port > 0 ? $port : 80), self::t('Apache, port %d')) . '</span></div></div>'
+            . '<div class="aa-tile">' . $ico('<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>') . '<div><b>' . $n . '</b><span>' . str_replace('%d', (string) $over, self::t('domains, %d with their own settings')) . '</span></div></div>'
             . '<div class="aa-tile">' . $ico('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>') . '<div><b>' . self::h($when) . '</b><span>' . self::t('Apache configuration') . '</span></div></div>';
     }
 
@@ -253,7 +253,7 @@ class module_controller extends ctrl_module
             }
             $chips = '';
             foreach ($r['overrides'] as $o) {
-                $chips .= '<span class="aa-chip' . (in_array($o, array('Switched off', 'open_basedir off'), true) ? ' warn' : '') . '">' . self::t($o) . '</span>';
+                $chips .= '<span class="aa-chip' . (in_array($o[0], array('Switched off', 'open_basedir off'), true) ? ' warn' : '') . '">' . str_replace('%s', self::h($o[1]), self::t($o[0])) . '</span>';
             }
             $rows .= '<div class="aa-row"><div class="aa-main"><b>' . self::h($r['vh_name_vc']) . '</b><span>' . self::t('of') . ' ' . self::h($r['owner']) . '</span><div class="aa-chips">' . $chips . '</div></div>'
                 . '<a class="btn btn-default btn-sm" href="./?module=apache_admin&amp;show=Vhost&amp;id=' . (int) $r['vh_id_pk'] . '">' . self::t('Edit') . '</a></div>';
@@ -468,7 +468,7 @@ class module_controller extends ctrl_module
         }
         $who = $controller->GetControllerRequest('URL', 'saved');
         if ($who) {
-            return ui_sysmessage::shout(self::t('The settings of') . ' <strong>' . self::h($who) . '</strong> ' . self::t('are saved. The daemon writes them to Apache within 5 minutes.'), 'zannounceok');
+            return ui_sysmessage::shout(str_replace('%s', '<strong>' . self::h($who) . '</strong>', self::t('The settings of %s are saved. The daemon writes them to Apache within 5 minutes.')), 'zannounceok');
         }
         return null;
     }

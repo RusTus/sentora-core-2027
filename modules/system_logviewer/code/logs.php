@@ -103,12 +103,35 @@ class system_logviewer_logs
         $uid = isset($_SESSION['zpuid']) ? (int) $_SESSION['zpuid'] : 0;
         $user = ($uid > 0) ? ctrl_users::GetUserDetail($uid) : false;
         session_write_close();
+        if ($user) {
+            self::UseLanguageOf($user['userid']);
+        }
         if (!$user || (int) $user['usergroupid'] !== 1) {
             http_response_code(403);
             header('Content-Type: text/plain; charset=utf-8');
-            exit('The System Log Viewer is only available to panel administrators.');
+            exit(ui_language::translate('The System Log Viewer is only available to panel administrators.'));
         }
         return $user;
+    }
+
+    /**
+     * Make ui_language::translate() use an account's language in read.php and view.php.
+     *
+     * Those run without the panel's request controller, where translate() would always
+     * give English; the language is checked as translate() checks it (English otherwise).
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $uid The account ID.
+     * @return void
+     */
+    static function UseLanguageOf($uid)
+    {
+        global $zdbh;
+        $sql = $zdbh->prepare('SELECT ud_language_vc FROM x_profiles WHERE ud_user_fk = :uid');
+        $sql->execute(array(':uid' => (int) $uid));
+        $lang = (string) $sql->fetchColumn();
+        $ok = preg_match('/^[a-z]{2}$/', $lang) && in_array($lang, ui_language::Languages(), true);
+        ui_language::$LangCol = 'tr_' . ($ok ? $lang : 'en') . '_tx';
     }
 
 }

@@ -10,6 +10,12 @@
     var interval = 2000, timer = null, paused = false, prev = null, info = null, hist = [], sortKey = 'cpu';
     var $ = function (id) { return document.getElementById(id); };
     var esc = function (s) { return String(s).replace(/[&<>"']/g, function (c) { return '&#' + c.charCodeAt(0) + ';'; }); };
+    // the page's words, translated in the template (data-t-*); each %s / %d is filled in order
+    function T(key, fallback) {
+        var t = root.getAttribute('data-t-' + key) || fallback, args = Array.prototype.slice.call(arguments, 2);
+        args.forEach(function (a) { t = t.replace(/%[sd]/, function () { return String(a); }); });
+        return t;
+    }
 
     function fmtBytes(b, d) {
         var u = ['B', 'KiB', 'MiB', 'GiB', 'TiB'], i = 0; b = Math.max(0, b || 0);
@@ -52,7 +58,7 @@
         }
         for (var m = 0; m <= 5; m++) {
             var tt = svgEl('text', { x: pl + iw * m / 5, y: h - 4, 'text-anchor': m === 0 ? 'start' : (m === 5 ? 'end' : 'middle') });
-            tt.textContent = m === 5 ? 'now' : '-' + Math.round(WINDOW / 60 * (5 - m) / 5) + 'm'; ax.appendChild(tt);
+            tt.textContent = m === 5 ? T('now', 'now') : '-' + Math.round(WINDOW / 60 * (5 - m) / 5) + 'm'; ax.appendChild(tt);
         }
         svg.appendChild(g); svg.appendChild(ax);
         for (var s2 = series.length - 1; s2 >= 0; s2--) {
@@ -137,18 +143,18 @@
 
         // cards
         $('sm-cpu').textContent = pct(cpu.busy);
-        $('sm-cpu-d').textContent = 'user ' + pct(cpu.user) + ' · system ' + pct(cpu.system) + ' · I/O wait ' + pct(cpu.iowait);
+        $('sm-cpu-d').textContent = T('user', 'user') + ' ' + pct(cpu.user) + ' · ' + T('system', 'system') + ' ' + pct(cpu.system) + ' · ' + T('iowait', 'I/O wait') + ' ' + pct(cpu.iowait);
         $('sm-load').textContent = cur.load[0].toFixed(2);
-        $('sm-load-d').textContent = '5m ' + cur.load[1].toFixed(2) + ' · 15m ' + cur.load[2].toFixed(2) + ' · ' + (info ? info.cores + (info.cores === 1 ? ' core' : ' cores') : '');
+        $('sm-load-d').textContent = '5m ' + cur.load[1].toFixed(2) + ' · 15m ' + cur.load[2].toFixed(2) + ' · ' + (info ? (info.cores === 1 ? T('core', '1 core') : T('cores', '%d cores', info.cores)) : '');
         $('sm-mem').textContent = pct(used / m.total * 100);
-        $('sm-mem-d').textContent = fmtBytes(used) + ' of ' + fmtBytes(m.total) + ' · cache ' + fmtBytes(point.cache);
-        $('sm-swap').textContent = m.swapTotal ? pct(point.swap / m.swapTotal * 100) : 'none';
-        $('sm-swap-d').textContent = m.swapTotal ? fmtBytes(point.swap) + ' of ' + fmtBytes(m.swapTotal) : 'no swap set up';
+        $('sm-mem-d').textContent = T('of', '%s of %s', fmtBytes(used), fmtBytes(m.total)) + ' · ' + T('cache', 'cache %s', fmtBytes(point.cache));
+        $('sm-swap').textContent = m.swapTotal ? pct(point.swap / m.swapTotal * 100) : T('none', 'none');
+        $('sm-swap-d').textContent = m.swapTotal ? T('of', '%s of %s', fmtBytes(point.swap), fmtBytes(m.swapTotal)) : T('noswap', 'no swap set up');
         $('sm-net').textContent = fmtRate(point.rx + point.tx);
         $('sm-net-d').textContent = '↓ ' + fmtRate(point.rx) + ' · ↑ ' + fmtRate(point.tx);
         $('sm-io').textContent = fmtRate(point.rd + point.wr);
-        $('sm-io-d').textContent = 'read ' + fmtRate(point.rd) + ' · write ' + fmtRate(point.wr);
-        $('sm-uptime').textContent = 'up ' + fmtUptime(cur.uptime) + ' · ' + cur.procs.length + ' processes · ' + (cur.running || 0) + ' running';
+        $('sm-io-d').textContent = T('read', 'read %s', fmtRate(point.rd)) + ' · ' + T('write', 'write %s', fmtRate(point.wr));
+        $('sm-uptime').textContent = T('up', 'up %s', fmtUptime(cur.uptime)) + ' · ' + T('procs', '%d processes', cur.procs.length) + ' · ' + T('running', '%d running', cur.running || 0);
         spark('sm-cpu-s', H(function (p) { return p.cpu.busy; }), C.blue, 100);
         spark('sm-load-s', H(function (p) { return p.load; }), C.purple);
         spark('sm-mem-s', H(function (p) { return p.used; }), C.green, m.total);
@@ -158,32 +164,32 @@
 
         // charts
         var cpuSeries = [
-            { name: 'User', color: C.blue, values: H(function (p) { return p.cpu.user; }) },
-            { name: 'System', color: C.purple, values: H(function (p) { return p.cpu.system; }) },
-            { name: 'I/O wait', color: C.amber, values: H(function (p) { return p.cpu.iowait; }) },
-            { name: 'Steal', color: C.red, values: H(function (p) { return p.cpu.steal; }) }];
+            { name: T('s-user', 'User'), color: C.blue, values: H(function (p) { return p.cpu.user; }) },
+            { name: T('s-system', 'System'), color: C.purple, values: H(function (p) { return p.cpu.system; }) },
+            { name: T('s-iowait', 'I/O wait'), color: C.amber, values: H(function (p) { return p.cpu.iowait; }) },
+            { name: T('s-steal', 'Steal'), color: C.red, values: H(function (p) { return p.cpu.steal; }) }];
         legend('sm-cpu-l', cpuSeries);
         chart($('sm-cpu-c'), times, cpuSeries, { stack: true, max: 100, fmt: function (v) { return Math.round(v) + '%'; } });
         var memSeries = [
-            { name: 'Used', color: C.green, values: H(function (p) { return p.used; }) },
-            { name: 'Cache and buffers', color: C.teal, values: H(function (p) { return p.cache; }) },
-            { name: 'Swap used', color: C.amber, values: H(function (p) { return p.swap; }) }];
+            { name: T('s-used', 'Used'), color: C.green, values: H(function (p) { return p.used; }) },
+            { name: T('s-cache', 'Cache and buffers'), color: C.teal, values: H(function (p) { return p.cache; }) },
+            { name: T('s-swap', 'Swap used'), color: C.amber, values: H(function (p) { return p.swap; }) }];
         legend('sm-mem-l', memSeries);
         // Scale in whole GiB (4, 8, 16, 20 …), so the axis steps are round numbers
         var gib = Math.pow(2, 30), top = Math.ceil(m.total / gib);
         top = top <= 4 ? top : Math.ceil(top / 4) * 4;
         chart($('sm-mem-c'), times, memSeries.slice(0, 2), { stack: true, max: top * gib, fmt: function (v) { return v ? fmtBytes(v, v % gib ? 1 : 0) : '0'; } });
         var netSeries = [
-            { name: 'Received', color: C.teal, values: H(function (p) { return p.rx; }) },
-            { name: 'Sent', color: C.blue, values: H(function (p) { return p.tx; }) }];
+            { name: T('s-received', 'Received'), color: C.teal, values: H(function (p) { return p.rx; }) },
+            { name: T('s-sent', 'Sent'), color: C.blue, values: H(function (p) { return p.tx; }) }];
         legend('sm-net-l', netSeries);
         chart($('sm-net-c'), times, netSeries, { fill: true, min: 1024, fmt: function (v) { return v ? fmtRate(v) : '0'; } });
         var ioSeries = [
-            { name: 'Read', color: C.green, values: H(function (p) { return p.rd; }) },
-            { name: 'Write', color: C.red, values: H(function (p) { return p.wr; }) }];
+            { name: T('s-read', 'Read'), color: C.green, values: H(function (p) { return p.rd; }) },
+            { name: T('s-write', 'Write'), color: C.red, values: H(function (p) { return p.wr; }) }];
         legend('sm-io-l', ioSeries);
         chart($('sm-io-c'), times, ioSeries, { fill: true, min: 1024, fmt: function (v) { return v ? fmtRate(v) : '0'; } });
-        var loadSeries = [{ name: 'Load (1 min)', color: C.purple, values: H(function (p) { return p.load; }) }];
+        var loadSeries = [{ name: T('s-load', 'Load (1 min)'), color: C.purple, values: H(function (p) { return p.load; }) }];
         legend('sm-load-l', loadSeries);
         chart($('sm-load-c'), times, loadSeries, { max: niceMax(Math.max.apply(null, loadSeries[0].values.concat([info ? info.cores : 1]))), fmt: function (v) { return v.toFixed(1); } });
 
@@ -191,7 +197,7 @@
         var cores = '';
         Object.keys(cur.cpu).filter(function (k) { return k !== 'cpu'; }).forEach(function (k) {
             var c = prev.cpu[k] ? cpuPct(prev.cpu[k], cur.cpu[k]).busy : 0;
-            cores += '<div class="sm-core">' + k.replace('cpu', 'Core ') + ' <b>' + Math.round(c) + '%</b><div class="sm-bar" style="--c:' + (c > 85 ? C.red : c > 60 ? C.amber : C.blue)
+            cores += '<div class="sm-core">' + esc(T('corename', 'Core %s', k.replace('cpu', ''))) + ' <b>' + Math.round(c) + '%</b><div class="sm-bar" style="--c:' + (c > 85 ? C.red : c > 60 ? C.amber : C.blue)
                 + '"><b style="width:' + c.toFixed(1) + '%"></b></div></div>';
         });
         $('sm-cores').innerHTML = cores;
@@ -199,14 +205,14 @@
         // disk space
         $('sm-fs').innerHTML = cur.fs.map(function (f) {
             var u = (f.total - f.free) / f.total * 100;
-            return '<div class="sm-fs"><div class="sm-fs-row"><b>' + esc(f.mount) + '</b><span>' + fmtBytes(f.total - f.free) + ' of ' + fmtBytes(f.total)
-                + ' · ' + fmtBytes(f.free) + ' free</span></div><div class="sm-bar" style="--c:' + (u > 90 ? C.red : u > 75 ? C.amber : C.green)
+            return '<div class="sm-fs"><div class="sm-fs-row"><b>' + esc(f.mount) + '</b><span>' + esc(T('of', '%s of %s', fmtBytes(f.total - f.free), fmtBytes(f.total)))
+                + ' · ' + esc(T('free', '%s free', fmtBytes(f.free))) + '</span></div><div class="sm-bar" style="--c:' + (u > 90 ? C.red : u > 75 ? C.amber : C.green)
                 + '"><b style="width:' + u.toFixed(1) + '%"></b></div></div>';
-        }).join('') || '<p class="sm-sub">No disks found.</p>';
+        }).join('') || '<p class="sm-sub">' + esc(T('nodisks', 'No disks found.')) + '</p>';
 
         // services
         $('sm-svc').innerHTML = Object.keys(cur.services).map(function (k) {
-            return '<div class="sm-svc' + (cur.services[k] ? '' : ' down') + '"><i></i>' + esc(k) + (cur.services[k] ? '' : ' · stopped') + '</div>';
+            return '<div class="sm-svc' + (cur.services[k] ? '' : ' down') + '"><i></i>' + esc(k) + (cur.services[k] ? '' : ' · ' + esc(T('stopped', 'stopped'))) + '</div>';
         }).join('');
 
         // processes
@@ -228,7 +234,7 @@
     }
     function showInfo() {
         $('sm-hostname').textContent = info.host;
-        $('sm-sysinfo').textContent = info.os + ' · kernel ' + info.kernel + ' · ' + info.cpu + (info.cores > 1 ? ' × ' + info.cores : '');
+        $('sm-sysinfo').textContent = info.os + ' · ' + T('kernel', 'kernel %s', info.kernel) + ' · ' + info.cpu + (info.cores > 1 ? ' × ' + info.cores : '');
     }
 
     /* ---- polling --------------------------------------------------------- */
@@ -237,7 +243,7 @@
         fetch(url, { credentials: 'same-origin', cache: 'no-store' })
             .then(function (r) { if (!r.ok) { throw new Error('HTTP ' + r.status); } return r.json(); })
             .then(function (d) { $('sm-error').style.display = 'none'; update(d); })
-            .catch(function (e) { $('sm-error').textContent = 'Could not read the server figures (' + e.message + '). Retrying…'; $('sm-error').style.display = 'block'; })
+            .catch(function (e) { $('sm-error').textContent = T('error', 'Could not read the server figures (%s). Retrying…', e.message); $('sm-error').style.display = 'block'; })
             .then(schedule);
     }
     function schedule() {
@@ -246,7 +252,7 @@
     }
     $('sm-interval').addEventListener('change', function () { interval = +this.value; schedule(); });
     $('sm-pause').addEventListener('click', function () {
-        paused = !paused; this.textContent = paused ? 'Resume' : 'Pause';
+        paused = !paused; this.textContent = paused ? T('resume', 'Resume') : T('pause', 'Pause');
         $('sm-live').classList.toggle('paused', paused); if (!paused) { poll(); } else { clearTimeout(timer); }
     });
     Array.prototype.forEach.call(document.querySelectorAll('#sm th[data-sort]'), function (th) {

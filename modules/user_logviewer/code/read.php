@@ -20,6 +20,13 @@ session_start();
 $uid = isset($_SESSION['zpuid']) ? (int) $_SESSION['zpuid'] : 0;
 $user = ($uid > 0) ? ctrl_users::GetUserDetail($uid) : false;
 session_write_close();
+if ($user) {
+    // the account's language for the messages below (translate() gives English without the panel's controller)
+    $lq = $zdbh->prepare('SELECT ud_language_vc FROM x_profiles WHERE ud_user_fk = :uid');
+    $lq->execute(array(':uid' => (int) $user['userid']));
+    $lang = (string) $lq->fetchColumn();
+    ui_language::$LangCol = 'tr_' . ((preg_match('/^[a-z]{2}$/', $lang) && in_array($lang, ui_language::Languages(), true)) ? $lang : 'en') . '_tx';
+}
 
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
@@ -29,13 +36,13 @@ header('X-Content-Type-Options: nosniff');
  * End the request with an error.
  *
  * @param int $code The HTTP status code.
- * @param string $message The message.
+ * @param string $message The message (fixed English; translated here).
  * @return never
  */
 function ulv_fail($code, $message)
 {
     http_response_code($code);
-    exit(json_encode(array('error' => $message)));
+    exit(json_encode(array('error' => ui_language::translate($message))));
 }
 
 if (!$user) {

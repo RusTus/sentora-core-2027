@@ -73,13 +73,13 @@
         <form action="./?module=faqs&action=AddFaq" method="post">
             <table class="none">
                 <tr valign="top">
-                    <th>Question:</th><td><input type="text" name="question" id="question" style="width: 310px;"></td>
+                    <th><: Question :>:</th><td><input type="text" name="question" id="question" style="width: 310px;"></td>
                 </tr>
                 <tr valign="top">
                     <th>&nbsp;</th><td>&nbsp;</td>
                 </tr>
                 <tr valign="top">
-                    <th>Answer:</th><td><textarea rows="5" cols="45" name="answer"id="answer"></textarea></td>
+                    <th><: Answer :>:</th><td><textarea rows="5" cols="45" name="answer"id="answer"></textarea></td>
                 </tr>
                 <tr valign="top">
                     <th></th><td><@ CSFR_Tag @><button class="button-loader btn btn-primary" type="submit" id="button" name="inAdd" value="1"><: Add :></button></td>

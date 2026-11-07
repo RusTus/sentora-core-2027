@@ -69,7 +69,7 @@
                     <ol class="ma-steps">
                         <li><: Scan this code with your authenticator app :>
                             <div class="ma-qr"><@ TwoFactorQr @></div>
-                            <span class="ma-sub"><: Can not scan it? Add an account in the app with this key (time based): :></span>
+                            <span class="ma-sub"><@ TwoFactorKeyHelp @></span>
                             <code class="ma-key"><@ TwoFactorSecret @></code>
                             <a class="ma-link" href="<@ TwoFactorUri @>"><: On this phone: open it in the app :></a></li>
                         <li><: Enter the 6-digit code it shows :>

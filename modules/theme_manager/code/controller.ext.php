@@ -213,7 +213,7 @@ class module_controller extends ctrl_module
             $n = count(self::ExecuteCSSList($t['name']));
             $out .= '<label class="tm-theme"><input type="radio" name="inTheme" value="' . self::h($t['name']) . '"' . ($t['name'] === $cur ? ' checked' : '') . '>'
                 . '<span class="tm-theme-art" aria-hidden="true"><i></i><i></i><i></i></span><b>' . self::h($t['name']) . '</b>'
-                . '<small>' . ($n > 1 ? $n . ' ' . self::t('variations') : self::t('one look')) . '</small></label>';
+                . '<small>' . ($n > 1 ? str_replace('%d', (string) $n, self::t('%d variations')) : self::t('one look')) . '</small></label>';
         }
         return $out;
     }
@@ -265,10 +265,10 @@ class module_controller extends ctrl_module
             $own = (int) $q->fetchColumn();
         }
         $mine = ui_template::GetStylePref($me);
-        return '<p class="tm-reach"><b>' . self::t('You and your') . ' ' . $n . ' ' . self::t($n === 1 ? 'client' : 'clients') . '</b> '
+        return '<p class="tm-reach"><b>' . ($n === 1 ? self::t('You and your 1 client') : str_replace('%d', (string) $n, self::t('You and your %d clients'))) . '</b> '
             . self::t('get this look. Each person can still pick Light, Dark or Auto for themselves in My Account.') . '</p>'
-            . ($own ? '<p class="tm-sub">' . $own . ' ' . self::t($own === 1 ? 'client has chosen its own appearance there; it keeps it.' : 'clients have chosen their own appearance there; they keep it.') . '</p>' : '')
-            . ($mine !== '' ? '<p class="tm-sub">' . self::t('You chose') . ' <b>' . self::h(ui_language::translate(ui_template::CSSLabel($mine))) . '</b> ' . self::t('for yourself in My Account, so your own panel keeps that.') . '</p>' : '');
+            . ($own ? '<p class="tm-sub">' . ($own === 1 ? self::t('1 client has chosen its own appearance there; it keeps it.') : str_replace('%d', (string) $own, self::t('%d clients have chosen their own appearance there; they keep it.'))) . '</p>' : '')
+            . ($mine !== '' ? '<p class="tm-sub">' . str_replace('%s', '<b>' . self::h(ui_language::translate(ui_template::CSSLabel($mine))) . '</b>', self::t('You chose %s for yourself in My Account, so your own panel keeps that.')) . '</p>' : '');
     }
 
     /**

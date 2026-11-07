@@ -17,6 +17,15 @@ session_start();
 $uid = isset($_SESSION['zpuid']) ? (int) $_SESSION['zpuid'] : 0;
 $user = ($uid > 0) ? ctrl_users::GetUserDetail($uid) : false;
 session_write_close();
+// messages in the account's language (this runs without the panel's request controller,
+// where ui_language::translate() would always give English)
+if ($user) {
+    $gaLang = $zdbh->prepare('SELECT ud_language_vc FROM x_profiles WHERE ud_user_fk = :uid');
+    $gaLang->execute(array(':uid' => (int) $user['userid']));
+    $gaLang = (string) $gaLang->fetchColumn();
+    $gaOk = preg_match('/^[a-z]{2}$/', $gaLang) && in_array($gaLang, ui_language::Languages(), true);
+    ui_language::$LangCol = 'tr_' . ($gaOk ? $gaLang : 'en') . '_tx';
+}
 
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: no-referrer');
@@ -30,17 +39,17 @@ header('X-Frame-Options: SAMEORIGIN');
 
 if (!$user) {
     http_response_code(403);
-    exit('Please log in to the control panel first.');
+    exit(htmlspecialchars(ui_language::translate('Please log in to the control panel first.'), ENT_QUOTES, 'UTF-8'));
 }
 // Only reports of the account's own domains (administrators: all of them)
 $key = isset($_GET['r']) ? (string) $_GET['r'] : '';
 $file = goaccess_helper::ReportFile($key);
 if ($file === false || !array_key_exists($key, goaccess_helper::ReportsFor($user))) {
     http_response_code(404);
-    exit('Unknown report.');
+    exit(htmlspecialchars(ui_language::translate('Unknown report.'), ENT_QUOTES, 'UTF-8'));
 }
 if (!is_file($file)) {
-    echo '<p style="font-family: sans-serif">' . 'No report yet. Reports are made every hour from the web server logs, once there have been visitors.' . '</p>';
+    echo '<p style="font-family: sans-serif">' . htmlspecialchars(ui_language::translate('No report yet. Reports are made every hour from the web server logs, once there have been visitors.'), ENT_QUOTES, 'UTF-8') . '</p>';
     exit;
 }
 // The report keeps its display settings in browser storage, which a sandboxed page

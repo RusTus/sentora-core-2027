@@ -125,7 +125,7 @@ class module_controller extends ctrl_module
                 $createdby = NULL;
                 if ($faq['reseller'] == $currentuser['resellerid'] || $faq['reseller'] == $currentuser['userid'] || $currentuser['usergroup'] == "Administrators" || $faq['global'] <> 0) {
                     if ($faq['reseller'] == $currentuser['userid'] || $currentuser['usergroup'] == "Administrators") {
-                        $allowdelete = "<input type=\"image\" src=\"" . self::getModulePath() . "assets/delete_small.png\" name=\"inDelete_" . $faq['id'] . "\" id=\"inDelete_" . $faq['id'] . "\" value=\"" . $faq['id'] . "\" title=\"DELETE FAQ\">";
+                        $allowdelete = "<input type=\"image\" src=\"" . self::getModulePath() . "assets/delete_small.png\" name=\"inDelete_" . $faq['id'] . "\" id=\"inDelete_" . $faq['id'] . "\" value=\"" . $faq['id'] . "\" title=\"" . htmlspecialchars(ui_language::translate('DELETE FAQ'), ENT_QUOTES, 'UTF-8') . "\">";
                         if ($currentuser['usergroup'] == "Administrators") {
                             $createdbyid = ctrl_users::GetUserDetail($faq['reseller']);
                             $createdby = " (" . $createdbyid['username'] . ")";

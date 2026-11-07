@@ -310,7 +310,7 @@ class module_controller extends ctrl_module
             }
             $out .= '<details class="pi-ext" data-s="' . self::h($search) . '"><summary><span class="pi-ext-name">' . self::h($name) . '</span>'
                 . ($ver ? '<span class="pi-ext-ver">' . self::h($ver) . '</span>' : '')
-                . ($m['directives'] ? '<span class="pi-ext-n">' . count($m['directives']) . ' ' . self::t(count($m['directives']) === 1 ? 'setting' : 'settings') . '</span>' : '') . '</summary><div class="pi-ext-body">'
+                . ($m['directives'] ? '<span class="pi-ext-n">' . (count($m['directives']) === 1 ? self::t('1 setting') : str_replace('%d', (string) count($m['directives']), self::t('%d settings'))) . '</span>' : '') . '</summary><div class="pi-ext-body">'
                 . ($m['info'] ? self::InfoTable($m['info']) : '') . ($m['directives'] ? self::DirectiveTable($m['directives']) : '')
                 . (!$m['info'] && !$m['directives'] ? '<p class="pi-note">' . self::t('Nothing more to show for this extension.') . '</p>' : '') . '</div></details>';
         }

@@ -148,7 +148,10 @@ class module_controller extends ctrl_module
             $made = is_file($file) ? (int) filemtime($file) : 0;
             $owner = (int) $r[2];
             if ($owner === 0) {
-                $server[$key] = array('title' => ui_language::translate($r[0]), 'group' => ui_language::translate('Server'), 'made' => $made);
+                // the panel's report names the panel's domain: put in after translating
+                $title = ($key === 'panel') ? str_replace('%s', (string) ctrl_options::GetSystemOption('sentora_domain'), ui_language::translate('Control panel (%s)'))
+                    : ui_language::translate($r[0]);
+                $server[$key] = array('title' => $title, 'group' => ui_language::translate('Server'), 'made' => $made);
                 continue;
             }
             if (!isset($names[$owner])) {
@@ -271,7 +274,9 @@ class module_controller extends ctrl_module
             return '';
         }
         $url = 'modules/goaccess_stats/code/report.php?r=' . rawurlencode($key);
-        return '<iframe class="ga-frame sn-autoheight" data-src="' . self::h($url) . '" title="' . self::h('GoAccess: ' . $reports[$key][0]) . '"></iframe>'
+        $list = self::Listed();
+        $title = ((int) $reports[$key][2] === 0 && isset($list[$key])) ? $list[$key]['title'] : $reports[$key][0];
+        return '<iframe class="ga-frame sn-autoheight" data-src="' . self::h($url) . '" title="' . self::h('GoAccess: ' . $title) . '"></iframe>'
             . '<noscript><iframe class="ga-frame" src="' . self::h($url) . '" title="GoAccess"></iframe></noscript>'
             . '<script src="etc/lib/sentora/frame-height.js"></script>';
     }

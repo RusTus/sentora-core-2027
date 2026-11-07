@@ -70,10 +70,10 @@ class panel_update_view
             return self::t('just now');
         }
         if ($s < 5400) {
-            return (int) round($s / 60) . ' ' . self::t('minutes ago');
+            return str_replace('%d', (string) (int) round($s / 60), self::t('%d minutes ago'));
         }
         if ($s < 129600) {
-            return (int) round($s / 3600) . ' ' . self::t('hours ago');
+            return str_replace('%d', (string) (int) round($s / 3600), self::t('%d hours ago'));
         }
         return self::t('on') . ' ' . self::h(date('j M Y', (int) $t));
     }

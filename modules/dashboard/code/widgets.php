@@ -407,7 +407,7 @@ class dashboard_widgets
             }
         }
         $bar = $counted > 0 ? '<div class="dw-bar"><span style="width: ' . (int) round(100 * $done / $counted) . '%"></span></div>'
-            . '<p class="text-muted" style="margin-top: 4px;">' . $done . ' ' . self::t('of') . ' ' . $counted . ' ' . self::t('steps done') . ' &middot; <span class="dw-tip" style="display:inline-block">i</span> ' . self::t('tips') . '</p>' : '';
+            . '<p class="text-muted" style="margin-top: 4px;">' . str_replace(array('%done%', '%total%'), array((string) $done, (string) $counted), self::h(self::t('%done% of %total% steps done'))) . ' &middot; <span class="dw-tip" style="display:inline-block">i</span> ' . self::t('tips') . '</p>' : '';
         return $bar . '<ol class="dw-steps">' . $items . '</ol>';
     }
 
@@ -587,7 +587,7 @@ class dashboard_widgets
         $out .= '<table class="dw-usage" style="margin-top: 6px;"><tr><th></th><th>' . self::t('Spam') . '</th><th>' . self::t('Viruses') . '</th><th>' . self::t('Refused') . '</th></tr>'
             . '<tr><th>' . self::t('Today') . '</th><td>' . number_format((int) $t[1]) . '</td><td>' . number_format((int) $t[2]) . '</td><td>' . number_format((int) $t[3]) . '</td></tr>'
             . '<tr><th>' . self::t('Last 7 days') . '</th><td>' . number_format((int) $w[1]) . '</td><td>' . number_format((int) $w[2]) . '</td><td>' . number_format((int) $w[3]) . '</td></tr></table>'
-            . '<p class="text-muted" style="margin: 4px 0 8px;">' . self::h($admin ? self::t('All mail on this server') . ', ' . number_format((int) $w[0]) . ' ' . self::t('checked in 7 days') : self::t('For your mailboxes')) . '</p>';
+            . '<p class="text-muted" style="margin: 4px 0 8px;">' . ($admin ? str_replace('%s', number_format((int) $w[0]), self::h(self::t('All mail on this server, %s checked in 7 days'))) : self::h(self::t('For your mailboxes'))) . '</p>';
         // the latest few events (the whole server for administrators, else the account's own)
         $q = $zdbh->prepare("SELECT * FROM x_spamav_events" . ($admin ? '' : ' WHERE ev_acc_fk = :a') . " ORDER BY ev_ts DESC, ev_id_pk DESC LIMIT 5");
         $q->execute($admin ? array() : array(':a' => $acc));
@@ -596,7 +596,7 @@ class dashboard_widgets
             $out .= '<ul class="dw-list" style="list-style: none; padding-left: 0;">';
             foreach ($rows as $r) {
                 $what = ($r['ev_kind_vc'] === 'virus') ? ui_status::Bad('Virus') . ' ' . self::h($r['ev_detail_vc']) : ui_status::Warn('Spam') . ' ' . self::t('Spam') . ($r['ev_score_vc'] !== '' ? ', ' . self::t('score') . ' ' . self::h($r['ev_score_vc']) : '');
-                $out .= '<li style="margin-bottom: 4px;">' . $what . ' <span class="text-muted">' . self::t('to') . ' ' . self::h($r['ev_mailbox_vc']) . ', ' . self::h(date('M j H:i', (int) $r['ev_ts'])) . '</span></li>';
+                $out .= '<li style="margin-bottom: 4px;">' . $what . ' <span class="text-muted">' . str_replace('%s', self::h($r['ev_mailbox_vc']), self::h(self::t('to %s'))) . ', ' . self::h(date('M j H:i', (int) $r['ev_ts'])) . '</span></li>';
             }
             $out .= '</ul>';
         } else {

@@ -24,13 +24,22 @@ session_start();
 $uid = isset($_SESSION['zpuid']) ? (int) $_SESSION['zpuid'] : 0;
 $user = ($uid > 0) ? ctrl_users::GetUserDetail($uid) : false;
 session_write_close();
+// messages in the account's language (this runs without the panel's request controller,
+// where ui_language::translate() would always give English)
+if ($user) {
+    $apstLang = $zdbh->prepare('SELECT ud_language_vc FROM x_profiles WHERE ud_user_fk = :uid');
+    $apstLang->execute(array(':uid' => (int) $user['userid']));
+    $apstLang = (string) $apstLang->fetchColumn();
+    $apstOk = preg_match('/^[a-z]{2}$/', $apstLang) && in_array($apstLang, ui_language::Languages(), true);
+    ui_language::$LangCol = 'tr_' . ($apstOk ? $apstLang : 'en') . '_tx';
+}
 
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 header('X-Content-Type-Options: nosniff');
 if (!$user || (int) $user['usergroupid'] !== 1) {
     http_response_code(403);
-    exit('{"error":"Administrators only."}');
+    exit(json_encode(array('error' => ui_language::translate('Administrators only.'))));
 }
 
 /**
@@ -53,7 +62,7 @@ function apst_fetch($query)
 list($codeAuto, $auto) = apst_fetch('?auto');
 if ($codeAuto !== 200 || strpos($auto, 'Total Accesses') === false) {
     http_response_code(502);
-    exit(json_encode(array('error' => "Apache's status page did not answer (HTTP " . $codeAuto . '). It needs mod_status with ExtendedStatus On, reachable at http://127.0.0.1/server-status.')));
+    exit(json_encode(array('error' => str_replace('%s', (string) $codeAuto, ui_language::translate("Apache's status page did not answer (HTTP %s). It needs mod_status with ExtendedStatus On, reachable at http://127.0.0.1/server-status.")))));
 }
 list($codeHtml, $html) = apst_fetch('');
 $out = apst_status($auto, $codeHtml === 200 ? $html : '');

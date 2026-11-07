@@ -5,7 +5,17 @@
         <div class="zmodule_desc" id="zmodule_desc_<@ ModuleName @>"><@ ModuleDesc @></div>
     </div>
     <link rel="stylesheet" href="<@ Assets @>monitor.css">
-    <div class="sm" id="sm" data-url="modules/server_monitor/code/stats.php">
+    <div class="sm" id="sm" data-url="modules/server_monitor/code/stats.php"
+         data-t-now="<: now :>" data-t-user="<: user :>" data-t-system="<: system :>" data-t-iowait="<: I/O wait :>"
+         data-t-core="<: 1 core :>" data-t-cores="<: %d cores :>" data-t-of="<: %s of %s :>" data-t-cache="<: cache %s :>"
+         data-t-none="<: none :>" data-t-noswap="<: no swap set up :>" data-t-read="<: read %s :>" data-t-write="<: write %s :>"
+         data-t-up="<: up %s :>" data-t-procs="<: %d processes :>" data-t-running="<: %d running :>"
+         data-t-s-user="<: User :>" data-t-s-system="<: System :>" data-t-s-iowait="<: I/O wait :>" data-t-s-steal="<: Steal :>"
+         data-t-s-used="<: Used :>" data-t-s-cache="<: Cache and buffers :>" data-t-s-swap="<: Swap used :>"
+         data-t-s-received="<: Received :>" data-t-s-sent="<: Sent :>" data-t-s-read="<: Read :>" data-t-s-write="<: Write :>"
+         data-t-s-load="<: Load (1 min) :>" data-t-corename="<: Core %s :>" data-t-free="<: %s free :>" data-t-nodisks="<: No disks found. :>"
+         data-t-stopped="<: stopped :>" data-t-kernel="<: kernel %s :>" data-t-error="<: Could not read the server figures (%s). Retrying… :>"
+         data-t-pause="<: Pause :>" data-t-resume="<: Resume :>">
         <div class="sm-error" id="sm-error"></div>
         <div class="sm-head">
             <div><div class="sm-host" id="sm-hostname">&nbsp;</div><div class="sm-sub" id="sm-sysinfo">&nbsp;</div><div class="sm-sub" id="sm-uptime">&nbsp;</div></div>

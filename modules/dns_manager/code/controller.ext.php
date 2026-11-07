@@ -270,10 +270,10 @@ class module_controller extends ctrl_module
     static function TtlText($s)
     {
         $s = (int) $s;
-        foreach (array(array(604800, 'week', 'weeks'), array(86400, 'day', 'days'), array(3600, 'hour', 'hours'), array(60, 'minute', 'minutes')) as $u) {
+        foreach (array(array(604800, '1 week', '%d weeks'), array(86400, '1 day', '%d days'), array(3600, '1 hour', '%d hours'), array(60, '1 minute', '%d minutes')) as $u) {
             if ($s >= $u[0] && $s % $u[0] === 0) {
                 $n = $s / $u[0];
-                return $n . ' ' . ui_language::translate($n === 1 ? $u[1] : $u[2]);
+                return str_replace('%d', (string) $n, ui_language::translate($n === 1 ? $u[1] : $u[2]));
             }
         }
         return $s . ' s';
@@ -1360,9 +1360,9 @@ class module_controller extends ctrl_module
     static function getResult()
     {
         if (!fs_director::CheckForEmptyValue(self::$ResultOk)) {
-            return ui_sysmessage::shout(ui_language::translate(self::$ResultOk), 'zannouncesuccess', 'SUCCESS DNS SAVED');
+            return ui_sysmessage::shout(self::t(self::$ResultOk), 'zannouncesuccess', self::t('SUCCESS DNS SAVED'));
         } elseif (!fs_director::CheckForEmptyValue(self::$ResultErr)) {
-            return ui_sysmessage::shout(ui_language::translate(self::$ResultErr), 'zannounceerror', 'ERROR DNS NOT SAVED');
+            return ui_sysmessage::shout(self::t(self::$ResultErr), 'zannounceerror', self::t('ERROR DNS NOT SAVED'));
         }
         return;
     }

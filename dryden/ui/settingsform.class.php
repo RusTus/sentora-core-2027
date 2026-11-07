@@ -11,6 +11,8 @@
  *     'options' => array(value => label) (select), 'min' / 'max' / 'unit' (number),
  *     'pattern' => PCRE a text must match, 'pattern_help' => what it must look like, 'empty' => true when it may be empty).
  * Editable settings of the module that the spec does not list are shown too, under "Other".
+ * Tab titles, labels, help texts, option labels and units are English and translated when shown
+ * (labels and help texts from x_settings too, at display only); stored values never are.
  *
  * @package Sentora
  * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
@@ -69,7 +71,7 @@ class ui_settingsform
             $opts = ctrl_options::CheckForPredefinedOptions($r['so_defvalues_tx']) ? explode('|', (string) $r['so_defvalues_tx']) : array();
             $bool = $opts && count(array_diff(array_map('strtolower', $opts), array('true', 'false'))) === 0;
             $out[$name] = array('section' => 'Other', 'label' => $r['so_cleanname_vc'], 'help' => $r['so_desc_tx'], 'value' => (string) $r['so_value_tx'],
-                'type' => $bool ? 'switch' : ($opts ? 'select' : 'text'), 'options' => $opts ? array_combine($opts, $opts) : array(), 'empty' => true);
+                'type' => $bool ? 'switch' : ($opts ? 'select' : 'text'), 'options' => $opts ? array_combine($opts, $opts) : array(), 'raw_options' => true, 'empty' => true);
         }
         return $out;
     }
@@ -135,7 +137,7 @@ class ui_settingsform
             case 'select':
                 $ctl = '<select class="form-control" name="' . $n . '" id="' . $id . '">';
                 foreach ($f['options'] as $val => $label) {
-                    $ctl .= '<option value="' . self::h($val) . '"' . ((string) $val === $v ? ' selected' : '') . '>' . self::t($label) . '</option>';
+                    $ctl .= '<option value="' . self::h($val) . '"' . ((string) $val === $v ? ' selected' : '') . '>' . (empty($f['raw_options']) ? self::t($label) : self::h($label)) . '</option>';
                 }
                 $ctl .= '</select>';
                 break;
@@ -156,7 +158,22 @@ class ui_settingsform
         }
         $range = $f['type'] === 'number' && isset($f['min'], $f['max']) ? ' <span class="sf-range">' . (int) $f['min'] . '&ndash;' . (int) $f['max'] . '</span>' : '';
         return '<div class="sf-row' . (!empty($f['error']) ? ' is-bad' : '') . ($f['type'] === 'code' ? ' is-wide' : '') . '"><div class="sf-what"><label for="' . $id . '">' . self::t($f['label']) . $range . '</label>'
-            . (!empty($f['help']) ? '<small>' . self::t($f['help']) . '</small>' : '') . (!empty($f['error']) ? '<em>' . self::t($f['error']) . '</em>' : '') . '</div><div class="sf-ctl">' . $ctl . '</div></div>';
+            . (!empty($f['help']) ? '<small>' . self::t($f['help']) . '</small>' : '') . (!empty($f['error']) ? '<em>' . self::h(self::ErrorText($f)) . '</em>' : '') . '</div><div class="sf-ctl">' . $ctl . '</div></div>';
+    }
+
+    /**
+     * A setting's error, translated, with its numbers put into the %d places (not escaped).
+     *
+     * @param array<string, mixed> $f Its spec with 'error' (English) and, optionally, 'error_args' (numbers for each %d in order).
+     * @return string The translated text.
+     */
+    static function ErrorText(array $f)
+    {
+        $text = ui_language::translate((string) $f['error']);
+        foreach (isset($f['error_args']) ? (array) $f['error_args'] : array() as $a) {
+            $text = preg_replace('/%d/', (string) (int) $a, $text, 1);
+        }
+        return $text;
     }
 
     /**
@@ -187,7 +204,8 @@ class ui_settingsform
                 case 'number':
                     $v = trim($v);
                     if (!preg_match('/^-?\d{1,9}$/', $v) || (isset($f['min']) && (int) $v < $f['min']) || (isset($f['max']) && (int) $v > $f['max'])) {
-                        $err = isset($f['min'], $f['max']) ? 'Enter a whole number from ' . (int) $f['min'] . ' to ' . (int) $f['max'] . '.' : 'Enter a whole number.';
+                        $err = isset($f['min'], $f['max']) ? 'Enter a whole number from %d to %d.' : 'Enter a whole number.';
+                        $f['error_args'] = isset($f['min'], $f['max']) ? array((int) $f['min'], (int) $f['max']) : array();
                     }
                     break;
                 case 'timezone':
@@ -264,7 +282,7 @@ class ui_settingsform
             $out .= ui_sysmessage::shout(self::t('Not saved, as the value is not allowed:') . ' <b>' . implode(', ', $bad) . '</b>. ' . self::t('The reason is shown next to each.'), 'zannounceerror');
         }
         if ($saved > 0) {
-            $out .= ui_sysmessage::shout($saved . ' ' . self::t($saved === 1 ? 'setting saved.' : 'settings saved.') . ($applies !== '' ? ' ' . self::t($applies) : ''), 'zannounceok');
+            $out .= ui_sysmessage::shout(($saved === 1 ? self::t('1 setting saved.') : str_replace('%d', (string) (int) $saved, self::t('%d settings saved.'))) . ($applies !== '' ? ' ' . self::t($applies) : ''), 'zannounceok');
         } elseif (!$bad) {
             $out .= ui_sysmessage::shout(self::t('Nothing was changed.'), 'zannounceinfo');
         }

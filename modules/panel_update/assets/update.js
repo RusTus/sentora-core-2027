@@ -9,7 +9,7 @@
         each(root.querySelectorAll('.pu-cmd[data-copy]'), function (c) {
             if (c.getAttribute('data-bound')) { return; }
             c.setAttribute('data-bound', '1');
-            c.setAttribute('title', 'Copy');
+            c.setAttribute('title', (pu && pu.getAttribute('data-copy-label')) || 'Copy');
             c.addEventListener('click', function () {
                 var t = c.getAttribute('data-copy');
                 var done = function () { c.classList.add('copied'); setTimeout(function () { c.classList.remove('copied'); }, 1200); };
