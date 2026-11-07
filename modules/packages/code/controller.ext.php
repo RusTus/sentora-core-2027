@@ -979,7 +979,7 @@ class module_controller extends ctrl_module
             }
             $out[$k] = $l[4] ? round((float) $raw * (($f[$l[1] . 'Unit'] ?? 'MB') === 'GB' ? 1000 : 1), 3) : (int) $raw;
             if ($l[4] && $out[$k] <= 0) {
-                self::$limiterror = ui_language::translate($l[0]) . ': ' . ui_language::translate('a size of 0 means no limit; tick No limit for that.');
+                self::$limiterror = ui_language::translate($l[0]) . ': ' . ui_language::translate('a size must be more than 0; to allow any size, tick No limit.');
                 return false;
             }
         }
