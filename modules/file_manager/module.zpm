@@ -1,14 +1,56 @@
 <div class="zmodule_content panel" id="zmodule_header_<@ ModuleName @>">
     <div class="panel-heading">
         <img src="<@ ModuleIcon @>" width="35" height="35" border="0" alt="<@ ModuleName @>">
-        <div class="zmodule_title">
-            <@ ModuleName @>
-        </div>
-        <div class="zmodule_desc" id="zmodule_desc_<@ ModuleName @>"><@ ModuleDesc @></div>
+        <div class="zmodule_title"><@ ModuleName @></div>
+        <div class="zmodule_desc" id="zmodule_desc_<@ ModuleName @>"><: Your files in the browser: upload, download, edit, move, copy and unzip, in your own hosting folder. :></div>
     </div>
-    <div class="zgrid_wrapper">
-        <p><: Your hosting folder :>: <strong><@ HostingFolder @></strong>
-            &nbsp; <a href="modules/file_manager/app/index.php" target="_blank" rel="noopener"><: Open in a new window :></a></p>
-        <iframe src="modules/file_manager/app/index.php" title="<: File Manager :>" style="width: 100%; height: 720px; border: 1px solid var(--sn-line, #ddd);"></iframe>
+    <style>
+    .fm { background: var(--sn-soft, #f4f6f9); border-radius: 8px; padding: 14px; margin-top: 10px; color: var(--sn-ink, #1f2933); }
+    .fm * { box-sizing: border-box; }
+    .fm-bar-top { display: flex; align-items: center; gap: 10px 22px; flex-wrap: wrap; padding: 10px 14px; margin-bottom: 12px; background: var(--sn-card, #fff); border-radius: 6px; box-shadow: 0 1px 3px rgba(20,30,40,0.08); font-size: 13px; }
+    .fm-item { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+    .fm-item > span:first-child { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; color: var(--sn-muted, #6b7785); }
+    .fm-path { display: flex; align-items: center; gap: 6px; min-width: 0; }
+    .fm-path code { font-size: 13px; font-weight: 700; background: none; border: 0; padding: 0; color: var(--sn-ink, #1f2933); overflow-wrap: anywhere; }
+    .fm-copy.done { background: #2db87d !important; border-color: #2db87d !important; color: #fff !important; }
+    .fm-v small { color: var(--sn-muted, #6b7785); }
+    .fm-bar { display: block; width: 140px; height: 5px; border-radius: 3px; background: var(--sn-line, #e6e9ee); overflow: hidden; margin-top: 3px; }
+    .fm-bar i { display: block; height: 100%; background: var(--sn-accent, #447fb3); }
+    .fm-bar.high i { background: var(--sn-warn, #a86b00); } .fm-bar.full i { background: var(--sn-bad, #c62f2b); }
+    .fm-tip { color: var(--sn-muted, #6b7785); font-size: 12px; }
+    .fm-open { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; }
+    .fm-ico { width: 16px; height: 16px; flex: none; }
+    .fm-frame { display: block; width: 100%; height: calc(100vh - 230px); min-height: 520px; border: 1px solid var(--sn-line, #e6e9ee); border-radius: 6px; background: var(--sn-card, #fff); }
+    @media (max-width: 760px) { .fm { padding: 8px; } .fm-open { margin-left: 0; width: 100%; justify-content: center; } .fm-frame { height: 75vh; } }
+    </style>
+    <div class="fm" id="fm">
+        <div class="fm-bar-top">
+            <div class="fm-item"><span><: Your folder :></span><div class="fm-path"><code data-copy="<@ HostingFolder @>"><@ HostingFolder @></code>
+                <button type="button" class="btn btn-default btn-xs fm-copy" data-done="<: Copied :>"><: Copy :></button></div></div>
+            <div class="fm-item"><span><: Disk space :></span><@ DiskUse @></div>
+            <div class="fm-item"><span><: Largest upload :></span><span><@ UploadLimit @></span></div>
+            <span class="fm-tip"><: Websites are in public_html. :><% if FtpOn %> <: For many or large files, use :> <a href="./?module=ftp_management"><: an FTP account :></a>.<% endif %></span>
+            <a class="btn btn-default btn-sm fm-open" id="fm-open" href="modules/file_manager/app/index.php" target="_blank" rel="noopener"><svg class="fm-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6"/><path d="M20 4 10 14"/><path d="M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/></svg><: Open in a new window :></a>
+        </div>
+        <iframe class="fm-frame" id="fm-frame" data-src="modules/file_manager/app/index.php" title="<: File Manager :>"></iframe>
     </div>
 </div>
+<script>
+(function () {
+    'use strict';
+    var fm = document.getElementById('fm'); if (!fm) { return; }
+    // the file manager takes the panel's look: dark when the panel's background is dark (Auto included)
+    var bg = getComputedStyle(document.body).backgroundColor.match(/\d+/g) || [255, 255, 255];
+    var dark = (0.299 * bg[0] + 0.587 * bg[1] + 0.114 * bg[2]) < 128;
+    document.cookie = 'sn_fm_theme=' + (dark ? 'dark' : 'light') + '; path=/; SameSite=Lax';
+    var frame = document.getElementById('fm-frame'); frame.src = frame.getAttribute('data-src');
+    var b = fm.querySelector('.fm-copy');
+    b.addEventListener('click', function () {
+        var text = fm.querySelector('[data-copy]').getAttribute('data-copy');
+        var done = function () { var o = b.textContent; b.textContent = b.getAttribute('data-done'); b.classList.add('done'); setTimeout(function () { b.textContent = o; b.classList.remove('done'); }, 1500); };
+        if (navigator.clipboard && window.isSecureContext) { navigator.clipboard.writeText(text).then(done, function () {}); return; }
+        var ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select();
+        try { document.execCommand('copy'); done(); } catch (e) {} document.body.removeChild(ta);
+    });
+})();
+</script>

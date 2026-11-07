@@ -1,0 +1,58 @@
+/* Sentora File Manager: the panel's look on Tiny File Manager (loaded after its own styles).
+   Light and dark follow the panel (config.php, data-bs-theme); these are the panel's colours. */
+:root, [data-bs-theme=light] {
+    --bs-body-font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    --bs-body-bg: #f4f6f9; --bs-body-color: #1f2933; --bs-secondary-color: #6b7785;
+    --bs-tertiary-bg: #ffffff; --bs-border-color: #e6e9ee; --bs-link-color: #447fb3; --bs-link-color-rgb: 68, 127, 179;
+    --bs-link-hover-color: #3a6d9a; --bs-primary: #447fb3; --bs-primary-rgb: 68, 127, 179; --bs-border-radius: 6px;
+    --sn-card: #ffffff; --sn-hover: #f4f6f9; --sn-accent: #447fb3; --sn-accent-soft: #e3edf6;
+}
+[data-bs-theme=dark] {
+    --bs-body-bg: #12171d; --bs-body-color: #e6e9ee; --bs-secondary-color: #9aa5b1;
+    --bs-tertiary-bg: #171d24; --bs-border-color: #2c3540; --bs-link-color: #5b97cc; --bs-link-color-rgb: 91, 151, 204;
+    --bs-link-hover-color: #7aaedb; --bs-primary: #5b97cc; --bs-primary-rgb: 91, 151, 204;
+    --sn-card: #1b222b; --sn-hover: #232c36; --sn-accent: #5b97cc; --sn-accent-soft: rgba(91, 151, 204, 0.16);
+}
+body { font-family: var(--bs-body-font-family); font-size: 14px; background: var(--bs-body-bg) !important; color: var(--bs-body-color); }
+.main-nav.navbar { background: var(--sn-card) !important; border-bottom: 1px solid var(--bs-border-color); box-shadow: 0 1px 3px rgba(20, 30, 40, 0.06); }
+.main-nav .breadcrumb, .main-nav .navbar-brand, .main-nav a { color: var(--bs-body-color); }
+.main-nav .nav-link { border-radius: 6px; color: var(--bs-secondary-color) !important; }
+.main-nav .nav-link:hover { background: var(--sn-hover); color: var(--sn-accent) !important; }
+.card, .list-group-item, .dropdown-menu, .modal-content { background: var(--sn-card); border-color: var(--bs-border-color); border-radius: 6px; }
+.card { box-shadow: 0 1px 3px rgba(20, 30, 40, 0.08); }
+.table, #main-table { --bs-table-bg: var(--sn-card); --bs-table-color: var(--bs-body-color); --bs-table-border-color: var(--bs-border-color); --bs-table-hover-bg: var(--sn-hover); --bs-table-striped-bg: var(--sn-hover); }
+#main-table { border-radius: 6px; overflow: hidden; box-shadow: 0 1px 3px rgba(20, 30, 40, 0.08); }
+#main-table thead th { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; color: var(--bs-secondary-color); background: var(--sn-card); border-bottom-width: 1px; }
+#main-table td, #main-table th { border-left: 0; border-right: 0; vertical-align: middle; }
+#main-table tbody tr:hover td { background: var(--sn-hover); }
+#main-table a { color: var(--bs-body-color); text-decoration: none; }
+#main-table a:hover { color: var(--sn-accent); }
+#main-table .fa-folder-o, #main-table .fa-folder { color: var(--sn-accent); }
+.btn-primary, .btn-outline-primary:hover { background: var(--sn-accent); border-color: var(--sn-accent); color: #fff; }
+.btn-outline-primary { color: var(--sn-accent); border-color: var(--sn-accent); }
+.btn { border-radius: 6px; }
+.form-control, .form-select { border-radius: 6px; border-color: var(--bs-border-color); }
+.form-control:focus, .form-select:focus { border-color: var(--sn-accent); box-shadow: 0 0 0 3px var(--sn-accent-soft); }
+.badge.bg-primary, .bg-primary { background-color: var(--sn-accent) !important; }
+.dropzone { border: 2px dashed var(--bs-border-color); border-radius: 8px; background: var(--sn-card); }
+.message.alert, .alert { border-radius: 6px; }
+
+/* Tiny File Manager's own dark colours (tan links, lime buttons, a gradient) replaced by the panel's */
+:root, [data-bs-theme=light] { --bg-color: #447fb3; }
+[data-bs-theme=dark] { --bg-color: #5b97cc; --bs-dark-rgb: 18, 23, 29 !important; }
+body.theme-dark { background: var(--bs-body-bg) !important; background-image: none !important; color: var(--bs-body-color); }
+#main-table .filename a, #main-table td a { color: var(--bs-body-color); }
+#main-table .filename a:hover, #main-table td a:hover { color: var(--sn-accent); }
+.inline-actions > a > i, .theme-dark .inline-actions > a > i { background: var(--sn-accent-soft); color: var(--sn-accent); padding: 4px 5px; border-radius: 4px; }
+.inline-actions > a:hover > i { background: var(--sn-accent); color: #fff; }
+.btn-outline-primary, .theme-dark .btn-outline-primary { color: var(--sn-accent); border-color: var(--sn-accent); }
+.btn-outline-primary:hover, .theme-dark .btn-outline-primary:hover, .theme-dark .btn-outline-primary:active { background: var(--sn-accent-soft); color: var(--sn-accent); border-color: var(--sn-accent); }
+.theme-dark input.form-control, .theme-dark .form-control, .theme-dark .form-select { background-color: var(--sn-card); color: var(--bs-body-color); border-color: var(--bs-border-color); }
+.list-group .list-group-item, .theme-dark .list-group .list-group-item { background: var(--sn-card); color: var(--bs-body-color); }
+.message, .theme-dark .message { background-color: var(--sn-card); }
+form.dropzone, .theme-dark form.dropzone { border-color: var(--bs-border-color); }
+.theme-dark .text-white { color: var(--bs-body-color) !important; }
+.theme-dark .table-bordered td, .table-bordered th { border-color: var(--bs-border-color); }
+.theme-dark .navbar-nav i, .navbar-nav .dropdown-toggle, .break-word { color: var(--bs-body-color); }
+/* Settings are fixed on this server (index.php refuses them): no link to a page that only says so */
+a[href*="settings=1"] { display: none !important; }
