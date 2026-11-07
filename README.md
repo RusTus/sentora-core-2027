@@ -160,6 +160,39 @@ It lists the backups, newest first; run it again with the newest one (`sentora-u
 
 ## Moving websites from an old Sentora server
 
+Accounts move from an old Sentora server (1.0.x or 2.0.x, on Debian, Ubuntu or CentOS) with two commands: one packs the old server, the other takes one account at a time into this one, under the same name.
+
+1. On this server, make the account the sites go into, with the same name as on the old server (Admin > Manage Clients; zadmin is there already).
+2. Copy the export command to the old server and run it there, as root. It only reads: nothing on the old server changes.
+
+   ```bash
+   scp /etc/sentora/panel/bin/sentora-migrate-export root@<old server>:/root/
+   ```
+
+   ```bash
+   bash /root/sentora-migrate-export
+   ```
+
+   It writes `/root/sentora-export-<server>-<date>/`: the panel's databases, every account's databases, folders and mail, with checksums. Copy that folder here (as root on this server):
+
+   ```bash
+   rsync -a root@<old server>:/root/sentora-export-<server>-<date> /root/
+   ```
+
+3. See what it holds, then what moving an account would do (nothing changes yet):
+
+   ```bash
+   sentora-migrate-import /root/sentora-export-<server>-<date>
+   ```
+
+   ```bash
+   sentora-migrate-import /root/sentora-export-<server>-<date> zadmin
+   ```
+
+4. Move it: add `--yes` (and `--php 7.1` for sites that do not run on PHP 8 yet, after switching PHP 7.1 on in PHP Versions). It moves the account's domains, sub-domains and parked domains, website files, DNS records (those pointing to the old server get this server's IP), MySQL databases and users with their passwords (so the sites' settings keep working), FTP accounts, cron jobs, protected folders, mailboxes with their mail, aliases, forwarders and distribution lists. A name that is already taken here is skipped and reported; running it again adds only what is missing. This server's panel databases are saved in `/var/sentora/backups/pre-migrate-<date>/` first.
+5. It lists the `.htaccess` files that use FollowSymLinks (see below). Point the domains' DNS to this server and open each site.
+
+
 - **PHP 7.1** is installed switched off, only for sites that do not run on PHP 8 yet: switch it on in **Admin > Server Admin > PHP Versions**, choose it for the domain, and move the site to PHP 8 as soon as it runs. It gets no security fixes.
 - **Error 500 after a move?** Old sites often have `Options +FollowSymLinks` in their `.htaccess`. This server does not allow it (it would let one website read another website's files), so Apache answers the site with error 500, and the site's error log says `Option FollowSymLinks not allowed here`. To move such a site:
   1. In **Admin > Apache Admin**, open the domain, switch on **Allow FollowSymLinks (for moving an old site)** and save: the site works again within 5 minutes.

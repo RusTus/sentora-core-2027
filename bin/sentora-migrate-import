@@ -1,0 +1,552 @@
+#!/usr/bin/php
+<?php
+/**
+ * sentora-migrate-import (run as root on the Sentora-2027 server): take one account of an old
+ * Sentora server (1.0.x or 2.0.x) over from a folder made there by sentora-migrate-export.
+ *
+ *   sentora-migrate-import <export folder>                                  what it holds
+ *   sentora-migrate-import <export folder> <old account> [<new account>]       what would be done (nothing changes)
+ *   sentora-migrate-import <export folder> <old account> [<new account>] --yes do it
+ *     (without <new account>, the account of the same name here: clients keep their names)
+ *     --php <version>   the domains' PHP version (for example 7.1 for old sites; default: the server's own)
+ *     --keep-ip         leave DNS records that point to the old server's IP address as they are
+ *     --overwrite       replace website files that are already there (default: keep them)
+ *
+ * The new account must exist (Admin > Manage Clients, or zadmin itself). Moved for it: its domains,
+ * sub-domains and parked domains, their website files, DNS records, MySQL databases and users (with
+ * their passwords, so the sites' settings keep working), FTP accounts, cron jobs, protected folders,
+ * mailboxes (with their mail), aliases, forwarders and distribution lists. A name that is already
+ * taken on this server is skipped and reported. Before anything is changed, the panel's databases
+ * are saved in /var/sentora/backups/pre-migrate-<date>/. Log: /var/sentora/logs/migrate-import.log
+ *
+ * @package Sentora
+ * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
+ */
+$rootPath = str_replace('/bin', '/', str_replace("\\", '/', dirname(__FILE__)));
+chdir($rootPath);
+require_once 'dryden/loader.inc.php';
+require_once 'cnf/db.php';
+require_once 'inc/dbc.inc.php';
+if (!runtime_controller::IsCLI()) {
+    exit(1);
+}
+if (!function_exists('posix_geteuid') || posix_geteuid() !== 0) {
+    fwrite(STDERR, "Run this as root.\n");
+    exit(1);
+}
+
+/** @var array<int, string> $args The positional arguments. */
+$args = array();
+$opt = array('yes' => false, 'php' => '', 'keep-ip' => false, 'overwrite' => false);
+for ($i = 1; $i < $argc; $i++) {
+    $a = $argv[$i];
+    if ($a === '--yes') { $opt['yes'] = true; }
+    elseif ($a === '--keep-ip') { $opt['keep-ip'] = true; }
+    elseif ($a === '--overwrite') { $opt['overwrite'] = true; }
+    elseif ($a === '--php') { $opt['php'] = (string) ($argv[++$i] ?? ''); }
+    elseif ($a === '-h' || $a === '--help') { $args = array(); break; }
+    elseif (strncmp($a, '--', 2) === 0) { fwrite(STDERR, "Unknown option $a\n"); exit(2); }
+    else { $args[] = $a; }
+}
+if (!$args) {
+    $lines = file(__FILE__);
+    foreach (array_slice($lines, 3, 17) as $l) {
+        echo preg_replace('/^ \* ?/', '', rtrim($l)), "\n";
+    }
+    exit(2);
+}
+
+$LOG = '/var/sentora/logs/migrate-import.log';
+@touch($LOG);
+@chmod($LOG, 0640);
+$WARN = 0;
+function say($s) { global $LOG; echo $s, "\n"; @file_put_contents($LOG, date('Y-m-d H:i:s') . '  ' . $s . "\n", FILE_APPEND); }
+function warn($s) { global $WARN; $WARN++; say('  WARNING: ' . $s); }
+function stop($s) { say('STOPPED: ' . $s); cleanup(); exit(1); }
+function sh($cmd, &$out = null) { exec($cmd . ' 2>&1', $o, $rc); $out = implode("\n", $o); return $rc === 0; }
+function q($s) { return escapeshellarg((string) $s); }
+
+// --- the export folder ------------------------------------------------------------------------------
+$EXP = rtrim(realpath($args[0]) ?: '', '/');
+if ($EXP === '' || !is_file($EXP . '/manifest.txt')) {
+    fwrite(STDERR, "$args[0] is not a folder made by sentora-migrate-export (it has no manifest.txt).\n");
+    exit(1);
+}
+$M = array('accounts' => array());
+foreach (file($EXP . '/manifest.txt', FILE_IGNORE_NEW_LINES) as $l) {
+    if (strpos($l, 'account=') === 0) {
+        $M['accounts'][] = substr($l, 8);
+    } elseif (strpos($l, '=') !== false) {
+        list($k, $v) = explode('=', $l, 2);
+        $M[$k] = $v;
+    }
+}
+if (($M['format'] ?? '') !== 'sentora-migrate-1') {
+    fwrite(STDERR, "This export's format is not one this panel reads (format=" . ($M['format'] ?? '?') . ").\n");
+    exit(1);
+}
+if (count($args) < 2) {
+    echo "Export of " . $M['server'] . " (Sentora " . $M['sentora'] . "), made " . $M['made'] . "\n";
+    echo "Panel address there: " . $M['panel_domain'] . ", IP " . $M['server_ip'] . ", PHP " . $M['php'] . ", MySQL " . $M['mysql'] . "\n\nAccounts:\n";
+    foreach ($M['accounts'] as $a) {
+        echo "  $a\n";
+    }
+    echo "\nTo see what moving one would do (nothing changes):\n    sentora-migrate-import $args[0] <old account>\n";
+    exit(0);
+}
+$OLDU = $args[1];
+$NEWU = $args[2] ?? $args[1];
+$APPLY = $opt['yes'];
+foreach (array($OLDU, $NEWU) as $u) {
+    if (!preg_match('/^[A-Za-z0-9_-]{1,64}$/', $u)) {
+        fwrite(STDERR, "'$u' is not an account name.\n");
+        exit(2);
+    }
+}
+
+// the checksums of the copy
+if (is_file($EXP . '/SHA256SUMS')) {
+    if (!sh('cd ' . q($EXP) . ' && sha256sum --quiet -c SHA256SUMS', $o)) {
+        fwrite(STDERR, "The export does not match its checksums (copied incompletely?):\n$o\n");
+        exit(1);
+    }
+}
+
+// --- this server -------------------------------------------------------------------------------------
+global $zdbh;
+$q = $zdbh->prepare("SELECT ac_id_pk FROM x_accounts WHERE ac_user_vc = :u AND ac_deleted_ts IS NULL");
+$q->execute(array(':u' => $NEWU));
+$NEWID = (int) $q->fetchColumn();
+if (!$NEWID) {
+    fwrite(STDERR, "The account $NEWU does not exist on this server: make it first (Admin > Manage Clients), then run this again.\n");
+    exit(1);
+}
+$HOSTED = rtrim((string) ctrl_options::GetSystemOption('hosted_dir'), '/') . '/';
+$NEWHOME = $HOSTED . $NEWU;
+$OLDHOME = rtrim($M['hostdata'] ?: '/var/sentora/hostdata', '/') . '/' . $OLDU;
+$NEWIP = (string) ctrl_options::GetSystemOption('server_ip');
+$OLDIP = (string) ($M['server_ip'] ?? '');
+$PANELDOMAIN = strtolower((string) ctrl_options::GetSystemOption('sentora_domain'));
+$FTPDB = (string) ctrl_options::GetSystemOption('ftp_db') ?: 'sentora_proftpd';
+$PHPV = $opt['php'];
+if ($PHPV !== '' && !is_dir('/opt/sentora-php/' . $PHPV) && $PHPV !== sys_phpversions::DefaultVersion()) {
+    fwrite(STDERR, "PHP $PHPV is not installed here (sentora-php-install $PHPV adds it).\n");
+    exit(1);
+}
+
+// MySQL as the panel's root user, from an option file
+include 'cnf/db.php';
+$MYCNF = tempnam('/root', '.migrate-my');
+chmod($MYCNF, 0600);
+file_put_contents($MYCNF, "[client]\nuser=$user\npassword=\"$pass\"\nhost=$host\n");
+$STAMP = date('Ymd-His');
+$TMPDB = 'sentora_migrate_' . preg_replace('/\D/', '', $STAMP);
+$STAGE = '/var/sentora/migrate-stage/' . $STAMP;
+function cleanup()
+{
+    global $MYCNF, $TMPDB, $zdbh, $STAGE;
+    static $done = false;
+    if ($done) {
+        return;
+    }
+    $done = true;
+    foreach (array('', '_mail', '_ftp') as $sfx) {
+        try { $zdbh->exec("DROP DATABASE IF EXISTS `" . $TMPDB . $sfx . "`"); } catch (Exception $e) { }
+    }
+    if ($STAGE && is_dir($STAGE)) {
+        sh('rm -rf ' . q($STAGE));
+    }
+    @unlink($MYCNF);
+}
+// also after an error: the old panel's copy and the unpacked files never stay behind
+register_shutdown_function('cleanup');
+function load_dump($file, $db)
+{
+    global $MYCNF;
+    // old dumps can hold zero dates and other values MySQL 8.4 refuses by default
+    return sh('gunzip -c ' . q($file) . ' | mysql --defaults-extra-file=' . q($MYCNF) . ' --init-command="SET SESSION sql_mode=\'\', foreign_key_checks=0" ' . q($db), $o) ? true : $o;
+}
+
+say(($APPLY ? 'Moving' : 'What moving would do (nothing changes until --yes):') . " $OLDU from " . $M['server'] . " (Sentora " . $M['sentora'] . ") into $NEWU here");
+
+// --- the old panel's databases, loaded beside this one to read from --------------------------------
+$panelDump = $EXP . '/db/panel/' . ($M['panel_db'] ?: 'sentora_core') . '.sql.gz';
+$mailDump = glob($EXP . '/db/panel/{sentora,zpanel}_postfix.sql.gz', GLOB_BRACE);
+$ftpDump = glob($EXP . '/db/panel/{sentora,zpanel}_proftpd.sql.gz', GLOB_BRACE);
+$zdbh->exec("CREATE DATABASE `$TMPDB`");
+if (($r = load_dump($panelDump, $TMPDB)) !== true) {
+    stop("the old panel's database did not load: " . substr((string) $r, 0, 300));
+}
+$HAVE_MAILDB = false;
+if ($mailDump) {
+    $zdbh->exec("CREATE DATABASE `{$TMPDB}_mail`");
+    $HAVE_MAILDB = (load_dump($mailDump[0], $TMPDB . '_mail') === true);
+}
+$HAVE_FTPDB = false;
+if ($ftpDump) {
+    $zdbh->exec("CREATE DATABASE `{$TMPDB}_ftp`");
+    $HAVE_FTPDB = (load_dump($ftpDump[0], $TMPDB . '_ftp') === true);
+}
+$O = $TMPDB;
+$old = function ($sql, $params = array()) use ($zdbh) {
+    $s = $zdbh->prepare($sql);
+    $s->execute($params);
+    return $s->fetchAll(PDO::FETCH_ASSOC);
+};
+$cols = function ($db, $table) use ($zdbh) {
+    $s = $zdbh->prepare("SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = :d AND TABLE_NAME = :t");
+    $s->execute(array(':d' => $db, ':t' => $table));
+    return $s->fetchAll(PDO::FETCH_COLUMN);
+};
+$r = $old("SELECT ac_id_pk FROM `$O`.x_accounts WHERE ac_user_vc = :u AND ac_deleted_ts IS NULL", array(':u' => $OLDU));
+if (!$r) {
+    stop("the export has no account $OLDU (see: sentora-migrate-import " . $args[0] . ")");
+}
+$OLDID = (int) $r[0]['ac_id_pk'];
+$PATHFIX = function ($s) use ($OLDHOME, $NEWHOME) { return str_replace($OLDHOME . '/', $NEWHOME . '/', (string) $s); };
+
+// --- what there is, and what is already taken here ------------------------------------------------
+$taken = function ($sql, $params) use ($zdbh) { $s = $zdbh->prepare($sql); $s->execute($params); return (int) $s->fetchColumn() > 0; };
+$plan = array('domains' => array(), 'skipdomains' => array(), 'dbs' => array(), 'skipdbs' => array(), 'users' => array(), 'skipusers' => array(),
+    'ftp' => array(), 'skipftp' => array(), 'mail' => array(), 'skipmail' => array());
+$VH = $old("SELECT * FROM `$O`.x_vhosts WHERE vh_acc_fk = :a AND vh_deleted_ts IS NULL ORDER BY vh_type_in, vh_name_vc", array(':a' => $OLDID));
+foreach ($VH as $v) {
+    $n = strtolower($v['vh_name_vc']);
+    if ($n === $PANELDOMAIN || $taken("SELECT COUNT(*) FROM x_vhosts WHERE vh_name_vc = :n AND vh_deleted_ts IS NULL", array(':n' => $n))) {
+        $plan['skipdomains'][] = $n;
+    } else {
+        $plan['domains'][] = $v;
+    }
+}
+$DBS = $old("SELECT * FROM `$O`.x_mysql_databases WHERE my_acc_fk = :a AND my_deleted_ts IS NULL", array(':a' => $OLDID));
+foreach ($DBS as $d) {
+    $exists = $taken("SELECT COUNT(*) FROM information_schema.SCHEMATA WHERE SCHEMA_NAME = :n", array(':n' => $d['my_name_vc']));
+    if ($exists || !is_file($EXP . '/db/sites/' . $d['my_name_vc'] . '.sql.gz')) {
+        $plan['skipdbs'][] = $d['my_name_vc'] . ($exists ? ' (already on this server)' : ' (not in the export)');
+    } else {
+        $plan['dbs'][] = $d;
+    }
+}
+$MU = $old("SELECT * FROM `$O`.x_mysql_users WHERE mu_acc_fk = :a AND mu_deleted_ts IS NULL", array(':a' => $OLDID));
+foreach ($MU as $u) {
+    if ($taken("SELECT COUNT(*) FROM mysql.user WHERE User = :n", array(':n' => $u['mu_name_vc']))) {
+        $plan['skipusers'][] = $u['mu_name_vc'] . ' (already on this server)';
+    } else {
+        $plan['users'][] = $u;
+    }
+}
+$FT = $old("SELECT * FROM `$O`.x_ftpaccounts WHERE ft_acc_fk = :a AND ft_deleted_ts IS NULL", array(':a' => $OLDID));
+foreach ($FT as $f) {
+    if ($taken("SELECT COUNT(*) FROM `$FTPDB`.ftpuser WHERE userid = :n", array(':n' => $f['ft_user_vc']))) {
+        $plan['skipftp'][] = $f['ft_user_vc'] . ' (already on this server)';
+    } else {
+        $plan['ftp'][] = $f;
+    }
+}
+$MB = $old("SELECT * FROM `$O`.x_mailboxes WHERE mb_acc_fk = :a AND mb_deleted_ts IS NULL", array(':a' => $OLDID));
+foreach ($MB as $m) {
+    if ($taken("SELECT COUNT(*) FROM x_mailboxes WHERE mb_address_vc = :n AND mb_deleted_ts IS NULL", array(':n' => $m['mb_address_vc']))) {
+        $plan['skipmail'][] = $m['mb_address_vc'] . ' (already on this server)';
+    } else {
+        $plan['mail'][] = $m;
+    }
+}
+$counts = array();
+foreach (array('x_cronjobs' => 'ct', 'x_aliases' => 'al', 'x_forwarders' => 'fw', 'x_distlists' => 'dl', 'x_htaccess' => 'ht') as $t => $p) {
+    $counts[$t] = count($old("SELECT 1 FROM `$O`.$t WHERE {$p}_acc_fk = :a AND {$p}_deleted_ts IS NULL", array(':a' => $OLDID)));
+}
+$dnsCount = count($old("SELECT 1 FROM `$O`.x_dns WHERE dn_acc_fk = :a AND dn_deleted_ts IS NULL", array(':a' => $OLDID)));
+$filesTar = $EXP . '/files/' . $OLDU . '.tar.gz';
+
+say('');
+say('Domains (' . count($plan['domains']) . '): ' . implode(', ', array_map(function ($v) { return $v['vh_name_vc'] . ' -> public_html' . $v['vh_directory_vc']; }, $plan['domains'])));
+if ($plan['skipdomains']) { warn('skipped, already on this server (or the panel\'s own address): ' . implode(', ', $plan['skipdomains'])); }
+say('Website files: ' . (is_file($filesTar) ? 'public_html of ' . $OLDU . ' (' . round(filesize($filesTar) / 1048576) . ' MB packed), ' . ($opt['overwrite'] ? 'replacing' : 'keeping') . ' files already there' : 'NOT IN THE EXPORT'));
+say('MySQL databases (' . count($plan['dbs']) . '): ' . implode(', ', array_column($plan['dbs'], 'my_name_vc')));
+if ($plan['skipdbs']) { warn('databases skipped: ' . implode(', ', $plan['skipdbs'])); }
+say('MySQL users (' . count($plan['users']) . '): ' . implode(', ', array_column($plan['users'], 'mu_name_vc')));
+if ($plan['skipusers']) { warn('MySQL users skipped: ' . implode(', ', $plan['skipusers'])); }
+say('FTP accounts (' . count($plan['ftp']) . '): ' . implode(', ', array_column($plan['ftp'], 'ft_user_vc')));
+if ($plan['skipftp']) { warn('FTP accounts skipped: ' . implode(', ', $plan['skipftp'])); }
+say('Mailboxes (' . count($plan['mail']) . ')' . ($plan['mail'] ? ': ' . implode(', ', array_column($plan['mail'], 'mb_address_vc')) : ''));
+if ($plan['skipmail']) { warn('mailboxes skipped: ' . implode(', ', $plan['skipmail'])); }
+say('Also: ' . $dnsCount . ' DNS record(s)' . ($OLDIP !== '' && !$opt['keep-ip'] ? " (those pointing to $OLDIP get $NEWIP)" : '') . ', ' . $counts['x_cronjobs'] . ' cron job(s), '
+    . $counts['x_htaccess'] . ' protected folder(s), ' . $counts['x_aliases'] . ' alias(es), ' . $counts['x_forwarders'] . ' forwarder(s), ' . $counts['x_distlists'] . ' distribution list(s)');
+say('PHP for these domains: ' . ($PHPV !== '' ? $PHPV : 'the server\'s own (' . sys_phpversions::DefaultVersion() . ')') . '; old server: PHP ' . $M['php']);
+if ($M['php'] !== '' && version_compare($M['php'], '8.0', '<') && $PHPV === '') {
+    warn('the sites ran on PHP ' . $M['php'] . ': if they do not work on PHP 8, run this with --php 7.1 (switch PHP 7.1 on in PHP Versions first), then move them to PHP 8');
+}
+if (!$APPLY) {
+    say('');
+    say('Nothing was changed. To do it: add --yes');
+    cleanup();
+    exit(0);
+}
+
+// --- a copy of this server's panel databases first ------------------------------------------------
+$PRE = '/var/sentora/backups/pre-migrate-' . $STAMP;
+@mkdir($PRE, 0700, true);
+foreach (array('sentora_core', 'sentora_postfix', $FTPDB) as $db) {
+    if (!sh('mysqldump --defaults-extra-file=' . q($MYCNF) . ' --single-transaction --routines --triggers --databases ' . q($db) . ' | gzip -6 > ' . q("$PRE/$db.sql.gz"), $o)) {
+        stop("could not save $db first: $o");
+    }
+}
+say('');
+say("This server's panel databases are saved in $PRE");
+
+// --- domains ----------------------------------------------------------------------------------------
+sys_symlinks::EnsureColumn();
+$newCols = $cols('sentora_core', 'x_vhosts');
+$VHMAP = array();
+foreach ($plan['domains'] as $v) {
+    $row = array('vh_acc_fk' => $NEWID, 'vh_name_vc' => strtolower($v['vh_name_vc']), 'vh_directory_vc' => $v['vh_directory_vc'], 'vh_type_in' => (int) $v['vh_type_in'],
+        'vh_active_in' => 0, 'vh_obasedir_in' => (int) ($v['vh_obasedir_in'] ?? 1), 'vh_custom_tx' => $v['vh_custom_tx'] ?? null,
+        'vh_custom_port_in' => $v['vh_custom_port_in'] ?? null, 'vh_custom_ip_vc' => $v['vh_custom_ip_vc'] ?? null, 'vh_portforward_in' => $v['vh_portforward_in'] ?? null,
+        'vh_enabled_in' => (int) ($v['vh_enabled_in'] ?? 1), 'vh_created_ts' => $v['vh_created_ts'] ?: time());
+    if (in_array('vh_php_version_vc', $newCols, true)) {
+        $row['vh_php_version_vc'] = $PHPV !== '' ? $PHPV : null;
+    }
+    $row = array_intersect_key($row, array_flip($newCols));
+    $zdbh->prepare("INSERT INTO x_vhosts (" . implode(',', array_keys($row)) . ") VALUES (" . implode(',', array_fill(0, count($row), '?')) . ")")->execute(array_values($row));
+    $VHMAP[(int) $v['vh_id_pk']] = (int) $zdbh->lastInsertId();
+    if (trim((string) ($v['vh_ssl_tx'] ?? '')) !== '') {
+        warn($v['vh_name_vc'] . ': its SSL settings were not copied (the old certificate files are not here): request a certificate in Sencrypt');
+    }
+}
+say('Domains: ' . count($VHMAP) . ' added');
+
+// --- website files ------------------------------------------------------------------------------------
+if (is_file($filesTar)) {
+    @mkdir($STAGE, 0700, true);
+    if (!sh('tar -xzf ' . q($filesTar) . ' -C ' . q($STAGE) . ' --no-same-owner', $o)) {
+        warn('the website files did not unpack completely: ' . substr($o, 0, 300));
+    }
+    $src = $STAGE . '/' . $OLDU . '/public_html/';
+    if (is_dir($src)) {
+        @mkdir($NEWHOME . '/public_html', 0750, true);
+        sh('rsync -a --no-owner --no-group ' . ($opt['overwrite'] ? '' : '--ignore-existing ') . q($src) . ' ' . q($NEWHOME . '/public_html/'), $o) || warn('copying the website files: ' . substr($o, 0, 300));
+        // absolute paths to the old account's folder (protected folders' AuthUserFile, site settings)
+        if ($OLDHOME !== $NEWHOME) {
+            $n = 0;
+            $it = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($NEWHOME . '/public_html', FilesystemIterator::SKIP_DOTS));
+            foreach ($it as $f) {
+                if ($f->isFile() && !$f->isLink() && in_array($f->getFilename(), array('.htaccess', '.htpasswd', '.user.ini'), true)) {
+                    $c = (string) file_get_contents($f->getPathname());
+                    if (strpos($c, $OLDHOME . '/') !== false) {
+                        file_put_contents($f->getPathname(), $PATHFIX($c));
+                        $n++;
+                    }
+                }
+            }
+            if ($n) { say("  $n .htaccess/.htpasswd file(s): $OLDHOME changed to $NEWHOME"); }
+        }
+        say('Website files: copied to ' . $NEWHOME . '/public_html');
+    } else {
+        warn('the export has no public_html for ' . $OLDU);
+    }
+}
+
+// --- DNS ----------------------------------------------------------------------------------------------
+$n = 0;
+$touched = array();
+foreach ($old("SELECT * FROM `$O`.x_dns WHERE dn_acc_fk = :a AND dn_deleted_ts IS NULL", array(':a' => $OLDID)) as $d) {
+    if (!isset($VHMAP[(int) $d['dn_vhost_fk']])) { continue; }
+    $target = $d['dn_target_vc'];
+    if (!$opt['keep-ip'] && $OLDIP !== '' && $target === $OLDIP && $NEWIP !== '') { $target = $NEWIP; }
+    $zdbh->prepare("INSERT INTO x_dns (dn_acc_fk, dn_name_vc, dn_vhost_fk, dn_type_vc, dn_host_vc, dn_ttl_in, dn_target_vc, dn_texttarget_tx, dn_priority_in, dn_weight_in, dn_port_in, dn_created_ts)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?)")->execute(array($NEWID, strtolower($d['dn_name_vc']), $VHMAP[(int) $d['dn_vhost_fk']], $d['dn_type_vc'], $d['dn_host_vc'], $d['dn_ttl_in'], $target,
+        $d['dn_texttarget_tx'], $d['dn_priority_in'], $d['dn_weight_in'], $d['dn_port_in'], $d['dn_created_ts'] ?: time()));
+    $touched[$VHMAP[(int) $d['dn_vhost_fk']]] = true;
+    $n++;
+}
+if ($touched) {
+    $list = array_filter(explode(',', (string) ctrl_options::GetSystemOption('dns_hasupdates')));
+    $list = array_unique(array_merge($list, array_map('strval', array_keys($touched))));
+    $zdbh->prepare("UPDATE x_settings SET so_value_tx = :v WHERE so_name_vc = 'dns_hasupdates'")->execute(array(':v' => implode(',', $list)));
+}
+say("DNS records: $n added");
+
+// --- MySQL databases and users ---------------------------------------------------------------------
+$DBMAP = array();
+foreach ($plan['dbs'] as $d) {
+    $name = $d['my_name_vc'];
+    $zdbh->exec("CREATE DATABASE `" . str_replace('`', '', $name) . "` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+    if (($r = load_dump($EXP . '/db/sites/' . $name . '.sql.gz', $name)) !== true) {
+        warn("the database $name did not load completely: " . substr((string) $r, 0, 300));
+    }
+    $zdbh->prepare("INSERT INTO x_mysql_databases (my_acc_fk, my_name_vc, my_usedspace_bi, my_created_ts) VALUES (?,?,0,?)")->execute(array($NEWID, $name, $d['my_created_ts'] ?: time()));
+    $DBMAP[(int) $d['my_id_pk']] = (int) $zdbh->lastInsertId();
+    say("MySQL database: $name");
+}
+$MUMAP = array();
+$newpass = array();
+foreach ($plan['users'] as $u) {
+    $name = $u['mu_name_vc'];
+    $host = $u['mu_access_vc'] ?: 'localhost';
+    $pass = (string) $u['mu_pass_vc'];
+    // old panels kept the password as it was typed; a hash (or nothing) can not be used again
+    if ($pass === '' || preg_match('/^\*[0-9A-F]{40}$/', $pass)) {
+        $pass = fs_director::GenerateRandomPassword(16, 4);
+        $newpass[] = "$name: $pass";
+    }
+    try {
+        $zdbh->prepare("CREATE USER :u@:h IDENTIFIED BY :p")->execute(array(':u' => $name, ':h' => $host, ':p' => $pass));
+        $zdbh->prepare("GRANT USAGE ON *.* TO :u@:h")->execute(array(':u' => $name, ':h' => $host));
+    } catch (Exception $e) {
+        warn("MySQL user $name was not made: " . $e->getMessage());
+        continue;
+    }
+    $zdbh->prepare("INSERT INTO x_mysql_users (mu_acc_fk, mu_name_vc, mu_database_fk, mu_pass_vc, mu_access_vc, mu_created_ts) VALUES (?,?,?,?,?,?)")
+        ->execute(array($NEWID, $name, $DBMAP[(int) $u['mu_database_fk']] ?? 0, ctrl_secret::Encrypt($pass), $host, $u['mu_created_ts'] ?: time()));
+    $MUMAP[(int) $u['mu_id_pk']] = array((int) $zdbh->lastInsertId(), $name, $host);
+}
+$g = 0;
+foreach ($old("SELECT * FROM `$O`.x_mysql_dbmap WHERE mm_acc_fk = :a", array(':a' => $OLDID)) as $m) {
+    if (!isset($MUMAP[(int) $m['mm_user_fk']], $DBMAP[(int) $m['mm_database_fk']])) { continue; }
+    list($uid, $name, $host) = $MUMAP[(int) $m['mm_user_fk']];
+    $db = $old("SELECT my_name_vc FROM x_mysql_databases WHERE my_id_pk = :i", array(':i' => $DBMAP[(int) $m['mm_database_fk']]))[0]['my_name_vc'];
+    $zdbh->exec("GRANT ALL PRIVILEGES ON `" . str_replace('`', '', $db) . "`.* TO " . $zdbh->quote($name) . "@" . $zdbh->quote($host));
+    $zdbh->prepare("INSERT INTO x_mysql_dbmap (mm_acc_fk, mm_user_fk, mm_database_fk) VALUES (?,?,?)")->execute(array($NEWID, $uid, $DBMAP[(int) $m['mm_database_fk']]));
+    $g++;
+}
+$zdbh->exec("FLUSH PRIVILEGES");
+say('MySQL users: ' . count($MUMAP) . " added, $g database permission(s)");
+
+// --- FTP ------------------------------------------------------------------------------------------------
+$owner = posix_getpwnam('web' . $NEWID);
+$n = 0;
+foreach ($plan['ftp'] as $f) {
+    $pass = (string) $f['ft_password_vc'];
+    if ($pass === '' || strncmp($pass, '$', 1) === 0) {
+        $pass = fs_director::GenerateRandomPassword(12, 3);
+        $newpass[] = 'FTP ' . $f['ft_user_vc'] . ": $pass";
+    }
+    $salt = substr(strtr(base64_encode(random_bytes(12)), '+', '.'), 0, 16);
+    $hash = crypt($pass, '$6$rounds=50000$' . $salt . '$');
+    $dir = $f['ft_directory_vc'];
+    $zdbh->prepare("INSERT INTO x_ftpaccounts (ft_acc_fk, ft_user_vc, ft_directory_vc, ft_access_vc, ft_password_vc, ft_passenc_tx, ft_created_ts) VALUES (?,?,?,?,?,?,?)")
+        ->execute(array($NEWID, $f['ft_user_vc'], $dir, $f['ft_access_vc'], $hash, ctrl_secret::Encrypt($pass), $f['ft_created_ts'] ?: time()));
+    $zdbh->prepare("INSERT INTO `$FTPDB`.ftpquotalimits (name, quota_type, per_session, limit_type, bytes_in_avail, bytes_out_avail, bytes_xfer_avail, files_in_avail, files_out_avail, files_xfer_avail)
+        VALUES (?, 'user', 'true', 'hard', 0, 0, 0, 0, 0, 0)")->execute(array($f['ft_user_vc']));
+    $zdbh->prepare("INSERT INTO `$FTPDB`.ftpuser (userid, passwd, uid, gid, homedir, shell, count, accessed, modified) VALUES (?,?,?,?,?, '/sbin/nologin', 0, now(), now())")
+        ->execute(array($f['ft_user_vc'], $hash, $owner ? $owner['uid'] : 33, $owner ? $owner['gid'] : 33, $HOSTED . $NEWU . $dir));
+    $n++;
+}
+say("FTP accounts: $n added");
+
+// --- cron jobs and protected folders -----------------------------------------------------------------
+$n = 0;
+foreach ($old("SELECT * FROM `$O`.x_cronjobs WHERE ct_acc_fk = :a AND ct_deleted_ts IS NULL", array(':a' => $OLDID)) as $c) {
+    if ($taken("SELECT COUNT(*) FROM x_cronjobs WHERE ct_acc_fk = :a AND ct_fullpath_vc = :p AND ct_timing_vc = :t AND ct_deleted_ts IS NULL",
+        array(':a' => $NEWID, ':p' => $PATHFIX($c['ct_fullpath_vc']), ':t' => $c['ct_timing_vc']))) { continue; }   // (moved before)
+    $zdbh->prepare("INSERT INTO x_cronjobs (ct_acc_fk, ct_script_vc, ct_timing_vc, ct_fullpath_vc, ct_description_tx, ct_created_ts) VALUES (?,?,?,?,?,?)")
+        ->execute(array($NEWID, $c['ct_script_vc'], $c['ct_timing_vc'], $PATHFIX($c['ct_fullpath_vc']), $c['ct_description_tx'], $c['ct_created_ts'] ?: time()));
+    $n++;
+}
+say("Cron jobs: $n added");
+$n = 0;
+foreach ($old("SELECT * FROM `$O`.x_htaccess WHERE ht_acc_fk = :a AND ht_deleted_ts IS NULL", array(':a' => $OLDID)) as $h) {
+    if ($taken("SELECT COUNT(*) FROM x_htaccess WHERE ht_acc_fk = :a AND ht_dir_vc = :d AND ht_deleted_ts IS NULL", array(':a' => $NEWID, ':d' => $PATHFIX($h['ht_dir_vc'])))) { continue; }
+    $zdbh->prepare("INSERT INTO x_htaccess (ht_acc_fk, ht_user_vc, ht_dir_vc, ht_created_ts) VALUES (?,?,?,?)")
+        ->execute(array($NEWID, $h['ht_user_vc'], $PATHFIX($h['ht_dir_vc']), $h['ht_created_ts'] ?: time()));
+    $n++;
+}
+$HTF = array();
+foreach ($old("SELECT * FROM `$O`.x_htpasswd_file WHERE x_htpasswd_sentora_user_id = :a AND x_htpasswd_file_deleted IS NULL", array(':a' => $OLDID)) as $h) {
+    if ($taken("SELECT COUNT(*) FROM x_htpasswd_file WHERE x_htpasswd_sentora_user_id = :a AND x_htpasswd_file_target = :t AND x_htpasswd_file_deleted IS NULL",
+        array(':a' => $NEWID, ':t' => $PATHFIX($h['x_htpasswd_file_target'])))) { continue; }
+    $zdbh->prepare("INSERT INTO x_htpasswd_file (x_htpasswd_file_target, x_htpasswd_file_message, x_htpasswd_file_created, x_htpasswd_sentora_user_id) VALUES (?,?,?,?)")
+        ->execute(array($PATHFIX($h['x_htpasswd_file_target']), $h['x_htpasswd_file_message'], $h['x_htpasswd_file_created'] ?: time(), $NEWID));
+    $HTF[(int) $h['x_htpasswd_file_id']] = (int) $zdbh->lastInsertId();
+    $n++;
+}
+$HTU = array();
+foreach ($old("SELECT * FROM `$O`.x_htpasswd_user WHERE x_htpasswd_sentora_user_id = :a AND x_htpasswd_user_deleted IS NULL", array(':a' => $OLDID)) as $h) {
+    $zdbh->prepare("INSERT INTO x_htpasswd_user (x_htpasswd_user_username, x_htpasswd_user_password, x_htpasswd_user_created, x_htpasswd_sentora_user_id) VALUES (?,?,?,?)")
+        ->execute(array($h['x_htpasswd_user_username'], $h['x_htpasswd_user_password'], $h['x_htpasswd_user_created'] ?: time(), $NEWID));
+    $HTU[(int) $h['x_htpasswd_user_id']] = (int) $zdbh->lastInsertId();
+}
+foreach ($old("SELECT * FROM `$O`.x_htpasswd_mapper") as $m) {
+    if (isset($HTF[(int) $m['x_htpasswd_file_id']], $HTU[(int) $m['x_htpasswd_user_id']])) {
+        $zdbh->prepare("INSERT INTO x_htpasswd_mapper (x_htpasswd_file_id, x_htpasswd_user_id) VALUES (?,?)")->execute(array($HTF[(int) $m['x_htpasswd_file_id']], $HTU[(int) $m['x_htpasswd_user_id']]));
+    }
+}
+say("Protected folders: $n added");
+
+// --- mail -----------------------------------------------------------------------------------------------
+$domains = array_map(function ($v) { return strtolower($v['vh_name_vc']); }, $plan['domains']);
+$nm = 0;
+if ($plan['mail'] || $counts['x_aliases'] || $counts['x_forwarders'] || $counts['x_distlists']) {
+    foreach ($plan['mail'] as $m) {
+        $zdbh->prepare("INSERT INTO x_mailboxes (mb_acc_fk, mb_address_vc, mb_enabled_in, mb_created_ts) VALUES (?,?,?,?)")
+            ->execute(array($NEWID, $m['mb_address_vc'], $m['mb_enabled_in'], $m['mb_created_ts'] ?: time()));
+        $nm++;
+    }
+    foreach (array('x_aliases' => array('al', 'al_address_vc, al_destination_vc'), 'x_forwarders' => array('fw', 'fw_address_vc, fw_destination_vc, fw_keepmessage_in')) as $t => $p) {
+        foreach ($old("SELECT * FROM `$O`.$t WHERE {$p[0]}_acc_fk = :a AND {$p[0]}_deleted_ts IS NULL", array(':a' => $OLDID)) as $r) {
+            if ($taken("SELECT COUNT(*) FROM $t WHERE {$p[0]}_address_vc = :x AND {$p[0]}_deleted_ts IS NULL", array(':x' => $r[$p[0] . '_address_vc']))) { continue; }
+            $fields = array_map('trim', explode(',', $p[1]));
+            $vals = array_map(function ($f) use ($r) { return $r[$f]; }, $fields);
+            $zdbh->prepare("INSERT INTO $t ({$p[0]}_acc_fk, " . implode(',', $fields) . ", {$p[0]}_created_ts) VALUES (?," . implode(',', array_fill(0, count($fields), '?')) . ",?)")
+                ->execute(array_merge(array($NEWID), $vals, array($r[$p[0] . '_created_ts'] ?: time())));
+        }
+    }
+    foreach ($old("SELECT * FROM `$O`.x_distlists WHERE dl_acc_fk = :a AND dl_deleted_ts IS NULL", array(':a' => $OLDID)) as $d) {
+        if ($taken("SELECT COUNT(*) FROM x_distlists WHERE dl_address_vc = :x AND dl_deleted_ts IS NULL", array(':x' => $d['dl_address_vc']))) { continue; }
+        $zdbh->prepare("INSERT INTO x_distlists (dl_acc_fk, dl_address_vc, dl_created_ts) VALUES (?,?,?)")->execute(array($NEWID, $d['dl_address_vc'], $d['dl_created_ts'] ?: time()));
+        $nid = (int) $zdbh->lastInsertId();
+        foreach ($old("SELECT * FROM `$O`.x_distlistusers WHERE du_distlist_fk = :d AND du_deleted_ts IS NULL", array(':d' => $d['dl_id_pk'])) as $u) {
+            $zdbh->prepare("INSERT INTO x_distlistusers (du_distlist_fk, du_address_vc, du_created_ts) VALUES (?,?,?)")->execute(array($nid, $u['du_address_vc'], $u['du_created_ts'] ?: time()));
+        }
+    }
+    // the mail server's own tables, for the moved domains only (passwords as they are: the mail
+    // server reads the old {PLAIN-MD5} ones too)
+    if ($HAVE_MAILDB && $domains) {
+        $in = implode(',', array_map(array($zdbh, 'quote'), $domains));
+        foreach (array('domain' => 'domain', 'mailbox' => 'domain', 'alias' => 'domain') as $t => $col) {
+            $have = $cols('sentora_postfix', $t);
+            $from = array_values(array_intersect($cols($TMPDB . '_mail', $t), $have));
+            if (!$from) { continue; }
+            $list = '`' . implode('`,`', $from) . '`';
+            $zdbh->exec("INSERT IGNORE INTO sentora_postfix.`$t` ($list) SELECT $list FROM `{$TMPDB}_mail`.`$t` WHERE LOWER(`$col`) IN ($in)");
+        }
+    }
+    // the mail itself
+    foreach ($domains as $d) {
+        $tar = $EXP . '/mail/' . $d . '.tar.gz';
+        if (is_file($tar)) {
+            sh('tar -xzf ' . q($tar) . ' -C /var/sentora/vmail --no-same-owner --skip-old-files', $o) || warn("the mail of $d did not unpack completely: " . substr($o, 0, 200));
+            sh('chown -R vmail:mail ' . q('/var/sentora/vmail/' . $d));
+        }
+    }
+}
+say("Mailboxes: $nm added" . ($nm ? ' (with their mail and passwords)' : ''));
+
+// --- let the daemon build it all ------------------------------------------------------------------
+$zdbh->exec("UPDATE x_settings SET so_value_tx = 'true' WHERE so_name_vc = 'apache_changed'");
+say('');
+say('Running the Sentora daemon: Linux user, folder permissions, websites, PHP pool, DNS, FTP, cron');
+getenv('SENTORA_MIGRATE_NO_DAEMON') || sh('php -q ' . q($rootPath . 'bin/daemon.php') . ' > /var/sentora/logs/daemon-last-run.log', $o) || warn('the daemon run reported problems (see /var/sentora/logs/daemon-last-run.log)');
+if (posix_getpwnam('web' . $NEWID) && is_dir($NEWHOME)) {
+    sys_accountphp::SetPermissions('web' . $NEWID, rtrim($NEWHOME, '/'));
+}
+cleanup();
+
+// --- what to check ------------------------------------------------------------------------------------
+say('');
+say("Done: $OLDU is in $NEWU, with $WARN warning(s). Log: $LOG");
+if ($newpass) {
+    say('These had no password that could be used again, and got a new one (change the sites\' settings to match):');
+    foreach ($newpass as $p) { say("  $p"); }
+}
+$fsl = array();
+sh('grep -rliE --include=.htaccess "^[[:space:]]*Options[[:space:]].*FollowSymLinks" ' . q($NEWHOME . '/public_html'), $o);
+foreach (array_filter(explode("\n", $o)) as $f) {
+    if (strpos($f, $NEWHOME) === 0) { $fsl[] = substr($f, strlen($HOSTED)); }
+}
+if ($fsl) {
+    say('These .htaccess files use FollowSymLinks, which gives error 500 here (see Apache Admin > the domain: "A moved site gives error 500?"):');
+    foreach ($fsl as $f) { say("  $f"); }
+}
+say('Next: point the domains\' DNS to this server (' . $NEWIP . '), then open each site.');
+exit($WARN ? 3 : 0);

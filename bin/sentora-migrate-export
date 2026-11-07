@@ -1,0 +1,172 @@
+#!/bin/bash
+#
+# sentora-migrate-export: pack an old Sentora server (1.0.x or 2.0.x) so a Sentora-2027 server can
+# take its accounts over with sentora-migrate-import. Run it ON THE OLD SERVER, as root. It only
+# reads: nothing on the old server is changed.
+#
+#   bash sentora-migrate-export                    everything, into /root/sentora-export-<server>-<date>
+#   bash sentora-migrate-export --to /backup/x     into another folder
+#   bash sentora-migrate-export --no-mail          without the mailboxes' mail
+#
+# What it writes (one folder; copy it to the new server, for example with rsync or scp):
+#   manifest.txt                 the server, the Sentora version and every account with its domains
+#   db/panel/*.sql.gz            the panel's databases (sentora_core, sentora_postfix, sentora_proftpd)
+#   db/sites/<name>.sql.gz       every database the panel lists for an account
+#   files/<account>.tar.gz       every account's folder (websites and the files in it)
+#   mail/<domain>.tar.gz         every domain's mailboxes (unless --no-mail)
+#   SHA256SUMS                   to check the copy on the new server
+#   export.log
+#
+# Works with the old servers' own tools: bash, mysqldump, tar, gzip (Debian 8, Ubuntu 14.04 to
+# 20.04, CentOS 7).
+set -u
+
+OUT=""
+MAIL=yes
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --to) OUT="${2:-}"; shift ;;
+        --no-mail) MAIL=no ;;
+        -h|--help) sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        *) echo "Unknown option: $1 (see --help)"; exit 2 ;;
+    esac
+    shift
+done
+[ "$(id -u)" -eq 0 ] || { echo "Run this as root (sudo -i, or su -)."; exit 1; }
+
+# the panel: Sentora's own folder (or ZPanel's on very old servers)
+PANEL=""
+for p in /etc/sentora/panel /etc/zpanel/panel; do [ -f "$p/cnf/db.php" ] && { PANEL=$p; break; }; done
+[ -n "$PANEL" ] || { echo "No Sentora panel found (/etc/sentora/panel/cnf/db.php)."; exit 1; }
+DATA=/var/sentora
+[ -d "$DATA/hostdata" ] || DATA=/var/zpanel
+HOSTED="$DATA/hostdata"
+VMAIL="$DATA/vmail"
+
+# the panel's database login, in an option file (never on the command line)
+val() { sed -n "s/^[[:space:]]*\$$1[[:space:]]*=[[:space:]]*['\"]\([^'\"]*\)['\"].*/\1/p" "$PANEL/cnf/db.php" | head -1; }
+DBHOST=$(val host); DBUSER=$(val user); DBPASS=$(val pass); DBNAME=$(val dbname)
+[ -n "$DBNAME" ] || DBNAME=sentora_core
+MYCNF=$(mktemp); chmod 600 "$MYCNF"
+printf '[client]\nuser=%s\npassword="%s"\nhost=%s\n' "$DBUSER" "$DBPASS" "${DBHOST:-localhost}" > "$MYCNF"
+trap 'rm -f "$MYCNF"' EXIT
+sql() { mysql --defaults-extra-file="$MYCNF" -N -B -e "$1" 2>> "$LOGF"; }
+
+HOST=$(hostname -f 2> /dev/null || hostname)
+STAMP=$(date +%Y%m%d-%H%M)
+[ -n "$OUT" ] || OUT="/root/sentora-export-$(hostname -s 2> /dev/null || echo server)-$STAMP"
+if [ -e "$OUT" ] && [ -n "$(ls -A "$OUT" 2> /dev/null)" ]; then echo "$OUT is not empty: choose another folder with --to."; exit 1; fi
+mkdir -p "$OUT/db/panel" "$OUT/db/sites" "$OUT/files" "$OUT/mail" || exit 1
+chmod 700 "$OUT"
+LOGF="$OUT/export.log"; : > "$LOGF"
+say() { echo "$*"; echo "$(date '+%H:%M:%S') $*" >> "$LOGF"; }
+warn() { echo "  WARNING: $*"; echo "$(date '+%H:%M:%S') WARNING: $*" >> "$LOGF"; WARNS=$((WARNS + 1)); }
+WARNS=0
+
+mysql --defaults-extra-file="$MYCNF" -e "SELECT 1" > /dev/null 2>> "$LOGF" || { echo "Could not log in to MySQL with the panel's settings ($PANEL/cnf/db.php)."; exit 1; }
+VERSION=$(sql "SELECT so_value_tx FROM $DBNAME.x_settings WHERE so_name_vc = 'dbversion'")
+say "Sentora $VERSION on $HOST: exporting to $OUT"
+
+# room for it: the folders, compressed, rarely take more than they do now
+NEED=$(du -sk "$HOSTED" 2> /dev/null | cut -f1); NEED=${NEED:-0}
+[ "$MAIL" = yes ] && NEED=$((NEED + $(du -sk "$VMAIL" 2> /dev/null | cut -f1 || echo 0)))
+FREE=$(df -Pk "$OUT" | awk 'NR == 2 {print $4}')
+if [ "${FREE:-0}" -lt "$NEED" ]; then
+    warn "$OUT has $((FREE / 1024)) MB free and the folders take $((NEED / 1024)) MB: it may not fit (use --to on a larger disk)"
+fi
+
+# --- databases ---------------------------------------------------------------------------------
+# utf8mb4 keeps every character (MySQL 5.5.3 and later); no CREATE DATABASE lines, so the new
+# server can load each one under the name it chooses
+DUMPOPT=(--single-transaction --routines --triggers --no-create-db --default-character-set=utf8mb4)
+mysqldump --help 2> /dev/null | grep -q -- '--set-gtid-purged' && DUMPOPT+=(--set-gtid-purged=OFF)
+dump() { # database file
+    if mysqldump --defaults-extra-file="$MYCNF" "${DUMPOPT[@]}" "$1" 2>> "$LOGF" | gzip -6 > "$2"; then
+        [ "${PIPESTATUS[0]}" = 0 ] && return 0
+    fi
+    warn "the database $1 could not be exported (see export.log)"
+    rm -f "$2"
+    return 1
+}
+say "-- The panel's databases"
+for db in "$DBNAME" sentora_postfix sentora_proftpd zpanel_postfix zpanel_proftpd; do
+    [ -n "$(sql "SHOW DATABASES LIKE '$db'")" ] || continue
+    dump "$db" "$OUT/db/panel/$db.sql.gz" && say "   $db"
+done
+[ -f "$OUT/db/panel/$DBNAME.sql.gz" ] || { echo "The panel's own database ($DBNAME) could not be exported: stopping."; exit 1; }
+
+say "-- The accounts' databases"
+NDB=0
+while IFS= read -r db; do
+    [ -n "$db" ] || continue
+    if [ -z "$(sql "SHOW DATABASES LIKE '$db'")" ]; then
+        warn "the panel lists the database $db, but MySQL does not have it"
+        continue
+    fi
+    dump "$db" "$OUT/db/sites/$db.sql.gz" && { say "   $db"; NDB=$((NDB + 1)); }
+done <<< "$(sql "SELECT my_name_vc FROM $DBNAME.x_mysql_databases WHERE my_deleted_ts IS NULL")"
+# each MySQL user's grants, for reference (the import makes the users again from the panel's records)
+while IFS=$'\t' read -r u h; do
+    [ -n "$u" ] || continue
+    echo "-- $u@$h"
+    mysql --defaults-extra-file="$MYCNF" -N -B -e "SHOW GRANTS FOR '$u'@'$h'" 2> /dev/null | sed 's/$/;/'
+done <<< "$(sql "SELECT mu_name_vc, mu_access_vc FROM $DBNAME.x_mysql_users WHERE mu_deleted_ts IS NULL")" > "$OUT/db/mysql-grants.txt"
+
+# --- the accounts' folders and the mail ----------------------------------------------------------
+say "-- The accounts' folders"
+NACC=0
+while IFS= read -r u; do
+    [ -n "$u" ] || continue
+    if [ ! -d "$HOSTED/$u" ]; then
+        warn "the account $u has no folder in $HOSTED"
+        continue
+    fi
+    if tar -C "$HOSTED" --numeric-owner -czf "$OUT/files/$u.tar.gz" "$u" 2>> "$LOGF"; then
+        say "   $u ($(du -sh "$OUT/files/$u.tar.gz" | cut -f1))"
+        NACC=$((NACC + 1))
+    else
+        warn "the folder of $u was not packed completely (see export.log)"
+    fi
+done <<< "$(sql "SELECT ac_user_vc FROM $DBNAME.x_accounts WHERE ac_deleted_ts IS NULL")"
+
+NMAIL=0
+if [ "$MAIL" = yes ] && [ -d "$VMAIL" ]; then
+    say "-- The mailboxes"
+    for d in "$VMAIL"/*/; do
+        [ -d "$d" ] || continue
+        dom=$(basename "$d")
+        tar -C "$VMAIL" --numeric-owner -czf "$OUT/mail/$dom.tar.gz" "$dom" 2>> "$LOGF" \
+            && { say "   $dom"; NMAIL=$((NMAIL + 1)); } || warn "the mail of $dom was not packed completely (see export.log)"
+    done
+fi
+
+# --- what is in it --------------------------------------------------------------------------------
+{
+    echo "format=sentora-migrate-1"
+    echo "made=$(date '+%Y-%m-%d %H:%M:%S %Z')"
+    echo "server=$HOST"
+    echo "sentora=$VERSION"
+    echo "panel_domain=$(sql "SELECT so_value_tx FROM $DBNAME.x_settings WHERE so_name_vc = 'sentora_domain'")"
+    echo "server_ip=$(sql "SELECT so_value_tx FROM $DBNAME.x_settings WHERE so_name_vc = 'server_ip'")"
+    echo "panel_db=$DBNAME"
+    echo "hostdata=$HOSTED"
+    echo "mail=$MAIL"
+    echo "php=$(php -r 'echo PHP_VERSION;' 2> /dev/null)"
+    echo "mysql=$(sql "SELECT VERSION()")"
+    sql "SELECT a.ac_user_vc, (SELECT COUNT(*) FROM $DBNAME.x_vhosts v WHERE v.vh_acc_fk = a.ac_id_pk AND v.vh_deleted_ts IS NULL)
+         FROM $DBNAME.x_accounts a WHERE a.ac_deleted_ts IS NULL ORDER BY a.ac_user_vc" | while IFS=$'\t' read -r u n; do
+        echo "account=$u domains=$n: $(sql "SELECT GROUP_CONCAT(vh_name_vc ORDER BY vh_name_vc SEPARATOR ' ') FROM $DBNAME.x_vhosts v JOIN $DBNAME.x_accounts a ON a.ac_id_pk = v.vh_acc_fk WHERE a.ac_user_vc = '$u' AND v.vh_deleted_ts IS NULL")"
+    done
+} > "$OUT/manifest.txt"
+
+say "-- Checksums"
+(cd "$OUT" && find . -type f ! -name SHA256SUMS ! -name export.log -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS)
+chmod -R go-rwx "$OUT"
+
+echo
+say "Done: $OUT ($(du -sh "$OUT" | cut -f1)): $NACC account folder(s), $NDB database(s), $NMAIL mail domain(s), $WARNS warning(s)."
+echo "It holds every website, database and mailbox of this server: keep it as private as the server."
+echo "Copy it to the new server, for example (as root on the new one):"
+echo "    rsync -a root@$(hostname -I 2> /dev/null | awk '{print $1}'):$OUT /root/"
+echo "then there: sentora-migrate-import $(basename "$OUT")"
+[ "$WARNS" -eq 0 ]
