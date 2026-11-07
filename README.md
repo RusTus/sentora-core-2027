@@ -69,7 +69,7 @@ The installer downloads everything it needs from the GitHub releases of the two 
 Each download is checked against the SHA-256 GitHub lists for it. On the new server, as root:
 
 ```bash
-wget https://github.com/RusTus/sentora-installers-2027/releases/download/current/sentora2027-ub26.04
+wget -O sentora2027-ub26.04 https://github.com/RusTus/sentora-installers-2027/releases/download/current/sentora2027-ub26.04
 bash sentora2027-ub26.04
 ```
 
