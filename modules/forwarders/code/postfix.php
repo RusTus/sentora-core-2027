@@ -39,22 +39,58 @@ try {
 
 
 // Deleting hMail Forwarder
+/**
+ * The mailbox's delivery list in Postfix, rebuilt from all its forwarders in the panel, so that
+ * forwarders of one mailbox no longer overwrite each other: each used to replace the whole list,
+ * and deleting one set it back to the mailbox alone, while the panel still listed the others.
+ * The mailbox keeps its own copy when it has no forwarder left, or when any forwarder keeps one.
+ *
+ * @param db_driver $mail_db The mail server's database.
+ * @param db_driver $zdbh The panel's database.
+ * @param string $mailbox The forwarded mailbox address.
+ * @param array<int, array{0: string, 1: int}> $extra A forwarder about to be added: [destination, keep a copy].
+ * @param int $skip The ID of a forwarder about to be deleted (0: none).
+ * @return void
+ */
+if (!function_exists('SentoraForwardersGoto')) {
+    function SentoraForwardersGoto($mail_db, $zdbh, $mailbox, $extra, $skip)
+    {
+        $q = $zdbh->prepare("SELECT fw_id_pk, fw_destination_vc, fw_keepmessage_in FROM x_forwarders WHERE fw_address_vc = :a AND fw_deleted_ts IS NULL");
+        $q->execute(array(':a' => $mailbox));
+        $list = array();
+        foreach ($q->fetchAll(PDO::FETCH_ASSOC) as $r) {
+            if ((int) $r['fw_id_pk'] !== (int) $skip) {
+                $list[] = array((string) $r['fw_destination_vc'], (int) $r['fw_keepmessage_in']);
+            }
+        }
+        $list = array_merge($list, $extra);
+        $keep = !$list;
+        $goto = array();
+        foreach ($list as $f) {
+            if ($f[1] == 1) {
+                $keep = true;
+            }
+            if (!in_array(strtolower($f[0]), $goto, true)) {
+                $goto[] = strtolower($f[0]);
+            }
+        }
+        if ($keep) {
+            array_unshift($goto, strtolower($mailbox));
+        }
+        $sql = $mail_db->prepare("UPDATE alias SET goto = :g, modified = NOW() WHERE address = :a");
+        $sql->execute(array(':g' => implode(',', $goto), ':a' => $mailbox));
+    }
+}
+
 if (!fs_director::CheckForEmptyValue(self::$delete)) {
-    //$result = $mail_db->query("SELECT address FROM alias WHERE address='" . $rowforwarder['fw_address_vc'] . "'")->Fetch();   
     $numrows = $mail_db->prepare("SELECT address FROM alias WHERE address=:fw_address_vc");
     $numrows->bindParam(':fw_address_vc', $rowforwarder['fw_address_vc']);
     $numrows->execute();
     $result = $numrows->fetch();
     if ($result) {
-        $sql = "UPDATE alias SET goto=:fw_address_vc, modified=NOW() WHERE address = :fw_address_vc2";
-        $sql = $mail_db->prepare($sql);
-        $sql->bindParam(':fw_address_vc', $rowforwarder['fw_address_vc']);
-        $sql->bindParam(':fw_address_vc2', $rowforwarder['fw_address_vc']);
-        $sql->execute();
+        SentoraForwardersGoto($mail_db, $zdbh, $rowforwarder['fw_address_vc'], array(), (int) $rowforwarder['fw_id_pk']);
     }
 	
-   // If no more mailboxes or aliases for the domain exist, delete the domain to
-   // prevent Postfix using a local route when sending to this domain in future
 
    $domaincheck = explode("@", $rowforwarder['fw_address_vc']);
    $sql = $mail_db->prepare("SELECT * FROM mailbox WHERE domain=:domain");
@@ -77,23 +113,12 @@ if (!fs_director::CheckForEmptyValue(self::$delete)) {
 
 // Adding hMail Forwarder
 if (!fs_director::CheckForEmptyValue(self::$create)) {
-    //$result = $mail_db->query("SELECT address FROM alias WHERE address='" . $address . "'")->Fetch();
     $numrows = $mail_db->prepare("SELECT address FROM alias WHERE address=:address");
     $numrows->bindParam(':address', $address);
     $numrows->execute();
     $result = $numrows->fetch();
     if ($result) {
-        if ($keepmessage == 1) {
-            $copy = "," . $address;
-        } else {
-            $copy = NULL;
-        }
-        $sql = "UPDATE alias SET goto=:goTo, modified=NOW() WHERE address = :address";
-        $sql = $mail_db->prepare($sql);
-        $goTo = $destination . $copy;
-        $sql->bindParam(':goTo', $goTo);
-        $sql->bindParam(':address', $address);
-        $sql->execute();
+        SentoraForwardersGoto($mail_db, $zdbh, $address, array(array($destination, (int) $keepmessage)), 0);
     }
 }
 ?>

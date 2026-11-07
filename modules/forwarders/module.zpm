@@ -1,109 +1,80 @@
 <div class="zmodule_content panel" id="zmodule_header_<@ ModuleName @>">
     <div class="panel-heading">
         <img src="<@ ModuleIcon @>" width="35" height="35" border="0" alt="<@ ModuleName @>">
+        <div class="zmodule_title"><@ ModuleName @></div>
+        <div class="zmodule_desc" id="zmodule_desc_<@ ModuleName @>"><@ ModuleDesc @></div>
+    </div>
+    <@ Result @>
+    <link rel="stylesheet" href="modules/forwarders/assets/forwarders.css">
 
-        <div class="zmodule_title">
-            <@ ModuleName @>
+    <div class="fw" id="fw">
+        <% if isDeleteForwarder %>
+        <form class="fw-box fw-confirm" action="./?module=forwarders&amp;action=ConfirmDeleteForwarder" method="post">
+            <h4><svg class="fw-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg><: Stop forwarding :> <code><@ DeleteName @></code>?</h4>
+            <ul class="fw-lose"><li><: New mail stays in the mailbox and is no longer sent on to that address. :></li><li><: Mail already forwarded is not affected. :></li></ul>
+            <div class="fw-foot"><input type="hidden" name="inDelete" value="<@ EditCurrentForwarderID @>">
+                <button class="btn btn-danger" type="submit"><: Stop forwarding :></button>
+                <a class="btn btn-default" href="./?module=forwarders"><: Cancel :></a></div>
+            <@ CSFR_Tag @>
+        </form>
+        <% endif %>
+
+        <% if isCreateForwarder %>
+        <div class="fw-tiles"><@ Tiles @></div>
+
+        <div class="fw-box">
+            <div class="fw-head"><div><h4><: Your forwarders :></h4>
+                <p class="fw-sub"><: A forwarder sends the mail that arrives in one of your mailboxes on to another address, here or elsewhere. :></p></div>
+                <input type="search" class="form-control fw-find" placeholder="<: Find a mailbox or address :>" aria-label="<: Find a mailbox or address :>" hidden></div>
+            <% if ForwarderList %>
+            <form action="./?module=forwarders&amp;action=DeleteForwarder" method="post" class="fw-list">
+                <@ ForwarderRows @>
+                <@ CSFR_Tag @>
+            </form>
+            <p class="fw-empty fw-nomatch" hidden><: Nothing matches. :></p>
+            <% else %>
+            <div class="fw-empty"><b><: You have no forwarders yet :></b><span><: For example, send office@ on to your phone's mail account. :></span></div>
+            <% endif %>
         </div>
 
-        <div class="zmodule_desc" id="zmodule_desc_<@ ModuleName @>"><@ ModuleDesc @></div>
-
-    </div>
-
-    <@ Result @>
-
-    <% if isDeleteForwarder %>
-    <div class="zform_wrapper alert alert-danger">
-        <h2><: Delete Forwarder :>: <@ EditCurrentForwarderName @> ?</h2>
-        <p><: Please confirm that you want to delete this forwarder. :></p>
-        <form action="./?module=forwarders&action=ConfirmDeleteForwarder" method="post">
-            <table class="none" cellpadding="0" cellspacing="0">
-                <tr>
-                    <td colspan="2" align="right">
-                        <input type="hidden" name="inDelete" value="<@ EditCurrentForwarderID @>">
-                        <button class="button-loader delete btn btn-danger" type="submit" ><: Delete :></button>
-                        <button class="button-loader btn btn-default" type="button" onclick="window.location.href='./?module=forwarders';return false;"><: Cancel :></button>
-                    </td>
-                </tr>
-            </table>
-            <@ CSFR_Tag @>
-        </form>
-    </div>
-    <% endif %>
-
-    <div class="zgrid_wrapper">
-        <h2><: Current Forwarders :></h2>
-        <% if ForwarderList %>
-        <form action="./?module=forwarders&action=DeleteForwarder" method="post">
-            <table class="table table-striped">
-                <tr>
-                    <th><: Address :></th>
-                    <th><: Destination :></th>
-                    <th><: Keep Message :></th>
-                    <th></th>
-                </tr>
-                <% loop ForwarderList %>
-                <tr>
-                    <td><& address &></td>
-                    <td><& destination &></td>
-                    <td><& status &></td>
-                    <td><button class="button-loader delete btn btn-danger" type="submit" id="button" name="inDelete_<& id &>" id="inDelete_<& id &>" value="inDelete_<& id &>"><: Delete :></button></td>
-                </tr>
-                <% endloop %>
-            </table>
-            <@ CSFR_Tag @>
-        </form>
-        <% else %>
-        <: Sorry there are currently no mailbox forwards configured! :>
+        <div class="fw-box">
+            <h4><: Add a forwarder :></h4>
+            <% if QuotaLimit %>
+            <% if MailboxList %>
+            <form action="./?module=forwarders&amp;action=CreateForwarder" method="post" class="fw-create">
+                <div class="fw-grid">
+                    <div><label class="fw-label" for="inAddress"><: Mail arriving in :></label>
+                        <select class="form-control" name="inAddress" id="inAddress" required><@ MailboxOptions @></select></div>
+                    <div><label class="fw-label" for="inDestinationName"><: Is sent on to :></label>
+                        <input class="form-control" type="email" name="inDestinationName" id="inDestinationName" value="<@ PostedDestination @>" placeholder="name@example.com" autocomplete="off" spellcheck="false" required></div>
+                </div>
+                <label class="fw-check"><input type="checkbox" name="inKeepMessage" id="inKeepMessage" value="1" checked> <span><b><: Keep a copy in the mailbox :></b><small><: Off: the mail is only in the other address afterwards. :></small></span></label>
+                <div class="fw-foot"><@ CSFR_Tag @><button class="btn btn-primary" type="submit" name="inCreate" value="inCreate"><: Add forwarder :></button>
+                    <span class="fw-sub"><: A mailbox can forward to more than one address: add one forwarder for each. :></span></div>
+            </form>
+            <% else %>
+            <div class="fw-limit"><: A forwarder sends on the mail of one of your mailboxes: make a mailbox first in Mailboxes. To pass mail for an address with no mailbox to yours, use Aliases. :></div>
+            <% endif %>
+            <% else %>
+            <div class="fw-limit"><: You have as many forwarders and aliases as your package allows. Delete one, or ask your host for a bigger package. :></div>
+            <% endif %>
+        </div>
         <% endif %>
     </div>
-
-    <% if isCreateForwarder %>
-    <div class="zform_wrapper">
-        <table class="none" width="100%" cellborder="0" cellspacing="0">
-            <tr valign="top">
-                <td>
-                    <h2><: Create a new forward :></h2>
-                    <% if QuotaLimit %>
-                    <form action="./?module=forwarders&action=CreateForwarder" method="post">
-                        <table class="table table-striped">
-                            <tr>
-                                <th nowrap="nowrap"><: Email Address :>:</th>
-                                <td>
-                                    <select name="inAddress" id="inAddress">
-                                        <option value="" selected="selected">-- <: Select a mailbox :> --</option>
-                                        <% if MailboxList %>
-                                            <% loop MailboxList %>
-                                            <option value="<& address &>"><& address &></option>
-                                            <% endloop %>
-                                        <% endif %>
-                                    </select>
-                                </td>
-                            </tr>
-                            <tr>
-                                <th nowrap="nowrap"><: Destination :>:</th>
-                                <td nowrap="nowrap"><input type="text" name="inDestinationName" id="inDestinationName" style="width: 285px;width: 47%;" /> @ <input type="text" name="inDestinationDomain" id="inDestinationDomain" style="width: 285px;width: 50%;" /></td>
-                            </tr>
-                            <tr>
-                                <th nowrap="nowrap"><: Keep original message :>:</th>
-                                <td><input type="checkbox" name="inKeepMessage" id="inKeepMessage" value="1" checked="checked" /></td>
-                            </tr>
-                            <tr>
-                                <th><button class="button-loader btn btn-primary" type="submit" id="button" name="inCreate" id="inCreate" value="inCreate"><: Create :></button></th>
-                                <td></td>
-                            </tr>
-                        </table>
-                        <@ CSFR_Tag @>
-                    </form>
-                    <% else %><!-- ELSE QuotaLimit -->
-                    <: Sorry, you have reached your mailbox forward quota limit! :>
-                    <% endif %><!-- END QuotaLimit -->
-                </td>
-
-            </tr>
-
-        </table><hr><@ ForwardUsagepChart @>
-    </div>
-    <% endif %>
-
 </div>
+<script>
+(function () {
+    'use strict';
+    var fw = document.getElementById('fw'); if (!fw) { return; }
+    var groups = fw.querySelectorAll('.fw-group'), find = fw.querySelector('.fw-find');
+    if (find && groups.length > 6) {
+        find.hidden = false;
+        find.addEventListener('input', function () {
+            var q = find.value.trim().toLowerCase(), n = 0;
+            Array.prototype.forEach.call(groups, function (g) { var on = q === '' || g.getAttribute('data-s').toLowerCase().indexOf(q) >= 0; g.hidden = !on; if (on) { n++; } });
+            fw.querySelector('.fw-nomatch').hidden = n > 0;
+        });
+    }
+    Array.prototype.forEach.call(fw.querySelectorAll('form'), function (f) { f.addEventListener('submit', function () { if (window.Sentora && Sentora.loader) { Sentora.loader.showLoader(); } }); });
+})();
+</script>

@@ -157,3 +157,5 @@ modules/parked_domains/assets/unlimited.png
 modules/aliases/assets/unlimited.png
 # Distribution Lists: the old "unlimited" picture
 modules/distlists/assets/unlimited.png
+# Forwarders: the old "unlimited" picture
+modules/forwarders/assets/unlimited.png

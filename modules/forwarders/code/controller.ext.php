@@ -203,7 +203,7 @@ class module_controller extends ctrl_module
         $sql->bindParam(':address', $address);
         $sql->bindParam(':destination', $destination);
         $sql->bindParam(':keepmessage', $keepmessage);
-        $sql->bindParam(':time', time());
+        $sql->bindValue(':time', time(), PDO::PARAM_INT); // bindParam refuses time() in PHP 8
         $sql->execute();
         runtime_hook::Execute('OnAfterCreateForwarder');
         self::$ok = true;
@@ -225,7 +225,8 @@ class module_controller extends ctrl_module
     {
         global $zdbh;
         global $controller;
-        runtime_hook::Execute('OnBeforeDeleteForwarer');
+        runtime_hook::Execute('OnBeforeDeleteForwarder');
+        runtime_hook::Execute('OnBeforeDeleteForwarer'); // the old misspelt name, for modules that still listen to it
         //$rowforwarder = $zdbh->query("SELECT * FROM x_forwarders WHERE fw_id_pk=" . $fw_id_pk . "")->fetch();
         $numrows = $zdbh->prepare("SELECT * FROM x_forwarders WHERE fw_id_pk=:fw_id_pk");
         $numrows->bindParam(':fw_id_pk', $fw_id_pk);
@@ -239,7 +240,7 @@ class module_controller extends ctrl_module
         $sql = "UPDATE x_forwarders SET fw_deleted_ts=:time WHERE fw_id_pk=:fw_id_pk";
         $sql = $zdbh->prepare($sql);
         $sql->bindParam(':fw_id_pk', $fw_id_pk);
-        $sql->bindParam(':time', time());
+        $sql->bindValue(':time', time(), PDO::PARAM_INT); // bindParam refuses time() in PHP 8
         $sql->execute();
         runtime_hook::Execute('OnAfterDeleteForwarder');
         self::$ok = true;
@@ -261,8 +262,8 @@ class module_controller extends ctrl_module
      */
     static function CheckCreateForErrors($address, $dname, $ddomain, $keepmessage)
     {
-        global $controller;
-        $address = $controller->GetControllerRequest('FORM', 'inAddress');
+        global $zdbh;
+        $address = strtolower(trim((string) $address)); // the address given (this read the form again)
         $destination = strtolower(str_replace(' ', '', $dname . '@' . $ddomain));
         if (fs_director::CheckForEmptyValue($address)) {
             self::$noaddress = true;
@@ -279,6 +280,12 @@ class module_controller extends ctrl_module
         
         if ($address == $destination) {
             self::$alreadyexistssame = true;
+            return false;
+        }
+        $q = $zdbh->prepare("SELECT COUNT(*) FROM x_forwarders WHERE fw_address_vc = :a AND fw_destination_vc = :d AND fw_deleted_ts IS NULL");
+        $q->execute(array(':a' => $address, ':d' => $destination));
+        if ((int) $q->fetchColumn() > 0) {
+            self::$alreadyexists = true;
             return false;
         }
         return true;
@@ -331,7 +338,13 @@ class module_controller extends ctrl_module
         $currentuser = ctrl_users::GetUserDetail();
         $formvars = $controller->GetAllControllerRequests('FORM');
         $keepmessage = (isset($formvars['inKeepMessage'])) ? fs_director::GetCheckboxValue($formvars['inKeepMessage']) : 0;
-        if (self::ExecuteCreateForwarder($currentuser['userid'], $formvars['inAddress'], $formvars['inDestinationName'], $formvars['inDestinationDomain'], $keepmessage))
+        $dname = strtolower(trim(isset($formvars['inDestinationName']) ? (string) $formvars['inDestinationName'] : ''));
+        $ddomain = strtolower(trim(isset($formvars['inDestinationDomain']) ? (string) $formvars['inDestinationDomain'] : ''));
+        if ($ddomain === '' && strpos($dname, '@') !== false) {
+            $ddomain = substr($dname, strrpos($dname, '@') + 1);
+            $dname = substr($dname, 0, strrpos($dname, '@'));
+        }
+        if (self::ExecuteCreateForwarder($currentuser['userid'], isset($formvars['inAddress']) ? strtolower((string) $formvars['inAddress']) : '', $dname, $ddomain, $keepmessage))
             self::$ok = true;
         return true;
     }
@@ -495,34 +508,158 @@ class module_controller extends ctrl_module
     {
         $currentuser = ctrl_users::GetUserDetail();
         return ($currentuser['forwardersquota'] < 0) or //-1 = unlimited
-                ($currentuser['forwardersquota'] > ctrl_users::GetQuotaUsages('forwarders', $currentuser['userid']));
+                ($currentuser['forwardersquota'] > self::UsedForwards($currentuser['userid']));
     }
 
     /**
-     * Template value <@ ForwardUsagepChart @>: the quota usage pie chart.
+     * How many forwarders and aliases the account has: both count toward the package's forwarder limit (as in Aliases).
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $uid The account ID.
+     * @return int The number.
+     */
+    static function UsedForwards($uid)
+    {
+        global $zdbh;
+        $q = $zdbh->prepare("SELECT COUNT(*) FROM x_aliases WHERE al_acc_fk = :u AND al_deleted_ts IS NULL");
+        $q->execute(array(':u' => (int) $uid));
+        return (int) ctrl_users::GetQuotaUsages('forwarders', $uid) + (int) $q->fetchColumn();
+    }
+
+    /**
+     * Escape a value for HTML.
+     *
+     * @param mixed $s The value (cast to string).
+     * @return string The escaped text.
+     */
+    static function h($s)
+    {
+        return htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
+    }
+
+    /**
+     * Translate and escape a text.
+     *
+     * @param string $s The English text.
+     * @return string The escaped translation.
+     */
+    static function t($s)
+    {
+        return self::h(ui_language::translate($s));
+    }
+
+    /**
+     * The account's forwarders as plain rows.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return array<int, array<string, mixed>> x_forwarders rows, by mailbox then destination.
+     */
+    static function Rows()
+    {
+        global $zdbh;
+        $q = $zdbh->prepare("SELECT * FROM x_forwarders WHERE fw_acc_fk = :u AND fw_deleted_ts IS NULL ORDER BY fw_address_vc, fw_destination_vc");
+        $q->execute(array(':u' => (int) ctrl_users::GetUserDetail()['userid']));
+        return $q->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /**
+     * The figures at the top (<@ Tiles @>): forwarders, mailboxes forwarded, and forwarders and aliases against the package's forwarder limit.
+     *
+     * @return string The HTML.
+     */
+    static function getTiles()
+    {
+        $me = ctrl_users::GetUserDetail();
+        $rows = self::Rows();
+        $boxes = count(array_unique(array_map(function ($r) { return strtolower($r['fw_address_vc']); }, $rows)));
+        $max = (int) $me['forwardersquota'];
+        $used = self::UsedForwards($me['userid']);
+        $pct = $max > 0 ? min(100, round($used / $max * 100)) : 0;
+        $ico = function ($d) { return '<svg class="fw-ico-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' . $d . '</svg>'; };
+        return '<div class="fw-tile">' . $ico('<path d="M15 4h5v5"/><path d="M20 4 13 11"/><path d="M4 8v11a1 1 0 0 0 1 1h11"/>') . '<div><b>' . count($rows) . '</b><span>' . self::t('Forwarders') . '</span></div></div>'
+            . '<div class="fw-tile">' . $ico('<path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.5 5.1 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.5-6.9A2 2 0 0 0 16.8 4H7.2a2 2 0 0 0-1.7 1.1z"/>') . '<div><b>' . $boxes . '</b><span>' . self::t('Mailboxes forwarded') . '</span></div></div>'
+            . '<div class="fw-tile' . ($max >= 0 && $used >= $max ? ' full' : '') . '">' . $ico('<path d="M5 12h14"/><path d="m13 6 6 6-6 6"/>')
+            . '<div><b>' . $used . ($max < 0 ? '' : ' <small>/ ' . $max . '</small>') . '</b><span>' . self::t('Forwarders and aliases') . ($max < 0 ? ' &middot; ' . self::t('no limit') : '') . '</span>'
+            . ($max > 0 ? '<div class="fw-bar"><i style="width:' . $pct . '%"></i></div>' : '') . '</div></div>';
+    }
+
+    /**
+     * The forwarders grouped by mailbox (<@ ForwarderRows @>): each mailbox with where its mail goes, whether a copy stays, and Delete.
+     *
+     * @return string The HTML ('' when there are none).
+     */
+    static function getForwarderRows()
+    {
+        $groups = array();
+        foreach (self::Rows() as $r) {
+            $groups[strtolower($r['fw_address_vc'])][] = $r;
+        }
+        $own = array_map('strtolower', array_column(self::getMailboxList() ?: array(), 'address'));
+        $out = '';
+        foreach ($groups as $box => $rows) {
+            $keep = count(array_filter($rows, function ($r) { return (int) $r['fw_keepmessage_in'] === 1; })) > 0;
+            $dest = '';
+            foreach ($rows as $r) {
+                $here = in_array(strtolower($r['fw_destination_vc']), $own, true);
+                $dest .= '<div class="fw-dest"><svg class="fw-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>'
+                    . '<span class="fw-to">' . self::h($r['fw_destination_vc']) . '</span>'
+                    . '<span class="fw-where ' . ($here ? 'here' : 'out') . '">' . self::t($here ? 'your mailbox' : 'outside address') . '</span>'
+                    . '<button class="btn btn-default btn-sm fw-del" type="submit" name="inDelete_' . (int) $r['fw_id_pk'] . '" value="inDelete_' . (int) $r['fw_id_pk'] . '" title="' . self::t('Delete') . '" aria-label="' . self::t('Stop forwarding to') . ' ' . self::h($r['fw_destination_vc']) . '">'
+                    . '<svg class="fw-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg></button></div>';
+            }
+            $out .= '<div class="fw-group" data-s="' . self::h($box . ' ' . implode(' ', array_column($rows, 'fw_destination_vc'))) . '">'
+                . '<div class="fw-from"><svg class="fw-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.5 5.1 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.5-6.9A2 2 0 0 0 16.8 4H7.2a2 2 0 0 0-1.7 1.1z"/></svg>'
+                . '<b>' . self::h($box) . '</b><span class="fw-keep ' . ($keep ? 'yes' : 'no') . '">' . self::t($keep ? 'keeps a copy' : 'no copy kept') . '</span></div>'
+                . '<div class="fw-dests">' . $dest . '</div></div>';
+        }
+        return $out;
+    }
+
+    /**
+     * The forwarder being deleted, as "mailbox to destination" (<@ DeleteName @>).
      *
      * @global runtime_controller $controller The request controller.
-     * @return string An <img> tag (the "unlimited" image when the quota is -1).
+     * @return string The escaped text.
      */
-    static function getForwardUsagepChart()
+    static function getDeleteName()
     {
-		global $controller;
-		$currentuser = ctrl_users::GetUserDetail();
-		$maximum = $currentuser['forwardersquota'];
-		if ($maximum < 0) { //-1 = unlimited
-            if (file_exists(ui_template::AssetPath('img/misc/unlimited.png'))) {
-				return '<img src="' . ui_template::AssetPath('img/misc/unlimited.png') . '" alt="' . ui_language::translate('Unlimited') . '"/>';
-			} else {
-				return '<img src="modules/' . $controller->GetControllerRequest('URL', 'module') . '/assets/unlimited.png" alt="' . ui_language::translate('Unlimited') . '"/>';
-			}
-        } else {
-            $used = ctrl_users::GetQuotaUsages('forwarders', $currentuser['userid']);
-            $free = max($maximum - $used, 0);
-            return '<img src="etc/lib/pChart2/sentora/z3DPie.php?score=' . $free . '::' . $used
-                    . '&labels=Free: ' . $free . '::Used: ' . $used
-                    . '&legendfont=verdana&legendfontsize=8&imagesize=240::190&chartsize=120::90&radius=100&legendsize=150::160"'
-                    . ' alt="' . ui_language::translate('Pie chart') . '"/>';
+        global $controller;
+        $cur = self::ListCurrentForwarder($controller->GetControllerRequest('URL', 'other'));
+        return $cur ? self::h($cur[0]['address']) . ' &rarr; ' . self::h($cur[0]['destination']) : '';
+    }
+
+    /**
+     * The mailbox choices for a new forwarder, the one picked before selected (<@ MailboxOptions @>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return string The <option> HTML.
+     */
+    static function getMailboxOptions()
+    {
+        global $controller;
+        $picked = strtolower((string) $controller->GetControllerRequest('FORM', 'inAddress'));
+        $out = '';
+        foreach (self::getMailboxList() ?: array() as $m) {
+            $out .= '<option value="' . self::h($m['address']) . '"' . (strtolower($m['address']) === $picked ? ' selected' : '') . '>' . self::h($m['address']) . '</option>';
         }
+        return $out;
+    }
+
+    /**
+     * The destination typed when adding failed, so it is not lost (<@ PostedDestination @>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return string The escaped address.
+     */
+    static function getPostedDestination()
+    {
+        global $controller;
+        if (self::$ok) {
+            return '';
+        }
+        $n = (string) $controller->GetControllerRequest('FORM', 'inDestinationName');
+        $d = (string) $controller->GetControllerRequest('FORM', 'inDestinationDomain');
+        return self::h($d !== '' ? $n . '@' . $d : $n);
     }
 
     /**
@@ -536,7 +673,7 @@ class module_controller extends ctrl_module
             return ui_sysmessage::shout(ui_language::translate("You cannot forward a mailbox to itself!"), "zannounceerror");
         }
         if (!fs_director::CheckForEmptyValue(self::$alreadyexists)) {
-            return ui_sysmessage::shout(ui_language::translate('A mailbox, alias, forwarder or distribution list already exists with that name.'), "zannounceerror");
+            return ui_sysmessage::shout(ui_language::translate('That mailbox already forwards to that address.'), "zannounceerror");
         }
         if (!fs_director::CheckForEmptyValue(self::$validemail)) {
             return ui_sysmessage::shout(ui_language::translate("Your email address is not valid."), "zannounceerror");
