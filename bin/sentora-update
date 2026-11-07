@@ -318,8 +318,17 @@ if [ "$MODE" = rollback ]; then
     tar -xzf "$RESTORE" -C "$TMP" || die "could not unpack $RESTORE"
     [ -f "$TMP/panel/index.php" ] || die "$RESTORE is not a panel backup"
     ui_step "Restoring the panel files"
+    # Modules the backup does not have: the core's (listed by the update that brought them) go,
+    # add-on modules installed since (.zpp) stay. Without the list nothing is taken out.
+    KEEP=(); ADDONS=""
+    for d in "$PANEL"/modules/*/; do
+        m=$(basename "$d")
+        [ -d "$TMP/panel/modules/$m" ] && continue
+        if [ -f "$STATUS_DIR/core-modules" ] && grep -qxF "$m" "$STATUS_DIR/core-modules"; then continue; fi
+        KEEP+=("--exclude=/modules/$m/"); ADDONS="$ADDONS $m"
+    done
     # back to exactly that state, except this server's own files (kept as they are now)
-    rsync -a --delete --exclude=/cnf/ --exclude=/bin/zsudo --exclude=/etc/tmp/ --exclude=/etc/zppy-cache/ \
+    rsync -a --delete "${KEEP[@]}" --exclude=/cnf/ --exclude=/bin/zsudo --exclude=/etc/tmp/ --exclude=/etc/zppy-cache/ \
         --exclude=/etc/apps/matomo/tmp/ --exclude=/etc/apps/matomo/config/config.ini.php \
         --exclude=/etc/apps/webmail/config/config.inc.php --exclude=/etc/apps/phpmyadmin/config.inc.php \
         --exclude=/etc/apps/webmail/plugins/managesieve/config.inc.php --exclude=/etc/apps/webmail/plugins/password/config.inc.php \
@@ -341,6 +350,7 @@ if [ "$MODE" = rollback ]; then
         }
         echo implode(" ", $gone);
     ' 2>&1 ) || warn "could not check the menu for modules the restored panel does not have: $GONE"
+    [ -n "$ADDONS" ] && say "kept the module(s) the backup does not have, installed as add-ons:$ADDONS"
     [ -n "$GONE" ] && [ "${GONE#*Error}" = "$GONE" ] && say "unregistered the module(s) the restored panel does not have: $GONE (an update registers them again)"
     fix_permissions; php_reload
     rm -f "$STATE"
@@ -519,6 +529,11 @@ command -v rsync > /dev/null 2>&1 || apt-get install -y -qq rsync > /dev/null 2>
 rsync -a --exclude=/cnf/ --exclude=/bin/zsudo --exclude=/etc/tmp/ --exclude=/etc/zppy-cache/ \
     --exclude=/etc/apps/matomo/tmp/ --exclude=/etc/apps/matomo/config/config.ini.php \
     "$SRC/" "$PANEL/" || die "the copy did not complete: restore with sentora-update --rollback $B"
+# the core's own modules, so that a rollback takes out only those and keeps add-on modules
+if st_dir; then
+    ( cd "$SRC/modules" && ls -1d */ | tr -d / ) > "$STATUS_DIR/core-modules.new" 2> /dev/null \
+        && mv -f "$STATUS_DIR/core-modules.new" "$STATUS_DIR/core-modules"
+fi
 # files the core no longer has (never an installed add-on module)
 if [ -f "$SRC/bin/obsolete-files.txt" ]; then
     n=0
