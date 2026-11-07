@@ -1,0 +1,51 @@
+/* Services in the panel's style. Colours come from the theme's shared --sn-* variables
+   (etc/styles/THEMES.md), with these as the fallback, so it follows Light, Dark and Auto. */
+.sv { --sv-ink: var(--sn-ink, #1f2933); --sv-muted: var(--sn-muted, #6b7785); --sv-line: var(--sn-line, #e6e9ee);
+      --sv-card: var(--sn-card, #ffffff); --sv-bg: var(--sn-soft, #f4f6f9); --sv-accent: var(--sn-accent, #447fb3);
+      --sv-ok: var(--sn-ok, #1e8a4c); --sv-bad: var(--sn-bad, #b42b27);
+      color: var(--sv-ink); background: var(--sv-bg); border-radius: 8px; padding: 18px; margin-top: 10px; }
+.sv * { box-sizing: border-box; }
+.sv-ico { width: 16px; height: 16px; flex: none; }
+.sv-ico-lg { width: 40px; height: 40px; padding: 8px; border-radius: 9px; flex: none; background: var(--sn-accent-soft, #e3edf6); color: var(--sv-accent); }
+
+/* overall */
+.sv-overall { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 14px 16px; border-radius: 6px; margin-bottom: 14px; background: var(--sv-card); box-shadow: 0 1px 3px rgba(20,30,40,0.08); border-left: 4px solid var(--sv-ok); }
+.sv-overall.bad { border-left-color: var(--sv-bad); }
+.sv-overall.ok .sv-ico-lg { background: var(--sn-ok-soft, #e3f4ea); color: var(--sv-ok); }
+.sv-overall.bad .sv-ico-lg { background: var(--sn-bad-soft, #fdeaea); color: var(--sv-bad); }
+.sv-overall b { display: block; font-size: 16px; }
+.sv-overall span { display: block; font-size: 13px; color: var(--sv-muted); margin-top: 2px; }
+.sv-checked { margin-left: auto; display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--sv-muted); }
+.sv-checked .btn { display: inline-flex; align-items: center; gap: 6px; }
+
+/* services */
+.sv-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; align-items: start; }
+.sv-card { background: var(--sv-card); border-radius: 6px; box-shadow: 0 1px 3px rgba(20,30,40,0.08); padding: 14px 16px; min-width: 0; }
+.sv-card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+.sv-card-head h4 { margin: 0; font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; }
+.sv-pill { font-size: 11px; font-weight: 700; padding: 1px 9px; border-radius: 10px; border: 1px solid; white-space: nowrap; }
+.sv-pill.ok { background: var(--sn-ok-soft, #e3f4ea); color: var(--sv-ok); border-color: var(--sn-ok-line, #a9dcbd); }
+.sv-pill.bad { background: var(--sn-bad-soft, #fdeaea); color: var(--sv-bad); border-color: var(--sn-bad-line, #f0a9a7); }
+.sv-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.sv-list li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--sv-line); border-radius: 6px; }
+.sv-list li.down { border-color: var(--sn-bad-line, #f0a9a7); background: var(--sn-bad-soft, #fdeaea); }
+.sv-dot { width: 10px; height: 10px; border-radius: 50%; background: #2db87d; box-shadow: 0 0 0 3px rgba(45,184,125,0.18); }
+.sv-list li.down .sv-dot { background: var(--sv-bad); box-shadow: 0 0 0 3px rgba(192,57,43,0.18); }
+.sv-name b { display: block; font-size: 13px; }
+.sv-name small { display: block; font-size: 11px; color: var(--sv-muted); line-height: 1.3; }
+.sv-port { font-size: 11px; color: var(--sv-muted); background: var(--sv-bg); border: 1px solid var(--sv-line); border-radius: 4px; padding: 0 6px; }
+.sv-state { font-size: 12px; font-weight: 700; color: var(--sv-ok); text-align: right; min-width: 52px; }
+.sv-state small { display: block; font-weight: normal; color: var(--sv-muted); font-size: 11px; }
+.sv-list li.down .sv-state { color: var(--sv-bad); }
+
+/* uptime and daemon */
+.sv-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 14px; }
+.sv-tile { display: flex; align-items: center; gap: 12px; background: var(--sv-card); border-radius: 6px; box-shadow: 0 1px 3px rgba(20,30,40,0.08); padding: 14px 16px; min-width: 0; }
+.sv-tile span { display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: var(--sv-muted); }
+.sv-tile b { display: block; font-size: 15px; margin-top: 2px; }
+.sv-tile small { display: block; font-size: 12px; color: var(--sv-muted); }
+.sv-note { color: var(--sv-muted); font-size: 12px; margin: 12px 2px 0; }
+
+@media (max-width: 1100px) { .sv-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .sv-grid .sv-card:nth-child(2) { grid-row: span 2; } }
+@media (max-width: 760px) { .sv-grid, .sv-tiles { grid-template-columns: 1fr; } .sv-grid .sv-card:nth-child(2) { grid-row: auto; } }
+@media (max-width: 640px) { .sv { padding: 12px; } .sv-checked { margin-left: 0; width: 100%; justify-content: space-between; } }

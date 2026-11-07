@@ -38,47 +38,201 @@
 class module_controller extends ctrl_module
 {
     /**
-     * Build the status icon and text for one local port.
+     * The services checked, in groups: name, port and what it is for.
      *
-     * @param int $PortNum The TCP port on 127.0.0.1.
-     * @param string $iconpath Not used (the icons come from ui_status).
-     * @return string HTML: the open/closed icon and "(port N is open|closed)".
+     * @return array<string, array<int, array{0: string, 1: int, 2: string}>> Group title => list of [name, port, purpose].
      */
-    static private function status_port($PortNum, $iconpath)
+    static function Checks()
     {
-        $status = sys_monitoring::LocalPortStatus($PortNum);
-        return ($status ? ui_status::Ok('Port ' . $PortNum . ' is open') : ui_status::Bad('Port ' . $PortNum . ' is closed')) . ' (port ' . $PortNum .' is ' . ($status ? 'open' : 'closed') . ')';
+        return array(
+            'Websites' => array(
+                array('HTTP', 80, 'Websites and the panel, unencrypted'),
+                array('HTTPS', 443, 'Websites and the panel, encrypted'),
+            ),
+            'Email' => array(
+                array('SMTP', 25, 'Mail from other servers'),
+                array('SMTP submission', 587, 'Mail sent by your users'),
+                array('IMAP', 143, 'Reading mail'),
+                array('IMAPS', 993, 'Reading mail, encrypted'),
+                array('POP3', 110, 'Downloading mail'),
+                array('POP3S', 995, 'Downloading mail, encrypted'),
+            ),
+            'Files, names and data' => array(
+                array('FTP', 21, 'Uploading website files'),
+                array('DNS', 53, 'Domain names of hosted sites'),
+                array('MySQL', 3306, 'Databases'),
+            ),
+        );
     }
 
     /**
-     * Template value <@ Services @>: the service status table and server uptime.
+     * Check one local TCP port and time it.
      *
-     * @global runtime_controller $controller The request controller (not used).
+     * @param int $port The port on 127.0.0.1.
+     * @return array{0: bool, 1: float} Whether it answered, and how long it took in milliseconds.
+     */
+    static function Probe($port)
+    {
+        $start = microtime(true);
+        $up = sys_monitoring::LocalPortStatus($port);
+        return array($up, (microtime(true) - $start) * 1000);
+    }
+
+    /**
+     * The results of every check, done once per page.
+     *
+     * @return array<string, array<int, array{0: string, 1: int, 2: string, 3: bool, 4: float}>> Group title => list of [name, port, purpose, up, ms].
+     */
+    static function Results()
+    {
+        static $res = null;
+        if ($res === null) {
+            $res = array();
+            foreach (self::Checks() as $group => $list) {
+                foreach ($list as $c) {
+                    $p = self::Probe($c[1]);
+                    $res[$group][] = array($c[0], $c[1], $c[2], $p[0], $p[1]);
+                }
+            }
+        }
+        return $res;
+    }
+
+    /**
+     * Template value <@ Overall @>: one line for all services, with how many answer.
+     *
+     * @return string The HTML.
+     */
+    static function getOverall()
+    {
+        $t = function ($s) { return htmlspecialchars(ui_language::translate($s), ENT_QUOTES, 'UTF-8'); };
+        $up = 0;
+        $all = 0;
+        $down = array();
+        foreach (self::Results() as $list) {
+            foreach ($list as $r) {
+                $all++;
+                if ($r[3]) {
+                    $up++;
+                } else {
+                    $down[] = $r[0];
+                }
+            }
+        }
+        $ok = !$down;
+        return '<div class="sv-overall ' . ($ok ? 'ok' : 'bad') . '">'
+            . '<svg class="sv-ico-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+            . ($ok ? '<circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/>' : '<path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/>') . '</svg>'
+            . '<div><b>' . ($ok ? $t('All services are answering') : $t(count($down) === 1 ? '1 service is not answering' : count($down) . ' services are not answering')) . '</b>'
+            . '<span>' . ($ok ? $up . ' ' . $t('of') . ' ' . $all . ' ' . $t('ports open on this server.') : htmlspecialchars(implode(', ', $down), ENT_QUOTES, 'UTF-8') . ' &middot; ' . $up . ' ' . $t('of') . ' ' . $all . ' ' . $t('answer.')) . '</span></div>'
+            . '<div class="sv-checked"><span>' . $t('Checked at') . ' ' . date('H:i:s') . '</span>'
+            . '<a class="btn btn-default btn-sm" href="./?module=services"><svg class="sv-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>' . $t('Check again') . '</a></div>'
+            . '</div>';
+    }
+
+    /**
+     * Template value <@ Services @>: a card per group with each service, its port, state and answer time.
+     *
      * @return string The HTML.
      */
     static public function getServices()
     {
-        global $controller;
-        $iconpath = ''; // the status icons are ui_status (no image files)
-        $line = "<h2>" . ui_language::translate("Checking status of services...") . "</h2>";
-        $line .= "<table>";
-        
+        $t = function ($s) { return htmlspecialchars(ui_language::translate($s), ENT_QUOTES, 'UTF-8'); };
+        $out = '';
+        foreach (self::Results() as $group => $list) {
+            $rows = '';
+            $down = 0;
+            foreach ($list as $r) {
+                if (!$r[3]) {
+                    $down++;
+                }
+                $rows .= '<li class="' . ($r[3] ? 'up' : 'down') . '"><span class="sv-dot" aria-hidden="true"></span>'
+                    . '<div class="sv-name"><b>' . $t($r[0]) . '</b><small>' . $t($r[2]) . '</small></div>'
+                    . '<code class="sv-port">' . (int) $r[1] . '</code>'
+                    . '<span class="sv-state">' . $t($r[3] ? 'Open' : 'Closed') . ($r[3] ? '<small>' . ($r[4] < 1 ? '&lt;1' : round($r[4])) . ' ms</small>' : '') . '</span></li>';
+            }
+            $out .= '<div class="sv-card"><div class="sv-card-head"><h4>' . $t($group) . '</h4>'
+                . '<span class="sv-pill ' . ($down ? 'bad' : 'ok') . '">' . ($down ? $down . ' ' . $t('down') : $t('All open')) . '</span></div>'
+                . '<ul class="sv-list">' . $rows . '</ul></div>';
+        }
+        return $out;
+    }
 
-        $line .= '<tr><th>HTTP</th><td>'  . module_controller::status_port(80, $iconpath) . '</td></tr>';
-		$line .= '<tr><th>HTTPS</th><td>'  . module_controller::status_port(443, $iconpath) . '</td></tr>';
-        $line .= '<tr><th>FTP</th><td>'   . module_controller::status_port(21, $iconpath) . '</td></tr>';
-        $line .= '<tr><th>DNS</th><td>'   . module_controller::status_port(53, $iconpath)  . '</td></tr>';
-        $line .= '<tr><th>SMTP</th><td>'  . module_controller::status_port(25, $iconpath) . '</td></tr>';
-        $line .= '<tr><th>POP3</th><td>'  . module_controller::status_port(110, $iconpath) . '</td></tr>';
-        $line .= '<tr><th>IMAP</th><td>'  . module_controller::status_port(143, $iconpath) . '</td></tr>';
-        $line .= '<tr><th>IMAPS</th><td>' . module_controller::status_port(993, $iconpath) . '</td></tr>';
-        $line .= '<tr><th>POP3S</th><td>' . module_controller::status_port(995, $iconpath) . '</td></tr>';
-        $line .= '<tr><th>SMTP Submission</th><td>' . module_controller::status_port(587, $iconpath) . '</td></tr>';
-        $line .= '<tr><th>MySQL</th><td>' . module_controller::status_port(3306, $iconpath) . '</td></tr>';
-        $line .= '</table>';
-        $line .= '<br><h2>' . ui_language::translate('Server Uptime') . '</h2>';
-        $line .= ui_language::translate('Uptime') . ": " . sys_monitoring::ServerUptime();
-        return $line;
+    /**
+     * How far a time is from now, in words ("in 4 min", "2 h ago").
+     *
+     * @param int $time A Unix time.
+     * @return string The words.
+     */
+    static function Ago($time)
+    {
+        $d = (int) $time - time();
+        $a = abs($d);
+        if ($a < 60) {
+            return ui_language::translate($d >= 0 ? 'in under a minute' : 'just now');
+        }
+        $w = $a < 3600 ? floor($a / 60) . ' min' : ($a < 172800 ? floor($a / 3600) . ' h' : floor($a / 86400) . ' ' . ui_language::translate('days'));
+        return $d >= 0 ? ui_language::translate('in') . ' ' . $w : $w . ' ' . ui_language::translate('ago');
+    }
+
+    /**
+     * Template value <@ Facts @>: server uptime (and when it started), and the daemon's last and next run.
+     *
+     * @return string The HTML.
+     */
+    static function getFacts()
+    {
+        $t = function ($s) { return htmlspecialchars(ui_language::translate($s), ENT_QUOTES, 'UTF-8'); };
+        $h = function ($s) { return htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8'); };
+        $df = ctrl_options::GetSystemOption('sentora_df');
+        $up = (float) explode(' ', trim((string) @file_get_contents('/proc/uptime')) . ' ')[0];
+        $last = (int) ctrl_options::GetSystemOption('daemon_lastrun');
+        $next = self::NextRun();
+        $tiles = array(
+            array('Server uptime', $up > 0 ? self::Span($up) : sys_monitoring::ServerUptime(), $up > 0 ? $t('since') . ' ' . $h(date($df, time() - (int) $up)) : '', '<path d="M12 2v4M12 18v4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M2 12h4M18 12h4M4.9 19.1l2.8-2.8M16.3 7.7l2.8-2.8"/>'),
+            array('Daemon last ran', $last > 0 ? self::Ago($last) : ui_language::translate('Not since the last reset'), $last > 0 ? $h(date($df, $last)) : $t('A full run was queued in Sentora Config.'), '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/>'),
+            array('Daemon runs next', self::Ago($next), $h(date($df, $next)), '<path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/>'),
+        );
+        $out = '';
+        foreach ($tiles as $x) {
+            $out .= '<div class="sv-tile"><svg class="sv-ico-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' . $x[3] . '</svg>'
+                . '<div><span>' . $t($x[0]) . '</span><b>' . $h($x[1]) . '</b>' . ($x[2] !== '' ? '<small>' . $x[2] . '</small>' : '') . '</div></div>';
+        }
+        return $out;
+    }
+
+    /**
+     * A length of time in words, leaving out units that are zero ("2 hours, 3 minutes", "4 days, 1 hour").
+     *
+     * @param float $seconds The length in seconds.
+     * @return string The words.
+     */
+    static function Span($seconds)
+    {
+        $s = (int) $seconds;
+        $parts = array();
+        foreach (array(array(86400, 'day', 'days'), array(3600, 'hour', 'hours'), array(60, 'minute', 'minutes')) as $u) {
+            $n = intdiv($s, $u[0]);
+            $s -= $n * $u[0];
+            if ($n > 0) {
+                $parts[] = $n . ' ' . ui_language::translate($n === 1 ? $u[1] : $u[2]);
+            }
+        }
+        // days and hours are enough once it has been up for days
+        return $parts ? implode(', ', array_slice($parts, 0, 2)) : ui_language::translate('under a minute');
+    }
+
+    /**
+     * When the daemon runs next: the last run plus its interval, or the next 5-minute mark (cron starts it then)
+     * when it has not run since a reset or is overdue.
+     *
+     * @return int The Unix time.
+     */
+    static function NextRun()
+    {
+        $last = (int) ctrl_options::GetSystemOption('daemon_lastrun');
+        $next = $last > 0 ? $last + (int) ctrl_options::GetSystemOption('daemon_run_interval') : 0;
+        return $next > time() ? $next : (int) (ceil(time() / 300) * 300);
     }
 
     /**
@@ -164,22 +318,22 @@ class module_controller extends ctrl_module
     /**
      * Template value <@ LastRunTime @>: when the daemon last ran.
      *
-     * @return string The time in the panel's date format (option 'sentora_df').
+     * @return string The time in the panel's date format (option 'sentora_df'), or "Not since the last reset".
      */
     static function getLastRunTime()
     {
-        return date(ctrl_options::GetSystemOption('sentora_df'), ctrl_options::GetSystemOption('daemon_lastrun'));
+        $last = (int) ctrl_options::GetSystemOption('daemon_lastrun');
+        return $last > 0 ? date(ctrl_options::GetSystemOption('sentora_df'), $last) : ui_language::translate('Not since the last reset');
     }
 
     /**
      * Template value <@ NextRunTime @>: when the daemon runs next.
      *
-     * @return string The time in the panel's date format (last run + run interval).
+     * @return string The time in the panel's date format (see NextRun()).
      */
     static function getNextRunTime()
     {
-        $new_time = ctrl_options::GetSystemOption('daemon_lastrun') + ctrl_options::GetSystemOption('daemon_run_interval');
-        return date(ctrl_options::GetSystemOption('sentora_df'), $new_time);
+        return date(ctrl_options::GetSystemOption('sentora_df'), self::NextRun());
     }
 
 }

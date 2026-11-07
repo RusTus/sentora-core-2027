@@ -1,31 +1,15 @@
 <div class="zmodule_content panel" id="zmodule_header_<@ ModuleName @>">
     <div class="panel-heading">
         <img src="<@ ModuleIcon @>" width="35" height="35" border="0" alt="<@ ModuleName @>">
-
-        <div class="zmodule_title">
-            <@ ModuleName @>
-        </div>
-
+        <div class="zmodule_title"><@ ModuleName @></div>
         <div class="zmodule_desc" id="zmodule_desc_<@ ModuleName @>"><@ ModuleDesc @></div>
-
     </div>
+    <link rel="stylesheet" href="modules/services/assets/services.css">
 
-    <div class="zform_wrapper">
-        <@ Services @>
+    <div class="sv" id="sv">
+        <@ Overall @>
+        <div class="sv-grid"><@ Services @></div>
+        <div class="sv-tiles"><@ Facts @></div>
+        <p class="sv-note"><: Each service is checked by opening its port on this server. Open means the service is listening; it does not test logins or sending mail. Programs that run in the background are in Server Monitor. :></p>
     </div>
-
-    <div class="zform_wrapper">
-        <h2><: Daemon Status :></h2>
-        <table class="table table-striped">
-            <tr>
-                <th><: Last Daemon Run :>:</th>
-                <td><@ LastRunTime @></td>
-            </tr>
-            <tr>
-                <th><: Next Daemon Run :>:</th>
-                <td><@ NextRunTime @></td>
-            </tr>
-        </table>
-    </div>
-
 </div>
