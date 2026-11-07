@@ -4,59 +4,100 @@
         <div class="zmodule_title"><@ ModuleName @></div>
         <div class="zmodule_desc" id="zmodule_desc_<@ ModuleName @>"><@ ModuleDesc @></div>
     </div>
-    <link rel="stylesheet" href="<@ Assets @>tree.css">
-    <div class="zgrid_wrapper">
-        <@ Result @>
-        <% if IsIndex %>
-        <h3><: Protected folders :></h3>
-        <table class="table table-striped">
-            <tr><th><: Folder :></th><th><: Message :></th><th><: Users :></th><th></th></tr>
-            <@ ProtectionRows @>
-        </table>
+    <@ Result @>
+    <link rel="stylesheet" href="<@ Assets @>pd.css">
 
-        <h3><: Protect a folder :></h3>
-        <p class="text-muted"><: Choose a folder of your website: visitors then need a username and password to open it and everything in it. :></p>
-        <form method="post" action="./?module=protected_directories&action=CreateProtection" id="pd-form">
-            <div class="pd-tree" id="pd-tree" data-url="modules/protected_directories/code/folders.php">
-                <div class="pd-loading"><: Loading folders :>...</div>
-            </div>
-            <div class="pd-chosen" id="pd-chosen">
-                <: Selected folder :>: <strong id="pd-chosen-path" class="text-muted"><: none yet: click a folder in the tree :></strong>
-                <span id="pd-chosen-note" class="label label-warning" style="display:none"><: already protected :></span>
-            </div>
-            <input type="hidden" name="inPath" id="pd-path" value="">
-            <div class="form-group" style="max-width: 480px; margin-top: 12px;">
-                <label for="pd-message"><: Message in the login box :></label>
-                <input type="text" class="form-control" name="inMessage" id="pd-message" maxlength="64" placeholder="Protected area">
-            </div>
-            <button type="submit" class="btn btn-primary" id="pd-submit" disabled><: Protect this folder :></button>
-            <@ CSFR_Tag @>
-        </form>
+    <div class="pd" id="pd">
+        <% if IsIndex %>
+        <div class="pd-tiles"><@ Summary @></div>
+
+        <div class="pd-card">
+            <h4><: Protected folders :></h4>
+            <p class="pd-sub"><: Visitors need a username and password to open these folders and everything in them. :></p>
+            <div class="pd-items"><@ ProtectionRows @></div>
+        </div>
+
+        <div class="pd-card">
+            <h4><: Protect a folder :></h4>
+            <form method="post" action="./?module=protected_directories&amp;action=CreateProtection" id="pd-form">
+                <div class="pd-step"><span class="pd-num">1</span><div class="pd-step-body">
+                    <span class="pd-label"><: The folder :></span>
+                    <p class="pd-sub"><: Click a folder of your website; the arrow opens it. Folders with a lock are protected already. :></p>
+                    <div class="pd-tree" id="pd-tree" data-url="modules/protected_directories/code/folders.php" data-loading="<: Loading folders... :>" data-none="<: no subfolders :>" data-locked="<: already protected :>">
+                        <div class="pd-tree-msg"><: Loading folders... :></div>
+                    </div>
+                    <div class="pd-chosen"><span><: Chosen :></span><code id="pd-chosen-path" class="is-empty"><: none yet: click a folder in the tree :></code>
+                        <span id="pd-chosen-note" class="pd-pill warn" hidden><: already protected :></span></div>
+                    <input type="hidden" name="inPath" id="pd-path" value="">
+                </div></div>
+                <div class="pd-step"><span class="pd-num">2</span><div class="pd-step-body">
+                    <label class="pd-label" for="pd-message"><: Message in the login box :> <small><: optional :></small></label>
+                    <input type="text" class="form-control" name="inMessage" id="pd-message" maxlength="64" placeholder="Protected area">
+                    <p class="pd-sub pd-hint"><: Browsers show it when they ask for the username and password. Letters, digits, spaces and . , : ; ! ( ) _ - / @ &amp; + :></p>
+                </div></div>
+                <div class="pd-foot"><@ CSFR_Tag @><button type="submit" class="btn btn-primary" id="pd-submit" disabled><: Protect this folder :></button>
+                    <span class="pd-sub"><: Then add the users who may open it. :></span></div>
+            </form>
+        </div>
         <% endif %>
 
         <% if IsEdit %>
-        <p><a href="./?module=protected_directories" class="btn btn-default btn-sm">&larr; <: All protected folders :></a></p>
-        <h3><span class="icon-lock-alt"></span> <@ EditPath @></h3>
-        <form method="post" action="./?module=protected_directories&control=Edit&id=<@ EditId @>&action=UpdateMessage" class="form-inline" style="margin-bottom: 18px;">
-            <input type="hidden" name="inId" value="<@ EditId @>">
-            <label for="pd-msg"><: Message in the login box :>:</label>
-            <input type="text" class="form-control" name="inMessage" id="pd-msg" value="<@ EditMessage @>" maxlength="64" style="min-width: 280px;">
-            <button type="submit" class="btn btn-default"><: Change message :></button>
-            <@ CSFR_Tag @>
-        </form>
-        <h4><: Users who can open it :></h4>
-        <table class="table table-striped">
-            <tr><th><: Username :></th><th><: Password :></th><th></th></tr>
-            <@ UserRows @>
-        </table>
-        <form method="post" action="./?module=protected_directories&control=Edit&id=<@ EditId @>&action=AddUser" class="form-inline">
-            <input type="hidden" name="inId" value="<@ EditId @>">
-            <input type="text" class="form-control" name="inUser" placeholder="<: Username :>" maxlength="32" pattern="[A-Za-z0-9._\-]+" required autocomplete="off">
-            <input type="password" class="form-control" name="inPassword" placeholder="<: Password, 8 characters or more :>" minlength="8" maxlength="128" required autocomplete="new-password">
-            <button type="submit" class="btn btn-primary"><: Add user :></button>
-            <@ CSFR_Tag @>
-        </form>
+        <div class="pd-card pd-edit-head">
+            <a href="./?module=protected_directories" class="btn btn-default btn-sm pd-back"><svg class="pd-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg><: All protected folders :></a>
+            <div class="pd-title"><svg class="pd-ico-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+                <div><small><: Protected folder :></small><div class="pd-path"><@ EditPathHtml @></div></div></div>
+            <form method="post" action="./?module=protected_directories&amp;control=Edit&amp;id=<@ EditId @>&amp;action=UpdateMessage" class="pd-msg-form">
+                <input type="hidden" name="inId" value="<@ EditId @>">
+                <label for="pd-msg" class="pd-label"><: Message in the login box :></label>
+                <div class="pd-inline"><input type="text" class="form-control" name="inMessage" id="pd-msg" value="<@ EditMessage @>" maxlength="64">
+                    <button type="submit" class="btn btn-default"><: Change message :></button></div>
+                <@ CSFR_Tag @>
+            </form>
+        </div>
+
+        <div class="pd-card">
+            <h4><: Users who can open it :> <span class="pd-count"><@ EditUserCount @></span></h4>
+            <div class="pd-users-list"><@ UserRows @></div>
+            <form method="post" action="./?module=protected_directories&amp;control=Edit&amp;id=<@ EditId @>&amp;action=AddUser" class="pd-add">
+                <input type="hidden" name="inId" value="<@ EditId @>">
+                <span class="pd-label"><: Add a user :></span>
+                <div class="pd-add-row">
+                    <input type="text" class="form-control pd-add-user" name="inUser" value="<@ PostedUser @>" placeholder="<: Username :>" aria-label="<: Username :>" maxlength="32" pattern="[A-Za-z0-9._\-]+" title="<: Letters, digits, dots, dashes and underscores :>" required autocomplete="off">
+                    <div class="pd-pass"><input type="password" class="form-control" name="inPassword" placeholder="<: Password, 8 characters or more :>" aria-label="<: Password :>" minlength="8" maxlength="128" required autocomplete="new-password">
+                        <button type="button" class="btn btn-default pd-show" data-show="<: Show :>" data-hide="<: Hide :>"><: Show :></button>
+                        <button type="button" class="btn btn-default pd-gen"><: Make one :></button></div>
+                    <button type="submit" class="btn btn-primary"><: Add user :></button>
+                </div>
+                <p class="pd-sub pd-hint"><: Passwords are stored with bcrypt, so the panel can not show them again later: note a made password before you add the user. :></p>
+                <@ CSFR_Tag @>
+            </form>
+        </div>
         <% endif %>
     </div>
-    <script src="<@ Assets @>tree.js"></script>
 </div>
+<script>
+(function () {
+    'use strict';
+    var pd = document.getElementById('pd'); if (!pd) { return; }
+    var each = function (sel, fn) { Array.prototype.forEach.call(pd.querySelectorAll(sel), fn); };
+    each('.pd-confirm', function (f) { f.addEventListener('submit', function (e) { if (!window.confirm(f.getAttribute('data-confirm'))) { e.preventDefault(); } }); });
+    each('.pd-user', function (u) {
+        var b = u.querySelector('.pd-pw-btn'), f = u.querySelector('.pd-pw');
+        b.addEventListener('click', function () { f.hidden = !f.hidden; b.setAttribute('aria-expanded', f.hidden ? 'false' : 'true'); b.classList.toggle('active', !f.hidden); });
+    });
+    // Show / Hide, and Make one: 16 characters from the browser's secure random numbers (shown, so it can be noted)
+    each('.pd-pass', function (box) {
+        var input = box.querySelector('input[name=inPassword]'), show = box.querySelector('.pd-show'), gen = box.querySelector('.pd-gen');
+        var vis = function (on) { input.type = on ? 'text' : 'password'; show.textContent = show.getAttribute(on ? 'data-hide' : 'data-show'); };
+        show.addEventListener('click', function () { vis(input.type === 'password'); });
+        gen.addEventListener('click', function () {
+            var chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789-_.!', a = new Uint32Array(16), out = '';
+            window.crypto.getRandomValues(a);
+            for (var i = 0; i < a.length; i++) { out += chars[a[i] % chars.length]; }
+            input.value = out; vis(true); input.select();
+        });
+    });
+    each('form', function (f) { f.addEventListener('submit', function (e) { if (!e.defaultPrevented && window.Sentora && Sentora.loader) { Sentora.loader.showLoader(); } }); });
+})();
+</script>
+<script src="<@ Assets @>tree.js"></script>

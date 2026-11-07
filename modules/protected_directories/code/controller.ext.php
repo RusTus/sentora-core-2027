@@ -509,32 +509,6 @@ class module_controller extends ctrl_module
     }
 
     /**
-     * Build the table rows of the account's protected folders (<@ ProtectionRows @>).
-     *
-     * @global db_driver $zdbh The panel's database connection.
-     * @return string HTML <tr> rows.
-     */
-    static function getProtectionRows()
-    {
-        global $zdbh;
-        $me = self::Me();
-        $q = $zdbh->prepare("SELECT * FROM x_htpasswd_file WHERE x_htpasswd_sentora_user_id = :u AND x_htpasswd_file_deleted IS NULL ORDER BY x_htpasswd_file_target");
-        $q->execute(array(':u' => (int) $me['userid']));
-        $html = '';
-        foreach ($q->fetchAll() as $r) {
-            $rel = pd_safe::RelPath($me['username'], $r['x_htpasswd_file_target']);
-            $n = count(self::Users($r['x_htpasswd_file_id']));
-            $html .= '<tr><td><span class="icon-lock-alt"></span> public_html/' . self::h($rel === false ? $r['x_htpasswd_file_target'] : $rel) . '</td>'
-                . '<td>' . self::h($r['x_htpasswd_file_message']) . '</td><td>' . $n . '</td><td nowrap>'
-                . '<a class="btn btn-default btn-sm" href="./?module=protected_directories&amp;control=Edit&amp;id=' . (int) $r['x_htpasswd_file_id'] . '">' . ui_language::translate('Users and message') . '</a> '
-                . '<form method="post" action="./?module=protected_directories&amp;action=DeleteProtection" style="display:inline" onsubmit="return confirm(\'' . self::h(ui_language::translate('Remove the protection from this folder')) . '\');">'
-                . '<input type="hidden" name="inId" value="' . (int) $r['x_htpasswd_file_id'] . '">' . runtime_csfr::Token()
-                . '<button class="btn btn-danger btn-sm" type="submit">' . ui_language::translate('Remove protection') . '</button></form></td></tr>';
-        }
-        return $html === '' ? '<tr><td colspan="4" class="text-muted">' . ui_language::translate('No folder is protected yet.') . '</td></tr>' : $html;
-    }
-
-    /**
      * Return the account's public_html path, HTML-escaped.
      *
      * @return string The escaped path.
@@ -578,9 +552,148 @@ class module_controller extends ctrl_module
     }
 
     /**
-     * Build the table rows of the edited folder's users (<@ UserRows @>).
+     * The account's protected folders, by path.
      *
-     * @return string HTML <tr> rows ('' when the folder is not found).
+     * @global db_driver $zdbh The panel's database connection.
+     * @return array<int, array<int|string, mixed>> x_htpasswd_file rows.
+     */
+    static function Protections()
+    {
+        global $zdbh;
+        static $rows = null;
+        if ($rows === null) {
+            $q = $zdbh->prepare("SELECT * FROM x_htpasswd_file WHERE x_htpasswd_sentora_user_id = :u AND x_htpasswd_file_deleted IS NULL ORDER BY x_htpasswd_file_target");
+            $q->execute(array(':u' => (int) self::Me()['userid']));
+            $rows = $q->fetchAll();
+        }
+        return $rows;
+    }
+
+    /**
+     * A folder of a record as shown: 'public_html/...'.
+     *
+     * @param array<int|string,mixed> $r The x_htpasswd_file row.
+     * @return string The path.
+     */
+    static function Shown($r)
+    {
+        $rel = pd_safe::RelPath(self::Me()['username'], $r['x_htpasswd_file_target']);
+        return $rel === false ? (string) $r['x_htpasswd_file_target'] : rtrim('public_html/' . $rel, '/');
+    }
+
+    /**
+     * The path split for display: the folders before it (muted) and its own name (bold).
+     *
+     * @param string $path A path like 'public_html/shop/admin'.
+     * @return string The HTML.
+     */
+    static function PathHtml($path)
+    {
+        $pos = strrpos($path, '/');
+        return $pos === false ? '<b>' . self::h($path) . '</b>'
+            : '<span class="pd-dir">' . self::h(substr($path, 0, $pos + 1)) . '</span><b>' . self::h(substr($path, $pos + 1)) . '</b>';
+    }
+
+    /**
+     * The figures at the top (<@ Summary @>): protected folders, users, and folders nobody can open yet.
+     *
+     * @return string The HTML.
+     */
+    static function getSummary()
+    {
+        $folders = self::Protections();
+        $users = 0;
+        $empty = 0;
+        foreach ($folders as $r) {
+            $n = count(self::Users($r['x_htpasswd_file_id']));
+            $users += $n;
+            if ($n === 0) {
+                $empty++;
+            }
+        }
+        $tiles = array(
+            array('Protected folders', count($folders), '', '<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>'),
+            array('Users who can log in', $users, '', '<circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 14 0"/><path d="M17 11a3 3 0 1 0 0-6M22 21a6 6 0 0 0-4-5.6"/>'),
+            array('Folders with no users yet', $empty, $empty ? 'warn' : '', '<path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/>'),
+        );
+        $out = '';
+        foreach ($tiles as $t) {
+            $out .= '<div class="pd-tile ' . $t[2] . '"><svg class="pd-ico-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' . $t[3] . '</svg>'
+                . '<div><b>' . (int) $t[1] . '</b><span>' . self::h(ui_language::translate($t[0])) . '</span></div></div>';
+        }
+        return $out;
+    }
+
+    /**
+     * One card per protected folder (<@ ProtectionRows @>): its path, login box message, users, Manage and Remove protection.
+     *
+     * @return string The HTML.
+     */
+    static function getProtectionRows()
+    {
+        $t = function ($s) { return self::h(ui_language::translate($s)); };
+        $html = '';
+        foreach (self::Protections() as $r) {
+            $users = self::Users($r['x_htpasswd_file_id']);
+            $n = count($users);
+            $id = (int) $r['x_htpasswd_file_id'];
+            $names = array_map(function ($u) { return $u['x_htpasswd_user_username']; }, array_slice($users, 0, 4));
+            $html .= '<div class="pd-item' . ($n ? '' : ' is-empty') . '"><div class="pd-item-main">'
+                . '<div class="pd-path"><svg class="pd-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>'
+                . self::PathHtml(self::Shown($r)) . '</div>'
+                . '<div class="pd-meta"><span title="' . $t('Message in the login box') . '">&ldquo;' . self::h($r['x_htpasswd_file_message']) . '&rdquo;</span>'
+                . ($n ? '<span class="pd-users">' . $n . ' ' . $t($n === 1 ? 'user' : 'users') . ': ' . self::h(implode(', ', $names)) . ($n > 4 ? ', &hellip;' : '') . '</span>'
+                    : '<span class="pd-pill warn">' . $t('No users yet: nobody can open it') . '</span>')
+                . '</div></div>'
+                . '<div class="pd-act"><a class="btn btn-primary btn-sm" href="./?module=protected_directories&amp;control=Edit&amp;id=' . $id . '">'
+                . '<svg class="pd-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 14 0"/></svg>' . $t('Users and message') . '</a>'
+                . '<form method="post" action="./?module=protected_directories&amp;action=DeleteProtection" class="pd-confirm" data-confirm="' . $t('Remove the protection from this folder? Anyone can open it again.') . '">'
+                . '<input type="hidden" name="inId" value="' . $id . '">' . runtime_csfr::Token()
+                . '<button class="btn btn-default btn-sm pd-unlock" type="submit"><svg class="pd-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 7.5-2"/></svg>' . $t('Remove protection') . '</button></form>'
+                . '</div></div>';
+        }
+        return $html === '' ? '<div class="pd-none"><svg class="pd-ico-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>'
+            . '<b>' . $t('No folder is protected yet.') . '</b><span>' . $t('Choose one below, for example an admin or staging folder.') . '</span></div>' : $html;
+    }
+
+    /**
+     * The edited folder's path as HTML, folders muted and its name bold (<@ EditPathHtml @>).
+     *
+     * @return string The HTML.
+     */
+    static function getEditPathHtml()
+    {
+        $row = self::Protection(self::CurrentId());
+        return $row ? self::PathHtml(self::Shown($row)) : '';
+    }
+
+    /**
+     * How many users the edited folder has (<@ EditUserCount @>).
+     *
+     * @return int
+     */
+    static function getEditUserCount()
+    {
+        $row = self::Protection(self::CurrentId());
+        return $row ? count(self::Users($row['x_htpasswd_file_id'])) : 0;
+    }
+
+    /**
+     * The username typed when adding a user failed, so it is not lost (<@ PostedUser @>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return string The escaped username ('' after a success or without a post).
+     */
+    static function getPostedUser()
+    {
+        global $controller;
+        return self::$errors ? self::h((string) $controller->GetControllerRequest('FORM', 'inUser')) : '';
+    }
+
+    /**
+     * One row per user of the edited folder (<@ UserRows @>), with a new password that opens in place and Remove.
+     *
+     * @return string The HTML ('' when the folder is not found).
      */
     static function getUserRows()
     {
@@ -588,21 +701,32 @@ class module_controller extends ctrl_module
         if (!$row) {
             return '';
         }
+        $t = function ($s) { return self::h(ui_language::translate($s)); };
+        $fid = (int) $row['x_htpasswd_file_id'];
         $html = '';
-        foreach (self::Users($row['x_htpasswd_file_id']) as $u) {
+        foreach (self::Users($fid) as $u) {
             $strong = (strncmp($u['x_htpasswd_user_password'], '$2y$', 4) === 0);
             $id = (int) $u['x_htpasswd_user_id'];
-            $html .= '<tr><td>' . self::h($u['x_htpasswd_user_username'])
-                . ($strong ? '' : ' <span class="label label-warning" title="' . self::h(ui_language::translate('Set a new password to store it with bcrypt.')) . '">' . ui_language::translate('weak password hash') . '</span>') . '</td>'
-                . '<td><form method="post" action="./?module=protected_directories&amp;control=Edit&amp;id=' . (int) $row['x_htpasswd_file_id'] . '&amp;action=SetPassword" class="form-inline" style="display:inline">'
-                . '<input type="hidden" name="inId" value="' . (int) $row['x_htpasswd_file_id'] . '"><input type="hidden" name="inUserId" value="' . $id . '">'
-                . '<input type="password" name="inPassword" class="form-control input-sm" placeholder="' . self::h(ui_language::translate('New password')) . '" minlength="8" maxlength="128" autocomplete="new-password" required> '
-                . runtime_csfr::Token() . '<button class="btn btn-default btn-sm" type="submit">' . ui_language::translate('Set password') . '</button></form></td>'
-                . '<td><form method="post" action="./?module=protected_directories&amp;control=Edit&amp;id=' . (int) $row['x_htpasswd_file_id'] . '&amp;action=DeleteUser" style="display:inline" onsubmit="return confirm(\'' . self::h(ui_language::translate('Remove this user')) . '\');">'
-                . '<input type="hidden" name="inId" value="' . (int) $row['x_htpasswd_file_id'] . '"><input type="hidden" name="inUserId" value="' . $id . '">'
-                . runtime_csfr::Token() . '<button class="btn btn-danger btn-sm" type="submit">' . ui_language::translate('Remove') . '</button></form></td></tr>';
+            $html .= '<div class="pd-user"><div class="pd-user-row">'
+                . '<span class="pd-avatar" aria-hidden="true">' . self::h(strtoupper(substr($u['x_htpasswd_user_username'], 0, 1))) . '</span>'
+                . '<div class="pd-user-name"><b>' . self::h($u['x_htpasswd_user_username']) . '</b>'
+                . ($strong ? '<small>' . $t('Password stored with bcrypt') . '</small>'
+                    : '<span class="pd-pill warn" title="' . $t('Set a new password to store it with bcrypt.') . '">' . $t('weak password hash') . '</span>')
+                . (!empty($u['x_htpasswd_user_created']) ? '<small>' . $t('Added') . ' ' . self::h(date('Y-m-d', (int) $u['x_htpasswd_user_created'])) . '</small>' : '') . '</div>'
+                . '<div class="pd-act"><button type="button" class="btn btn-default btn-sm pd-pw-btn" aria-expanded="false">'
+                . '<svg class="pd-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="15" r="4"/><path d="m11 12 9-9M17 6l3 3"/></svg>' . $t('New password') . '</button>'
+                . '<form method="post" action="./?module=protected_directories&amp;control=Edit&amp;id=' . $fid . '&amp;action=DeleteUser" class="pd-confirm" data-confirm="' . $t('Remove this user? They can no longer open the folder.') . '">'
+                . '<input type="hidden" name="inId" value="' . $fid . '"><input type="hidden" name="inUserId" value="' . $id . '">' . runtime_csfr::Token()
+                . '<button class="btn btn-default btn-sm pd-del" type="submit" title="' . $t('Remove') . '" aria-label="' . $t('Remove') . ' ' . self::h($u['x_htpasswd_user_username']) . '">'
+                . '<svg class="pd-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg></button></form></div></div>'
+                . '<form method="post" action="./?module=protected_directories&amp;control=Edit&amp;id=' . $fid . '&amp;action=SetPassword" class="pd-pw" hidden>'
+                . '<input type="hidden" name="inId" value="' . $fid . '"><input type="hidden" name="inUserId" value="' . $id . '">'
+                . '<div class="pd-pass"><input type="password" name="inPassword" class="form-control" placeholder="' . $t('New password, 8 characters or more') . '" minlength="8" maxlength="128" autocomplete="new-password" required>'
+                . '<button type="button" class="btn btn-default pd-show" aria-label="' . $t('Show the password') . '" data-show="' . $t('Show') . '" data-hide="' . $t('Hide') . '">' . $t('Show') . '</button>'
+                . '<button type="button" class="btn btn-default pd-gen">' . $t('Make one') . '</button></div>'
+                . runtime_csfr::Token() . '<button class="btn btn-primary" type="submit">' . $t('Set password') . '</button></form></div>';
         }
-        return $html === '' ? '<tr><td colspan="3" class="text-muted">' . ui_language::translate('No users yet: nobody can open the folder until you add one.') . '</td></tr>' : $html;
+        return $html === '' ? '<div class="pd-none"><b>' . $t('No users yet') . '</b><span>' . $t('Nobody can open the folder until you add one below.') . '</span></div>' : $html;
     }
 
     /**
