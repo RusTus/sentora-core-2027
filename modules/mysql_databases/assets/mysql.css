@@ -1,0 +1,70 @@
+/* MySQL Databases in the panel's style. Colours come from the theme's shared --sn-* variables
+   (etc/styles/THEMES.md), with these as the fallback, so it follows Light, Dark and Auto. */
+.my { --my-ink: var(--sn-ink, #1f2933); --my-muted: var(--sn-muted, #6b7785); --my-line: var(--sn-line, #e6e9ee);
+      --my-card: var(--sn-card, #ffffff); --my-bg: var(--sn-soft, #f4f6f9); --my-field-line: var(--sn-line-strong, #cfd6de);
+      --my-accent: var(--sn-accent, #447fb3); --my-accent-soft: var(--sn-accent-soft, #e3edf6); --my-bad: var(--sn-bad, #b42b27);
+      color: var(--my-ink); background: var(--my-bg); border-radius: 8px; padding: 18px; margin-top: 10px; }
+.my * { box-sizing: border-box; }
+.my [hidden] { display: none !important; }
+.my-ico { width: 16px; height: 16px; flex: none; }
+.my-ico-lg { width: 40px; height: 40px; padding: 8px; border-radius: 9px; flex: none; background: var(--my-accent-soft); color: var(--my-accent); }
+.my-card { background: var(--my-card); border-radius: 6px; box-shadow: 0 1px 3px rgba(20,30,40,0.08); padding: 16px 18px; margin-bottom: 14px; }
+.my-card:last-child { margin-bottom: 0; }
+.my-card h4 { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0 0 12px; font-size: 15px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; }
+.my-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.my-find { max-width: 260px; margin-bottom: 10px; }
+.my-sub { color: var(--my-muted); font-size: 12px; margin: 10px 0 0; }
+.my-label { display: block; font-size: 13px; font-weight: 600; margin: 0 0 6px; }
+.my-empty { display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; padding: 16px 10px; color: var(--my-muted); font-size: 13px; margin: 0; }
+.my-empty b { color: var(--my-ink); font-size: 14px; }
+
+/* figures */
+.my-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 14px; }
+.my-tile { display: flex; gap: 12px; align-items: center; background: var(--my-card); border-radius: 6px; box-shadow: 0 1px 3px rgba(20,30,40,0.08); padding: 14px 16px; min-width: 0; }
+.my-tile > div { flex: 1; min-width: 0; }
+.my-tile b { display: block; font-size: 22px; line-height: 1.1; }
+.my-tile b small { font-size: 13px; color: var(--my-muted); font-weight: 600; }
+.my-tile span { display: block; font-size: 12px; color: var(--my-muted); margin-top: 2px; }
+.my-bar { height: 6px; border-radius: 3px; background: var(--my-bg); margin-top: 7px; overflow: hidden; }
+.my-bar i { display: block; height: 100%; background: var(--my-accent); border-radius: 3px; }
+.my-quota.full .my-bar i { background: #e8a33d; }
+.my-quota.full b { color: var(--sn-warn, #8f5b00); }
+
+/* databases */
+.my-list { display: grid; gap: 8px; margin: 0; }
+.my-db { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border: 1px solid var(--my-line); border-radius: 6px; }
+.my-ico-db { width: 22px; height: 22px; color: var(--my-accent); flex: none; }
+.my-db-main { flex: 1; min-width: 0; }
+.my-name { font-family: SFMono-Regular, Menlo, Consolas, monospace; font-size: 14px; overflow-wrap: anywhere; }
+.my-prefix { color: var(--my-muted); }
+.my-meta { display: flex; align-items: center; gap: 6px 12px; flex-wrap: wrap; margin-top: 4px; font-size: 12px; color: var(--my-muted); }
+.my-size { font-weight: 600; color: var(--my-ink); }
+.my-users { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+.my-user { font-size: 11px; font-family: SFMono-Regular, Menlo, Consolas, monospace; padding: 0 7px; border-radius: 9px; background: var(--my-accent-soft); color: var(--my-accent); }
+.my-nouser { color: var(--sn-warn, #8f5b00); }
+.my-act { display: flex; gap: 6px; flex: none; }
+.my-act .btn { display: inline-flex; align-items: center; gap: 6px; }
+.my-del { padding-left: 8px; padding-right: 8px; }
+.my-del:hover { color: var(--my-bad) !important; border-color: var(--sn-bad-line, #f0a9a7) !important; }
+
+/* create */
+.my-create { margin: 0; }
+.my-name-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.my-name-field { display: flex; flex: 0 1 460px; min-width: 0; }
+.my-pre { display: flex; align-items: center; padding: 0 10px; font-family: SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; color: var(--my-muted); background: var(--my-bg); border: 1px solid var(--my-field-line); border-right: 0; border-radius: 4px 0 0 4px; white-space: nowrap; }
+.my-name-field .form-control { border-radius: 0 4px 4px 0; font-family: SFMono-Regular, Menlo, Consolas, monospace; min-width: 0; }
+.my-hint { margin-top: 6px; }
+.my-left { display: inline-block; font-weight: 700; color: var(--my-ink); margin-right: 4px; }
+.my-left.low { color: var(--sn-warn, #8f5b00); }
+.my-limit { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 6px; font-size: 13px; background: var(--sn-warn-soft, #fff4d6); border: 1px solid var(--sn-warn-line, #f2cf7a); color: var(--sn-warn, #8f5b00); }
+
+/* delete */
+.my-confirm { border-left: 4px solid var(--my-bad); }
+.my-confirm h4 { text-transform: none; letter-spacing: 0; font-size: 17px; }
+.my-confirm h4 .my-ico { color: var(--my-bad); width: 20px; height: 20px; }
+.my-confirm h4 code { font-size: 15px; }
+.my-lose { margin: 0 0 12px; padding-left: 20px; font-size: 13px; line-height: 1.5; }
+.my-foot { display: flex; gap: 8px; padding-top: 12px; border-top: 1px solid var(--my-line); }
+
+@media (max-width: 760px) { .my-tiles { grid-template-columns: 1fr; } }
+@media (max-width: 640px) { .my { padding: 12px; } .my-card { padding: 14px 12px; } .my-db { flex-wrap: wrap; } .my-act { width: 100%; padding-left: 34px; } }

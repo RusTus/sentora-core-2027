@@ -1,92 +1,86 @@
 <div class="zmodule_content panel" id="zmodule_header_<@ ModuleName @>">
     <div class="panel-heading">
         <img src="<@ ModuleIcon @>" width="35" height="35" border="0" alt="<@ ModuleName @>">
+        <div class="zmodule_title"><@ ModuleName @></div>
+        <div class="zmodule_desc" id="zmodule_desc_<@ ModuleName @>"><@ ModuleDesc @></div>
+    </div>
+    <@ Result @>
+    <link rel="stylesheet" href="modules/mysql_databases/assets/mysql.css">
 
-        <div class="zmodule_title">
-            <@ ModuleName @>
+    <div class="my" id="my" data-confirm="<: Delete this database and everything in it? :>">
+        <% if isDeleteDatabase %>
+        <form class="my-card my-confirm" action="./?module=mysql_databases&amp;action=ConfirmDeleteDatabase" method="post">
+            <h4><svg class="my-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg><: Delete the database :> <code><@ EditCurrentDatabaseName @></code>?</h4>
+            <@ DeleteDetails @>
+            <div class="my-foot"><input type="hidden" name="inDelete" value="<@ EditCurrentDatabaseID @>">
+                <button class="btn btn-danger" type="submit"><: Delete :></button>
+                <a class="btn btn-default" href="./?module=mysql_databases"><: Cancel :></a></div>
+            <@ CSFR_Tag @>
+        </form>
+        <% endif %>
+
+        <div class="my-tiles"><@ Summary @></div>
+
+        <div class="my-card">
+            <div class="my-head"><h4><: Your databases :></h4>
+                <input type="search" class="form-control my-find" placeholder="<: Find a database or user :>" aria-label="<: Find a database or user :>" hidden></div>
+            <% if DatabaseList %>
+            <form action="./?module=mysql_databases&amp;action=DeleteDatabase" method="post" class="my-list">
+                <@ DatabaseCards @>
+                <@ CSFR_Tag @>
+            </form>
+            <p class="my-empty my-nomatch" hidden><: No database matches. :></p>
+            <p class="my-sub"><: Sizes are measured by the daemon, so a new or changed database shows its size within a few minutes. Users and their access are set in MySQL Users. :></p>
+            <% else %>
+            <div class="my-empty"><svg class="my-ico-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>
+                <b><: You have no databases yet :></b><span><: Create one below, then give a user access to it in MySQL Users. :></span></div>
+            <% endif %>
         </div>
 
-        <div class="zmodule_desc" id="zmodule_desc_<@ ModuleName @>"><@ ModuleDesc @></div>
-
-    </div>
-
-    <@ Result @>
-
-    <% if isDeleteDatabase %>
-    <div class="zform_wrapper alert alert-danger">
-        <h2><: Delete database :>: <@ EditCurrentDatabaseName @> ?</h2>
-        <p><: Please confirm that you want to delete this database. :></p>
-        <form action="./?module=mysql_databases&action=ConfirmDeleteDatabase" method="post">
-            <table class="none" cellpadding="0" cellspacing="0">
-                <tr>
-                    <td colspan="2" align="right">
-                        <input type="hidden" name="inDelete" value="<@ EditCurrentDatabaseID @>">
-                        <button class="button-loader delete btn btn-danger" type="submit" ><: Delete :></button>
-                        <button class="button-loader btn btn-default" type="button" onclick="window.location.href='./?module=mysql_databases';return false;"><: Cancel :></button>
-                    </td>
-                </tr>
-            </table>
-            <@ CSFR_Tag @>
-        </form>
-    </div>
-    <% endif %>
-
-    <div class="zgrid_wrapper">
-        <h2><: Current MySQL&reg; Databases :></h2>
-        <% if DatabaseList %>
-        <form action="./?module=mysql_databases&action=DeleteDatabase" method="post">
-            <table class="table table-striped">
-                <tr>
-                    <th><: Database name :></th>
-                    <th><: Size :></th>
-                    <th><: Users :></th>
-                    <th></th>
-                </tr>
-                <% loop DatabaseList %>
-                <tr>
-                    <td><& mysqlname &></td>
-                    <td><& mysqlfriendlysize &></td>
-                    <td><& totaldb &></td>
-                    <td><button class="button-loader delete btn btn-danger" type="submit" name="inDelete_<& mysqlid &>" id="inDelete_<& mysqlid &>" value="<& mysqlid &>"><: Delete :></button></td>
-                </tr>
-                <% endloop %>
-            </table>
-            <@ CSFR_Tag @>
-        </form>
-        <% else %>
-        <: You have no databases at this time. Create a database using the form below. :>
+        <% if isCreateDatabase %>
+        <div class="my-card">
+            <h4><: Create a database :></h4>
+            <% if QuotaLimit %>
+            <form action="./?module=mysql_databases&amp;action=CreateDatabase" method="post" class="my-create">
+                <label class="my-label" for="inDatabase"><: Database name :></label>
+                <div class="my-name-row">
+                    <div class="my-name-field"><span class="my-pre"><@ CurrentUserName @>_</span>
+                        <input class="form-control" name="inDatabase" type="text" id="inDatabase" value="<@ PostedName @>" maxlength="<@ MaxCharAllowed @>" pattern="[A-Za-z0-9]([A-Za-z0-9\-]*[A-Za-z0-9])?" title="<: Letters, digits and dashes, not at the start or end :>" autocomplete="off" spellcheck="false" required></div>
+                    <@ CSFR_Tag @><button class="btn btn-primary" type="submit"><: Create :></button>
+                </div>
+                <p class="my-sub my-hint"><span class="my-left" data-max="<@ MaxCharAllowed @>"></span> <: Letters, digits and dashes. It is made in lower case, and your user name in front keeps it apart from other accounts' databases. :></p>
+            </form>
+            <% else %>
+            <div class="my-limit"><svg class="my-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>
+                <: You have as many databases as your package allows. Delete one, or ask your host for a bigger package. :></div>
+            <% endif %>
+        </div>
         <% endif %>
     </div>
-
-    <% if isCreateDatabase %>
-    <div class="zform_wrapper">
-        <table class="none" width="100%" cellborder="0" cellspacing="0">
-            <tr valign="top">
-                <td>
-                    <h2><: Create a new MySQL&reg; database :></h2>
-                    <% if QuotaLimit %>
-                    <form action="./?module=mysql_databases&action=CreateDatabase" method="post">
-                        <table class="table table-striped">
-                            <tr>
-                                <th nowrap="nowrap">
-									<: Database name :>:<br />
-									(<@ MaxCharAllowed @> <: Characters max :>)
-								</th>
-                                <td nowrap="nowrap"><@ CurrentUserName @>_<input name="inDatabase" type="text" id="inDatabase" size="30" /></td>
-                            </tr>
-                            <tr>
-                                <th colspan="2" align="right">
-                                    <@ CSFR_Tag @><button class="button-loader btn btn-primary" type="submit" ><: Create :></button></th>
-                            </tr>
-                        </table>
-                    </form>
-                    <% else %>
-                    <: You have reached your MySQL database limit! :>
-                    <% endif %>
-                </td>
-                <td align="right"><@ MysqlUsagepChart @></td>
-            </tr></table>
-    </div>
-    <% endif %>
-
 </div>
+<script>
+(function () {
+    'use strict';
+    var my = document.getElementById('my'); if (!my) { return; }
+    // Delete goes to the confirmation, which says what is lost
+    var list = my.querySelector('.my-list');
+    if (list) { list.addEventListener('submit', function () { if (window.Sentora && Sentora.loader) { Sentora.loader.showLoader(); } }); }
+    // characters left for the name
+    var input = my.querySelector('#inDatabase'), left = my.querySelector('.my-left');
+    if (input && left) {
+        var max = parseInt(left.getAttribute('data-max'), 10) || 0;
+        var upd = function () { input.value = input.value.replace(/\s+/g, ''); var n = max - input.value.length; left.textContent = n + ' / ' + max; left.classList.toggle('low', n < 4); };
+        input.addEventListener('input', upd); upd();
+    }
+    // with many databases, a search
+    var dbs = my.querySelectorAll('.my-db'), find = my.querySelector('.my-find');
+    if (find && dbs.length > 6) {
+        find.hidden = false;
+        find.addEventListener('input', function () {
+            var q = find.value.trim().toLowerCase(), n = 0;
+            Array.prototype.forEach.call(dbs, function (d) { var on = q === '' || d.getAttribute('data-s').indexOf(q) >= 0; d.hidden = !on; if (on) { n++; } });
+            my.querySelector('.my-nomatch').hidden = n > 0;
+        });
+    }
+})();
+</script>

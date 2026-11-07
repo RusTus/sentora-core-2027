@@ -93,7 +93,9 @@ class module_controller extends ctrl_module
             $res = array();
             $sql->execute();
             while ($rowmysql = $sql->fetch()) {
-                $numrowdb = $zdbh->query("SELECT COUNT(*) FROM x_mysql_dbmap WHERE mm_acc_fk=" . $rowmysql['my_acc_fk'] . " AND mm_database_fk=" . $rowmysql['my_id_pk'] . "")->fetch();
+                $cq = $zdbh->prepare("SELECT COUNT(*) FROM x_mysql_dbmap WHERE mm_acc_fk = :a AND mm_database_fk = :d");
+                $cq->execute(array(':a' => (int) $rowmysql['my_acc_fk'], ':d' => (int) $rowmysql['my_id_pk']));
+                $numrowdb = array((int) $cq->fetchColumn());
                 $res[] = array('mysqlid' => $rowmysql['my_id_pk'],
                     'totaldb' => $numrowdb[0],
                     'mysqlname' => $rowmysql['my_name_vc'],
@@ -204,8 +206,10 @@ class module_controller extends ctrl_module
             self::$blank = true;
             return false;
         }
-        // Check for invalid username
-        if (!self::IsValidUserName($databasename)) {
+        // Check for invalid username, and the length the form promises (the whole name, prefix
+        // included, is kept to 32 characters, so it also fits as a MySQL user name)
+        $max = self::getMaxCharAllowed();
+        if (!self::IsValidUserName($databasename) || $max === false || strlen($databasename) > $max) {
             self::$badname = true;
             return false;
         }
@@ -252,8 +256,10 @@ class module_controller extends ctrl_module
             $sql = $zdbh->prepare("FLUSH PRIVILEGES");
             $sql->execute();
 
+            // bindValue: bindParam takes a variable, and PHP 8 refuses time() there (the database
+            // was already dropped by then, so its record stayed and it kept showing in the list)
             $sql = $zdbh->prepare("UPDATE x_mysql_databases SET my_deleted_ts = :time WHERE my_id_pk = :my_id_pk");
-            $sql->bindParam(':time', time());
+            $sql->bindValue(':time', time(), PDO::PARAM_INT);
             $sql->bindParam(':my_id_pk', $my_id_pk);
             $sql->execute();
 
@@ -463,26 +469,153 @@ class module_controller extends ctrl_module
     }
 
     /**
-     * Returns the database usage pie chart image (<@ MysqlUsagepChart @>).
+     * The users mapped to each of an account's databases.
      *
-     * @global runtime_controller $controller The request controller (declared, not used).
-     * @return string An <img> tag: the pChart pie of free/used, or the "unlimited" picture.
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $uid The account ID.
+     * @return array<int, array<int, string>> Database ID => user names.
      */
-    static function getMysqlUsagepChart()
+    static function UsersByDatabase($uid)
+    {
+        global $zdbh;
+        $q = $zdbh->prepare("SELECT m.mm_database_fk, u.mu_name_vc FROM x_mysql_dbmap m JOIN x_mysql_users u ON u.mu_id_pk = m.mm_user_fk
+            WHERE m.mm_acc_fk = :uid AND u.mu_deleted_ts IS NULL ORDER BY u.mu_name_vc");
+        $q->execute(array(':uid' => (int) $uid));
+        $out = array();
+        foreach ($q->fetchAll(PDO::FETCH_NUM) as $r) {
+            $out[(int) $r[0]][] = (string) $r[1];
+        }
+        return $out;
+    }
+
+    /**
+     * Whether a module is installed and switched on, for the links to it.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param string $folder The module's folder name.
+     * @return bool
+     */
+    static function ModuleOn($folder)
+    {
+        global $zdbh;
+        $q = $zdbh->prepare("SELECT COUNT(*) FROM x_modules WHERE mo_folder_vc = :f AND mo_enabled_en = 'true'");
+        $q->execute(array(':f' => $folder));
+        return (int) $q->fetchColumn() > 0;
+    }
+
+    /**
+     * The figures at the top (<@ Summary @>): databases against the package's limit, their size, and the users with access.
+     *
+     * @return string The HTML.
+     */
+    static function getSummary()
+    {
+        $me = ctrl_users::GetUserDetail();
+        $list = self::ListDatabases($me['userid']);
+        $list = $list ? $list : array();
+        $size = 0;
+        foreach ($list as $d) {
+            $size += (int) $d['mysqlsize'];
+        }
+        $users = array();
+        foreach (self::UsersByDatabase($me['userid']) as $names) {
+            $users = array_merge($users, $names);
+        }
+        $max = (int) $me['mysqlquota'];
+        $used = count($list);
+        $pct = $max > 0 ? min(100, round($used / $max * 100)) : 0;
+        $t = function ($s) { return htmlspecialchars(ui_language::translate($s), ENT_QUOTES, 'UTF-8'); };
+        $quota = '<div class="my-tile my-quota' . ($max >= 0 && $used >= $max ? ' full' : '') . '">'
+            . '<svg class="my-ico-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>'
+            . '<div><b>' . $used . ($max < 0 ? '' : ' <small>/ ' . $max . '</small>') . '</b><span>' . $t('Databases') . ($max < 0 ? ' &middot; ' . $t('no limit') : '') . '</span>'
+            . ($max > 0 ? '<div class="my-bar" role="img" aria-label="' . $pct . '%"><i style="width:' . $pct . '%"></i></div>' : '') . '</div></div>';
+        $tiles = array(
+            array('Total size', fs_director::ShowHumanFileSize($size), '<path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/>'),
+            array('Users with access', (string) count(array_unique($users)), '<circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 14 0"/><path d="M17 11a3 3 0 1 0 0-6M22 21a6 6 0 0 0-4-5.6"/>'),
+        );
+        foreach ($tiles as $x) {
+            $quota .= '<div class="my-tile"><svg class="my-ico-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' . $x[2] . '</svg>'
+                . '<div><b>' . htmlspecialchars($x[1], ENT_QUOTES, 'UTF-8') . '</b><span>' . $t($x[0]) . '</span></div></div>';
+        }
+        return $quota;
+    }
+
+    /**
+     * One card per database (<@ DatabaseCards @>): its name, size, the users who can use it, phpMyAdmin and Delete.
+     *
+     * @return string The HTML ('' when there are none).
+     */
+    static function getDatabaseCards()
+    {
+        $me = ctrl_users::GetUserDetail();
+        $list = self::ListDatabases($me['userid']);
+        if (!$list) {
+            return '';
+        }
+        $h = function ($s) { return htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8'); };
+        $t = function ($s) use ($h) { return $h(ui_language::translate($s)); };
+        $users = self::UsersByDatabase($me['userid']);
+        $pma = self::ModuleOn('phpmyadmin');
+        $musers = self::ModuleOn('mysql_users');
+        $prefix = $me['username'] . '_';
+        $out = '';
+        foreach ($list as $d) {
+            $name = (string) $d['mysqlname'];
+            $id = (int) $d['mysqlid'];
+            $own = isset($users[$id]) ? $users[$id] : array();
+            $nameHtml = strpos($name, $prefix) === 0 ? '<span class="my-prefix">' . $h($prefix) . '</span><b>' . $h(substr($name, strlen($prefix))) . '</b>' : '<b>' . $h($name) . '</b>';
+            $pills = '';
+            foreach ($own as $u) {
+                $pills .= '<span class="my-user">' . $h($u) . '</span>';
+            }
+            $out .= '<div class="my-db" data-s="' . $h(strtolower($name . ' ' . implode(' ', $own))) . '">'
+                . '<svg class="my-ico-db" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>'
+                . '<div class="my-db-main"><div class="my-name">' . $nameHtml . '</div>'
+                . '<div class="my-meta"><span class="my-size">' . $h($d['mysqlfriendlysize']) . '</span>'
+                . ($own ? '<span class="my-users">' . $pills . '</span>'
+                    : '<span class="my-nouser">' . $t('No user can use it yet') . ($musers ? ': <a href="./?module=mysql_users">' . $t('add one in MySQL Users') . '</a>' : '') . '</span>')
+                . '</div></div>'
+                . '<div class="my-act">'
+                . ($pma ? '<a class="btn btn-default btn-sm" href="./?module=phpmyadmin"><svg class="my-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6"/><path d="M20 4 10 14"/><path d="M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/></svg>phpMyAdmin</a>' : '')
+                . '<button class="btn btn-default btn-sm my-del" type="submit" name="inDelete_' . $id . '" value="' . $id . '" title="' . $t('Delete') . '" aria-label="' . $t('Delete') . ' ' . $h($name) . '">'
+                . '<svg class="my-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg></button>'
+                . '</div></div>';
+        }
+        return $out;
+    }
+
+    /**
+     * The details of the database to delete (<@ DeleteDetails @>): its size and the users who lose access to it.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return string The HTML ('' when it is not one of the account's).
+     */
+    static function getDeleteDetails()
     {
         global $controller;
-        $currentuser = ctrl_users::GetUserDetail();
-        $maximum = $currentuser['mysqlquota'];
-        if ($maximum < 0) { //-1 = unlimited
-            return '<img src="' . ui_template::AssetPath('img/misc/unlimited.png') . '" alt="' . ui_language::translate('Unlimited') . '"/>';
-        } else {
-            $used = ctrl_users::GetQuotaUsages('mysql', $currentuser['userid']);
-            $free = max($maximum - $used, 0);
-            return '<img src="etc/lib/pChart2/sentora/z3DPie.php?score=' . $free . '::' . $used
-                    . '&labels=Free: ' . $free . '::Used: ' . $used
-                    . '&legendfont=verdana&legendfontsize=8&imagesize=240::190&chartsize=120::90&radius=100&legendsize=150::160"'
-                    . ' alt="' . ui_language::translate('Pie chart') . '"/>';
+        $me = ctrl_users::GetUserDetail();
+        $id = (int) $controller->GetControllerRequest('URL', 'other');
+        if (!ctrl_ownership::Owns('x_mysql_databases', 'my_id_pk', 'my_acc_fk', $id, ' AND my_deleted_ts IS NULL')) {
+            return '';
         }
+        $cur = self::ListCurrentDatabases($id);
+        $users = self::UsersByDatabase($me['userid']);
+        $own = isset($users[$id]) ? $users[$id] : array();
+        $t = function ($s) { return htmlspecialchars(ui_language::translate($s), ENT_QUOTES, 'UTF-8'); };
+        return '<ul class="my-lose"><li>' . $t('All its tables and data are deleted') . ' (' . htmlspecialchars($cur[0]['mysqlfriendlysize'], ENT_QUOTES, 'UTF-8') . '). ' . $t('This can not be undone: make a backup first if you may need it.') . '</li>'
+            . ($own ? '<li>' . $t('These users lose access to it (the users themselves stay):') . ' <b>' . htmlspecialchars(implode(', ', $own), ENT_QUOTES, 'UTF-8') . '</b></li>' : '') . '</ul>';
+    }
+
+    /**
+     * The database name typed when creating failed, so it is not lost (<@ PostedName @>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return string The escaped name ('' after a success).
+     */
+    static function getPostedName()
+    {
+        global $controller;
+        return (self::$blank || self::$badname || self::$alreadyexists) ? htmlspecialchars((string) $controller->GetControllerRequest('FORM', 'inDatabase'), ENT_QUOTES, 'UTF-8') : '';
     }
 
     /**
@@ -496,10 +629,10 @@ class module_controller extends ctrl_module
             return ui_sysmessage::shout(ui_language::translate("You need to specify a database name to create your database."), "zannounceerror");
         }
         if (!fs_director::CheckForEmptyValue(self::$badname)) {
-            return ui_sysmessage::shout(ui_language::translate("Your MySQL database name is not valid. Please enter a valid MySQL database name."), "zannounceerror");
+            return ui_sysmessage::shout(ui_language::translate("That database name can not be used: letters, digits and dashes only (not at the start or end), and at most") . " " . (int) self::getMaxCharAllowed() . " " . ui_language::translate("characters."), "zannounceerror");
         }
         if (!fs_director::CheckForEmptyValue(self::$alreadyexists)) {
-            return ui_sysmessage::shout(ui_language::translate("A database with that name already appears to exsist."), "zannounceerror");
+            return ui_sysmessage::shout(ui_language::translate("A database with that name already exists."), "zannounceerror");
         }
         if (!fs_director::CheckForEmptyValue(self::$ok)) {
             return ui_sysmessage::shout(ui_language::translate("Changes to your databases have been saved successfully!"), "zannounceok");

@@ -142,3 +142,5 @@ modules/sentoraconfig/assets/ajaxsbmt.js
 modules/sentoraconfig/assets/bar.gif
 # Protected Directories: the old tree styles (now in pd.css)
 modules/protected_directories/assets/tree.css
+# MySQL Databases: the old "unlimited" picture (the theme has its own)
+modules/mysql_databases/assets/unlimited.png
