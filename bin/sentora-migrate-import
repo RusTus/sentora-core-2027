@@ -344,13 +344,14 @@ if ($ftpDump) {
     $HAVE_FTPDB = (load_dump($ftpDump[0], $TMPDB . '_ftp') === true);
 }
 $O = $TMPDB;
-$old = function ($sql, $params = array()) use ($zdbh) {
-    $s = $zdbh->prepare($sql);
+// (the current connection each time: MySQL may restart during the move, see the users step)
+$old = function ($sql, $params = array()) {
+    $s = $GLOBALS['zdbh']->prepare($sql);
     $s->execute($params);
     return $s->fetchAll(PDO::FETCH_ASSOC);
 };
-$cols = function ($db, $table) use ($zdbh) {
-    $s = $zdbh->prepare("SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = :d AND TABLE_NAME = :t");
+$cols = function ($db, $table) {
+    $s = $GLOBALS['zdbh']->prepare("SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = :d AND TABLE_NAME = :t");
     $s->execute(array(':d' => $db, ':t' => $table));
     return $s->fetchAll(PDO::FETCH_COLUMN);
 };
@@ -362,7 +363,7 @@ $OLDID = (int) $r[0]['ac_id_pk'];
 $PATHFIX = function ($s) use ($OLDHOME, $NEWHOME) { return str_replace($OLDHOME . '/', $NEWHOME . '/', (string) $s); };
 
 // --- what there is, and what is already taken here ------------------------------------------------
-$taken = function ($sql, $params) use ($zdbh) { $s = $zdbh->prepare($sql); $s->execute($params); return (int) $s->fetchColumn() > 0; };
+$taken = function ($sql, $params) { $s = $GLOBALS['zdbh']->prepare($sql); $s->execute($params); return (int) $s->fetchColumn() > 0; };
 $plan = array('domains' => array(), 'skipdomains' => array(), 'dbs' => array(), 'skipdbs' => array(), 'users' => array(), 'skipusers' => array(),
     'ftp' => array(), 'skipftp' => array(), 'mail' => array(), 'skipmail' => array());
 $VH = $old("SELECT * FROM `$O`.x_vhosts WHERE vh_acc_fk = :a AND vh_deleted_ts IS NULL ORDER BY vh_type_in, vh_name_vc", array(':a' => $OLDID));
@@ -615,6 +616,36 @@ foreach ($plan['dbs'] as $d) {
     ui_info($name);
 }
 ui_step('MySQL users and their permissions');
+// PHP 7.1 can not log in with MySQL 8.4's default method (caching_sha2_password: "The server
+// requested authentication method unknown to the client"). For sites on an old PHP the users get
+// mysql_native_password, which MySQL 8.4 has but keeps off until mysql_native_password = ON in its
+// settings: switched on here (MySQL restarts once). MySQL only listens on this server.
+$NATIVE = false;
+$isMysql = stripos((string) $zdbh->query("SELECT VERSION()")->fetchColumn(), 'mariadb') === false;
+if ($isMysql && $PHPV !== '' && version_compare($PHPV, '7.4', '<') && $plan['users']) {
+    $NATIVE = true;
+    $active = $zdbh->query("SELECT PLUGIN_STATUS FROM information_schema.PLUGINS WHERE PLUGIN_NAME = 'mysql_native_password'")->fetchColumn();
+    if ($active !== 'ACTIVE') {
+        $cnf = '/etc/mysql/mysql.conf.d/mysqld.cnf';
+        $c = (string) @file_get_contents($cnf);
+        if ($c !== '' && !preg_match('/^\s*mysql[_-]native[_-]password\s*=/mi', $c)) {
+            @copy($cnf, $cnf . '.before-migrate');
+            file_put_contents($cnf, preg_replace('/^\[mysqld\]\s*$/m', "[mysqld]\n# PHP $PHPV (moved sites) logs in with it: MySQL 8.4 keeps it off by default\nmysql_native_password = ON", $c, 1));
+        }
+        ui_info("PHP $PHPV needs MySQL's older login method: switching it on (MySQL restarts)");
+        if (!sh('systemctl restart mysql', $o)) {
+            warn('MySQL did not restart: ' . substr($o, 0, 200) . " (see $cnf)");
+        }
+        // the panel's own connection went with the restart
+        include 'cnf/db.php';
+        $zdbh = new db_driver("mysql:host=$host;dbname=$dbname", $user, $pass);
+        $GLOBALS['zdbh'] = $zdbh;
+        if ($zdbh->query("SELECT PLUGIN_STATUS FROM information_schema.PLUGINS WHERE PLUGIN_NAME = 'mysql_native_password'")->fetchColumn() !== 'ACTIVE') {
+            warn("MySQL's older login method could not be switched on: sites on PHP $PHPV will not reach their databases (add mysql_native_password = ON under [mysqld] in $cnf and restart MySQL)");
+            $NATIVE = false;
+        }
+    }
+}
 $MUMAP = array();
 $newpass = array();
 foreach ($plan['users'] as $u) {
@@ -627,7 +658,7 @@ foreach ($plan['users'] as $u) {
         $newpass[] = "$name: $pass";
     }
     try {
-        $zdbh->prepare("CREATE USER :u@:h IDENTIFIED BY :p")->execute(array(':u' => $name, ':h' => $host, ':p' => $pass));
+        $zdbh->prepare("CREATE USER :u@:h IDENTIFIED " . ($NATIVE ? 'WITH mysql_native_password ' : '') . "BY :p")->execute(array(':u' => $name, ':h' => $host, ':p' => $pass));
         $zdbh->prepare("GRANT USAGE ON *.* TO :u@:h")->execute(array(':u' => $name, ':h' => $host));
     } catch (Exception $e) {
         warn("MySQL user $name was not made: " . $e->getMessage());
