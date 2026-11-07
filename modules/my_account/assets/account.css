@@ -82,3 +82,11 @@
 
 @media (max-width: 980px) { .ma-grid { grid-template-columns: 1fr; } }
 @media (max-width: 640px) { .ma { padding: 12px; } .ma-fields { grid-template-columns: 1fr; } }
+
+/* Support: the form for an account with clients, and the card a client sees */
+.ma-side .ma-card > .ma-field { margin-bottom: 10px; }
+.ma-support .ma-sub { margin: 0 0 8px; }
+.ma-sup-row { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-top: 1px solid var(--ma-line, rgba(127,127,127,.2)); }
+.ma-sup-row span { color: var(--ma-muted); font-size: 12px; }
+.ma-sup-row a { font-weight: 600; word-break: break-all; text-align: right; }
+.ma-sup-note { margin: 8px 0 0; font-size: 13px; }

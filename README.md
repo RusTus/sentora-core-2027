@@ -199,7 +199,7 @@ The menus:
 
 | Menu | Modules |
 | --- | --- |
-| Account Information | Dashboard, My Account (contact details, language, appearance, two-factor login), Change Password, Usage Viewer |
+| Account Information | Dashboard, My Account (contact details, language, appearance, two-factor login; the support contact for your clients, or your reseller's), Change Password, Usage Viewer |
 | Server Admin | Sentora Config, Module Admin, Server Monitor, Panel Update, Widget Admin, SpamAV Admin, System Log Viewer, Apache Status, Repo Browser, AutoIP Updater |
 | Reseller | Manage Clients, Package Manager, Manage Groups, Shadowing, Client Notice Manager, Theme Manager |
 | Domain Management | Domains, Sub Domains, Parked Domains, DNS Manager, Sencrypt SSL |
@@ -228,6 +228,8 @@ The menus:
 **Shadowing.** *Log in as* opens the panel as one of your clients, to see what they see and help them; a bar at the top of every page takes you back to your own account, on the page you started from. An administrator can shadow every other account; a reseller only its own clients (and from there their clients). What you change while shadowing, you change for the client. Each start is recorded in `/var/lib/sentora/shadowing.log` (System Log Viewer > Panel security), and the page lists the recent ones.
 
 **Client Notice Manager.** Notices at the top of clients' panels: information, warning, maintenance or outage, to all your clients, chosen packages or groups, or one client, with an optional start and end time and whether clients may close them. The panel's own notices (PHP end of support, panel updates) show there too. From the console: `sentora-notice send ...`.
+
+**Support contact.** On **My Account**, an account that can have clients (an administrator, a reseller, or a sub-reseller whose group has Manage Clients) has a *Support for your clients* card: a support email, and optionally a phone number and a one-line note (support hours, or a help desk address, which becomes a link). Its own clients see it on their My Account page in a *Support* card, with the email and phone as links. A client sees only its own reseller's contact: when that one is empty, nothing is shown.
 
 **Theme Manager.** The theme for you and your clients: *Modern*, in light, dark or automatic. A user's own choice (My Account > Appearance) comes first.
 

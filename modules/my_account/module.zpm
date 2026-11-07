@@ -33,6 +33,22 @@
             <% endloop %>
 
             <div class="ma-side">
+                <!-- Support: the client's own reseller's contact -->
+                <@ SupportCard @>
+
+                <!-- Support for your clients: an account that can have clients sets what they see -->
+                <% if SupportCanSet %>
+                <form class="ma-card" action="./?module=my_account&amp;action=SaveSupport" method="post">
+                    <h4><svg class="ma-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1v-6h3zM3 19a2 2 0 0 0 2 2h1v-6H3z"/></svg><: Support for your clients :></h4>
+                    <p class="ma-sub"><: Your clients see this on their My Account page, to contact you for help. Leave it empty to show nothing. :></p>
+                    <label class="ma-field"><span><: Support email :></span><input class="form-control" name="inSupportEmail" type="email" value="<@ SupportEmail @>" maxlength="255" placeholder="support@example.com"></label>
+                    <label class="ma-field"><span><: Support phone (optional) :></span><input class="form-control" name="inSupportPhone" type="tel" value="<@ SupportPhone @>" maxlength="40"></label>
+                    <label class="ma-field"><span><: Note (optional) :></span><input class="form-control" name="inSupportNote" type="text" value="<@ SupportNote @>" maxlength="<@ SupportNoteMax @>">
+                        <small><: For example your support hours, or a help desk address (https://...). One line. :></small></label>
+                    <div class="ma-foot"><@ CSFR_Tag @><button class="btn btn-primary" type="submit"><: Save support contact :></button></div>
+                </form>
+                <% endif %>
+
                 <!-- Appearance -->
                 <% if AppearanceAvailable %>
                 <form class="ma-card" action="./?module=my_account&amp;action=SetAppearance" method="post">

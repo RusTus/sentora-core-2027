@@ -28,7 +28,9 @@
  */
 
 /**
- * My Account module: the user's contact details, language, appearance and two-factor login.
+ * My Account module: the user's contact details, language, appearance and two-factor login; for an
+ * account that can have clients, the support contact its clients see (ctrl_support), and for a client,
+ * its reseller's.
  */
 class module_controller extends ctrl_module
 {
@@ -39,6 +41,112 @@ class module_controller extends ctrl_module
     static $blank;
     /** @var bool|null True when the email address is not valid (shown by getResult()). */
     static $emailerror;
+
+    /** @var string Outcome of saving the support contact: '' (none), 'ok', 'email', 'phone' or 'note'. */
+    static $supportmsg = '';
+
+    /** @var array{email:string, phone:string, note:string}|null What was typed when saving failed (shown again). */
+    static $supporttyped = null;
+
+    /**
+     * Template flag <% if SupportCanSet %>: the account can have clients, so it can set the support
+     * contact they see.
+     *
+     * @return bool
+     */
+    static function getSupportCanSet()
+    {
+        return ctrl_support::CanSet((int) ctrl_users::GetUserDetail()['userid']);
+    }
+
+    /**
+     * The support contact form's values: what was typed when saving failed, else what is saved.
+     *
+     * @return array{email:string, phone:string, note:string}
+     */
+    static function SupportValues()
+    {
+        return self::$supporttyped !== null ? self::$supporttyped : ctrl_support::Get((int) ctrl_users::GetUserDetail()['userid']);
+    }
+
+    /** <@ SupportEmail @>. @return string */
+    static function getSupportEmail()
+    {
+        return htmlspecialchars(self::SupportValues()['email'], ENT_QUOTES, 'UTF-8');
+    }
+
+    /** <@ SupportPhone @>. @return string */
+    static function getSupportPhone()
+    {
+        return htmlspecialchars(self::SupportValues()['phone'], ENT_QUOTES, 'UTF-8');
+    }
+
+    /** <@ SupportNote @>. @return string */
+    static function getSupportNote()
+    {
+        return htmlspecialchars(self::SupportValues()['note'], ENT_QUOTES, 'UTF-8');
+    }
+
+    /** <@ SupportNoteMax @>. @return int */
+    static function getSupportNoteMax()
+    {
+        return ctrl_support::NOTE_MAX;
+    }
+
+    /**
+     * Save the support contact (Support for your clients).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return void
+     */
+    static function doSaveSupport()
+    {
+        global $controller;
+        runtime_csfr::Protect();
+        $uid = (int) ctrl_users::GetUserDetail()['userid'];
+        if (!ctrl_support::CanSet($uid)) {
+            return;
+        }
+        $f = $controller->GetAllControllerRequests('FORM');
+        $typed = array('email' => (string) ($f['inSupportEmail'] ?? ''), 'phone' => (string) ($f['inSupportPhone'] ?? ''), 'note' => (string) ($f['inSupportNote'] ?? ''));
+        $err = ctrl_support::Save($uid, $typed['email'], $typed['phone'], $typed['note']);
+        if ($err !== '') {
+            self::$supportmsg = $err;
+            self::$supporttyped = $typed;
+            return;
+        }
+        header('location: ./?module=my_account&support=saved');
+        exit;
+    }
+
+    /**
+     * Template HTML <@ SupportCard @>: the support contact of the account's own reseller, for a
+     * client ('' when that reseller set none).
+     *
+     * @return string HTML.
+     */
+    static function getSupportCard()
+    {
+        $c = ctrl_support::ForClient((int) ctrl_users::GetUserDetail()['userid']);
+        if ($c === null) {
+            return '';
+        }
+        $h = function ($s) { return htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8'); };
+        $t = function ($s) use ($h) { return $h(ui_language::translate($s)); };
+        $rows = '';
+        if ($c['email'] !== '') {
+            $rows .= '<div class="ma-sup-row"><span>' . $t('Email') . '</span><a href="mailto:' . $h($c['email']) . '">' . $h($c['email']) . '</a></div>';
+        }
+        if ($c['phone'] !== '') {
+            $rows .= '<div class="ma-sup-row"><span>' . $t('Phone') . '</span><a href="tel:' . $h(preg_replace('/[^0-9+]/', '', $c['phone'])) . '">' . $h($c['phone']) . '</a></div>';
+        }
+        if ($c['note'] !== '') {
+            $rows .= '<p class="ma-sup-note">' . ctrl_support::NoteHtml($c['note']) . '</p>';
+        }
+        return '<div class="ma-card ma-support"><h4><svg class="ma-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+            . '<path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1v-6h3zM3 19a2 2 0 0 0 2 2h1v-6H3z"/></svg>' . $t('Support') . '</h4>'
+            . '<p class="ma-sub">' . $t('Questions or problems with your hosting? Contact your support:') . '</p>' . $rows . '</div>';
+    }
 
     /**
      * Return the current user's contact details, XSS-cleaned (<% loop AccountSettings %>).
@@ -551,6 +659,14 @@ class module_controller extends ctrl_module
      */
     static function getResult()
     {
+        if (isset($_GET['support']) && $_GET['support'] === 'saved') {
+            return ui_sysmessage::shout(ui_language::translate('Your support contact has been saved: your clients see it on their My Account page.'), 'zannounceok');
+        }
+        $supportErrors = array('email' => 'The support email address is not valid.', 'phone' => 'The support phone number may only have digits, spaces and + ( ) - . /',
+            'note' => 'The note is too long.');
+        if (isset($supportErrors[self::$supportmsg])) {
+            return ui_sysmessage::shout(ui_language::translate($supportErrors[self::$supportmsg]), 'zannounceerror');
+        }
         if (isset($_GET['appearance']) && $_GET['appearance'] === 'saved') {
             return ui_sysmessage::shout(ui_language::translate('Your appearance has been saved.'), 'zannounceok');
         }
