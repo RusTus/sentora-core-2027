@@ -876,7 +876,7 @@ class module_controller extends ctrl_module
             $out .= '<div class="dl-card' . ($n ? '' : ' is-empty') . '" data-s="' . self::h(strtolower($addr . ' ' . implode(' ', $members))) . '">'
                 . '<div class="dl-main"><div class="dl-addr"><svg class="dl-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 14 0"/><path d="M17 11a3 3 0 1 0 0-6M22 21a6 6 0 0 0-4-5.6"/></svg>'
                 . '<span class="dl-full"><b>' . self::h($at === false ? $addr : substr($addr, 0, $at)) . '</b><span class="dl-dom">' . self::h($at === false ? '' : substr($addr, $at)) . '</span></span>'
-                . '<span class="dl-count">' . $n . ' ' . self::t($n === 1 ? 'member' : 'members') . '</span></div>'
+                . '<span class="dl-count">' . ($n === 1 ? self::t('1 member') : str_replace('%d', (string) $n, self::t('%d members'))) . '</span></div>'
                 . '<div class="dl-members">' . ($n ? $pills . ($n > 5 ? '<span class="dl-more">+' . ($n - 5) . '</span>' : '') : '<span class="dl-none">' . self::t('No members yet: mail to this address goes nowhere') . '</span>') . '</div></div>'
                 . '<div class="dl-act"><button class="btn btn-primary btn-sm" type="submit" name="inEdit_' . $id . '" value="inEdit_' . $id . '">'
                 . '<svg class="dl-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 14 0"/><path d="M19 8v6M16 11h6"/></svg>' . self::t('Members') . '</button>'
@@ -979,7 +979,14 @@ class module_controller extends ctrl_module
         global $controller;
         $list = self::ListDistUsers($controller->GetControllerRequest('URL', 'other'));
         $n = $list ? count($list) : 0;
-        return '<ul class="dl-lose"><li>' . self::t('Mail sent to the list is no longer passed on') . ($n ? ' ' . self::t('to its') . ' ' . $n . ' ' . self::t($n === 1 ? 'member' : 'members') : '') . '.</li>'
+        if ($n === 0) {
+            $what = self::t('Mail sent to the list is no longer passed on.');
+        } elseif ($n === 1) {
+            $what = self::t('Mail sent to the list is no longer passed on to its one member.');
+        } else {
+            $what = str_replace('%d', (string) $n, self::t('Mail sent to the list is no longer passed on to its %d members.'));
+        }
+        return '<ul class="dl-lose"><li>' . $what . '</li>'
             . '<li>' . self::t('The members\' own mailboxes and their mail stay.') . '</li></ul>';
     }
 

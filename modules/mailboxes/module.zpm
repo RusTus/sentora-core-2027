@@ -62,7 +62,7 @@
             <form action="./?module=mailboxes&amp;action=AddMailbox" method="post" class="mb-create">
                 <div class="mb-grid">
                     <div><label class="mb-label" for="inAddress"><: Address :></label>
-                        <div class="mb-addrfield"><input class="form-control" type="text" name="inAddress" id="inAddress" value="<@ PostedAddress @>" placeholder="name" autocomplete="off" spellcheck="false" required>
+                        <div class="mb-addrfield"><input class="form-control" type="text" name="inAddress" id="inAddress" value="<@ PostedAddress @>" placeholder="<: name :>" autocomplete="off" spellcheck="false" required>
                             <select class="form-control" name="inDomain" id="inDomain" aria-label="<: Domain :>"><@ DomainOptions @></select></div></div>
                     <div><label class="mb-label" for="inNewPassword"><: Password :></label>
                         <div class="mb-pass"><input class="form-control" type="password" name="inPassword" id="inNewPassword" autocomplete="new-password" required>

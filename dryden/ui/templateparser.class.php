@@ -32,7 +32,9 @@ class ui_templateparser
         'PHPTags' => "/(<\?php)|(<\?)|(\?>)/is",
         'TemplateClass' => "/<# ([\w*_*]*) #>/is",
         'FunctionEcho' => "/<@\s([\w*]*)\s@>/is",
-        'Lanuage' => "/<:\s([^>\]\"<\?>]*)\s:>/is",
+        // any text up to the first " :>" (it used to stop at > " < ] ?, so a question, a quote or
+        // "Admin > Module" in a text was shown as it was typed, with the <: :> around it)
+        'Lanuage' => "/<:\s((?:(?!\s:>).)+?)\s:>/s",
         'EndLoop' => "/<%\s(endloop)\s%>/is",
         'Loop' => "/<%\sloop\s(\w*)\s%>/is",
         'EchoLoop' => "/<&\s([\w*]*)\s&>/is",
@@ -235,7 +237,7 @@ class ui_templateparser
     /**
      * Compiles Sentora lanuage template tags into valid PHP.
      *
-     * <: text :> becomes a call to ui_language::translate() (also called once now, which adds unknown text to x_translations).
+     * <: text :> becomes an escaped call to ui_language::translate() (also called once now, which adds unknown text to x_translations).
      *
      * @author Sam Mottley (smottley@zpanelcp.com)
      * @param string $value The regular expression for the tag (from $Functions).
@@ -249,8 +251,10 @@ class ui_templateparser
         if ($match) {
             $i = 0;
             foreach ($match[1] as $string) {
-                $output = ui_language::translate(addslashes($string));
-                $data = str_replace($match[0][$i], "<?php echo ui_language::translate('" . addslashes($string) . "');?>", $data);
+                ui_language::translate($string);
+                // escaped when shown (a translation with a quote in it broke the attribute it was in);
+                // entities already in the text (&amp; &reg;) are kept as they are
+                $data = str_replace($match[0][$i], "<?php echo htmlspecialchars(ui_language::translate('" . addcslashes($string, "'\\") . "'), ENT_QUOTES, 'UTF-8', false);?>", $data);
                 $i++;
             }
         }

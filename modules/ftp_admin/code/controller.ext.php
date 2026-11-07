@@ -110,7 +110,7 @@ class module_controller extends ctrl_module
         return '<div class="fa-tile ' . ($up ? 'ok' : 'bad') . '">' . $ico($up ? '<circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/>' : '<circle cx="12" cy="12" r="9"/><path d="M15 9l-6 6M9 9l6 6"/>')
             . '<div><b>' . self::t($up ? 'Running' : 'Not answering') . '</b><span>' . self::t('FTP server, port 21') . '</span></div></div>'
             . '<div class="fa-tile">' . $ico('<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>') . '<div><b>' . count(self::Accounts()) . '</b><span>'
-            . self::t('FTP accounts, of') . ' ' . count($owners) . ' ' . self::t(count($owners) === 1 ? 'client' : 'clients') . '</span></div></div>'
+            . (count($owners) === 1 ? self::t('FTP accounts, of 1 client') : str_replace('%d', (string) count($owners), self::t('FTP accounts, of %d clients'))) . '</span></div></div>'
             . '<div class="fa-tile">' . $ico('<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>') . '<div><b>' . ($by['RO'] + $by['WO']) . '</b><span>'
             . self::t('Read or upload only') . '</span></div></div>';
     }
@@ -188,7 +188,7 @@ class module_controller extends ctrl_module
             } else {
                 $field = '<input class="form-control" type="text" name="' . $name . '" id="' . $name . '" value="' . self::h($r['so_value_tx']) . '" required>';
             }
-            $out .= '<label class="fa-field" for="' . $name . '"><span>' . self::t($r['so_cleanname_vc']) . '</span>' . $field . '<small>' . self::t(rtrim((string) $r['so_desc_tx'], '. ') . '.')
+            $out .= '<label class="fa-field" for="' . $name . '"><span>' . self::t($r['so_cleanname_vc']) . '</span>' . $field . '<small>' . self::h(rtrim(ui_language::translate((string) $r['so_desc_tx']), '. ') . '.')
                 . ($r['so_name_vc'] === 'ftp_db' ? ' ' . self::t('Change it only when ProFTPD\'s database was moved: the panel writes the FTP logins there.') : '') . '</small></label>';
         }
         return $out;

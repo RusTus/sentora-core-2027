@@ -67,7 +67,7 @@
             <% if QuotaLimit %>
             <form action="./?module=distlists&amp;action=AddDistList" method="post" class="dl-create">
                 <label class="dl-label" for="inAddress"><: Address :></label>
-                <div class="dl-addrfield"><input class="form-control" type="text" name="inAddress" id="inAddress" value="<@ PostedAddress @>" placeholder="team" autocomplete="off" spellcheck="false" required>
+                <div class="dl-addrfield"><input class="form-control" type="text" name="inAddress" id="inAddress" value="<@ PostedAddress @>" placeholder="<: team :>" autocomplete="off" spellcheck="false" required>
                     <select class="form-control" name="inDomain" id="inDomain" aria-label="<: Domain :>"><@ DomainOptions @></select></div>
                 <div class="dl-foot"><@ CSFR_Tag @><button class="btn btn-primary" type="submit" name="inCreate" value="inCreate"><: Make list :></button>
                     <span class="dl-sub"><: Then open Members to add who receives its mail. :></span></div>

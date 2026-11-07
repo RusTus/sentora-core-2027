@@ -42,7 +42,7 @@
                 <div class="dm-fields">
                     <div>
                         <label class="dm-label" for="inSub"><: Sub-domain :></label>
-                        <div class="dm-namefield"><input class="form-control" name="inSub" type="text" id="inSub" data-folder-from="1" value="<@ PostedSub @>" placeholder="shop" autocomplete="off" spellcheck="false" required>
+                        <div class="dm-namefield"><input class="form-control" name="inSub" type="text" id="inSub" data-folder-from="1" value="<@ PostedSub @>" placeholder="<: shop :>" autocomplete="off" spellcheck="false" required>
                             <span class="dm-dot">.</span>
                             <select class="form-control" name="inDomain" id="inDomain" data-parent="1" aria-label="<: Domain :>"><@ ParentOptions @></select></div>
                         <p class="dm-sub"><: Letters, digits and dashes, under one of your own domains. :></p>

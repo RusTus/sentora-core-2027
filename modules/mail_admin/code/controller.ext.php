@@ -160,7 +160,8 @@ class module_controller extends ctrl_module
                 . htmlspecialchars(ui_language::translate($up ? 'answers' : 'not answering'), ENT_QUOTES, 'UTF-8') . '</b></li>';
         }
         $boxes = (int) $zdbh->query("SELECT COUNT(*) FROM x_mailboxes WHERE mb_deleted_ts IS NULL")->fetchColumn();
-        return '<ul class="ma-svc">' . $out . '</ul><p class="ma-sub">' . $boxes . ' ' . htmlspecialchars(ui_language::translate($boxes === 1 ? 'mailbox on the server.' : 'mailboxes on the server.'), ENT_QUOTES, 'UTF-8')
+        return '<ul class="ma-svc">' . $out . '</ul><p class="ma-sub">' . ($boxes === 1 ? htmlspecialchars(ui_language::translate('1 mailbox on the server.'), ENT_QUOTES, 'UTF-8')
+                : str_replace('%d', (string) $boxes, htmlspecialchars(ui_language::translate('%d mailboxes on the server.'), ENT_QUOTES, 'UTF-8')))
             . (is_file('/usr/sbin/sogod') ? '' : ' ' . htmlspecialchars(ui_language::translate('SOGo is not installed: its settings apply when it is.'), ENT_QUOTES, 'UTF-8')) . '</p>';
     }
 

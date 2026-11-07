@@ -44,7 +44,7 @@
                 <div class="al-grid">
                     <div>
                         <label class="al-label" for="inAddress"><: Address :></label>
-                        <div class="al-addr"><input class="form-control" type="text" name="inAddress" id="inAddress" value="<@ PostedAddress @>" placeholder="sales" autocomplete="off" spellcheck="false" required>
+                        <div class="al-addr"><input class="form-control" type="text" name="inAddress" id="inAddress" value="<@ PostedAddress @>" placeholder="<: sales :>" autocomplete="off" spellcheck="false" required>
                             <select class="form-control" name="inDomain" id="inDomain" aria-label="<: Domain :>"><@ DomainOptions @></select></div>
                         <label class="al-check"><input type="checkbox" name="inCatchAll" value="1" id="inCatchAll"> <: Every address at this domain that has no mailbox, alias or forwarder (catch-all) :></label>
                     </div>
@@ -53,7 +53,7 @@
                         <select class="form-control" name="inDestination" id="inDestination" required><@ MailboxOptions @></select>
                     </div>
                 </div>
-                <div class="al-preview"><span class="al-pv-from"></span><svg class="al-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg><span class="al-pv-to"></span></div>
+                <div class="al-preview" data-anything="<: anything :>"><span class="al-pv-from"></span><svg class="al-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg><span class="al-pv-to"></span></div>
                 <div class="al-foot"><@ CSFR_Tag @><button class="btn btn-primary" type="submit" name="inCreate" value="inCreate"><: Add alias :></button>
                     <span class="al-sub"><: To send mail on to an address somewhere else, use Forwarders. :></span></div>
             </form>
@@ -73,7 +73,7 @@
     var al = document.getElementById('al'); if (!al) { return; }
     var addr = al.querySelector('#inAddress'), dom = al.querySelector('#inDomain'), dest = al.querySelector('#inDestination'), all = al.querySelector('#inCatchAll');
     if (addr) {
-        var anything = '<: anything :>';
+        var anything = al.querySelector('.al-preview').getAttribute('data-anything') || 'anything';
         var sync = function () {
             addr.disabled = all.checked; addr.required = !all.checked;
             al.querySelector('.al-pv-from').textContent = (all.checked ? anything : (addr.value.trim().toLowerCase() || '…')) + '@' + (dom.value || '…');

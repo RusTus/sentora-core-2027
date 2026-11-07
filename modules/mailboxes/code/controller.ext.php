@@ -896,13 +896,13 @@ class module_controller extends ctrl_module
             $l = isset($links[strtolower($addr)]) ? $links[strtolower($addr)] : array('aliases' => array(), 'forwards' => array(), 'lists' => array());
             $chips = '';
             if ($l['aliases']) {
-                $chips .= '<span class="mb-chip" title="' . self::h(implode(', ', $l['aliases'])) . '">' . count($l['aliases']) . ' ' . self::t(count($l['aliases']) === 1 ? 'alias' : 'aliases') . '</span>';
+                $chips .= '<span class="mb-chip" title="' . self::h(implode(', ', $l['aliases'])) . '">' . (count($l['aliases']) === 1 ? self::t('1 alias') : str_replace('%d', (string) count($l['aliases']), self::t('%d aliases'))) . '</span>';
             }
             if ($l['forwards']) {
                 $chips .= '<span class="mb-chip fw" title="' . self::h(implode(', ', $l['forwards'])) . '">' . self::t('forwards to') . ' ' . self::h($l['forwards'][0]) . (count($l['forwards']) > 1 ? ' +' . (count($l['forwards']) - 1) : '') . '</span>';
             }
             if ($l['lists']) {
-                $chips .= '<span class="mb-chip" title="' . self::h(implode(', ', $l['lists'])) . '">' . self::t('on') . ' ' . count($l['lists']) . ' ' . self::t(count($l['lists']) === 1 ? 'list' : 'lists') . '</span>';
+                $chips .= '<span class="mb-chip" title="' . self::h(implode(', ', $l['lists'])) . '">' . (count($l['lists']) === 1 ? self::t('on 1 list') : str_replace('%d', (string) count($l['lists']), self::t('on %d lists'))) . '</span>';
             }
             $out .= '<div class="mb-row' . ($on ? '' : ' is-off') . '" data-s="' . self::h(strtolower($addr)) . '">'
                 . '<span class="mb-avatar" aria-hidden="true">' . self::h(strtoupper(substr($addr, 0, 1))) . '</span>'
