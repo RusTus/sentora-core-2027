@@ -1235,7 +1235,7 @@ function WriteVhostConfigFile() {
                                     WHERE so_name_vc='apache_changed'");
         $vsql->bindParam(':time', $time);
         $vsql->execute();
-        echo "Finished writting Apache Config... Now reloading Apache..." . fs_filehandler::NewLine();
+        echo "Finished writing Apache Config... Now reloading Apache..." . fs_filehandler::NewLine();
 
         $returnValue = 0;
 
@@ -1314,7 +1314,7 @@ function RestartHttpdServices() {
 								WHERE so_name_vc='apache_changed'");
 	$vsql->bindParam(':time', $time);
 	$vsql->execute();
-	echo "Finished writting Apache Config... Now reloading Apache..." . fs_filehandler::NewLine();
+	echo "Finished writing Apache Config... Now reloading Apache..." . fs_filehandler::NewLine();
 
 	$returnValue = 0;
 

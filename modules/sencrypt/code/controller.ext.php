@@ -2160,11 +2160,11 @@ class module_controller extends ctrl_module {
 		}
 		if (self::$portReqsError)
 		{
-			return ui_sysmessage::shout(ui_language::translate("ALERT: Port (443) appears to be CLOSED. Sencrypt will not work until port (443) is OPEN. Contact your Administator."), "zannounceerror");
+			return ui_sysmessage::shout(ui_language::translate("ALERT: Port (443) appears to be CLOSED. Sencrypt will not work until port (443) is OPEN. Contact your Administrator."), "zannounceerror");
 		}
 		if (self::$okletsencrypt)
 		{
-			return ui_sysmessage::shout(ui_language::translate("Your FREE Letsencrypt SSL Certificate has been Created. It will be active in about 5 minutes."), "zannounceok");
+			return ui_sysmessage::shout(ui_language::translate("Your FREE Let's Encrypt SSL Certificate has been Created. It will be active in about 5 minutes."), "zannounceok");
 		}
 		if (self::$okselfsigned)
 		{
@@ -2193,7 +2193,7 @@ class module_controller extends ctrl_module {
             return ui_sysmessage::shout(ui_language::translate("Certificate Signing Request was made and sent to the mail you have entered"), "zannounceok");
         }
 		if (self::$certFailed) {
-            return ui_sysmessage::shout(ui_language::translate("Oops! Something went wrong. Your Lets Encrypt certificate was not created. Check if your website is LIVE."), "zannounceerror");
+            return ui_sysmessage::shout(ui_language::translate("Oops! Something went wrong. Your Let's Encrypt certificate was not created. Check if your website is LIVE."), "zannounceerror");
         }
 		if (self::$revokeFailed) {
             return ui_sysmessage::shout(ui_language::translate("Let's Encrypt did not revoke the certificate. It is still in place; try again later, or delete it instead."), "zannounceerror");

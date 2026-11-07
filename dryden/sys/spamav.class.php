@@ -44,7 +44,9 @@ class sys_spamav
         return array(
             // --- ClamAV ---
             'clam_enabled' => array('clamav', 'Scan mail for viruses', 'bool', $mem >= 1900 ? 'true' : 'false',
-                'ClamAV checks every message and its attachments. Needs about 1.5 GB of memory for its signatures' . ($mem > 0 ? ' (this server has ' . round($mem / 1024, 1) . ' GB).' : '.'), null),
+                // (%s: this server's memory in GB, filled in after translating)
+                $mem > 0 ? 'ClamAV checks every message and its attachments. Needs about 1.5 GB of memory for its signatures (this server has %s GB).'
+                    : 'ClamAV checks every message and its attachments. Needs about 1.5 GB of memory for its signatures.', null),
             'clam_on_infected' => array('clamav', 'Infected mail', 'select', 'Reject',
                 'Reject: refused while the sender is connected, so they are told. Quarantine: kept on hold in the mail queue for the administrator. Drop: accepted and thrown away.',
                 array('Reject' => 'Reject', 'Quarantine' => 'Quarantine (hold in the mail queue)', 'Blackhole' => 'Drop silently')),

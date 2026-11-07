@@ -1055,13 +1055,13 @@ class module_controller extends ctrl_module {
             return ui_sysmessage::shout(ui_language::translate("ZPPY can not install this module because it does not exist in the repository."), "zannounceerror");
         }
         if (!fs_director::CheckForEmptyValue(self::$zppycommandzppynotneeded)) {
-            return ui_sysmessage::shout(ui_language::translate("You do not need to proceed the command with \"zppy\"."), "zannounceerror");
+            return ui_sysmessage::shout(ui_language::translate("You do not need to start the command with \"zppy\"."), "zannounceerror");
         }
         if (!fs_director::CheckForEmptyValue(self::$zppycommanderror)) {
-            return ui_sysmessage::shout(ui_language::translate("You have entered and invalid ZPPY command."), "zannounceerror");
+            return ui_sysmessage::shout(ui_language::translate("You have entered an invalid ZPPY command."), "zannounceerror");
         }
 		if (!fs_director::CheckForEmptyValue(self::$zppycommandblank)) {
-			return ui_sysmessage::shout(ui_language::translate("You have entered and invalid ZPPY command."), "zannounceerror");
+			return ui_sysmessage::shout(ui_language::translate("You have entered an invalid ZPPY command."), "zannounceerror");
 		}
 		if (!fs_director::CheckForEmptyValue(self::$zppypatchok)) {
 			return ui_sysmessage::shout(ui_language::translate("Repo Browser has successfully installed the ZPPY patch file. You can now remove your module with Repo Browser"), "zannounceok");

@@ -225,7 +225,8 @@ class module_controller extends ctrl_module
         $v = self::Value($name);
         $n = 'in_' . $name;
         $id = 'sa_' . $name;
-        $help = $d[4] !== '' ? '<small>' . self::h(self::t($d[4])) . '</small>' : '';
+        // a help text may name this server's memory (%s, in GB)
+        $help = $d[4] !== '' ? '<small>' . self::h(str_replace('%s', (string) round(sys_spamav::MemoryMB() / 1024, 1), self::t($d[4]))) . '</small>' : '';
         $label = self::h(self::t($d[1]));
         $wrap = function ($field, $extra = '', $cls = '') use ($id, $label, $help, $name) {
             return '<div class="sa-field' . $cls . '" data-name="' . self::h($name) . '"><label for="' . $id . '">' . $label . '</label>' . $field . $extra . $help . '</div>';
