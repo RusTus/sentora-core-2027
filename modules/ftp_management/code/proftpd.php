@@ -64,6 +64,14 @@ if (!fs_director::CheckForEmptyValue(self::$delete)) {
     $sql->bindParam(':username', $rowftp['ft_user_vc']);
     $sql->execute();
 }
+// Included after an account's home folder was changed (FTP Accounts > Edit)
+if (!fs_director::CheckForEmptyValue(self::$update)) {
+    $sql = $ftp_db->prepare("UPDATE ftpuser SET homedir=:homedir WHERE userid=:username");
+    $homedir = ctrl_options::GetSystemOption('hosted_dir') . $currentuser['username'] . $homedirectory_to_use;
+    $sql->bindParam(':homedir', $homedir);
+    $sql->bindParam(':username', $rowftp['ft_user_vc']);
+    $sql->execute();
+}
 // Included after account password has been reset
 if (!fs_director::CheckForEmptyValue(self::$reset)) {
     $sql = $ftp_db->prepare("UPDATE ftpuser SET passwd=:password WHERE userid=:username");

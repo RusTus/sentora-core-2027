@@ -10,6 +10,10 @@ echo fs_filehandler::NewLine() . "START FTP password hashes" . fs_filehandler::N
 FtpHashStoredPasswords();
 echo "END FTP password hashes" . fs_filehandler::NewLine();
 
+echo fs_filehandler::NewLine() . "START FTP access types" . fs_filehandler::NewLine();
+FtpWriteAccessRules();
+echo "END FTP access types" . fs_filehandler::NewLine();
+
 /**
  * The same hash the FTP module makes (module_controller::HashPassword); a copy, since
  * every module's controller is called module_controller and only one can be loaded.
@@ -94,4 +98,83 @@ function FtpHashStoredPasswords()
     }
     $kept = (int) $zdbh->query("SELECT COUNT(*) FROM x_ftpaccounts WHERE ft_deleted_ts IS NULL AND ft_passenc_tx LIKE 'enc1:%'")->fetchColumn();
     echo $total . " FTP account(s): logins checked against hashes only, " . $kept . " with an encrypted password the owner can see." . fs_filehandler::NewLine();
+}
+
+
+/**
+ * The access types of the FTP accounts (FTP Accounts: Read-only, Write-only, Full access) as
+ * ProFTPD rules. They used to be stored only: every FTP account could read and write.
+ *
+ * Writes ftp-access.conf next to ProFTPD's configuration (one DenyUser line per account: no WRITE
+ * for read-only ones, so no upload, delete, rename or new folder; no READ for write-only ones, so
+ * no download), adds an Include for it to that configuration once, checks the configuration with
+ * "proftpd -t" and reloads ProFTPD. When the check fails, the previous rules are put back.
+ *
+ * @global db_driver $zdbh The panel's database connection.
+ * @param string|null $conf Optional. ProFTPD's configuration file (null: the ftp_config_file setting, else /etc/proftpd/proftpd.conf). Default null.
+ * @param bool $reload Optional. Reload ProFTPD after a change. Default true.
+ * @return bool|null True when changed and in use, false when the check failed, null when nothing changed (or no ProFTPD).
+ */
+function FtpWriteAccessRules($conf = null, $reload = true)
+{
+    global $zdbh;
+    if ($conf === null) {
+        $conf = trim((string) ctrl_options::GetSystemOption('ftp_config_file'));
+        if ($conf === '') {
+            $conf = '/etc/proftpd/proftpd.conf';
+        }
+    }
+    $real = @realpath($conf);
+    if ($real === false || !is_file($real) || !is_writable($real)) {
+        echo "No ProFTPD configuration to add the rules to (" . $conf . ")" . fs_filehandler::NewLine();
+        return null;
+    }
+    $rules = dirname($real) . '/ftp-access.conf';
+    $deny = array('WRITE' => array(), 'READ' => array());
+    foreach ($zdbh->query("SELECT ft_user_vc, ft_access_vc FROM x_ftpaccounts WHERE ft_deleted_ts IS NULL AND ft_access_vc IN ('RO', 'WO') ORDER BY ft_user_vc")->fetchAll() as $r) {
+        if (preg_match('/^[A-Za-z0-9_-]{1,64}$/', (string) $r['ft_user_vc'])) {
+            $deny[$r['ft_access_vc'] === 'RO' ? 'WRITE' : 'READ'][] = $r['ft_user_vc'];
+        }
+    }
+    $text = "# Made by the Sentora daemon from the access type of each FTP account (FTP Accounts).\n# Do not edit: it is written again when an account changes.\n";
+    if ($deny['WRITE'] || $deny['READ']) {
+        $text .= "<Directory />\n";
+        foreach ($deny as $cmd => $users) {
+            if ($users) {
+                $text .= "  <Limit " . $cmd . ">\n" . implode('', array_map(function ($u) { return "    DenyUser " . $u . "\n"; }, $users)) . "  </Limit>\n";
+            }
+        }
+        $text .= "</Directory>\n";
+    }
+    $old = is_file($rules) ? (string) file_get_contents($rules) : null;
+    $main = (string) file_get_contents($real);
+    $include = "Include " . $rules;
+    $hasInclude = preg_match('/^\s*Include\s+' . preg_quote($rules, '/') . '\s*$/m', $main) === 1;
+    if ($old === $text && $hasInclude) {
+        return null;
+    }
+    file_put_contents($rules, $text);
+    @chmod($rules, 0600);
+    if (!$hasInclude) {
+        file_put_contents($real, rtrim($main, "\n") . "\n\n# FTP account access types (Read-only, Write-only), written by the Sentora daemon\n" . $include . "\n");
+    }
+    $out = array();
+    $rc = 1;
+    exec('proftpd -t -c ' . escapeshellarg($real) . ' 2>&1', $out, $rc);
+    if ($rc !== 0) {
+        // keep ProFTPD working: the old rules, or none
+        if ($old !== null) {
+            file_put_contents($rules, $old);
+        } else {
+            file_put_contents($real, $main);
+            @unlink($rules);
+        }
+        echo "ProFTPD did not accept the FTP access rules, left as they were: " . implode(' ', array_slice($out, -3)) . fs_filehandler::NewLine();
+        return false;
+    }
+    if ($reload) {
+        exec('systemctl reload proftpd 2>&1 || service proftpd reload 2>&1', $out, $rc);
+    }
+    echo "FTP access rules written: " . count($deny['WRITE']) . " read-only, " . count($deny['READ']) . " write-only account(s)" . fs_filehandler::NewLine();
+    return true;
 }

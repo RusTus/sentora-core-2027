@@ -72,6 +72,10 @@ class module_controller extends ctrl_module
     static $reset;
     /** @var bool|null True after an FTP account was created. */
     static $create;
+    /** @var bool|null True while an FTP account's access or home folder is changed (for the FTP server file). */
+    static $update;
+    /** @var string The view after a refused form ('new' or 'edit', '' for none), so it shows again with what was typed. */
+    static $failed = '';
 
     // The 'worker' methods.
 
@@ -296,35 +300,15 @@ class module_controller extends ctrl_module
         global $controller;
         $currentuser = ctrl_users::GetUserDetail($uid);
   		$username = $currentuser['username'] . '_' . $username;
+        if (!in_array($access_type, array('RO', 'WO', 'RW'), true)) {
+            self::$error = true;
+            return false;
+        }
         runtime_hook::Execute('OnBeforeCreateFTPAccount');
         if (fs_director::CheckForEmptyValue(self::CheckForErrors($username, $password))) {
-            // Check to see if its a new home directory or use a current one...
-            if ($home == 1) {
-                $homedirectory_to_use = '/' . str_replace('.', '_', $username);
-                $full_path = ctrl_options::GetSystemOption('hosted_dir') . $currentuser['username'] . $homedirectory_to_use . '/';
-                // Create the new home directory... (If it doesnt already exist.)
-                if (!file_exists($full_path)) {
-                    @mkdir($full_path, 0770); // octal (777 decimal was mode 1411; fixed on the next line anyway)
-                    fs_director::SetFileSystemPermissions($full_path, 0770);
-                }
-            } else if ($home == 3) {
-                $homedirectory_to_use = '/' . $domainDestination;
-            } else {
-                $homedirectory_to_use = '/' . $destination;
-            }
-            // An existing folder inside the account only (no "..", no other account)
-            if (ctrl_ownership::SafeSubFolder($homedirectory_to_use) === false) {
-                return false;
-            }
-
-            // Check if Path is inside user home directory.
-            $full_homeDir  = ctrl_options::GetSystemOption('hosted_dir') . $currentuser['username'] . $homedirectory_to_use . '/';
-            $baseDir       = ctrl_options::GetSystemOption('hosted_dir') . $currentuser['username'];
-            $realPath      = realpath($full_homeDir);
-
-            if( 0 !== strpos($realPath, $baseDir))
-            {
-                self::$invalidPath = true;
+            // the home folder: new, or one of the account's own (checked to be inside it)
+            $homedirectory_to_use = self::HomeFolder($currentuser, $home, $username, (string) $destination, (string) $domainDestination);
+            if ($homedirectory_to_use === false) {
                 return false;
             }
 
@@ -339,7 +323,8 @@ class module_controller extends ctrl_module
             $sql->bindParam(':homedir', $homedirectory_to_use);
             $sql->bindParam(':accesstype', $access_type);
             $sql->bindParam(':password', $password);
-            $sql->bindParam(':time', time());
+            // bindValue: PHP 8 refuses time() in bindParam, so creating an account stopped here
+            $sql->bindValue(':time', time(), PDO::PARAM_INT);
             $sql->execute();
             self::$create = true;
             // Include FTP server specific file here.
@@ -385,6 +370,11 @@ class module_controller extends ctrl_module
             self::$blank = TRUE;
             $retval = TRUE;
         }
+        // the shortest password (only a reset checked it)
+        if ($password !== '' && strlen($password) < (int) self::getMinPassLength()) {
+            self::$badpasswordlength = true;
+            $retval = TRUE;
+        }
         // Check for invalid username
         if (!self::IsValidUserName($username)) {
             self::$badname = true;
@@ -417,7 +407,8 @@ class module_controller extends ctrl_module
      */
     static function IsValidUserName($username)
     {
-        return preg_match('/^[a-z\d_][a-z\d_-]{0,62}$/i', $username) || preg_match('/-$/', $username) == 1;
+        // (anything ending in "-" passed, slashes and dots included)
+        return (bool) preg_match('/^[a-z\d_][a-z\d_-]{0,62}$/i', $username);
     }
 
 	/**
@@ -441,7 +432,7 @@ class module_controller extends ctrl_module
         }
 		// Check for password length... (true = there IS an error; this returned false, so a
 		// blank or too-short password was accepted on reset)
-		if (strlen($password) < ctrl_options::GetSystemOption('password_minlength')) {
+		if (strlen($password) < (int) self::getMinPassLength()) {
 			self::$badpasswordlength = true;
 			return true;
 		}
@@ -462,7 +453,8 @@ class module_controller extends ctrl_module
 	static function IsValidPassword($password)
     {
         //return preg_match('/(?=.*\d)(?=.*[a-z])(?=.*[A-Z]).{8,}/', $password) || preg_match('/-$/', $password) == 1;
-		return preg_match('/(?=.*\d)(?=.*[a-z])(?=.*[A-Z])/', $password) || preg_match('/-$/', $password) == 1;
+		// (any password ending in "-" passed)
+		return (bool) preg_match('/(?=.*\d)(?=.*[a-z])(?=.*[A-Z])/', $password);
     }
 	
     /**
@@ -505,7 +497,8 @@ class module_controller extends ctrl_module
 
         $sql = $zdbh->prepare("UPDATE x_ftpaccounts SET ft_deleted_ts=:time WHERE ft_id_pk=:ftpid");
         $sql->bindParam(':ftpid', $ft_id_pk);
-        $sql->bindParam(':time', $ft_id_pk);
+        // the time it was deleted (this stored the account's ID)
+        $sql->bindValue(':time', time(), PDO::PARAM_INT);
         $sql->execute();
         self::$delete = true;
         // Include FTP server specific file here.
@@ -518,59 +511,539 @@ class module_controller extends ctrl_module
         return $retval;
     }
 
+    /**
+     * The home folder of an FTP account from the form's choice, checked to be inside the account's own folder.
+     *
+     * @param array<string, mixed> $u The panel account (ctrl_users::GetUserDetail()).
+     * @param int|string $home 1: a new folder named after the FTP user; 2: $destination (in the home folder); 3: $domainDestination (in public_html).
+     * @param string $username The full FTP user name (for a new folder).
+     * @param string $destination A folder in the account's home folder.
+     * @param string $domainDestination A folder under public_html ("public_html/<name>" or "").
+     * @return string|false The folder, starting with "/", or false (self::$invalidPath set) when it is not the account's.
+     */
+    static function HomeFolder($u, $home, $username, $destination, $domainDestination)
+    {
+        if ((int) $home === 1) {
+            $dir = '/' . str_replace('.', '_', $username);
+            $full = ctrl_options::GetSystemOption('hosted_dir') . $u['username'] . $dir . '/';
+            if (!file_exists($full)) {
+                @mkdir($full, 0770);
+                fs_director::SetFileSystemPermissions($full, 0770);
+            }
+        } elseif ((int) $home === 3) {
+            $dir = '/' . ($domainDestination === '' ? 'public_html' : $domainDestination);
+        } else {
+            $dir = '/' . $destination;
+        }
+        $base = ctrl_options::GetSystemOption('hosted_dir') . $u['username'];
+        $real = realpath($base . $dir);
+        if (ctrl_ownership::SafeSubFolder($dir) === false || $real === false || ($real !== $base && strpos($real, $base . '/') !== 0)) {
+            self::$invalidPath = true;
+            return false;
+        }
+        return '/' . trim($dir, '/');
+    }
+
+    /**
+     * Change the access type and home folder of one of the logged-in account's FTP accounts.
+     *
+     * Includes the FTP server specific file (its home folder); the access type reaches ProFTPD
+     * through the daemon's rules within 5 minutes. Runs the OnBefore/OnAfterUpdateFTPAccount hooks.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller.
+     * @param int|string $ft_id_pk The FTP account ID.
+     * @param string $access_type 'RO', 'WO' or 'RW'.
+     * @param int|string $home See HomeFolder().
+     * @param string $destination See HomeFolder().
+     * @param string $domainDestination See HomeFolder().
+     * @return bool True when changed.
+     */
+    static function ExecuteUpdateFTP($ft_id_pk, $access_type, $home, $destination, $domainDestination)
+    {
+        global $zdbh;
+        global $controller;
+        $currentuser = ctrl_users::GetUserDetail();
+        $q = $zdbh->prepare("SELECT * FROM x_ftpaccounts WHERE ft_id_pk = :id AND ft_acc_fk = :u AND ft_deleted_ts IS NULL");
+        $q->execute(array(':id' => (int) $ft_id_pk, ':u' => (int) $currentuser['userid']));
+        $rowftp = $q->fetch();
+        if (!$rowftp || !in_array($access_type, array('RO', 'WO', 'RW'), true)) {
+            self::$error = true;
+            return false;
+        }
+        $homedirectory_to_use = (int) $home === 0 ? (string) $rowftp['ft_directory_vc'] : self::HomeFolder($currentuser, $home, $rowftp['ft_user_vc'], $destination, $domainDestination);
+        if ($homedirectory_to_use === false) {
+            return false;
+        }
+        runtime_hook::Execute('OnBeforeUpdateFTPAccount');
+        $q = $zdbh->prepare("UPDATE x_ftpaccounts SET ft_access_vc = :a, ft_directory_vc = :d WHERE ft_id_pk = :id");
+        $q->execute(array(':a' => $access_type, ':d' => $homedirectory_to_use, ':id' => (int) $ft_id_pk));
+        self::$update = true;
+        $FtpModuleFile = 'modules/' . $controller->GetControllerRequest('URL', 'module') . '/code/' . ctrl_options::GetSystemOption('ftp_php');
+        if (file_exists($FtpModuleFile)) {
+            include($FtpModuleFile);
+        }
+        self::$update = null;
+        runtime_hook::Execute('OnAfterUpdateFTPAccount');
+        return true;
+    }
+
     // End 'worker' methods.
 
     // Webinterface sudo methods.
 
     /**
-     * Handle the create form: create the FTP account for the logged-in account.
+     * Escape a value for HTML.
      *
-     * Checks the CSRF token; sets self::$ok on success.
+     * @param mixed $s The value (cast to string).
+     * @return string The escaped text.
+     */
+    static function h($s)
+    {
+        return htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
+    }
+
+    /**
+     * Translate and escape a text.
+     *
+     * @param string $s The English text.
+     * @return string The escaped translation.
+     */
+    static function t($s)
+    {
+        return self::h(ui_language::translate($s));
+    }
+
+    /**
+     * The access types: name and what it allows.
+     *
+     * @return array<string, array{0: string, 1: string}>
+     */
+    static function AccessTypes()
+    {
+        return array(
+            'RW' => array('Full access', 'Download, upload, rename and delete.'),
+            'RO' => array('Read only', 'Download only: nothing can be changed.'),
+            'WO' => array('Upload only', 'Upload and change files, but not download them.'),
+        );
+    }
+
+    /**
+     * The logged-in account's FTP accounts.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return array<int, array<string, mixed>> By name: 'id', 'user', 'dir', 'access', 'created', 'shown' (whether a password can be shown).
+     */
+    static function Accounts()
+    {
+        global $zdbh;
+        static $rows = null;
+        if ($rows === null) {
+            $q = $zdbh->prepare("SELECT ft_id_pk, ft_user_vc, ft_directory_vc, ft_access_vc, ft_created_ts, ft_passenc_tx FROM x_ftpaccounts WHERE ft_acc_fk = :u AND ft_deleted_ts IS NULL ORDER BY ft_user_vc");
+            $q->execute(array(':u' => (int) ctrl_users::GetUserDetail()['userid']));
+            $rows = array();
+            foreach ($q->fetchAll(PDO::FETCH_ASSOC) as $r) {
+                $rows[] = array('id' => (int) $r['ft_id_pk'], 'user' => (string) $r['ft_user_vc'], 'dir' => (string) $r['ft_directory_vc'], 'access' => (string) $r['ft_access_vc'],
+                    'created' => (int) $r['ft_created_ts'], 'shown' => strpos((string) $r['ft_passenc_tx'], 'enc1:') === 0);
+            }
+        }
+        return $rows;
+    }
+
+    /**
+     * One of the logged-in account's FTP accounts.
+     *
+     * @param mixed $id The FTP account ID.
+     * @return array<string, mixed>|false See Accounts().
+     */
+    static function Mine($id)
+    {
+        foreach (self::Accounts() as $a) {
+            if ($a['id'] === (int) $id) {
+                return $a;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Which page shows: the list, the new account form, an account's edit form, or a delete confirmation.
      *
      * @global runtime_controller $controller The request controller.
-     * @return bool True when created.
+     * @return string 'list', 'new', 'edit' or 'delete'.
+     */
+    static function View()
+    {
+        global $controller;
+        if (self::$failed !== '') {
+            return self::$failed;
+        }
+        $show = $controller->GetControllerRequest('URL', 'show');
+        if ($show === 'New' && self::getQuotaLimit()) {
+            return 'new';
+        }
+        if (in_array($show, array('Edit', 'Delete'), true) && self::Mine($controller->GetControllerRequest('URL', 'other'))) {
+            return strtolower($show);
+        }
+        return 'list';
+    }
+
+    /**
+     * Template flag <% if IsList %>.
+     *
+     * @return bool
+     */
+    static function getIsList()
+    {
+        return self::View() === 'list';
+    }
+
+    /**
+     * Template flag <% if IsForm %>: the new account form or an account's edit form.
+     *
+     * @return bool
+     */
+    static function getIsForm()
+    {
+        return in_array(self::View(), array('new', 'edit'), true);
+    }
+
+    /**
+     * Template flag <% if IsNew %>.
+     *
+     * @return bool
+     */
+    static function getIsNew()
+    {
+        return self::View() === 'new';
+    }
+
+    /**
+     * Template flag <% if IsEdit %>.
+     *
+     * @return bool
+     */
+    static function getIsEdit()
+    {
+        return self::View() === 'edit';
+    }
+
+    /**
+     * Template flag <% if IsDelete %>.
+     *
+     * @return bool
+     */
+    static function getIsDelete()
+    {
+        return self::View() === 'delete';
+    }
+
+    /**
+     * The figures at the top (<@ Tiles @>): accounts against the package's limit.
+     *
+     * @return string The HTML.
+     */
+    static function getTiles()
+    {
+        $u = ctrl_users::GetUserDetail();
+        $used = count(self::Accounts());
+        $max = (int) $u['ftpaccountsquota'];
+        $pct = $max > 0 ? min(100, round($used / $max * 100)) : 0;
+        $by = array('RW' => 0, 'RO' => 0, 'WO' => 0);
+        foreach (self::Accounts() as $a) {
+            if (isset($by[$a['access']])) {
+                $by[$a['access']]++;
+            }
+        }
+        $ico = function ($d) { return '<svg class="ft-ico-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' . $d . '</svg>'; };
+        return '<div class="ft-tile' . ($max >= 0 && $used >= $max ? ' full' : '') . '">' . $ico('<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 10v6M9 13l3 3 3-3"/>')
+            . '<div><b>' . $used . ($max < 0 ? '' : ' <small>/ ' . $max . '</small>') . '</b><span>' . self::t('FTP accounts') . ($max < 0 ? ' &middot; ' . self::t('no limit') : '') . '</span>'
+            . ($max > 0 ? '<div class="ft-bar"><i style="width:' . $pct . '%"></i></div>' : '') . '</div></div>'
+            . '<div class="ft-tile">' . $ico('<path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/>') . '<div><b>' . $by['RO'] . '</b><span>' . self::t('Read only') . '</span></div></div>'
+            . '<div class="ft-tile">' . $ico('<path d="M12 21V9"/><path d="m7 14 5-5 5 5"/><path d="M5 3h14"/>') . '<div><b>' . $by['WO'] . '</b><span>' . self::t('Upload only') . '</span></div></div>';
+    }
+
+    /**
+     * The FTP accounts (<@ AccountRows @>): name with Copy, home folder, access, and the actions.
+     *
+     * @return string The HTML.
+     */
+    static function getAccountRows()
+    {
+        $types = self::AccessTypes();
+        $out = '';
+        foreach (self::Accounts() as $a) {
+            $t = isset($types[$a['access']]) ? $types[$a['access']] : array($a['access'], '');
+            $out .= '<div class="ft-row" data-s="' . self::h(strtolower($a['user'] . ' ' . $a['dir'])) . '">'
+                . '<span class="ft-avatar" aria-hidden="true"><svg class="ft-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></span>'
+                . '<div class="ft-main"><div class="ft-name"><code data-copy="' . self::h($a['user']) . '">' . self::h($a['user']) . '</code>'
+                . '<button type="button" class="btn btn-default btn-xs ft-copy" data-done="' . self::t('Copied') . '">' . self::t('Copy') . '</button>'
+                . '<span class="ft-acc ft-acc-' . self::h(strtolower($a['access'])) . '" title="' . self::t($t[1]) . '">' . self::t($t[0]) . '</span></div>'
+                . '<div class="ft-sub"><span class="ft-dir"><svg class="ft-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>'
+                . '<code>' . self::h($a['dir'] === '' ? '/' : $a['dir']) . '</code></span>'
+                . ($a['created'] ? '<span>' . self::t('Added') . ' ' . self::h(date('j M Y', $a['created'])) . '</span>' : '') . '</div></div>'
+                . '<div class="ft-act">'
+                . '<button class="btn btn-default btn-sm" type="submit" form="ft-act" name="inShow_' . $a['id'] . '" value="inShow_' . $a['id'] . '">'
+                . '<svg class="ft-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>' . self::t('Password') . '</button>'
+                . '<a class="btn btn-default btn-sm" href="./?module=ftp_management&amp;show=Edit&amp;other=' . $a['id'] . '">' . self::t('Edit') . '</a>'
+                . '<a class="btn btn-default btn-sm ft-del" href="./?module=ftp_management&amp;show=Delete&amp;other=' . $a['id'] . '" title="' . self::t('Delete') . '" aria-label="' . self::t('Delete') . ' ' . self::h($a['user']) . '">'
+                . '<svg class="ft-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg></a>'
+                . '</div></div>';
+        }
+        return $out;
+    }
+
+    /**
+     * Template flag <% if HasAccounts %>.
+     *
+     * @return bool
+     */
+    static function getHasAccounts()
+    {
+        return count(self::Accounts()) > 0;
+    }
+
+    /**
+     * Template flag <% if NoAccounts %>.
+     *
+     * @return bool
+     */
+    static function getNoAccounts()
+    {
+        return !self::getHasAccounts();
+    }
+
+    /**
+     * Template flag <% if AtLimit %>: the package allows no more FTP accounts.
+     *
+     * @return bool
+     */
+    static function getAtLimit()
+    {
+        return !self::getQuotaLimit();
+    }
+
+    /**
+     * The settings for FTP programs (<@ Connection @>): server, port and security, with Copy.
+     *
+     * @return string The HTML.
+     */
+    static function getConnection()
+    {
+        $host = self::h(ctrl_options::GetSystemOption('sentora_domain'));
+        $copy = '<button type="button" class="btn btn-default btn-xs ft-copy" data-done="' . self::t('Copied') . '">' . self::t('Copy') . '</button>';
+        return '<dl class="ft-dl"><dt>' . self::t('Server') . '</dt><dd><code data-copy="' . $host . '">' . $host . '</code>' . $copy . '</dd>'
+            . '<dt>' . self::t('Port') . '</dt><dd><code>21</code></dd>'
+            . '<dt>' . self::t('Encryption') . '</dt><dd>' . self::t('Require explicit FTP over TLS (FTPS)') . '</dd>'
+            . '<dt>' . self::t('User name') . '</dt><dd>' . self::t('the FTP account name, as shown') . '</dd>'
+            . '<dt>' . self::t('Transfer mode') . '</dt><dd>' . self::t('Passive') . '</dd></dl>'
+            . '<p class="ft-sub">' . self::t('For FileZilla or WinSCP: protocol FTP, encryption "Require explicit FTP over TLS". Plain FTP sends the password unencrypted.') . '</p>';
+    }
+
+    /**
+     * The form's values: what was typed after a refused save, the account being changed, or a new one.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return array<string, mixed> 'id', 'user' (without the prefix for a new one), 'access', 'home' (1, 2 or 3; 0 = keep), 'dest', 'ddest', 'dir' (current).
+     */
+    static function FormValues()
+    {
+        global $controller;
+        $f = $controller->GetAllControllerRequests('FORM');
+        if (self::$failed !== '') {
+            $a = self::Mine($f['inEditID'] ?? 0);
+            return array('id' => (int) ($f['inEditID'] ?? 0), 'user' => (string) ($f['inFTPUsername'] ?? ($a ? $a['user'] : '')), 'access' => (string) ($f['inAccess'] ?? 'RW'),
+                'home' => (int) ($f['inAutoHome'] ?? 1), 'dest' => (string) ($f['inDestination'] ?? ''), 'ddest' => (string) ($f['inDomainDestination'] ?? ''), 'dir' => $a ? $a['dir'] : '');
+        }
+        if (self::View() === 'edit') {
+            $a = self::Mine($controller->GetControllerRequest('URL', 'other'));
+            return array('id' => $a['id'], 'user' => $a['user'], 'access' => $a['access'], 'home' => 0, 'dest' => '', 'ddest' => '', 'dir' => $a['dir']);
+        }
+        return array('id' => 0, 'user' => '', 'access' => 'RW', 'home' => 1, 'dest' => '', 'ddest' => '', 'dir' => '');
+    }
+
+    /**
+     * <@ FormId @>: the account's ID in the edit form.
+     *
+     * @return int
+     */
+    static function getFormId()
+    {
+        return (int) self::FormValues()['id'];
+    }
+
+    /**
+     * <@ FormUser @>: the user name typed (new) or the account's name (edit), escaped.
+     *
+     * @return string
+     */
+    static function getFormUser()
+    {
+        return self::h(self::FormValues()['user']);
+    }
+
+    /**
+     * The access type choices (<@ AccessChoices @>).
+     *
+     * @return string The HTML.
+     */
+    static function getAccessChoices()
+    {
+        $cur = self::FormValues()['access'];
+        $out = '';
+        foreach (self::AccessTypes() as $k => $t) {
+            $out .= '<label class="ft-choice"><input type="radio" name="inAccess" value="' . $k . '"' . ($k === $cur ? ' checked' : '') . '><span><b>' . self::t($t[0]) . '</b><small>' . self::t($t[1]) . '</small></span></label>';
+        }
+        return $out;
+    }
+
+    /**
+     * The home folder choices (<@ HomeChoices @>): keep (edit), a new folder, a folder in the home folder, or a website's folder.
+     *
+     * @return string The HTML.
+     */
+    static function getHomeChoices()
+    {
+        $v = self::FormValues();
+        $u = ctrl_users::GetUserDetail();
+        $opt = function ($rows, $prefix, $cur) {
+            $out = '';
+            foreach ($rows as $r) {
+                $val = $prefix . $r['domains'];
+                $out .= '<option value="' . self::h($val) . '"' . ($val === $cur ? ' selected' : '') . '>/' . self::h($val) . '</option>';
+            }
+            return $out;
+        };
+        $edit = self::View() === 'edit';
+        $out = '';
+        if ($edit) {
+            $out .= '<label class="ft-home"><input type="radio" name="inAutoHome" value="0"' . ($v['home'] === 0 ? ' checked' : '') . '><span><b>' . self::t('Keep') . ' <code>' . self::h($v['dir'] === '' ? '/' : $v['dir']) . '</code></b></span></label>';
+        } else {
+            $out .= '<label class="ft-home"><input type="radio" name="inAutoHome" value="1"' . ($v['home'] === 1 ? ' checked' : '') . '><span><b>' . self::t('A new folder of its own') . '</b><small><code>/' . self::h($u['username']) . '_<span id="ft-newdir">' . self::h($v['user'] !== '' ? $v['user'] : '…') . '</span></code></small></span></label>';
+        }
+        $out .= '<label class="ft-home"><input type="radio" name="inAutoHome" value="3"' . ($v['home'] === 3 ? ' checked' : '') . '><span><b>' . self::t('A website\'s folder') . '</b>'
+            . '<select class="form-control input-sm" name="inDomainDestination"><option value="">/public_html</option>' . $opt(self::ListDomainDirs($u['userid']), 'public_html/', $v['ddest']) . '</select></span></label>'
+            . '<label class="ft-home"><input type="radio" name="inAutoHome" value="2"' . ($v['home'] === 2 ? ' checked' : '') . '><span><b>' . self::t('Another folder') . '</b>'
+            . '<select class="form-control input-sm" name="inDestination"><option value="">/ (' . self::t('everything') . ')</option>' . $opt(self::ListMasterDirs($u['userid']), '', $v['dest']) . '</select></span></label>';
+        return $out;
+    }
+
+    /**
+     * The account the delete confirmation is for (<@ DeleteName @>), escaped.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return string
+     */
+    static function getDeleteName()
+    {
+        global $controller;
+        $a = self::Mine($controller->GetControllerRequest('URL', 'other'));
+        return $a ? self::h($a['user']) : '';
+    }
+
+    /**
+     * The account's ID in the delete confirmation (<@ DeleteId @>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return int
+     */
+    static function getDeleteId()
+    {
+        global $controller;
+        $a = self::Mine($controller->GetControllerRequest('URL', 'other'));
+        return $a ? $a['id'] : 0;
+    }
+
+    /**
+     * The account's folder in the delete confirmation (<@ DeleteDir @>), escaped.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return string
+     */
+    static function getDeleteDir()
+    {
+        global $controller;
+        $a = self::Mine($controller->GetControllerRequest('URL', 'other'));
+        return $a ? self::h($a['dir'] === '' ? '/' : $a['dir']) : '';
+    }
+
+    /**
+     * Handle the new account form, then back to the list.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return bool|void False when refused (the form shows again); otherwise ends with a redirect and exit.
      */
     static function doCreateFTP()
     {
         global $controller;
         runtime_csfr::Protect();
+        self::$failed = 'new';
         // The package's limit on FTP accounts, checked here as well: the page only hides the
         // form at the limit, so a posted form could create more than the package allows
         if (!self::getQuotaLimit()) {
             return false;
         }
         $currentuser = ctrl_users::GetUserDetail();
-        $formvars = $controller->GetAllControllerRequests('FORM');
-        if (self::ExecuteCreateFTP($currentuser['userid'], $formvars['inFTPUsername'] ?? '', $formvars['inPassword'] ?? '', $formvars['inDestination'] ?? '', $formvars['inDomainDestination'] ?? '', $formvars['inAccess'] ?? '', $formvars['inAutoHome'] ?? '')) {
-            self::$ok = true;
-            return true;
-        } else {
-            return false;
+        $f = $controller->GetAllControllerRequests('FORM');
+        if (self::ExecuteCreateFTP($currentuser['userid'], $f['inFTPUsername'] ?? '', $f['inPassword'] ?? '', $f['inDestination'] ?? '', $f['inDomainDestination'] ?? '', $f['inAccess'] ?? '', $f['inAutoHome'] ?? '')) {
+            header('location: ./?module=' . $controller->GetCurrentModule() . '&saved=' . rawurlencode($currentuser['username'] . '_' . ($f['inFTPUsername'] ?? '')));
+            exit;
         }
+        return false;
     }
 
     /**
-     * Handle the delete confirmation: delete the posted FTP account (inDelete).
-     *
-     * Checks the CSRF token; sets self::$ok on success.
+     * Handle the edit form: access type, home folder and (when typed) a new password; then back to the list.
      *
      * @global runtime_controller $controller The request controller.
-     * @return true
+     * @return bool|void False when refused; otherwise ends with a redirect and exit.
+     */
+    static function doUpdateFTP()
+    {
+        global $controller;
+        runtime_csfr::Protect();
+        $f = $controller->GetAllControllerRequests('FORM');
+        $a = self::Mine($f['inEditID'] ?? 0);
+        if (!$a) {
+            return false;
+        }
+        self::$failed = 'edit';
+        $pass = (string) ($f['inPassword'] ?? '');
+        // the password first: nothing is changed when it is refused
+        if ($pass !== '' && !fs_director::CheckForEmptyValue(self::CheckPasswordForErrors($pass))) {
+            return false;
+        }
+        if (!self::ExecuteUpdateFTP($a['id'], (string) ($f['inAccess'] ?? ''), $f['inAutoHome'] ?? 0, (string) ($f['inDestination'] ?? ''), (string) ($f['inDomainDestination'] ?? ''))) {
+            return false;
+        }
+        if ($pass !== '') {
+            self::ExecuteResetPassword($a['id'], $pass);
+        }
+        header('location: ./?module=' . $controller->GetCurrentModule() . '&saved=' . rawurlencode($a['user']));
+        exit;
+    }
+
+    /**
+     * Handle the delete confirmation, then back to the list.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return bool|void False when it is not the account's; otherwise ends with a redirect and exit.
      */
     static function doDeleteFTP()
     {
         global $controller;
         runtime_csfr::Protect();
-        $formvars = $controller->GetAllControllerRequests('FORM');
-        if (self::ExecuteDeleteFTP($formvars['inDelete']))
-            self::$ok = true;
-        return true;
+        $f = $controller->GetAllControllerRequests('FORM');
+        $a = self::Mine($f['inDelete'] ?? 0);
+        if (!$a || !self::ExecuteDeleteFTP($a['id'])) {
+            return false;
+        }
+        header('location: ./?module=' . $controller->GetCurrentModule() . '&deleted=' . rawurlencode($a['user']));
+        exit;
     }
 
     /**
-     * Handle the password form: set the posted password (inPassword) on the FTP account inReset.
-     *
-     * Checks the CSRF token; sets self::$ok on success.
+     * The old password form (Reset Password): set the posted password on the FTP account inReset.
      *
      * @global runtime_controller $controller The request controller.
      * @return true
@@ -580,53 +1053,16 @@ class module_controller extends ctrl_module
         global $controller;
         runtime_csfr::Protect();
         $formvars = $controller->GetAllControllerRequests('FORM');
-        if (self::ExecuteResetPassword($formvars['inReset'], $formvars['inPassword']))
+        if (self::ExecuteResetPassword($formvars['inReset'] ?? 0, $formvars['inPassword'] ?? '')) {
             self::$ok = true;
+        }
         return true;
     }
 
     /**
-     * The logged-in account's FTP accounts (template <% loop ClientList %>).
+     * Handle Show password (and the old list's Edit and Delete buttons, which redirect and exit).
      *
-     * @return array<int, array<string, mixed>>|false One row per FTP account (see ListClients()), or false when there are none.
-     */
-    static function getClientList()
-    {
-        $currentuser = ctrl_users::GetUserDetail();
-        $clientlist = self::ListClients($currentuser['userid']);
-        return (!fs_director::CheckForEmptyValue($clientlist)) ? $clientlist : false;
-    }
-
-    /**
-     * The folders in the account's public_html (template <% loop DomainDirsList %>).
-     *
-     * @return array<int, array<string, string>>|false One row per folder ('domains'), or false when there are none.
-     */
-    static function getDomainDirsList()
-    {
-        $currentuser = ctrl_users::GetUserDetail();
-        $domaindirectories = self::ListDomainDirs($currentuser['userid']);
-        return (!fs_director::CheckForEmptyValue($domaindirectories)) ? $domaindirectories : false;
-    }
-
-    /**
-     * The folders in the account's home folder (template <% loop MasterDirsList %>).
-     *
-     * @return array<int, array<string, string>>|false One row per folder ('domains'), or false when there are none.
-     */
-    static function getMasterDirsList()
-    {
-        $currentuser = ctrl_users::GetUserDetail();
-        $domaindirectories = self::ListMasterDirs($currentuser['userid']);
-        return (!fs_director::CheckForEmptyValue($domaindirectories)) ? $domaindirectories : false;
-    }
-
-    /**
-     * Handle the buttons of the FTP account list: delete, reset password or show password.
-     *
-     * Checks the CSRF token. Delete and reset redirect to the confirmation page and
-     * exit; show password asks for the panel password first, then decrypts it into
-     * self::$shownuser / self::$shownpass.
+     * Show password asks for the panel password first, then decrypts it into self::$shownuser / self::$shownpass.
      *
      * @global runtime_controller $controller The request controller.
      * @global db_driver $zdbh The panel's database connection.
@@ -634,22 +1070,21 @@ class module_controller extends ctrl_module
      */
     static function doEditFTP()
     {
-        global $controller;
+        global $controller, $zdbh;
         runtime_csfr::Protect();
         $currentuser = ctrl_users::GetUserDetail();
         $formvars = $controller->GetAllControllerRequests('FORM');
-        foreach (self::ListClients($currentuser['userid']) as $row) {
-            if (isset($formvars['inDelete_' . $row['id'] . ''])) {
+        foreach (self::Accounts() as $row) {
+            if (isset($formvars['inDelete_' . $row['id']])) {
                 header("location: ./?module=" . $controller->GetCurrentModule() . "&show=Delete&other=" . $row['id']);
                 exit;
             }
-            if (isset($formvars['inReset_' . $row['id'] . ''])) {
+            if (isset($formvars['inReset_' . $row['id']])) {
                 header("location: ./?module=" . $controller->GetCurrentModule() . "&show=Edit&other=" . $row['id']);
                 exit;
             }
             // Show password: one of this account's own FTP accounts (the loop only has those)
-            if (isset($formvars['inShow_' . $row['id'] . ''])) {
-                global $zdbh;
+            if (isset($formvars['inShow_' . $row['id']])) {
                 $q = $zdbh->prepare("SELECT ft_user_vc, ft_passenc_tx FROM x_ftpaccounts WHERE ft_id_pk = :id AND ft_acc_fk = :uid AND ft_deleted_ts IS NULL");
                 $q->execute(array(':id' => (int) $row['id'], ':uid' => (int) $currentuser['userid']));
                 $f = $q->fetch();
@@ -673,163 +1108,22 @@ class module_controller extends ctrl_module
                 return;
             }
         }
-        return;
     }
 
     /**
-     * Whether to show the create form: no 'show' in the URL (template <% if isCreateFTP %>).
-     *
-     * @global runtime_controller $controller The request controller.
-     * @return bool
-     */
-    static function getisCreateFTP()
-    {
-        global $controller;
-        $urlvars = $controller->GetAllControllerRequests('URL');
-        return !isset($urlvars['show']);
-    }
-
-    /**
-     * Whether to show the delete confirmation for the FTP account in the URL ('other') (template <% if isDeleteFTP %>).
-     *
-     * @global runtime_controller $controller The request controller.
-     * @global db_driver $zdbh The panel's database connection.
-     * @param int|null $uid Optional. The panel account ID; null for the logged-in account. Default null.
-     * @return bool|null Null when the FTP account is not the account's.
-     */
-    static function getisDeleteFTP($uid = null)
-    {
-        global $controller;
-        global $zdbh;
-
-        $urlvars = $controller->GetAllControllerRequests('URL');
-
-        // Verify if Current user can Delete FTP Account.
-        // This shall avoid exposing ftp username based on ID lookups.
-        $currentuser = ctrl_users::GetUserDetail($uid);
-
-        $sql = " SELECT * FROM x_ftpaccounts WHERE ft_acc_fk=:userid AND ft_id_pk=:editedUsrID AND ft_deleted_ts IS NULL";
-        $numrows = $zdbh->prepare($sql);
-        $numrows->bindParam(':userid', $currentuser['userid']);
-        $numrows->bindParam(':editedUsrID', $urlvars['other']);
-        $numrows->execute();
-
-        if( $numrows->rowCount() == 0 ) {
-            return;
-        }
-
-        // Show User Info
-        return (isset($urlvars['show'])) && ($urlvars['show'] == "Delete");
-    }
-
-    /**
-     * Whether to show the reset password form for the FTP account in the URL ('other') (template <% if isEditFTP %>).
-     *
-     * @global runtime_controller $controller The request controller.
-     * @global db_driver $zdbh The panel's database connection.
-     * @param int|null $uid Optional. The panel account ID; null for the logged-in account. Default null.
-     * @return bool|null Null when the FTP account is not the account's.
-     */
-    static function getisEditFTP($uid = null)
-    {
-        global $controller;
-        global $zdbh;
-
-        $urlvars     = $controller->GetAllControllerRequests('URL');
-
-        // Verify if Current user can Edit FTP Account.
-        // This shall avoid exposing ftp username based on ID lookups.
-        $currentuser = ctrl_users::GetUserDetail($uid);
-
-        $sql = " SELECT * FROM x_ftpaccounts WHERE ft_acc_fk=:userid AND ft_id_pk=:editedUsrID AND ft_deleted_ts IS NULL";
-        $numrows = $zdbh->prepare($sql);
-        $numrows->bindParam(':userid', $currentuser['userid']);
-        $numrows->bindParam(':editedUsrID', $urlvars['other']);
-        $numrows->execute();
-
-        if( $numrows->rowCount() == 0 ) {
-            return;
-        }
-
-        // Show User Info
-        return (isset($urlvars['show'])) && ($urlvars['show'] == "Edit");
-    }
-
-    /**
-     * The user name of the FTP account in the URL ('other') (template <@ EditCurrentName @>).
-     *
-     * @global runtime_controller $controller The request controller.
-     * @return string The user name, or '' when there is no 'other'.
-     */
-    static function getEditCurrentName()
-    {
-        global $controller;
-        if ($controller->GetControllerRequest('URL', 'other')) {
-            $current = self::ListCurrentClient($controller->GetControllerRequest('URL', 'other'));
-            return $current[0]['username'];
-        } else {
-            return "";
-        }
-    }
-
-    /**
-     * The ID of the FTP account in the URL ('other') (template <@ EditCurrentID @>).
-     *
-     * @global runtime_controller $controller The request controller.
-     * @return int|string The ID, or '' when there is no 'other'.
-     */
-    static function getEditCurrentID()
-    {
-        global $controller;
-        if ($controller->GetControllerRequest('URL', 'other')) {
-            $current = self::ListCurrentClient($controller->GetControllerRequest('URL', 'other'));
-            return $current[0]['id'];
-        } else {
-            return "";
-        }
-    }
-
-    /**
-     * Whether the account may create another FTP account (template <% if QuotaLimit %>).
+     * Whether the account may create another FTP account (the package's limit).
      *
      * @return bool
      */
     static function getQuotaLimit()
     {
         $currentuser = ctrl_users::GetUserDetail();
-        return ($currentuser['ftpaccountsquota'] < 0 ) or //-1 = unlimited
+        return ($currentuser['ftpaccountsquota'] < 0) or //-1 = unlimited
                 ($currentuser['ftpaccountsquota'] > ctrl_users::GetQuotaUsages('ftpaccounts', $currentuser['userid']));
     }
 
     /**
-     * The FTP accounts quota image: "unlimited", or a pie chart of free and used (template <@ FTPUsagepChart @>).
-     *
-     * @global runtime_controller $controller The request controller.
-     * @return string The HTML <img> tag.
-     */
-    static function getFTPUsagepChart()
-    {
-    global $controller;
-    $currentuser = ctrl_users::GetUserDetail();
-    $maximum = $currentuser['ftpaccountsquota'];
-    if ($maximum < 0) { //-1 = unlimited
-            if (file_exists(ui_template::AssetPath('img/misc/unlimited.png'))) {
-        return '<img src="' . ui_template::AssetPath('img/misc/unlimited.png') . '" alt="' . ui_language::translate('Unlimited') . '"/>';
-      } else {
-        return '<img src="modules/' . $controller->GetControllerRequest('URL', 'module') . '/assets/unlimited.png" alt="' . ui_language::translate('Unlimited') . '"/>';
-      }
-        } else {
-            $used = ctrl_users::GetQuotaUsages('ftpaccounts', $currentuser['userid']);
-            $free = max($maximum - $used, 0);
-            return '<img src="etc/lib/pChart2/sentora/z3DPie.php?score=' . $free . '::' . $used
-                    . '&labels=Free: ' . $free . '::Used: ' . $used
-                    . '&legendfont=verdana&legendfontsize=8&imagesize=240::190&chartsize=120::90&radius=100&legendsize=150::160"'
-                    . ' alt="' . ui_language::translate('Pie chart') . '"/>';
-        }
-    }
-
-    /**
-     * The password length to suggest: the password_minlength setting, at least 9 (template <@ MinPassLength @>).
+     * The password length to ask for: the password_minlength setting, at least 9 (template <@ MinPassLength @>).
      *
      * @return int|string
      */
@@ -846,56 +1140,62 @@ class module_controller extends ctrl_module
     }
 
     /**
-     * The message box for the last action, or the panel password form for "show password" (template <@ Result @>).
+     * The message for the last action, or the panel password form for "show password" (template <@ Result @>).
      *
+     * @global runtime_controller $controller The request controller.
      * @return string|null The HTML, or null when there is nothing to show.
      */
     static function getResult()
     {
+        global $controller;
+        $err = function ($m) { return ui_sysmessage::shout(ui_language::translate($m), 'zannounceerror'); };
         if (self::$askpw !== null) {
             return ui_sysmessage::shout(ctrl_secret::ConfirmForm(self::$askpw[0], self::$askpw[1], self::$askpw[2]), "zannounceinfo");
         }
         if (!fs_director::CheckForEmptyValue(self::$wrongpw)) {
-            return ui_sysmessage::shout(ui_language::translate("That is not your panel password: the password was not shown."), "zannounceerror");
+            return $err('That is not your panel password: the password was not shown.');
         }
         if (self::$shownuser !== null) {
-            $h = function ($s) { return htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8'); };
             if (self::$shownpass === '') {
-                return ui_sysmessage::shout(ui_language::translate("The password of") . ' <strong>' . $h(self::$shownuser) . '</strong> '
-                    . ui_language::translate("is not stored (it was set before passwords were kept). Use Reset Password to set a new one; it can be shown after that."), "zannounceerror");
+                return ui_sysmessage::shout(ui_language::translate("The password of") . ' <strong>' . self::h(self::$shownuser) . '</strong> '
+                    . ui_language::translate("is not stored (it was set before passwords were kept). Set a new one in Edit; it can be shown after that."), "zannounceerror");
             }
-            return ui_sysmessage::shout(ui_language::translate("FTP account") . ' <strong>' . $h(self::$shownuser) . '</strong>, '
-                . ui_language::translate("password:") . ' <code style="user-select: all; font-size: 14px;">' . $h(self::$shownpass) . '</code>', "zannounceok");
+            return ui_sysmessage::shout(ui_language::translate("FTP account") . ' <strong>' . self::h(self::$shownuser) . '</strong>, '
+                . ui_language::translate("password:") . ' <code style="user-select: all; font-size: 14px;">' . self::h(self::$shownpass) . '</code>', "zannounceok");
         }
         if (!fs_director::CheckForEmptyValue(self::$blank)) {
-            return ui_sysmessage::shout(ui_language::translate("You must enter a valid username and password to create your FTP account."), "zannounceerror");
+            return $err('Enter a name and a password for the FTP account.');
         }
         if (!fs_director::CheckForEmptyValue(self::$blankpassword)) {
-            return ui_sysmessage::shout(ui_language::translate("You entered blank a password. Please retry and enter a valid password."), "zannounceerror");
+            return $err('Enter a password, or use Make one.');
         }
-		if (!fs_director::CheckForEmptyValue(self::$alreadyexists)) {
-            return ui_sysmessage::shout(ui_language::translate("An FTP account with that name already exists."), "zannounceerror");
-        }
-        if (!fs_director::CheckForEmptyValue(self::$error)) {
-            return ui_sysmessage::shout(ui_language::translate("There was an error updating your FTP accounts."), "zannounceerror");
+        if (!fs_director::CheckForEmptyValue(self::$alreadyexists)) {
+            return $err('An FTP account with that name already exists.');
         }
         if (!fs_director::CheckForEmptyValue(self::$badname)) {
-            return ui_sysmessage::shout(ui_language::translate("Your ftp account name is not valid. Please enter a valid ftp account name."), "zannounceerror");
+            return $err('The name may have letters, digits, underscores and hyphens.');
         }
-		if (!fs_director::CheckForEmptyValue(self::$badpass)) {
-            return ui_sysmessage::shout(ui_language::translate("Your MySQL password is not valid. Valid characters are A-Z, a-z, 0-9."), "zannounceerror");
+        if (!fs_director::CheckForEmptyValue(self::$badpasswordlength)) {
+            return ui_sysmessage::shout(ui_language::translate('The password is too short: it needs at least') . ' ' . (int) self::getMinPassLength() . ' ' . ui_language::translate('characters.'), 'zannounceerror');
         }
-		if (!fs_director::CheckForEmptyValue(self::$badpasswordlength)) {
-            return ui_sysmessage::shout(ui_language::translate("Your password did not meet the minimun length requirements. Characters needed for password length") . ": " . ctrl_options::GetSystemOption('password_minlength'), "zannounceerror");
+        if (!fs_director::CheckForEmptyValue(self::$badpass)) {
+            return $err('The password needs a lower case letter, a capital and a digit.');
         }
         if (!fs_director::CheckForEmptyValue(self::$invalidPath)) {
-            return ui_sysmessage::shout(ui_language::translate("Invalid Folder."), "zannounceok");
+            return $err('That folder is not one of yours.');
+        }
+        if (!fs_director::CheckForEmptyValue(self::$error)) {
+            return $err('Choose what the account may do.');
         }
         if (!fs_director::CheckForEmptyValue(self::$ok)) {
-            return ui_sysmessage::shout(ui_language::translate("FTP accounts updated successfully."), "zannounceok");
+            return ui_sysmessage::shout(ui_language::translate('The FTP account is saved.'), 'zannounceok');
+        }
+        foreach (array('saved' => 'is saved. A change of what it may do applies within 5 minutes.', 'deleted' => 'is deleted. Its files stay where they are.') as $k => $m) {
+            $who = $controller->GetControllerRequest('URL', $k);
+            if ($who) {
+                return ui_sysmessage::shout(ui_language::translate('The FTP account') . ' <strong>' . self::h($who) . '</strong> ' . ui_language::translate($m), 'zannounceok');
+            }
         }
         return;
     }
-
-    // Webinterface sudo methods.
 }

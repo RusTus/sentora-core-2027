@@ -246,3 +246,5 @@ modules/client_notices/code/tinymce/skins/lightgray/skin.ie7.min.css
 modules/client_notices/code/tinymce/skins/lightgray/skin.min.css
 modules/client_notices/code/tinymce/themes/modern/theme.min.js
 modules/client_notices/code/tinymce/tinymce.min.js
+# FTP Accounts: the old "unlimited" picture
+modules/ftp_management/assets/unlimited.png
