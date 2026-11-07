@@ -50,8 +50,9 @@ class ui_tpl_modulelist2column {
                     $line .= '        <ul>';
 
                     foreach ($mods as $mod) {
-                        $translatename = ui_language::translate($mod['mo_name_vc']);
-                        $cleanname = str_replace(" ", "ZP(br)", $translatename);
+                        // translated once and escaped, then each space a line break (the name went through
+                        // translation a second time with the breaks inside, and showed "<br/>" as text)
+                        $cleanname = str_replace(' ', '<br/>', htmlspecialchars(ui_language::translate($mod['mo_name_vc']), ENT_QUOTES, 'UTF-8'));
 
                         // Check is User Style Module Icon Exist
                  if (file_exists('etc/styles/' . ui_template::GetUserTemplate() . '/img/modules/'.$mod['mo_folder_vc'].'/assets/icon.png')) {
@@ -65,7 +66,7 @@ class ui_tpl_modulelist2column {
                         $line .= ui_template::DashboardIcon($mod['mo_folder_vc'], $icon);
                         $line .= '                      </a>';
                         $line .= '                      <br />';
-                        $line .= '                      <a href="?module=' . $mod['mo_folder_vc'] . '"><: ' . $cleanname . ' :></a>';
+                        $line .= '                      <a href="?module=' . $mod['mo_folder_vc'] . '">' . $cleanname . '</a>';
                         $line .= '              </li>';
                     }
 

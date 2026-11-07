@@ -51,8 +51,8 @@ class ui_tpl_modulelist {
                     $icons_per_row = ctrl_options::GetSystemOption('module_icons_pr');
                     $num_icons = 0;
                     foreach ($mods as $mod) {
-                        $translatename = '<: '.$mod['mo_name_vc'].' :>';
-                        $cleanname = str_replace(" ", "ZP(br)", $translatename);
+                        // translated and escaped, then each space a line break
+                        $cleanname = str_replace(' ', '<br/>', htmlspecialchars(ui_language::translate($mod['mo_name_vc']), ENT_QUOTES, 'UTF-8'));
                         if ($num_icons == $icons_per_row) {
                             $line .= "</tr><tr>";
                             $num_icons = 0;
