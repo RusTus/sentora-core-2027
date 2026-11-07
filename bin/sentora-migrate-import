@@ -8,7 +8,8 @@
  *   sentora-migrate-import <export folder> <old account> [<new account>]       what would be done (nothing changes)
  *   sentora-migrate-import <export folder> <old account> [<new account>] --yes do it
  *     (without <new account>, the account of the same name here: clients keep their names)
- *     --php <version>   the domains' PHP version (for example 7.1 for old sites; default: the server's own)
+ *     --php <version>   the domains' PHP version. Default: 7.1, the version for moving old sites (it is
+ *                       switched on in PHP Versions if it is off); --php default for the server's own PHP 8
  *     --keep-ip         leave DNS records that point to the old server's IP address as they are
  *     --overwrite       replace website files that are already there (default: keep them)
  *
@@ -37,7 +38,7 @@ if (!function_exists('posix_geteuid') || posix_geteuid() !== 0) {
 
 /** @var array<int, string> $args The positional arguments. */
 $args = array();
-$opt = array('yes' => false, 'php' => '', 'keep-ip' => false, 'overwrite' => false);
+$opt = array('yes' => false, 'php' => '7.1', 'keep-ip' => false, 'overwrite' => false);
 for ($i = 1; $i < $argc; $i++) {
     $a = $argv[$i];
     if ($a === '--yes') { $opt['yes'] = true; }
@@ -128,9 +129,10 @@ $NEWIP = (string) ctrl_options::GetSystemOption('server_ip');
 $OLDIP = (string) ($M['server_ip'] ?? '');
 $PANELDOMAIN = strtolower((string) ctrl_options::GetSystemOption('sentora_domain'));
 $FTPDB = (string) ctrl_options::GetSystemOption('ftp_db') ?: 'sentora_proftpd';
-$PHPV = $opt['php'];
-if ($PHPV !== '' && !is_dir('/opt/sentora-php/' . $PHPV) && $PHPV !== sys_phpversions::DefaultVersion()) {
-    fwrite(STDERR, "PHP $PHPV is not installed here (sentora-php-install $PHPV adds it).\n");
+// Old sites ran on PHP 5 or 7: they get PHP 7.1 (made for moving them) unless told otherwise
+$PHPV = ($opt['php'] === 'default' || $opt['php'] === sys_phpversions::DefaultVersion()) ? '' : $opt['php'];
+if ($PHPV !== '' && !is_dir('/opt/sentora-php/' . $PHPV)) {
+    fwrite(STDERR, "PHP $PHPV is not installed here: add it with   sentora-php-install $PHPV   (or use --php default for this server's own PHP).\n");
     exit(1);
 }
 
@@ -273,8 +275,14 @@ if ($plan['skipmail']) { warn('mailboxes skipped: ' . implode(', ', $plan['skipm
 say('Also: ' . $dnsCount . ' DNS record(s)' . ($OLDIP !== '' && !$opt['keep-ip'] ? " (those pointing to $OLDIP get $NEWIP)" : '') . ', ' . $counts['x_cronjobs'] . ' cron job(s), '
     . $counts['x_htaccess'] . ' protected folder(s), ' . $counts['x_aliases'] . ' alias(es), ' . $counts['x_forwarders'] . ' forwarder(s), ' . $counts['x_distlists'] . ' distribution list(s)');
 say('PHP for these domains: ' . ($PHPV !== '' ? $PHPV : 'the server\'s own (' . sys_phpversions::DefaultVersion() . ')') . '; old server: PHP ' . $M['php']);
+if ($PHPV !== '' && !sys_phpversions::IsEnabled($PHPV)) {
+    say("  (PHP $PHPV is switched off in PHP Versions: it is switched on for these domains)");
+}
+if ($PHPV !== '' && sys_phpversions::IsMigrationOnly($PHPV)) {
+    say("  PHP $PHPV gets no security fixes: move each site to PHP 8 (the domain's PHP choice) as soon as it runs.");
+}
 if ($M['php'] !== '' && version_compare($M['php'], '8.0', '<') && $PHPV === '') {
-    warn('the sites ran on PHP ' . $M['php'] . ': if they do not work on PHP 8, run this with --php 7.1 (switch PHP 7.1 on in PHP Versions first), then move them to PHP 8');
+    warn('the sites ran on PHP ' . $M['php'] . ' and get PHP 8 here: if one does not work, choose PHP 7.1 for its domain');
 }
 if (!$APPLY) {
     say('');
@@ -293,6 +301,14 @@ foreach (array('sentora_core', 'sentora_postfix', $FTPDB) as $db) {
 }
 say('');
 say("This server's panel databases are saved in $PRE");
+
+// --- the PHP version the domains get: switched on if it is off --------------------------------------
+if ($PHPV !== '' && !sys_phpversions::IsEnabled($PHPV)) {
+    $on = array_filter(array_map('trim', explode(',', (string) ctrl_options::GetSystemOption('php_versions_enabled'))));
+    $on[] = $PHPV;
+    $zdbh->prepare("UPDATE x_settings SET so_value_tx = :v WHERE so_name_vc = 'php_versions_enabled'")->execute(array(':v' => implode(',', array_unique($on))));
+    say("PHP $PHPV: switched on in PHP Versions (the daemon starts it)");
+}
 
 // --- domains ----------------------------------------------------------------------------------------
 sys_symlinks::EnsureColumn();
