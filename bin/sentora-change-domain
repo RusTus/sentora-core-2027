@@ -1,0 +1,150 @@
+#!/bin/bash
+#
+# sentora-change-domain: move the panel to a new address (for example from panel.old.com to
+# panel.new.com), everywhere the installer put the old one:
+#   the panel's setting and Apache site, the server's host name (/etc/hostname, /etc/hosts),
+#   Postfix (myhostname, mydomain), Dovecot's postmaster address, SOGo's mail domain,
+#   Matomo's trusted host and its panel site, and the panel's TLS certificate (a new
+#   self-signed one for the new name; request a Let's Encrypt one in Sencrypt after).
+#
+#   sentora-change-domain panel.new.com          asks before changing anything
+#   sentora-change-domain panel.new.com --yes    no questions
+#
+# The new name's DNS A record should point to this server first. The old address stops
+# working: log in again at the new one. Files it changes are kept as <file>.before-<new name>.
+set -uo pipefail
+
+PANEL=/etc/sentora/panel
+CONF=/etc/sentora/configs
+NEW=$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]')
+YES=0; [ "${2:-}" = "--yes" ] && YES=1
+if [ -z "$NEW" ] || [ "$NEW" = "-h" ] || [ "$NEW" = "--help" ]; then
+    sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'
+    exit 2
+fi
+[ "$(id -u)" -eq 0 ] || { echo "Run this as root."; exit 1; }
+if [[ ! "$NEW" =~ ^[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?$ || "$NEW" == *..* || "$NEW" == *.-* || "$NEW" == *-.* || "$NEW" != *.* ]]; then
+    echo "'$NEW' is not a valid name (letters, digits, dots and hyphens, like panel.example.com)."
+    exit 2
+fi
+
+setso() { "$PANEL/bin/setso" "$@"; }
+OLD=$(setso --show sentora_domain 2> /dev/null | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
+IP=$(setso --show server_ip 2> /dev/null | tr -d '[:space:]')
+[ -n "$OLD" ] || { echo "The panel's current address could not be read (setso --show sentora_domain)."; exit 1; }
+[ "$OLD" != "$NEW" ] && [ "www.$OLD" != "$NEW" ] || { echo "The panel is already at $OLD."; exit 1; }
+# not a hosted domain already (it would take the name from the panel, or the panel from it)
+TAKEN=$(cd "$PANEL" && php -r '
+    include "cnf/db.php";
+    $db = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $user, $pass);
+    $q = $db->prepare("SELECT COUNT(*) FROM x_vhosts WHERE vh_deleted_ts IS NULL AND (vh_name_vc = ? OR CONCAT(\"www.\", vh_name_vc) = ?)");
+    $q->execute(array($argv[1], $argv[1])); echo (int) $q->fetchColumn();' "$NEW" 2> /dev/null)
+if [ "${TAKEN:-0}" != "0" ]; then
+    echo "$NEW is a domain or sub-domain hosted on this server: delete it there first."
+    exit 1
+fi
+
+echo "The panel moves from https://$OLD to https://$NEW"
+DNS=$(dig +short A "$NEW" 2> /dev/null | grep -E '^[0-9.]+$' | tail -1)
+if [ -z "$DNS" ]; then
+    echo "  WARNING: $NEW is not in DNS yet: add an A record for it pointing to ${IP:-this server}."
+elif [ -n "$IP" ] && [ "$DNS" != "$IP" ]; then
+    echo "  WARNING: $NEW points to $DNS in DNS, not to this server ($IP)."
+else
+    echo "  DNS: $NEW points to this server ($DNS)."
+fi
+echo "  The old address stops working; you log in again at the new one."
+if [ $YES -eq 0 ]; then
+    read -r -p "Change it now? (y/n) > " yn || exit 1
+    [[ "$yn" =~ ^[Yy] ]] || { echo "Nothing changed."; exit 0; }
+fi
+
+STAMP="before-$NEW"
+keep() { [ -f "$1" ] && cp -p "$1" "$1.$STAMP"; }
+# the old name, as a whole word (a dot or a letter around it means another name)
+swap() { # file
+    [ -f "$1" ] || return 0
+    keep "$1"
+    OLDRE=$(printf '%s' "$OLD" | sed 's/[.]/\\./g')
+    sed -i -E "s/(^|[^A-Za-z0-9.-])$OLDRE([^A-Za-z0-9-]|\$)/\1$NEW\2/g" "$1"
+}
+
+echo "-- The panel's setting"
+setso --set sentora_domain "$NEW" > /dev/null
+
+echo "-- The server's host name"
+keep /etc/hosts
+awk -v o="$OLD" -v n="$NEW" '
+    $1 !~ /^#/ { line = $1; for (i = 2; i <= NF; i++) line = line " " ($i == o ? n : $i); print line; next }
+    { print }' /etc/hosts > /etc/hosts.sentora-new && cat /etc/hosts.sentora-new > /etc/hosts
+rm -f /etc/hosts.sentora-new
+awk -v n="$NEW" '$1 !~ /^#/ { for (i = 2; i <= NF; i++) if ($i == n) f = 1 } END { exit !f }' /etc/hosts || echo "127.0.0.1 $NEW" >> /etc/hosts
+if [ "$(cat /etc/hostname 2> /dev/null)" = "$OLD" ]; then
+    echo "$NEW" > /etc/hostname
+    hostnamectl set-hostname "$NEW" 2> /dev/null || hostname "$NEW"
+fi
+[ "$(cat /etc/mailname 2> /dev/null)" = "$OLD" ] && echo "$NEW" > /etc/mailname
+
+echo "-- Mail (Postfix, Dovecot) and SOGo"
+swap "$CONF/postfix/main.cf"
+swap "$CONF/dovecot2/dovecot.conf"
+if [ -f /etc/sogo/sogo.conf ]; then
+    swap /etc/sogo/sogo.conf
+    chown root:sogo /etc/sogo/sogo.conf; chmod 640 /etc/sogo/sogo.conf
+fi
+
+echo "-- A new self-signed certificate for $NEW"
+SSL="$CONF/ssl"
+SAN="DNS:$NEW"
+[ -n "$IP" ] && SAN="$SAN,IP:$IP"
+for a in $(hostname -I 2> /dev/null); do
+    [[ "$a" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] && [ "$a" != "$IP" ] && SAN="$SAN,IP:$a"
+done
+for f in sentora.crt sentora.key sentora-chain.crt; do keep "$SSL/$f"; done
+if openssl req -x509 -newkey rsa:3072 -sha256 -days 3650 -nodes \
+        -keyout "$SSL/sentora.key.new" -out "$SSL/sentora.crt.new" \
+        -subj "/CN=$NEW" -addext "subjectAltName=$SAN" \
+        -addext "basicConstraints=critical,CA:FALSE" -addext "keyUsage=critical,digitalSignature,keyEncipherment" \
+        -addext "extendedKeyUsage=serverAuth" > /dev/null 2>&1; then
+    mv -f "$SSL/sentora.key.new" "$SSL/sentora.key"; mv -f "$SSL/sentora.crt.new" "$SSL/sentora.crt"
+    cp "$SSL/sentora.crt" "$SSL/sentora-chain.crt"
+    chown root:root "$SSL"/sentora.key "$SSL"/sentora.crt "$SSL"/sentora-chain.crt
+    chmod 600 "$SSL/sentora.key"; chmod 644 "$SSL/sentora.crt" "$SSL/sentora-chain.crt"
+    # the panel's site uses it (a Let's Encrypt certificate for the old name no longer fits)
+    setso --set panel_ssl_tx "SSLEngine On
+SSLCertificateFile $SSL/sentora.crt
+SSLCertificateKeyFile $SSL/sentora.key" > /dev/null
+else
+    rm -f "$SSL/sentora.key.new" "$SSL/sentora.crt.new"
+    echo "  WARNING: the certificate could not be made; the old one stays."
+fi
+
+MATOMO_CFG="$PANEL/etc/apps/matomo/config/config.ini.php"
+if [ -f "$MATOMO_CFG" ]; then
+    echo "-- Matomo"
+    swap "$MATOMO_CFG"
+    chown root:sentora "$MATOMO_CFG"; chmod 660 "$MATOMO_CFG"
+    rm -f "$MATOMO_CFG.$STAMP"   # (it holds Matomo's database password: no extra copy)
+    # its first site is the panel itself
+    (cd "$PANEL" && php -r '
+        include "cnf/db.php";
+        $db = new PDO("mysql:host=$host;dbname=sentora_matomo;charset=utf8mb4", $user, $pass);
+        $q = $db->prepare("UPDATE matomo_site SET name = ?, main_url = ? WHERE idsite = 1 AND (name = ? OR main_url = ?)");
+        $q->execute(array($argv[2], "https://" . $argv[2], $argv[1], "https://" . $argv[1]));' "$OLD" "$NEW" 2> /dev/null) || true
+fi
+
+echo "-- Apache and the services"
+setso --set apache_changed true > /dev/null
+php "$PANEL/bin/daemon.php" > /var/sentora/logs/daemon-last-run.log 2>&1 || echo "  WARNING: the daemon run reported an error (see /var/sentora/logs/daemon-last-run.log)"
+newaliases 2> /dev/null
+for s in postfix dovecot proftpd sogo apache2; do
+    systemctl is-enabled --quiet "$s" 2> /dev/null || continue
+    systemctl restart "$s" 2> /dev/null || echo "  WARNING: $s did not restart: systemctl status $s"
+done
+
+echo
+echo "Done: the panel is at https://$NEW"
+echo "  - Its certificate is self-signed: request a Let's Encrypt one for $NEW in Admin > Sencrypt."
+echo "  - Mail clients and FTP programs that used $OLD as their server name need $NEW."
+echo "  - The files changed are kept as <file>.$STAMP"
+exit 0

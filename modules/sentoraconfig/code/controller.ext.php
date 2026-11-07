@@ -330,6 +330,19 @@ class module_controller extends ctrl_module
     }
 
     /**
+     * The panel's address, and the console command that moves it to another name (<@ PanelAddress @>).
+     *
+     * @return string HTML.
+     */
+    static function getPanelAddress()
+    {
+        $h = function ($s) { return htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8'); };
+        $domain = (string) ctrl_options::GetSystemOption('sentora_domain');
+        return sprintf($h(ui_language::translate('The panel\'s address: %s. To move it to another name, run this on the server as root: %s')),
+            '<b>https://' . $h($domain) . '</b>', '<code>sentora-change-domain panel.example.com</code>');
+    }
+
+    /**
      * Save the posted settings that changed, after checking them; the vhosts are rewritten only when a setting
      * that shapes them changed. Empty values are skipped, except for settings that may be cleared.
      *

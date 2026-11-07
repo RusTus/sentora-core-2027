@@ -2111,6 +2111,7 @@ return array(
     'The panel is updated' => 'O painel foi atualizado',
     'The panel keeps no copy: tell the person who uses the mailbox, and update the password in their mail program.' => 'O painel não guarda nenhuma cópia: informe a pessoa que usa a caixa de correio e atualize a senha no programa de e-mail dela.',
     'The panel\'s IP address' => 'Endereço IP do painel',
+    'The panel\'s address: %s. To move it to another name, run this on the server as root: %s' => 'Endereço do painel: %s. Para movê-lo para outro nome, execute isto no servidor como root: %s',
     'The panel\'s database says version' => 'O banco de dados do painel indica a versão',
     'The password is too short. Characters needed' => 'A senha é muito curta. Caracteres necessários',
     'The password is too short. Characters needed: %d' => 'A senha é muito curta. Caracteres necessários: %d',

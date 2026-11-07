@@ -2111,6 +2111,7 @@ return array(
     'The panel is updated' => 'Панель обновлена',
     'The panel keeps no copy: tell the person who uses the mailbox, and update the password in their mail program.' => 'Панель не хранит копию: сообщите пароль владельцу ящика и обновите его в почтовой программе.',
     'The panel\'s IP address' => 'IP-адрес панели',
+    'The panel\'s address: %s. To move it to another name, run this on the server as root: %s' => 'Адрес панели: %s. Чтобы перенести её на другое имя, выполните на сервере от имени root: %s',
     'The panel\'s database says version' => 'В базе данных панели указана версия',
     'The password is too short. Characters needed' => 'Пароль слишком короткий. Нужно символов',
     'The password is too short. Characters needed: %d' => 'Пароль слишком короткий. Нужно символов: %d',

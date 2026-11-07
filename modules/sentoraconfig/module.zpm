@@ -9,6 +9,7 @@
 
     <div class="sc" id="sc" data-unsaved="<: You have changes that are not saved. :>" data-reset="<@ ResetConfirm @>">
         <div class="sc-tiles"><@ Summary @></div>
+        <p class="sc-intro"><@ PanelAddress @></p>
 
         <div class="sc-card">
             <nav class="sc-tabs" role="tablist" aria-label="<: Settings :>"></nav>

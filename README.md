@@ -114,6 +114,14 @@ From another computer, these check what visitors can reach:
 > [!TIP]
 > Once the panel's host name is in public DNS, issue a Let's Encrypt certificate with **Sencrypt**. Mail and FTP switch to it within 5 minutes.
 
+To move the panel to another address later (its DNS A record pointing to this server first), as root:
+
+```bash
+sentora-change-domain panel.new-example.com
+```
+
+It changes the name everywhere the installer put it (the panel and its Apache site, the host name, Postfix, Dovecot, SOGo, Matomo) and makes a new self-signed certificate for it; request a Let's Encrypt one in Sencrypt after. The changed files are kept as `<file>.before-<new name>`. **Admin > Sentora Config** shows the current address.
+
 ## Making a release
 
 1. Build the zips from a clone of each repository (each zip holds one top folder named like the zip):
