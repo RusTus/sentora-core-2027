@@ -16,7 +16,7 @@
 .aa-box { background: var(--aa-card); border-radius: 6px; box-shadow: 0 1px 3px rgba(20,30,40,0.08); padding: 16px 18px; min-width: 0; position: sticky; top: 12px; }
 .aa-box h4 { margin: 0 0 12px; font-size: 15px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; }
 .aa-sub { color: var(--aa-muted); font-size: 12px; margin: 0; }
-.aa-rows { display: grid; gap: 8px; }
+.aa-rows { display: grid; gap: 8px; max-height: 60vh; overflow-y: auto; padding-right: 2px; }
 .aa-row { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border: 1px solid var(--aa-line); border-radius: 6px; }
 .aa-main { flex: 1; min-width: 0; }
 .aa-main b { font-size: 14px; overflow-wrap: anywhere; }
@@ -24,7 +24,7 @@
 .aa-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
 .aa-chip { font-size: 11px; padding: 1px 8px; border-radius: 9px; background: var(--aa-accent-soft); color: var(--aa-accent); }
 .aa-chip.warn { background: var(--sn-warn-soft, #fdf1dc); color: var(--sn-warn, #a86b00); }
-.aa-pick { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--aa-line); }
+.aa-pick { margin-bottom: 14px; padding-bottom: 14px; border-bottom: 1px solid var(--aa-line); }
 .aa-pick label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
 .aa-pick > div { display: flex; gap: 6px; }
 .aa-pick select { flex: 1; min-width: 0; }

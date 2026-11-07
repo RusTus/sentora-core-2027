@@ -266,10 +266,11 @@ class module_controller extends ctrl_module
             $rows .= '<div class="aa-row"><div class="aa-main"><b>' . self::h($r['vh_name_vc']) . '</b><span>' . self::t('of') . ' ' . self::h($r['owner']) . '</span><div class="aa-chips">' . $chips . '</div></div>'
                 . '<a class="btn btn-default btn-sm" href="./?module=apache_admin&amp;show=Vhost&amp;id=' . (int) $r['vh_id_pk'] . '">' . self::t('Edit') . '</a></div>';
         }
-        return ($rows !== '' ? '<div class="aa-rows">' . $rows . '</div>' : '<p class="aa-sub">' . self::t('No domain has settings of its own.') . '</p>')
-            . ($opts !== '' ? '<form class="aa-pick" method="get" action="./"><input type="hidden" name="module" value="apache_admin"><input type="hidden" name="show" value="Vhost">'
+        // the picker first: it stays in the same place however many domains have settings of their own
+        return ($opts !== '' ? '<form class="aa-pick" method="get" action="./"><input type="hidden" name="module" value="apache_admin"><input type="hidden" name="show" value="Vhost">'
                 . '<label for="aa-id">' . self::t('Change the settings of a domain:') . '</label><div><select class="form-control" name="id" id="aa-id">' . $opts . '</select>'
-                . '<button class="btn btn-default" type="submit">' . self::t('Open') . '</button></div></form>' : '');
+                . '<button class="btn btn-default" type="submit">' . self::t('Open') . '</button></div></form>' : '')
+            . ($rows !== '' ? '<div class="aa-rows">' . $rows . '</div>' : '<p class="aa-sub">' . self::t('No domain has settings of its own.') . '</p>');
     }
 
     /**
