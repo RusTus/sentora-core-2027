@@ -31,7 +31,19 @@ class ui_language {
     private static $cache = array();
 
     /**
-     * The languages the panel has a column for in x_translations.
+     * The folder of the panel's own translations: one file per language (etc/lang/de.php ...), each
+     * returning an array English => translation. They come with the panel and its updates.
+     *
+     * @return string The folder, with a trailing slash.
+     */
+    static function LangDir()
+    {
+        return dirname(__FILE__) . '/../../etc/lang/';
+    }
+
+    /**
+     * The languages the panel has: a file in etc/lang, or a column in x_translations (translations an
+     * administrator added there).
      *
      * @return string[] Two-letter codes, 'en' first.
      */
@@ -40,6 +52,11 @@ class ui_language {
         static $codes = null;
         if ($codes === null) {
             $codes = array();
+            foreach ((array) glob(self::LangDir() . '*.php') as $f) {
+                if (preg_match('/^([a-z]{2})\.php$/', basename((string) $f), $m)) {
+                    $codes[] = $m[1];
+                }
+            }
             foreach ((array) self::GetColumnNames('x_translations') as $col) {
                 if (preg_match('/^tr_([a-z]{2})_tx$/', (string) $col, $m)) {
                     $codes[] = $m[1];
@@ -48,6 +65,22 @@ class ui_language {
             $codes = array_values(array_unique(array_merge(array('en'), $codes)));
         }
         return $codes;
+    }
+
+    /**
+     * The panel's own translations into a language (etc/lang/<code>.php).
+     *
+     * @param string $code Two-letter language code.
+     * @return array<string, string> English => translation (empty when there is no file).
+     */
+    static function Shipped($code)
+    {
+        static $files = array();
+        if (!isset($files[$code])) {
+            $f = self::LangDir() . $code . '.php';
+            $files[$code] = (preg_match('/^[a-z]{2}$/', $code) && is_file($f)) ? (array) include $f : array();
+        }
+        return $files[$code];
     }
 
     /**
@@ -127,24 +160,35 @@ class ui_language {
         if (isset(self::$cache[$message])) {
             return self::$cache[$message];
         }
-        // the text as typed; older versions stored and looked it up with addslashes(), so a
-        // text with a quote in it never matched its translation: both forms are looked up
+        // 1. the panel's own translations (etc/lang), exactly as written
+        $code = substr(self::$LangCol, 3, 2);
+        $shipped = self::Shipped($code);
+        if (isset($shipped[$message]) && $shipped[$message] !== '') {
+            return self::$cache[$message] = $shipped[$message];
+        }
+        // 2. x_translations: what an administrator added (only when the language has a column there).
+        // Older versions stored and looked texts up with addslashes(), so both forms are looked up.
+        static $hasCol = null;
+        if ($hasCol === null) {
+            $hasCol = in_array(self::$LangCol, (array) self::GetColumnNames('x_translations'), true);
+        }
         $slashed = addslashes($message);
-        $sql = $zdbh->prepare('SELECT tr_en_tx, ' . self::$LangCol . ' AS tr FROM x_translations WHERE tr_en_tx = :m OR tr_en_tx = :s');
+        $sql = $zdbh->prepare('SELECT tr_en_tx' . ($hasCol ? ', ' . self::$LangCol . ' AS tr' : '') . ' FROM x_translations WHERE tr_en_tx = :m OR tr_en_tx = :s');
         $sql->execute(array(':m' => $message, ':s' => $slashed));
         $rows = $sql->fetchAll();
-        if (!$rows) {
-            // not in the table yet: add it with empty translations
+        if (!$rows && !isset($shipped[$message])) {
+            // a text no translation knows yet: add it with empty translations, so translators see it
             $sql = $zdbh->prepare('INSERT INTO x_translations SET tr_en_tx = :m');
             $sql->execute(array(':m' => $message));
             return self::$cache[$message] = $message;
         }
         foreach ($rows as $row) {
-            if (!fs_director::CheckForEmptyValue($row['tr'])) {
+            // (the column compares without case; "Delete" and "delete" are different texts here)
+            if ($hasCol && (string) $row['tr'] !== '' && ($row['tr_en_tx'] === $message || $row['tr_en_tx'] === $slashed)) {
                 return self::$cache[$message] = (string) $row['tr']; // valid translation present
             }
         }
-        return self::$cache[$message] = $message; // translated message empty
+        return self::$cache[$message] = $message; // no translation
     }
 
     /**

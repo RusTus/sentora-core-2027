@@ -103,23 +103,15 @@ class module_controller extends ctrl_module
     static function getLangList()
     {
         $currentuser = ctrl_users::GetUserDetail();
+        $names = array('en' => 'English', 'de' => 'Deutsch', 'fr' => 'Français', 'es' => 'Español', 'it' => 'Italiano', 'nl' => 'Nederlands', 'pt' => 'Português',
+            'pl' => 'Polski', 'ru' => 'Русский', 'tr' => 'Türkçe', 'sv' => 'Svenska', 'da' => 'Dansk', 'no' => 'Norsk', 'fi' => 'Suomi', 'cs' => 'Čeština', 'hu' => 'Magyar',
+            'ro' => 'Română', 'el' => 'Ελληνικά', 'ja' => '日本語', 'zh' => '中文', 'ko' => '한국어', 'ar' => 'العربية', 'he' => 'עברית');
         $res = array();
-        $column_names = ui_language::GetColumnNames('x_translations');
-        foreach ($column_names as $column_name) {
-            if ($column_name != 'tr_id_pk') {
-                $column_name = explode('_', $column_name);
-                $lang = $column_name[1];
-                if ($lang == $currentuser['language']) {
-                    $selected = "SELECTED";
-                } else {
-                    $selected = "";
-                }
-                $names = array('en' => 'English', 'de' => 'Deutsch', 'fr' => 'Français', 'es' => 'Español', 'it' => 'Italiano', 'nl' => 'Nederlands', 'pt' => 'Português',
-                    'pl' => 'Polski', 'ru' => 'Русский', 'tr' => 'Türkçe', 'sv' => 'Svenska', 'da' => 'Dansk', 'no' => 'Norsk', 'fi' => 'Suomi', 'cs' => 'Čeština', 'hu' => 'Magyar',
-                    'ro' => 'Română', 'el' => 'Ελληνικά', 'ja' => '日本語', 'zh' => '中文', 'ko' => '한국어', 'ar' => 'العربية', 'he' => 'עברית');
-                $label = isset($names[$lang]) ? $names[$lang] . ' (' . $lang . ')' : strtoupper($lang);
-                array_push($res, array('language' => htmlspecialchars($lang, ENT_QUOTES, 'UTF-8'), 'label' => htmlspecialchars($label, ENT_QUOTES, 'UTF-8'), 'selected' => $selected));
-            }
+        // the panel's languages: its own translation files (etc/lang) and any x_translations column
+        foreach (ui_language::Languages() as $lang) {
+            $label = isset($names[$lang]) ? $names[$lang] . ' (' . $lang . ')' : strtoupper($lang);
+            $res[] = array('language' => htmlspecialchars($lang, ENT_QUOTES, 'UTF-8'), 'label' => htmlspecialchars($label, ENT_QUOTES, 'UTF-8'),
+                'selected' => $lang == $currentuser['language'] ? 'SELECTED' : '');
         }
         return $res;
     }
@@ -142,7 +134,7 @@ class module_controller extends ctrl_module
         $fullname = $controller->GetControllerRequest('FORM', 'inFullname');
         $language = $controller->GetControllerRequest('FORM', 'inLanguage');
         // Only a language the panel has (it is used as part of a column name)
-        if (!preg_match('/^[a-z]{2}$/', (string) $language)) {
+        if (!preg_match('/^[a-z]{2}$/', (string) $language) || !in_array($language, ui_language::Languages(), true)) {
             $language = 'en';
         }
         $phone = $controller->GetControllerRequest('FORM', 'inPhone');
