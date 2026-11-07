@@ -1,0 +1,40 @@
+/* Client Notice Manager in the panel's style. Colours come from the theme's shared --sn-* variables
+   (etc/styles/THEMES.md), with these as the fallback, so it follows Light, Dark and Auto. The preview
+   uses the theme's own alert, so it looks as the clients see it. */
+.cn { --cn-ink: var(--sn-ink, #1f2933); --cn-muted: var(--sn-muted, #6b7785); --cn-line: var(--sn-line, #e6e9ee);
+      --cn-card: var(--sn-card, #ffffff); --cn-bg: var(--sn-soft, #f4f6f9); --cn-accent: var(--sn-accent, #447fb3); --cn-accent-soft: var(--sn-accent-soft, #e3edf6);
+      color: var(--cn-ink); background: var(--cn-bg); border-radius: 8px; padding: 18px; margin-top: 10px; }
+.cn * { box-sizing: border-box; }
+.cn-ico { width: 16px; height: 16px; flex: none; }
+.cn-ico-lg { width: 40px; height: 40px; padding: 8px; border-radius: 10px; flex: none; background: var(--cn-accent-soft); color: var(--cn-accent); }
+.cn-card { background: var(--cn-card); border-radius: 6px; box-shadow: 0 1px 3px rgba(20,30,40,0.08); padding: 16px 18px; min-width: 0; }
+.cn-card > h4 { margin: 0 0 10px; font-size: 15px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; }
+.cn-cols { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+.cn-side { display: grid; gap: 14px; min-width: 0; }
+
+/* editor */
+.cn-edit { border-left: 4px solid var(--cn-accent); }
+.cn-edit textarea { width: 100%; min-height: 180px; resize: vertical; font-size: 14px; line-height: 1.5; }
+.cn-under { display: flex; justify-content: space-between; gap: 12px; margin-top: 6px; font-size: 12px; color: var(--cn-muted); }
+.cn-hint code { font-size: 11px; padding: 0 4px; }
+.cn-count { flex: none; font-variant-numeric: tabular-nums; }
+.cn-count.near { color: var(--sn-warn, #8f5b00); font-weight: 600; }
+.cn-foot { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--cn-line); }
+.cn-clear { margin-left: auto; }
+
+/* preview */
+.cn-preview .cn-alert { margin: 0; overflow-wrap: anywhere; }
+.cn-preview .cn-alert p { margin: 0; }
+.cn-preview .cn-alert .close { pointer-events: none; }
+.cn-none { padding: 18px 12px; text-align: center; font-size: 13px; color: var(--cn-muted); border: 1px dashed var(--cn-line); border-radius: 6px; }
+
+/* who and how */
+.cn-who { display: flex; align-items: center; gap: 12px; padding-bottom: 12px; margin-bottom: 12px; border-bottom: 1px solid var(--cn-line); }
+.cn-who b { display: block; font-size: 22px; line-height: 1.1; }
+.cn-who span { font-size: 13px; color: var(--cn-muted); }
+.cn-facts ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.cn-facts li { display: flex; gap: 10px; align-items: flex-start; font-size: 13px; line-height: 1.45; }
+.cn-facts li .cn-ico { color: var(--cn-accent); margin-top: 2px; }
+
+@media (max-width: 900px) { .cn-cols { grid-template-columns: 1fr; } }
+@media (max-width: 640px) { .cn { padding: 12px; } .cn-under { flex-direction: column; gap: 2px; } .cn-foot .btn { flex: 1 1 auto; } .cn-clear { margin-left: 0; } }

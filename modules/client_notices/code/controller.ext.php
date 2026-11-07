@@ -28,101 +28,191 @@
  */
 
 /**
- * Client Notices module: lets a reseller set the notice shown to its clients.
+ * Client Notices module: lets a reseller (or the admin) set the notice shown at the top of the
+ * panel to its clients. A notice is plain text (see ui_tpl_notice::Format()); the page shows a
+ * live preview of how it looks.
  */
 class module_controller extends ctrl_module
 {
 
     /**
-     * Load the TinyMCE editor for the notice textarea (<@ Init @>).
-     *
-     * @global runtime_controller $controller The request controller.
-     * @return string HTML <script> tags.
+     * The longest notice, in characters.
      */
-    static function getInit() {
-        global $controller;
-		// TinyMCE JS
-		$line = '<script type="text/javascript" src="modules/'.$controller->GetControllerRequest('URL', 'module').'/code/tinymce/tinymce.min.js"></script>
-';
-		$line .= '<script type="text/javascript">
-			tinymce.init({
-				selector: "textarea",
-				plugins: [
-					"advlist autolink lists link charmap",
-					"searchreplace visualblocks code",
-					"insertdatetime media table contextmenu paste"
-				],
-				toolbar: "insertfile undo redo | styleselect | bold italic | alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | link image"
-			});
-			</script>
-			';
-        return $line;
+    const MAX_LENGTH = 2000;
+
+    /**
+     * Result of the last action: 'saved', 'cleared' or 'toolong' ('' for none).
+     *
+     * @var string
+     */
+    static $result = '';
+
+    /**
+     * The text posted with a refused save, so it is not lost.
+     *
+     * @var string|null
+     */
+    static $posted = null;
+
+    /**
+     * Escape a value for HTML.
+     *
+     * @param mixed $s The value (cast to string).
+     * @return string The escaped text.
+     */
+    static function h($s)
+    {
+        return htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
     }
-	
+
+    /**
+     * Translate and escape a text.
+     *
+     * @param string $s The English text.
+     * @return string The escaped translation.
+     */
+    static function t($s)
+    {
+        return self::h(ui_language::translate($s));
+    }
+
     /**
      * Save an account's notice text.
      *
      * @global db_driver $zdbh The panel's database connection.
      * @param int $uid The account ID.
-     * @param string $notice The notice text (HTML from the editor).
+     * @param string $notice The notice text ('' for none).
      * @return bool Always true.
      */
     static function ExectuteUpdateNotice($uid, $notice)
     {
         global $zdbh;
-        $sql = $zdbh->prepare("
-            UPDATE x_accounts
-            SET ac_notice_tx = :notice
-            WHERE ac_id_pk = :uid");
-        $sql->bindParam(':notice', $notice);
-        $sql->bindParam(':uid', $uid);
-        $sql->execute();
+        $sql = $zdbh->prepare("UPDATE x_accounts SET ac_notice_tx = :notice WHERE ac_id_pk = :uid");
+        $sql->execute(array(':notice' => (string) $notice, ':uid' => (int) $uid));
         return true;
     }
 
     /**
-     * Return an account's notice text, XSS-cleaned.
+     * An account's notice as plain text (a notice from the old HTML editor is read as text).
      *
      * @global db_driver $zdbh The panel's database connection.
-     * @param int $rid The account ID (the reseller whose notice is shown).
+     * @param int $rid The account ID.
      * @return string|false The notice, or false when the account is not found.
      */
     static function ExecuteShowNotice($rid)
     {
         global $zdbh;
-        //$result = $zdbh->query("SELECT ac_notice_tx FROM x_accounts WHERE ac_id_pk = :rid")->Fetch();
         $sql = $zdbh->prepare("SELECT ac_notice_tx FROM x_accounts WHERE ac_id_pk = :rid");
-        $sql->bindParam(':rid', $rid);
-        $sql->execute();
+        $sql->execute(array(':rid' => (int) $rid));
         $result = $sql->fetch();
-
-        if ($result) {
-            return runtime_xss::xssClean($result['ac_notice_tx']);
-        } else {
-            return false;
-        }
+        return $result ? ui_tpl_notice::Text($result['ac_notice_tx']) : false;
     }
 
     // End 'worker' methods.
 
     /**
-     * Return the notice of the current user's reseller (<@ CurrentNoticeText @>).
+     * The logged-in account's own notice: the one its clients see.
      *
-     * @global runtime_controller $controller The request controller (not used).
-     * @return string|false The notice, or false when not found.
+     * @return string The text ('' for none).
      */
-    static function getCurrentNoticeText()
+    static function Own()
     {
-        global $controller;
-        $currentuser = ctrl_users::GetUserDetail();
-		return self::ExecuteShowNotice($currentuser['resellerid']);
+        $n = self::ExecuteShowNotice(ctrl_users::GetUserDetail()['userid']);
+        return $n === false ? '' : $n;
     }
 
     /**
-     * Save the posted notice for the current user, then redirect back and exit.
+     * The notice in the editor (<@ CurrentNoticeText @>), escaped: the account's own, or the text of a refused save.
+     *
+     * Before, this showed the notice of the account's own reseller, while saving changed the
+     * account's own, so a reseller never saw the notice it had set.
+     *
+     * @return string The escaped text.
+     */
+    static function getCurrentNoticeText()
+    {
+        return self::h(self::$posted !== null ? self::$posted : self::Own());
+    }
+
+    /**
+     * The notice as clients see it (<@ Preview @>).
+     *
+     * @return string The HTML ('' for none).
+     */
+    static function getPreview()
+    {
+        return ui_tpl_notice::Format(self::$posted !== null ? self::$posted : self::Own());
+    }
+
+    /**
+     * Template flag <% if HasNotice %>: a notice is set.
+     *
+     * @return bool
+     */
+    static function getHasNotice()
+    {
+        return self::Own() !== '';
+    }
+
+    /**
+     * The longest notice (<@ MaxLength @>).
+     *
+     * @return int
+     */
+    static function getMaxLength()
+    {
+        return self::MAX_LENGTH;
+    }
+
+    /**
+     * Who sees the notice (<@ Audience @>): the number of the account's clients, and the admin itself.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return string The HTML.
+     */
+    static function getAudience()
+    {
+        global $zdbh;
+        $me = ctrl_users::GetUserDetail();
+        $q = $zdbh->prepare("SELECT COUNT(*) FROM x_accounts WHERE ac_reseller_fk = :u AND ac_id_pk <> :u2 AND ac_deleted_ts IS NULL");
+        $q->execute(array(':u' => (int) $me['userid'], ':u2' => (int) $me['userid']));
+        $n = (int) $q->fetchColumn();
+        $self = (int) $me['resellerid'] === (int) $me['userid'];
+        $who = $n === 1 ? self::t('your 1 client') : ($n === 0 ? self::t('none of your clients yet: you have none') : self::t('your') . ' ' . $n . ' ' . self::t('clients'));
+        return '<b>' . $n . '</b><span>' . self::t('Shown to') . ' ' . $who . ($self ? ' ' . self::t('and to you') : '') . '</span>';
+    }
+
+    /**
+     * The message after an action (<@ Result @>).
      *
      * @global runtime_controller $controller The request controller.
-     * @return void Ends with a redirect header and exit.
+     * @return string The HTML ('' for none).
+     */
+    static function getResult()
+    {
+        global $controller;
+        $r = self::$result;
+        if ($r === '') {
+            $r = $controller->GetControllerRequest('URL', 'saved') ? 'saved' : ($controller->GetControllerRequest('URL', 'cleared') ? 'cleared' : '');
+        }
+        switch ($r) {
+            case 'saved':
+                return ui_sysmessage::shout(ui_language::translate('The notice is saved. Your clients see it on their next page.'), 'zannounceok');
+            case 'cleared':
+                return ui_sysmessage::shout(ui_language::translate('The notice is removed. Your clients no longer see it.'), 'zannounceok');
+            case 'toolong':
+                return ui_sysmessage::shout(ui_language::translate('The notice is too long: it may have at most') . ' ' . self::MAX_LENGTH . ' ' . ui_language::translate('characters.'), 'zannounceerror');
+        }
+        return '';
+    }
+
+    /**
+     * Save the posted notice for the current user (or remove it with inClear), then redirect back and exit.
+     *
+     * A notice longer than MAX_LENGTH is refused and stays in the editor.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return false|void False when the notice is too long; otherwise ends with a redirect header and exit.
      */
     static function doUpdateMessage()
     {
@@ -130,8 +220,15 @@ class module_controller extends ctrl_module
         runtime_csfr::Protect();
         $currentuser = ctrl_users::GetUserDetail();
         $formvars = $controller->GetAllControllerRequests('FORM');
-        self::ExectuteUpdateNotice($currentuser['userid'], $formvars['inNotice']);
-        header("location: ./?module=" . $controller->GetCurrentModule() . "&saved=true");
+        $clear = !empty($formvars['inClear']);
+        $notice = $clear ? '' : trim(str_replace(array("\r\n", "\r"), "\n", (string) (isset($formvars['inNotice']) ? $formvars['inNotice'] : '')));
+        if (mb_strlen($notice, 'UTF-8') > self::MAX_LENGTH) {
+            self::$result = 'toolong';
+            self::$posted = $notice;
+            return false;
+        }
+        self::ExectuteUpdateNotice($currentuser['userid'], $notice);
+        header("location: ./?module=" . $controller->GetCurrentModule() . ($notice === '' ? '&cleared=true' : '&saved=true'));
         exit;
     }
 

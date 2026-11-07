@@ -1,31 +1,71 @@
-<@ Init @>
 <div class="zmodule_content panel" id="zmodule_header_<@ ModuleName @>">
     <div class="panel-heading">
         <img src="<@ ModuleIcon @>" width="35" height="35" border="0" alt="<@ ModuleName @>">
-
-        <div class="zmodule_title">
-            <@ ModuleName @>
-        </div>
-
-        <div class="zmodule_desc" id="zmodule_desc_<@ ModuleName @>"><: This module enables you to set a notice banner that will appear when any of your clients access ZPanel.  :></p></div>
-
+        <div class="zmodule_title"><@ ModuleName @></div>
+        <div class="zmodule_desc" id="zmodule_desc_<@ ModuleName @>"><: Set a notice that appears at the top of the panel for your clients: planned maintenance, an outage, a new feature. :></div>
     </div>
+    <@ Result @>
+    <link rel="stylesheet" href="modules/client_notices/assets/notices.css">
 
-    <div class="zform_wrapper">
-        <h2><: Client message :></h2>
-        <form action="./?module=client_notices&action=UpdateMessage" method="post">
-            <table class="table table-striped">
-                <tr>
-                    <th><: Notice message :>:</th>
-                    <td><textarea name="inNotice" id="inNotice" rows="3" cols="80" /><@ CurrentNoticeText @></textarea></td>
-                </tr>
-                <tr>
-                    <th colspan="2" align="right">
-                        <button class="button-loader add-row btn btn-primary" type="submit" ><: Save changes :></button>
-                    </th>
-                </tr>
-            </table>
-            <@ CSFR_Tag @>
-        </form>
+    <div class="cn" id="cn">
+        <div class="cn-cols">
+            <form class="cn-card cn-edit" action="./?module=client_notices&amp;action=UpdateMessage" method="post">
+                <h4><: Your notice :></h4>
+                <textarea class="form-control" name="inNotice" id="inNotice" aria-label="<: Notice message :>" rows="8" maxlength="<@ MaxLength @>" placeholder="<: For example: Planned maintenance on Sunday from 02:00 to 04:00. Mail may be slow during that time. :>"><@ CurrentNoticeText @></textarea>
+                <div class="cn-under">
+                    <span class="cn-hint"><: Plain text. A blank line starts a new paragraph, web addresses become links and :> <code>**<: text :>**</code> <: is bold. :></span>
+                    <span class="cn-count" id="cn-count" data-max="<@ MaxLength @>"></span>
+                </div>
+                <div class="cn-foot">
+                    <button class="btn btn-primary" type="submit"><: Save notice :></button>
+                    <% if HasNotice %><button class="btn btn-default cn-clear" type="submit" name="inClear" value="1"><: Remove notice :></button><% endif %>
+                </div>
+                <@ CSFR_Tag @>
+            </form>
+
+            <div class="cn-side">
+                <div class="cn-card">
+                    <h4><: What your clients see :></h4>
+                    <div class="cn-preview" id="cn-preview" data-empty="<: No notice: nothing is shown. :>" data-title="<: Notice: :>"><div class="alert alert-block alert-info cn-alert"><button type="button" class="close" tabindex="-1" aria-hidden="true">&times;</button><h4><: Notice: :></h4><p><@ Preview @></p></div></div>
+                </div>
+                <div class="cn-card cn-facts">
+                    <div class="cn-who"><svg class="cn-ico-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14a6 6 0 0 1 3.5 6"/></svg><div><@ Audience @></div></div>
+                    <ul>
+                        <li><svg class="cn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/></svg><span><: It shows at the top of every page, above the modules. :></span></li>
+                        <li><svg class="cn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg><span><: A client can close it; it comes back for everyone when you change the text. :></span></li>
+                        <li><svg class="cn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg><span><: Remove it when it no longer applies, so clients keep reading the next one. :></span></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
+<script>
+(function () {
+    'use strict';
+    var ta = document.getElementById('inNotice'), pv = document.getElementById('cn-preview'), cnt = document.getElementById('cn-count');
+    if (!ta || !pv) { return; }
+    var max = parseInt(cnt.getAttribute('data-max'), 10) || 2000;
+    var esc = function (s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;'); };
+    // the same rules as ui_tpl_notice::Format()
+    var format = function (t) {
+        var s = esc(t.replace(/\r\n?/g, '\n').trim());
+        s = s.replace(/\*\*(\S(?:.*?\S)?)\*\*/g, '<b>$1</b>');
+        s = s.replace(/\bhttps?:\/\/[^\s<]+/gi, function (url) {
+            var tail = '', m;
+            while ((m = url.match(/(&quot;|&#039;|&gt;|[.,;:!?)])$/))) { tail = m[1] + tail; url = url.slice(0, -m[1].length); }
+            return '<a href="' + url + '" target="_blank" rel="noopener noreferrer">' + url + '</a>' + tail;
+        });
+        return s.replace(/\n/g, '<br>');
+    };
+    var draw = function () {
+        var t = ta.value;
+        if (t.trim() === '') { pv.innerHTML = '<div class="cn-none">' + esc(pv.getAttribute('data-empty')) + '</div>'; }
+        else { pv.innerHTML = '<div class="alert alert-block alert-info cn-alert"><button type="button" class="close" tabindex="-1" aria-hidden="true">&times;</button><h4>' + esc(pv.getAttribute('data-title')) + '</h4><p>' + format(t) + '</p></div>'; }
+        cnt.textContent = Array.from(t).length + ' / ' + max;
+        cnt.classList.toggle('near', Array.from(t).length > max * 0.9);
+    };
+    ta.addEventListener('input', draw);
+    draw();
+})();
+</script>
