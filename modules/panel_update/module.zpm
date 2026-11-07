@@ -13,6 +13,7 @@
             <@ UpdateCard @>
             <@ BackupsCard @>
         </div>
+        <@ History @>
     </div>
 </div>
 <script src="modules/panel_update/assets/update.js"></script>

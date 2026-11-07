@@ -98,3 +98,16 @@
     .pu-tiles { grid-template-columns: minmax(0, 1fr); gap: 8px; }
     .pu-confirm { padding-left: 0; }
 }
+
+/* a run that is over: one line at the bottom, opening to its steps (the tiles say where the panel is now) */
+.pu-hist { margin-top: 14px; padding: 0; }
+.pu-hist > summary { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 12px 18px; cursor: pointer; list-style: none; }
+.pu-hist > summary::-webkit-details-marker { display: none; }
+.pu-hist > summary::after { content: "\25BE"; margin-left: auto; color: var(--pu-muted); transition: transform 0.2s; }
+.pu-hist[open] > summary::after { transform: rotate(180deg); }
+.pu-hist > summary .pu-ico { color: var(--pu-muted); }
+.pu-hist > summary b { font-size: 13px; text-transform: uppercase; letter-spacing: 0.4px; }
+.pu-hist > summary span { color: var(--pu-muted); font-size: 13px; }
+.pu-hist.is-fail > summary .pu-ico, .pu-hist.is-fail > summary span { color: var(--pu-bad); }
+.pu-hist > .pu-steps, .pu-hist > .pu-sub, .pu-hist > .pu-console { margin: 0 18px 14px; }
+.pu-hist > .pu-steps { border-top: 1px solid var(--pu-line); padding-top: 4px; }

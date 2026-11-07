@@ -119,9 +119,11 @@ class panel_update_view
      *
      * @param array<string, mixed>|null $run See panel_update_state::Run().
      * @param int $asked When this administrator last asked for a run (Unix time, 0 = not in this session).
+     * @param bool $compact Optional. A run that is over, as one line at the bottom of the page (it opens to show its
+     *        steps): the page's own state is in the tiles, so an old "updated" must not read as the current one. Default false.
      * @return array<string, mixed> 'html' and 'live' (whether the page should keep watching).
      */
-    static function Run($run, $asked)
+    static function Run($run, $asked, $compact = false)
     {
         // asked from here, and the run has not started yet (root's at job starts within seconds)
         if ($asked > 0 && (!$run || $run['started'] < $asked - 5)) {
@@ -137,6 +139,9 @@ class panel_update_view
         }
         $roll = $run['mode'] === 'rollback';
         $live = $run['result'] === 'running';
+        if ($compact && !$live) {
+            return array('live' => false, 'html' => self::History($run));
+        }
         $done = 0;
         foreach ($run['steps'] as $s) {
             if ($s['state'] !== 'running') {
@@ -170,9 +175,7 @@ class panel_update_view
         } elseif ($run['result'] === 'ok' || $run['result'] === 'warn') {
             $out .= '<div class="pu-end ' . $run['result'] . '">' . self::Icon($run['result'] === 'ok' ? 'ok' : 'warn', 'pu-ico-lg') . '<div><b>'
                 . self::t($roll ? 'Restored' : 'The panel is updated') . ($run['result'] === 'warn' ? ', ' . self::t('with warnings (see above)') : '') . '</b>'
-                . '<span>' . ($run['release'] !== '' ? self::t('Release') . ': ' . self::h($run['release']) . '. ' : '')
-                . self::t($roll ? 'Reload the page to use the version you went back to.' : 'Reload the page to use the new version.') . '</span></div>'
-                . '<a class="btn btn-default btn-sm" href="./?module=panel_update">' . self::t('Reload') . '</a></div>';
+                . ($run['release'] !== '' ? '<span>' . self::t('Release') . ': ' . self::h($run['release']) . '</span>' : '') . '</div></div>';
             if (!$roll && $back !== '') {
                 $out .= self::Console($back, 'Something wrong since the update? Go back to the version before from the server\'s console, as root:');
             }
@@ -196,5 +199,49 @@ class panel_update_view
             }
         }
         return array('live' => $live, 'html' => $out . '</div>');
+    }
+
+    /**
+     * A run that is over, as one neutral line ("The last update · 6 Nov 2026 22:56, from the panel ·
+     * finished") that opens to show its steps. One that failed says so, with the console command.
+     *
+     * @param array<string, mixed> $run See panel_update_state::Run().
+     * @return string The HTML.
+     */
+    static function History($run)
+    {
+        $roll = $run['mode'] === 'rollback';
+        $failed = !in_array($run['result'], array('ok', 'warn', 'same'), true);
+        $at = '';
+        foreach ($run['steps'] as $s) {
+            if ($s['state'] === 'fail' || $s['state'] === 'running') {
+                $at = $s['title'];
+            }
+        }
+        $what = array('ok' => self::t('finished'), 'warn' => self::t('finished with warnings'), 'same' => self::t('Already up to date'),
+            'stalled' => self::t('stopped answering'));
+        $result = isset($what[$run['result']]) ? $what[$run['result']] : str_replace('%s', self::t($at), self::t('stopped at %s'));
+        $out = '<details class="pu-box pu-hist' . ($failed ? ' is-fail' : '') . '"' . ($failed ? ' open' : '') . '><summary>'
+            . self::Icon($failed ? 'fail' : 'clock') . '<b>' . self::t($roll ? 'The last rollback' : 'The last update') . '</b>'
+            . '<span>' . self::h(ui_language::Date('j M Y H:i', (int) $run['started'])) . ', ' . self::t($run['from'] === 'panel' ? 'from the panel' : 'from the console')
+            . ' &middot; ' . $result . '</span></summary><ol class="pu-steps">';
+        foreach ($run['steps'] as $s) {
+            $icon = array('running' => 'wait', 'ok' => 'ok', 'warn' => 'warn', 'fail' => 'fail');
+            $out .= '<li class="pu-step is-' . $s['state'] . '">' . self::Icon($icon[$s['state']])
+                . '<div><div class="pu-step-head"><b>' . self::t($s['title']) . '</b>'
+                . ($s['state'] !== 'running' ? '<small>' . (int) floor($s['took'] / 60) . ':' . sprintf('%02d', $s['took'] % 60) . '</small>' : '') . '</div>';
+            foreach ($s['lines'] as $l) {
+                $out .= '<span class="pu-line' . ($l[0] === 'warn' ? ' warn' : '') . '">' . self::h($l[1]) . '</span>';
+            }
+            $out .= '</div></li>';
+        }
+        $out .= '</ol>';
+        if ($failed && $run['result'] !== 'stalled' && $run['message'] !== '') {
+            $out .= '<p class="pu-sub">' . self::h($run['message']) . '</p>';
+        }
+        if ($failed && ($run['backup'] !== '' || $roll)) {
+            $out .= self::Console($roll ? '' : $run['backup'], 'To go back to the version before, run this on the server\'s console, as root:');
+        }
+        return $out . '</details>';
     }
 }

@@ -241,8 +241,43 @@ class module_controller extends ctrl_module
      */
     static function getRun()
     {
-        $r = panel_update_view::Run(panel_update_state::Run(), isset($_SESSION['pu_asked']) ? (int) $_SESSION['pu_asked'] : 0);
+        $asked = isset($_SESSION['pu_asked']) ? (int) $_SESSION['pu_asked'] : 0;
+        $r = self::Fresh() ? panel_update_view::Run(panel_update_state::Run(), $asked) : array('live' => false, 'html' => '');
         return '<div id="pu-run" data-live="' . ($r['live'] ? '1' : '0') . '">' . $r['html'] . '</div>';
+    }
+
+    /**
+     * The last run, when it is over and not this session's latest (<@ History @>): one line at the
+     * bottom of the page, opening to its steps. The tiles say whether the panel is up to date.
+     *
+     * @return string The HTML ('' when there was no run, or it is shown at the top).
+     */
+    static function getHistory()
+    {
+        $run = panel_update_state::Run();
+        if (!$run || self::Fresh()) {
+            return '';
+        }
+        return panel_update_view::Run($run, 0, true)['html'];
+    }
+
+    /**
+     * Whether the last run belongs at the top: it is running or about to start, or this administrator
+     * started it from here in the last 10 minutes (so its outcome is the news of the page).
+     *
+     * @return bool
+     */
+    static function Fresh()
+    {
+        if (self::Busy()) {
+            return true;
+        }
+        $run = panel_update_state::Run();
+        $asked = isset($_SESSION['pu_asked']) ? (int) $_SESSION['pu_asked'] : 0;
+        if ($asked > 0 && (!$run || $run['started'] < $asked - 5)) {
+            return true; // asked, and it did not start: say so where it was asked
+        }
+        return $run && $asked > 0 && $run['started'] >= $asked - 5 && time() - (int) $run['updated'] < 600;
     }
 
     /**
