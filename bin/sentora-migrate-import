@@ -12,6 +12,10 @@
  *                       switched on in PHP Versions if it is off); --php default for the server's own PHP 8
  *     --keep-ip         leave DNS records that point to the old server's IP address as they are
  *     --overwrite       replace website files that are already there (default: keep them)
+ *     --allow-symlinks  switch "Allow FollowSymLinks" on (Apache Admin) for the domains that need it: their
+ *                       custom Apache settings or an .htaccess in their folder use FollowSymLinks. Off by
+ *                       default: such lines are then switched off, and those sites give error 500 until
+ *                       their .htaccess uses "Options +SymLinksIfOwnerMatch" (they are listed)
  *
  * The new account must exist (Admin > Manage Clients, or zadmin itself). Moved for it: its domains,
  * sub-domains and parked domains, their website files, DNS records, MySQL databases and users (with
@@ -39,12 +43,13 @@ if (!function_exists('posix_geteuid') || posix_geteuid() !== 0) {
 
 /** @var array<int, string> $args The positional arguments. */
 $args = array();
-$opt = array('yes' => false, 'php' => '7.1', 'keep-ip' => false, 'overwrite' => false);
+$opt = array('yes' => false, 'php' => '7.1', 'keep-ip' => false, 'overwrite' => false, 'allow-symlinks' => false);
 for ($i = 1; $i < $argc; $i++) {
     $a = $argv[$i];
     if ($a === '--yes') { $opt['yes'] = true; }
     elseif ($a === '--keep-ip') { $opt['keep-ip'] = true; }
     elseif ($a === '--overwrite') { $opt['overwrite'] = true; }
+    elseif ($a === '--allow-symlinks') { $opt['allow-symlinks'] = true; }
     elseif ($a === '--php') { $opt['php'] = (string) ($argv[++$i] ?? ''); }
     elseif ($a === '-h' || $a === '--help') { $args = array(); break; }
     elseif (strncmp($a, '--', 2) === 0) { fwrite(STDERR, "Unknown option $a\n"); exit(2); }
@@ -433,6 +438,32 @@ if ($PHPV !== '' && sys_phpversions::IsMigrationOnly($PHPV)) {
 if ($M['php'] !== '' && version_compare($M['php'], '8.0', '<') && $PHPV === '') {
     plan_warn('the sites ran on PHP ' . $M['php'] . ' and get PHP 8 here: if one does not work, choose PHP 7.1 for its domain');
 }
+// custom Apache settings: copied; a line that switches FollowSymLinks on works only with the switch
+$customFsl = array();
+$customSsl = array();
+foreach ($plan['domains'] as $v) {
+    if (trim((string) ($v['vh_custom_tx'] ?? '')) !== '' && ($bad = sys_symlinks::Offending((string) $v['vh_custom_tx']))) {
+        $customFsl[$v['vh_name_vc']] = $bad;
+    }
+    if (trim((string) ($v['vh_custom_sp_tx'] ?? '')) !== '') {
+        $customSsl[] = $v['vh_name_vc'];
+    }
+}
+$nCustom = count(array_filter($plan['domains'], function ($v) { return trim((string) ($v['vh_custom_tx'] ?? '')) !== ''; }));
+plan_line('Custom settings', $nCustom . ' domain(s) with their own Apache settings: copied (Apache Admin > the domain > Extra directives)');
+foreach ($customFsl as $d => $lines) {
+    if ($opt['allow-symlinks']) {
+        plan_line('', "$d: uses FollowSymLinks (" . implode('; ', $lines) . '): "Allow FollowSymLinks" is switched on for it');
+    } else {
+        plan_warn("$d: its custom settings switch FollowSymLinks on (" . implode('; ', $lines) . '): that line is switched off here; --allow-symlinks keeps it working while the site is moved');
+    }
+}
+if ($customSsl) {
+    plan_warn('custom settings for the SSL site are not used by this panel, and are not copied: ' . implode(', ', $customSsl) . ' (put what is still needed in Extra directives)');
+}
+plan_line('FollowSymLinks', $opt['allow-symlinks']
+    ? 'switched on (Apache Admin) for each domain whose settings or .htaccess files use it; switch it off once the site is fixed'
+    : 'off for every moved domain (the .htaccess files that use it are listed at the end; --allow-symlinks switches it on for those domains)');
 plan_line('Never moved', c('dim') . 'the old panel\'s modules (custom ones included) and add-ons, settings, themes, translations' . c('reset'));
 echo "\n";
 if (!$APPLY) {
@@ -464,6 +495,7 @@ if ($PHPV !== '' && !sys_phpversions::IsEnabled($PHPV)) {
 
 // --- domains ----------------------------------------------------------------------------------------
 sys_symlinks::EnsureColumn();
+$SYMON = array();   // domain name => new id: FollowSymLinks switched on for it (--allow-symlinks)
 $newCols = $cols('sentora_core', 'x_vhosts');
 $VHMAP = array();
 foreach ($plan['domains'] as $v) {
@@ -477,6 +509,9 @@ foreach ($plan['domains'] as $v) {
     $row = array_intersect_key($row, array_flip($newCols));
     $zdbh->prepare("INSERT INTO x_vhosts (" . implode(',', array_keys($row)) . ") VALUES (" . implode(',', array_fill(0, count($row), '?')) . ")")->execute(array_values($row));
     $VHMAP[(int) $v['vh_id_pk']] = (int) $zdbh->lastInsertId();
+    if ($opt['allow-symlinks'] && isset($customFsl[$v['vh_name_vc']])) {
+        $SYMON[$v['vh_name_vc']] = $VHMAP[(int) $v['vh_id_pk']];
+    }
     if (trim((string) ($v['vh_ssl_tx'] ?? '')) !== '') {
         warn($v['vh_name_vc'] . ': its SSL settings were not copied (the old certificate files are not here): request a certificate in Sencrypt');
     }
@@ -510,11 +545,29 @@ if (is_file($filesTar)) {
             if ($n) { ui_info("$n .htaccess/.htpasswd file(s): $OLDHOME changed to $NEWHOME"); }
         }
         ui_info('into ' . $NEWHOME . '/public_html');
+        if ($opt['allow-symlinks']) {
+            // the domains whose folder holds an .htaccess that uses FollowSymLinks
+            sh('grep -rliE --include=.htaccess "^[[:space:]]*Options[[:space:]].*FollowSymLinks" ' . q($NEWHOME . '/public_html'), $o);
+            foreach (array_filter(explode("\n", $o)) as $file) {
+                $rel = substr($file, strlen($NEWHOME . '/public_html'));
+                foreach ($plan['domains'] as $v) {
+                    $dir = rtrim('/' . ltrim((string) $v['vh_directory_vc'], '/'), '/') . '/';
+                    if (strpos($rel, $dir) === 0 && isset($VHMAP[(int) $v['vh_id_pk']])) {
+                        $SYMON[$v['vh_name_vc']] = $VHMAP[(int) $v['vh_id_pk']];
+                    }
+                }
+            }
+        }
     } else {
         warn('the export has no public_html for ' . $OLDU);
     }
 }
 
+if ($SYMON) {
+    $set = $zdbh->prepare("UPDATE x_vhosts SET " . sys_symlinks::COLUMN . " = 1 WHERE vh_id_pk = :id");
+    foreach ($SYMON as $id) { $set->execute(array(':id' => $id)); }
+    ui_info('"Allow FollowSymLinks" switched on for: ' . implode(', ', array_keys($SYMON)));
+}
 // --- DNS ----------------------------------------------------------------------------------------------
 ui_step('DNS records');
 $n = 0;
@@ -723,13 +776,24 @@ if ($newpass) {
 }
 $fsl = array();
 sh('grep -rliE --include=.htaccess "^[[:space:]]*Options[[:space:]].*FollowSymLinks" ' . q($NEWHOME . '/public_html'), $o);
+// (not those of a domain that got "Allow FollowSymLinks": they work)
+$onDirs = array();
+foreach ($plan['domains'] as $v) {
+    if (isset($SYMON[$v['vh_name_vc']])) { $onDirs[] = $NEWHOME . '/public_html' . rtrim('/' . ltrim((string) $v['vh_directory_vc'], '/'), '/') . '/'; }
+}
 foreach (array_filter(explode("\n", $o)) as $f) {
-    if (strpos($f, $NEWHOME) === 0) { $fsl[] = substr($f, strlen($HOSTED)); }
+    if (strpos($f, $NEWHOME) !== 0) { continue; }
+    foreach ($onDirs as $d) { if (strpos($f, $d) === 0) { continue 2; } }
+    $fsl[] = substr($f, strlen($HOSTED));
 }
 if ($fsl) {
     echo '  ' . c('bold') . c('yellow') . 'Error 500 ahead' . c('reset') . c('dim') . '  these .htaccess files use FollowSymLinks (Apache Admin > the domain: "A moved site gives error 500?")' . c('reset') . "\n";
     foreach ($fsl as $f) { echo "     $f\n"; ui_logline('FollowSymLinks: ' . $f); }
     echo "\n";
+}
+if ($SYMON) {
+    echo '  ' . c('bold') . c('yellow') . 'FollowSymLinks on' . c('reset') . c('dim') . '  for: ' . implode(', ', array_keys($SYMON)) . c('reset') . "\n";
+    echo "     Once each site's .htaccess uses \"Options +SymLinksIfOwnerMatch\", switch it off in Apache Admin > the domain.\n\n";
 }
 echo '  ' . c('bold') . 'Next' . c('reset') . "\n";
 echo "     1. Point the domains' DNS to this server ($NEWIP), then open each site.\n";
