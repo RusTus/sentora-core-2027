@@ -63,6 +63,19 @@ class panel_update_state
     }
 
     /**
+     * When the panel's code was last put in place, from a release line as sentora-update and the installer
+     * write it ("current, 2026-11-06 23:11" or "current, 2026-11-06 22:30 by the installer").
+     *
+     * @param string $text The release line (without the SHA-256).
+     * @return array{when: int, installer: bool} 'when': a Unix time (0 when it can not be read); 'installer': made by the installer.
+     */
+    static function ParseInstalled($text)
+    {
+        $when = preg_match('/(\d{4}-\d{2}-\d{2} \d{2}:\d{2})/', (string) $text, $m) ? (int) strtotime($m[1]) : 0;
+        return array('when' => $when, 'installer' => strpos((string) $text, 'by the installer') !== false);
+    }
+
+    /**
      * The Sentora version of the panel's code (its VERSION file).
      *
      * @return string For example '2027' ('' when unknown).

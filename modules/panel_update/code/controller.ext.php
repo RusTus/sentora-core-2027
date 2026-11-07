@@ -226,7 +226,7 @@ class module_controller extends ctrl_module
         // the published release is a value (tag and date): shown as it is, not translated as a whole
         $sub = ($a['state'] === 'available') ? $release : ($p[3] !== '' ? ui_language::translate($p[3]) : '');
         return '<div class="pu-tile">' . $v::Icon('box', 'pu-ico-lg') . '<div><b>Sentora-' . $v::h($ver !== '' ? $ver : '?') . '</b><span>'
-            . $v::t('installed') . ($inst !== '' ? ': ' . $v::h($inst) : '') . '</span></div></div>'
+            . ($inst !== '' && panel_update_state::ParseInstalled($inst)['when'] ? str_replace(array('<span>', '</span>'), '', $v::LastUpdate($inst)) : $v::t('installed')) . '</span></div></div>'
             . '<div class="pu-tile ' . $p[0] . '">' . $v::Icon($p[1], 'pu-ico-lg') . '<div><b>' . $v::t($p[2]) . '</b><span>' . $v::h($sub) . '</span></div></div>'
             . '<div class="pu-tile">' . $v::Icon($wait ? 'run' : 'clock', 'pu-ico-lg' . ($wait ? ' pu-spin' : '')) . '<div><b>' . ($wait ? $v::t('Checking') : ($a['checked'] ? $v::Ago($a['checked']) : $v::t('never'))) . '</b><span>'
             . $v::t('last checked with GitHub') . '</span>'

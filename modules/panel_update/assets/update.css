@@ -111,3 +111,6 @@
 .pu-hist.is-fail > summary .pu-ico, .pu-hist.is-fail > summary span { color: var(--pu-bad); }
 .pu-hist > .pu-steps, .pu-hist > .pu-sub, .pu-hist > .pu-console { margin: 0 18px 14px; }
 .pu-hist > .pu-steps { border-top: 1px solid var(--pu-line); padding-top: 4px; }
+/* an update that finished, with a newer release out since: neutral, not "all is well" green */
+.pu-end.info { background: var(--pu-accent-soft); }
+.pu-end.info .pu-ico-lg { background: var(--pu-card); color: var(--pu-accent); }

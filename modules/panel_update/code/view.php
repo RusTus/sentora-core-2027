@@ -173,9 +173,16 @@ class panel_update_view
         if ($live) {
             $out .= self::Console($roll ? '' : $back);
         } elseif ($run['result'] === 'ok' || $run['result'] === 'warn') {
-            $out .= '<div class="pu-end ' . $run['result'] . '">' . self::Icon($run['result'] === 'ok' ? 'ok' : 'warn', 'pu-ico-lg') . '<div><b>'
-                . self::t($roll ? 'Restored' : 'The panel is updated') . ($run['result'] === 'warn' ? ', ' . self::t('with warnings (see above)') : '') . '</b>'
-                . ($run['release'] !== '' ? '<span>' . self::t('Release') . ': ' . self::h($run['release']) . '</span>' : '') . '</div></div>';
+            // green only while the panel really is up to date: a newer release found after this run
+            // turns it neutral, so it never contradicts "Update available" in the tiles
+            $a = panel_update_state::Available();
+            $newer = !$roll && $a['state'] === 'available' && $a['checked'] > (int) $run['updated'];
+            $tone = $newer ? 'info' : $run['result'];
+            $out .= '<div class="pu-end ' . $tone . '">' . self::Icon($newer ? 'clock' : ($run['result'] === 'ok' ? 'ok' : 'warn'), 'pu-ico-lg') . '<div><b>'
+                . self::t($roll ? 'Restored' : ($newer ? 'The update finished' : 'The panel is updated'))
+                . ($run['result'] === 'warn' ? ', ' . self::t('with warnings (see above)') : '') . '</b>'
+                . self::LastUpdate($run['release'])
+                . ($newer ? '<span>' . self::t('A newer release has been published since: update again above.') . '</span>' : '') . '</div></div>';
             if (!$roll && $back !== '') {
                 $out .= self::Console($back, 'Something wrong since the update? Go back to the version before from the server\'s console, as root:');
             }
@@ -199,6 +206,21 @@ class panel_update_view
             }
         }
         return array('live' => $live, 'html' => $out . '</div>');
+    }
+
+    /**
+     * "Last panel update: 6 Nov 2026 23:11" (or "Installed: ..." for the installer's), from a release line.
+     *
+     * @param string $text The release line, as panel_update_state::Installed() gives it.
+     * @return string The HTML (a span; '' when there is no date in it).
+     */
+    static function LastUpdate($text)
+    {
+        $i = panel_update_state::ParseInstalled($text);
+        if (!$i['when']) {
+            return '';
+        }
+        return '<span>' . str_replace('%s', self::h(ui_language::Date('j M Y H:i', $i['when'])), self::t($i['installer'] ? 'Installed: %s' : 'Last panel update: %s')) . '</span>';
     }
 
     /**
