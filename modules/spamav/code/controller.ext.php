@@ -16,6 +16,11 @@ class module_controller extends ctrl_module
     static $msg = array();
 
     /**
+     * @var array<string, string>|null The settings form as posted when saving failed, so the form shows what was typed ('box' and the fields).
+     */
+    static $posted = null;
+
+    /**
      * Escapes text for HTML.
      *
      * @param mixed $s The value (cast to string).
@@ -98,6 +103,10 @@ class module_controller extends ctrl_module
             return;
         }
         $f = $controller->GetAllControllerRequests('FORM');
+        // kept for the form when something below is refused
+        self::$posted = array('box' => $box, 'enabled' => !empty($f['inEnabled']), 'score' => isset($f['inScore']) ? (string) $f['inScore'] : '',
+            'action' => isset($f['inAction']) ? (string) $f['inAction'] : '', 'delete_high' => !empty($f['inDeleteHigh']),
+            'allow' => isset($f['inAllow']) ? (string) $f['inAllow'] : '', 'block' => isset($f['inBlock']) ? (string) $f['inBlock'] : '');
         $score = isset($f['inScore']) ? (string) $f['inScore'] : '';
         $action = isset($f['inAction']) ? (string) $f['inAction'] : '';
         if (!array_key_exists($score, sys_spamav::Sensitivities()) || !in_array($action, array('', 'folder', 'inbox'), true)) {
@@ -128,76 +137,162 @@ class module_controller extends ctrl_module
             VALUES (:m, :a, :e, :s, :ac, :d, :al, :bl)")->execute(array(':m' => $box, ':a' => (int) self::Me()['userid'],
             ':e' => !empty($f['inEnabled']) ? 1 : 0, ':s' => $score === '' ? null : $score, ':ac' => $action === '' ? null : $action,
             ':d' => !empty($f['inDeleteHigh']) ? 1 : 0, ':al' => $lists['inAllow'], ':bl' => $lists['inBlock']));
+        self::$posted = null;
         self::$msg[] = array('ok', 'Spam settings for ' . $box . ' saved. They apply within 5 minutes.');
     }
 
     /**
-     * Builds the totals cards: checked, spam, viruses and refused in the last 7 days, plus today and 30 days.
+     * Sums of the daily counts for the account (optionally one mailbox) since a number of days ago.
      *
      * @global db_driver $zdbh The panel's database connection.
-     * @return string The HTML.
+     * @param int $days 1 for today, 7 for the last 7 days, and so on.
+     * @param string $box Optional. One mailbox; '' for all of them. Default ''.
+     * @return array<int, int> Checked, spam, viruses, refused.
      */
-    static function Totals()
+    static function Sums($days, $box = '')
     {
         global $zdbh;
-        $acc = (int) self::Me()['userid'];
-        $row = function ($days) use ($zdbh, $acc) {
-            $q = $zdbh->prepare("SELECT COALESCE(SUM(dd_scanned_in),0), COALESCE(SUM(dd_spam_in),0), COALESCE(SUM(dd_virus_in),0), COALESCE(SUM(dd_rejected_in),0) FROM x_spamav_daily WHERE dd_acc_fk = :a AND dd_day >= :d");
-            $q->execute(array(':a' => $acc, ':d' => date('Y-m-d', time() - ($days - 1) * 86400)));
-            return $q->fetch(PDO::FETCH_NUM);
-        };
-        $cards = '';
-        $w = $row(7);
-        foreach (array(array('Checked for spam', $w[0], ''), array('Spam caught', $w[1], 'is-spam'), array('Viruses blocked', $w[2], 'is-virus'), array('Refused outright', $w[3], '')) as $c) {
-            $cards .= '<div class="sv-card ' . $c[2] . '"><div class="sv-num">' . number_format((int) $c[1]) . '</div><div class="sv-label">' . self::h(self::t($c[0])) . '</div></div>';
+        $sql = "SELECT COALESCE(SUM(dd_scanned_in),0), COALESCE(SUM(dd_spam_in),0), COALESCE(SUM(dd_virus_in),0), COALESCE(SUM(dd_rejected_in),0) FROM x_spamav_daily WHERE dd_acc_fk = :a AND dd_day >= :d";
+        $args = array(':a' => (int) self::Me()['userid'], ':d' => date('Y-m-d', time() - ($days - 1) * 86400));
+        if ($box !== '') {
+            $sql .= " AND dd_mailbox_vc = :m";
+            $args[':m'] = $box;
         }
-        $t = $row(1);
-        $m = $row(30);
-        return '<div class="sv-cards">' . $cards . '</div><p class="text-muted">' . self::t('Last 7 days, for your mailboxes.') . ' '
-            . self::h(self::t('Today') . ': ' . $t[1] . ' ' . self::t('spam') . ', ' . $t[2] . ' ' . self::t((int) $t[2] === 1 ? 'virus' : 'viruses') . '. '
-                . self::t('Last 30 days') . ': ' . $m[1] . ' ' . self::t('spam') . ', ' . $m[2] . ' ' . self::t((int) $m[2] === 1 ? 'virus' : 'viruses') . '.') . '</p>';
+        $q = $zdbh->prepare($sql);
+        $q->execute($args);
+        return array_map('intval', $q->fetch(PDO::FETCH_NUM));
     }
 
     /**
-     * Builds the table of the account's mailboxes with their spam settings and 7-day counts.
+     * The figures at the top (<@ Totals @>): the last 7 days checked, spam, viruses and refused, with today and 30 days under each.
      *
-     * Adds the settings form (Form()) for the mailbox in ?edit= when it is the account's own.
-     *
-     * @global db_driver $zdbh The panel's database connection.
-     * @global runtime_controller $controller The request controller.
      * @return string The HTML.
      */
-    static function MailboxTable()
+    static function getTotals()
     {
-        global $zdbh, $controller;
-        $boxes = self::Mailboxes();
-        if (!$boxes) {
-            return '<p>' . self::t('You have no mailboxes yet.') . '</p>';
-        }
-        $can = sys_spamav::On('sa_user_settings');
-        $sens = sys_spamav::Sensitivities();
-        $edit = strtolower((string) $controller->GetControllerRequest('URL', 'edit'));
-        $q = $zdbh->prepare("SELECT COALESCE(SUM(dd_spam_in),0), COALESCE(SUM(dd_virus_in),0) FROM x_spamav_daily WHERE dd_acc_fk = :a AND dd_mailbox_vc = :m AND dd_day >= :d");
-        $out = '<table class="table table-striped"><tr><th>' . self::t('Mailbox') . '</th><th>' . self::t('Spam filter') . '</th><th>' . self::t('Sensitivity') . '</th><th>' . self::t('Spam goes to') . '</th><th>' . self::t('Spam / viruses (7 days)') . '</th><th></th></tr>';
-        foreach ($boxes as $b) {
-            $p = sys_spamav::Prefs($b);
-            $q->execute(array(':a' => (int) self::Me()['userid'], ':m' => $b, ':d' => date('Y-m-d', time() - 6 * 86400)));
-            $c = $q->fetch(PDO::FETCH_NUM);
-            $action = $p['action'] !== '' ? $p['action'] : sys_spamav::Get('sa_default_action');
-            $out .= '<tr><td><strong>' . self::h($b) . '</strong></td><td>' . ($p['enabled'] ? ui_status::Ok('On') . ' ' . self::t('on') : ui_status::Bad('Off') . ' ' . self::t('off')) . '</td>'
-                . '<td>' . self::h(self::t($sens[$p['score']] ?? $p['score'])) . '</td><td>' . self::h(self::t($action === 'inbox' ? 'Inbox (marked)' : 'Spam folder')) . ($p['delete_high'] ? '<br><span class="text-muted">' . self::t('very high scores deleted') . '</span>' : '') . '</td>'
-                . '<td>' . (int) $c[0] . ' / ' . (int) $c[1] . '</td>'
-                . '<td><a class="btn btn-default btn-sm" href="./?module=spamav&amp;edit=' . rawurlencode($b) . '#settings">' . self::t($can ? 'Settings' : 'View') . '</a></td></tr>';
-        }
-        $out .= '</table>';
-        if ($edit !== '' && in_array($edit, $boxes, true)) {
-            $out .= self::Form($edit, $can);
+        $w = self::Sums(7);
+        $d = self::Sums(1);
+        $m = self::Sums(30);
+        $tiles = array(
+            array('Checked', 0, 'sv-t-checked', '<path d="M4 4h16v16H4z"/><path d="m4 7 8 6 8-6"/>'),
+            array('Spam caught', 1, 'sv-t-spam', '<path d="M12 3 2 21h20z"/><path d="M12 10v4M12 17h.01"/>'),
+            array('Viruses blocked', 2, 'sv-t-virus', '<circle cx="12" cy="12" r="5"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5M5 5l3.5 3.5M15.5 15.5 19 19M5 19l3.5-3.5M15.5 8.5 19 5"/>'),
+            array('Refused outright', 3, 'sv-t-refused', '<circle cx="12" cy="12" r="9"/><path d="m5.6 5.6 12.8 12.8"/>'),
+        );
+        $out = '';
+        foreach ($tiles as $t) {
+            $out .= '<div class="sv-tile ' . $t[2] . '"><svg class="sv-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' . $t[3] . '</svg>'
+                . '<div><b>' . number_format($w[$t[1]]) . '</b><span>' . self::h(self::t($t[0])) . '</span>'
+                . '<small>' . self::h(self::t('Today')) . ' ' . number_format($d[$t[1]]) . ' &middot; ' . self::h(self::t('30 days')) . ' ' . number_format($m[$t[1]]) . '</small></div></div>';
         }
         return $out;
     }
 
     /**
-     * Builds the spam settings form for one mailbox.
+     * A bar for each of the last 14 days: spam and viruses caught for the account (<@ Chart @>).
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return string The HTML.
+     */
+    static function getChart()
+    {
+        global $zdbh;
+        $q = $zdbh->prepare("SELECT dd_day, SUM(dd_spam_in), SUM(dd_virus_in) FROM x_spamav_daily WHERE dd_acc_fk = :a AND dd_day >= :d GROUP BY dd_day");
+        $q->execute(array(':a' => (int) self::Me()['userid'], ':d' => date('Y-m-d', time() - 13 * 86400)));
+        $by = array();
+        foreach ($q->fetchAll(PDO::FETCH_NUM) as $r) {
+            $by[$r[0]] = array((int) $r[1], (int) $r[2]);
+        }
+        $max = 1;
+        foreach ($by as $v) {
+            $max = max($max, $v[0] + $v[1]);
+        }
+        $bars = '';
+        for ($i = 13; $i >= 0; $i--) {
+            $t = time() - $i * 86400;
+            $v = isset($by[date('Y-m-d', $t)]) ? $by[date('Y-m-d', $t)] : array(0, 0);
+            $tip = ($i === 0 ? self::t('Today') : date('D j M', $t)) . ': ' . $v[0] . ' ' . self::t('spam') . ', ' . $v[1] . ' ' . self::t($v[1] === 1 ? 'virus' : 'viruses');
+            $bars .= '<div class="sv-bar" title="' . self::h($tip) . '"><div class="sv-stack">'
+                . '<i class="sv-b-virus" style="height:' . round($v[1] / $max * 100, 1) . '%"></i><i class="sv-b-spam" style="height:' . round($v[0] / $max * 100, 1) . '%"></i></div>'
+                . '<span>' . date('j', $t) . '</span></div>';
+        }
+        return '<div class="sv-chart" role="img" aria-label="' . self::h(self::t('Spam and viruses caught, last 14 days')) . '">' . $bars . '</div>';
+    }
+
+    /**
+     * Whether spam filtering and virus scanning are on for the server (<@ ServerState @>), as two pills.
+     *
+     * @return string The HTML.
+     */
+    static function getServerState()
+    {
+        sys_spamav::Ensure();
+        $pill = function ($on, $label) {
+            return '<span class="sv-pill ' . ($on ? 'on' : 'off') . '">' . self::h(self::t($label)) . ': ' . self::h(self::t($on ? 'on' : 'off')) . '</span>';
+        };
+        return $pill(sys_spamav::On('sa_enabled'), 'Spam filtering') . $pill(sys_spamav::On('clam_enabled'), 'Virus scanning');
+    }
+
+    /**
+     * Whether the user may change spam settings (template <% if CanEdit %>).
+     *
+     * @return bool
+     */
+    static function getCanEdit()
+    {
+        return sys_spamav::On('sa_user_settings');
+    }
+
+    /**
+     * One row per mailbox with its settings, 7-day counts and a settings panel that opens in place (<@ MailboxRows @>).
+     *
+     * The panel of the mailbox in ?edit= (or the one just saved) starts open.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller.
+     * @return string The HTML.
+     */
+    static function getMailboxRows()
+    {
+        global $zdbh, $controller;
+        $boxes = self::Mailboxes();
+        if (!$boxes) {
+            return '<p class="sv-empty">' . self::h(self::t('You have no mailboxes yet. Make one in Mail > Mailboxes, and what is caught for it shows here.')) . '</p>';
+        }
+        $can = sys_spamav::On('sa_user_settings');
+        $sens = sys_spamav::Sensitivities();
+        $open = strtolower((string) $controller->GetControllerRequest('URL', 'edit'));
+        if (self::$posted !== null) {
+            $open = self::$posted['box'];
+        }
+        $q = $zdbh->prepare("SELECT COALESCE(SUM(dd_spam_in),0), COALESCE(SUM(dd_virus_in),0) FROM x_spamav_daily WHERE dd_acc_fk = :a AND dd_mailbox_vc = :m AND dd_day >= :d");
+        $out = '';
+        foreach ($boxes as $b) {
+            $p = sys_spamav::Prefs($b);
+            $q->execute(array(':a' => (int) self::Me()['userid'], ':m' => $b, ':d' => date('Y-m-d', time() - 6 * 86400)));
+            $c = $q->fetch(PDO::FETCH_NUM);
+            $action = $p['action'] !== '' ? $p['action'] : sys_spamav::Get('sa_default_action');
+            $isopen = $b === $open;
+            $out .= '<div class="sv-box' . ($isopen ? ' open' : '') . '" data-s="' . self::h($b) . '">'
+                . '<div class="sv-box-row">'
+                . '<div class="sv-box-name"><b>' . self::h($b) . '</b>'
+                . '<span class="sv-pill ' . ($p['enabled'] ? 'on' : 'off') . '">' . self::h(self::t($p['enabled'] ? 'Filter on' : 'Filter off')) . '</span></div>'
+                . '<div class="sv-box-facts"><span>' . self::h(self::t($sens[$p['score']] ?? $p['score'])) . '</span>'
+                . '<span>' . self::h(self::t($action === 'inbox' ? 'Spam stays in the inbox, marked' : 'Spam goes to the Spam folder')) . '</span>'
+                . ($p['delete_high'] ? '<span>' . self::h(self::t('Very high scores deleted')) . '</span>' : '') . '</div>'
+                . '<div class="sv-box-count" title="' . self::h(self::t('Last 7 days')) . '"><span class="sv-c-spam"><b>' . number_format((int) $c[0]) . '</b> ' . self::h(self::t('spam')) . '</span>'
+                . '<span class="sv-c-virus"><b>' . number_format((int) $c[1]) . '</b> ' . self::h(self::t((int) $c[1] === 1 ? 'virus' : 'viruses')) . '</span></div>'
+                . '<div class="sv-box-act"><a class="btn btn-default btn-sm" href="./?module=spamav&amp;box=' . rawurlencode($b) . '#activity" data-activity="' . self::h($b) . '">' . self::h(self::t('Activity')) . '</a>'
+                . '<button class="btn btn-default btn-sm sv-open" type="button" aria-expanded="' . ($isopen ? 'true' : 'false') . '">' . self::h(self::t($can ? 'Settings' : 'View settings')) . '</button></div>'
+                . '</div>' . self::Form($b, $can) . '</div>';
+        }
+        return $out;
+    }
+
+    /**
+     * Builds the spam settings panel for one mailbox.
+     *
+     * Shows what was posted when saving it failed, so nothing typed is lost.
      *
      * @param string $box The mailbox address (already checked to be the account's own).
      * @param bool $can True when the user may change the settings (otherwise the fields are disabled).
@@ -206,55 +301,97 @@ class module_controller extends ctrl_module
     static function Form($box, $can)
     {
         $p = sys_spamav::Prefs($box);
+        if (self::$posted !== null && self::$posted['box'] === $box) {
+            $p = array_merge($p, self::$posted);
+        }
         $dis = $can ? '' : ' disabled';
-        $opt = function ($list, $cur) {
-            $o = '';
-            foreach ($list as $k => $l) {
-                $o .= '<option value="' . self::h($k) . '"' . ((string) $k === (string) $cur ? ' selected' : '') . '>' . self::h(self::t($l)) . '</option>';
-            }
-            return $o;
+        $id = 'sv' . substr(md5($box), 0, 8);
+        $opts = '';
+        foreach (sys_spamav::Sensitivities() as $k => $l) {
+            $opts .= '<option value="' . self::h($k) . '"' . ((string) $k === (string) $p['score'] ? ' selected' : '') . '>' . self::h(self::t($l)) . '</option>';
+        }
+        $def = sys_spamav::Get('sa_default_action') === 'inbox' ? 'the inbox' : 'the Spam folder';
+        $tag = (string) sys_spamav::Get('sa_subject_tag') !== '' ? self::t('The subject starts with') . ' ' . sys_spamav::Get('sa_subject_tag') : self::t('Marked in its headers only');
+        $where = '';
+        foreach (array('' => array('Server default', 'Now ' . $def), 'folder' => array('Spam folder', 'Out of the way, still there to check'), 'inbox' => array('Inbox, marked', $tag)) as $k => $l) {
+            $where .= '<label class="sv-choice"><input type="radio" name="inAction" value="' . self::h($k) . '"' . ((string) $k === (string) $p['action'] ? ' checked' : '') . $dis . '>'
+                . '<span><b>' . self::h(self::t($l[0])) . '</b><small>' . self::h(self::t($l[1])) . '</small></span></label>';
+        }
+        $sw = function ($name, $on, $label, $help) use ($dis, $id) {
+            return '<div class="sv-switchrow"><div><label for="' . $id . $name . '">' . self::h(self::t($label)) . '</label><small>' . self::h(self::t($help)) . '</small></div>'
+                . '<label class="sv-switch"><input type="checkbox" id="' . $id . $name . '" name="' . $name . '" value="1"' . ($on ? ' checked' : '') . $dis . '><span class="sv-toggle"></span></label></div>';
         };
-        $def = sys_spamav::Get('sa_default_action') === 'inbox' ? 'Inbox' : 'Spam folder';
-        return '<div id="settings" class="sv-form"><h3>' . self::t('Spam settings for') . ' ' . self::h($box) . '</h3>'
-            . ($can ? '' : '<p class="text-warning">' . self::t('Your administrator sets these; they can not be changed here.') . '</p>')
-            . '<form method="post" action="./?module=spamav&amp;action=SavePrefs&amp;edit=' . rawurlencode($box) . '#settings"><input type="hidden" name="inMailbox" value="' . self::h($box) . '">'
-            . '<table class="table"><tr><th style="width: 220px;">' . self::t('Spam filter') . '</th><td><label style="font-weight: normal;"><input type="checkbox" name="inEnabled" value="1"' . ($p['enabled'] ? ' checked' : '') . $dis . '> ' . self::t('Check this mailbox for spam') . '</label>'
-            . '<br><span class="text-muted">' . self::t('Viruses are always blocked, whatever is chosen here.') . '</span></td></tr>'
-            . '<tr><th>' . self::t('Sensitivity') . '</th><td><select class="form-control" name="inScore" style="max-width: 300px;"' . $dis . '>' . $opt(sys_spamav::Sensitivities(), $p['score']) . '</select>'
-            . '<span class="text-muted">' . self::t('Stricter catches more spam, but sometimes also good mail.') . '</span></td></tr>'
-            . '<tr><th>' . self::t('Spam goes to') . '</th><td><select class="form-control" name="inAction" style="max-width: 300px;"' . $dis . '>' . $opt(array('' => 'Server default (' . $def . ')', 'folder' => 'The Spam folder', 'inbox' => 'The inbox, marked as spam'), $p['action']) . '</select></td></tr>'
-            . '<tr><th>' . self::t('Very high scores') . '</th><td><label style="font-weight: normal;"><input type="checkbox" name="inDeleteHigh" value="1"' . ($p['delete_high'] ? ' checked' : '') . $dis . '> ' . self::t('Delete spam scoring 15 or more instead of keeping it') . '</label></td></tr>'
-            . '<tr><th>' . self::t('Allowed senders') . '</th><td><textarea class="form-control" name="inAllow" rows="3" style="max-width: 420px; font-family: monospace;"' . $dis . '>' . self::h($p['allow']) . '</textarea>'
-            . '<span class="text-muted">' . self::t('Never spam. One per line: an address, or everyone at a domain (example.com or *@example.com).') . '</span></td></tr>'
-            . '<tr><th>' . self::t('Blocked senders') . '</th><td><textarea class="form-control" name="inBlock" rows="3" style="max-width: 420px; font-family: monospace;"' . $dis . '>' . self::h($p['block']) . '</textarea>'
-            . '<span class="text-muted">' . self::t('Always spam.') . '</span></td></tr></table>'
-            . runtime_csfr::Token() . ($can ? '<button class="btn btn-primary" type="submit">' . self::t('Save') . '</button> ' : '')
-            . '<a class="btn btn-default" href="./?module=spamav">' . self::t('Close') . '</a></form></div>';
+        $lines = function ($text) {
+            return count(array_filter(preg_split('/[\r\n,]+/', (string) $text), function ($l) { return trim($l) !== ''; }));
+        };
+        return '<form class="sv-form" method="post" action="./?module=spamav&amp;action=SavePrefs&amp;edit=' . rawurlencode($box) . '">'
+            . '<input type="hidden" name="inMailbox" value="' . self::h($box) . '">'
+            . ($can ? '' : '<p class="sv-locked">' . self::h(self::t('Your administrator sets these; they can not be changed here.')) . '</p>')
+            . '<div class="sv-form-grid"><div class="sv-col">'
+            . $sw('inEnabled', $p['enabled'], 'Check this mailbox for spam', 'Viruses are always blocked, whatever is chosen here.')
+            . '<div class="sv-field"><label for="' . $id . 'score">' . self::h(self::t('Sensitivity')) . '</label><select class="form-control" id="' . $id . 'score" name="inScore"' . $dis . '>' . $opts . '</select>'
+            . '<small>' . self::h(self::t('Stricter catches more spam, but sometimes also good mail.')) . '</small></div>'
+            . '<div class="sv-field"><span class="sv-flabel">' . self::h(self::t('Spam goes to')) . '</span><div class="sv-choices">' . $where . '</div></div>'
+            . $sw('inDeleteHigh', $p['delete_high'], 'Delete very high scores', 'Spam scoring 15 or more is deleted instead of kept.')
+            . '</div><div class="sv-col">'
+            . '<div class="sv-field"><label for="' . $id . 'allow">' . self::h(self::t('Allowed senders')) . ' <span class="sv-n">' . $lines($p['allow']) . '</span></label>'
+            . '<textarea class="form-control sv-list" id="' . $id . 'allow" name="inAllow" rows="5" spellcheck="false" placeholder="friend@example.com&#10;*@partner.example"' . $dis . '>' . self::h($p['allow']) . '</textarea>'
+            . '<small>' . self::h(self::t('Never spam. One per line: an address, or everyone at a domain (example.com or *@example.com).')) . '</small></div>'
+            . '<div class="sv-field"><label for="' . $id . 'block">' . self::h(self::t('Blocked senders')) . ' <span class="sv-n">' . $lines($p['block']) . '</span></label>'
+            . '<textarea class="form-control sv-list" id="' . $id . 'block" name="inBlock" rows="5" spellcheck="false"' . $dis . '>' . self::h($p['block']) . '</textarea>'
+            . '<small>' . self::h(self::t('Always spam. Same form, up to 200 in each list.')) . '</small></div>'
+            . '</div></div>'
+            . '<div class="sv-form-foot">' . runtime_csfr::Token() . ($can ? '<button class="btn btn-primary" type="submit">' . self::h(self::t('Save')) . '</button>' : '')
+            . '<button class="btn btn-default sv-close" type="button">' . self::h(self::t('Close')) . '</button>'
+            . ($can ? '<span class="sv-note">' . self::h(self::t('Changes apply within 5 minutes.')) . '</span>' : '') . '</div></form>';
     }
 
     /**
-     * Builds the activity log: what was caught for the account, 25 per page, newest first.
+     * Whether the page should open on the activity tab: a filter or page of it is in the URL (template <% if ShowActivity %>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return bool
+     */
+    static function getShowActivity()
+    {
+        global $controller;
+        foreach (array('box', 'kind', 'page') as $k) {
+            if ((string) $controller->GetControllerRequest('URL', $k) !== '') {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * The activity log (<@ Activity @>): what was caught for the account, 25 per page, newest first.
      *
      * Filtered by ?box= (one of the account's mailboxes) and ?kind= (spam or virus); page in ?page=.
      *
      * @global db_driver $zdbh The panel's database connection.
      * @global runtime_controller $controller The request controller.
-     * @return string The HTML (filter form, page links and table).
+     * @return string The HTML (filters, table and pager).
      */
-    static function Activity()
+    static function getActivity()
     {
         global $zdbh, $controller;
         $acc = (int) self::Me()['userid'];
         $box = strtolower((string) $controller->GetControllerRequest('URL', 'box'));
         $kind = (string) $controller->GetControllerRequest('URL', 'kind');
+        if ($box !== '' && !self::Mine($box)) {
+            $box = '';
+        }
+        if (!in_array($kind, array('spam', 'virus'), true)) {
+            $kind = '';
+        }
         $sql = "SELECT * FROM x_spamav_events WHERE ev_acc_fk = :a";
         $args = array(':a' => $acc);
-        if ($box !== '' && self::Mine($box)) {
+        if ($box !== '') {
             $sql .= " AND (ev_mailbox_vc = :m OR ev_sender_vc = :m2)";
             $args[':m'] = $box;
             $args[':m2'] = $box;
         }
-        if (in_array($kind, array('spam', 'virus'), true)) {
+        if ($kind !== '') {
             $sql .= " AND ev_kind_vc = :k";
             $args[':k'] = $kind;
         }
@@ -268,57 +405,62 @@ class module_controller extends ctrl_module
         $q = $zdbh->prepare($sql . " ORDER BY ev_ts DESC, ev_id_pk DESC LIMIT " . $per . " OFFSET " . (($page - 1) * $per));
         $q->execute($args);
         $rows = $q->fetchAll(PDO::FETCH_ASSOC);
-        $link = function ($p) use ($box, $kind) {
-            return './?module=spamav&amp;box=' . rawurlencode($box) . '&amp;kind=' . rawurlencode($kind) . '&amp;page=' . (int) $p . '#activity';
+        $link = function ($p, $k = null) use ($box, $kind) {
+            return './?module=spamav&amp;box=' . rawurlencode($box) . '&amp;kind=' . rawurlencode($k === null ? $kind : $k) . '&amp;page=' . (int) $p . '#activity';
         };
-        $nav = '<div class="sv-nav"><span class="text-muted">' . number_format($total) . ' ' . self::t($total === 1 ? 'entry' : 'entries')
-            . ($pages > 1 ? ' &middot; ' . self::t('page') . ' ' . $page . ' ' . self::t('of') . ' ' . $pages : '') . '</span>'
-            . ($pages > 1 ? ' <span class="sv-pages">'
-                . ($page > 1 ? '<a class="btn btn-default btn-sm" href="' . $link(1) . '">&laquo; ' . self::t('Newest') . '</a> <a class="btn btn-default btn-sm" href="' . $link($page - 1) . '">&lsaquo; ' . self::t('Newer') . '</a> ' : '')
-                . ($page < $pages ? '<a class="btn btn-default btn-sm" href="' . $link($page + 1) . '">' . self::t('Older') . ' &rsaquo;</a> <a class="btn btn-default btn-sm" href="' . $link($pages) . '">' . self::t('Oldest') . ' &raquo;</a>' : '')
-                . '</span>' : '') . '</div>';
-        $opts = '<option value="">' . self::t('All mailboxes') . '</option>';
+
+        $opts = '<option value="">' . self::h(self::t('All mailboxes')) . '</option>';
         foreach (self::Mailboxes() as $b) {
             $opts .= '<option value="' . self::h($b) . '"' . ($b === $box ? ' selected' : '') . '>' . self::h($b) . '</option>';
         }
-        $filter = '<form method="get" class="form-inline" style="margin-bottom: 10px;" id="activity"><input type="hidden" name="module" value="spamav">'
-            . '<select class="form-control" name="box" style="display:inline-block;width:auto;">' . $opts . '</select> <select class="form-control" name="kind" style="display:inline-block;width:auto;"><option value="">' . self::t('Spam and viruses') . '</option>'
-            . '<option value="spam"' . ($kind === 'spam' ? ' selected' : '') . '>' . self::t('Spam') . '</option><option value="virus"' . ($kind === 'virus' ? ' selected' : '') . '>' . self::t('Viruses') . '</option></select> '
-            . '<button class="btn btn-default" type="submit">' . self::t('Show') . '</button></form>';
+        $seg = '';
+        foreach (array('' => 'All', 'spam' => 'Spam', 'virus' => 'Viruses') as $k => $l) {
+            $seg .= '<a class="sv-seg' . ($k === $kind ? ' active' : '') . '" href="' . $link(1, $k) . '">' . self::h(self::t($l)) . '</a>';
+        }
+        $out = '<form method="get" class="sv-filter" action="./"><input type="hidden" name="module" value="spamav"><input type="hidden" name="kind" value="' . self::h($kind) . '">'
+            . '<select class="form-control" name="box" aria-label="' . self::h(self::t('Mailbox')) . '" onchange="this.form.submit()">' . $opts . '</select>'
+            . '<noscript><button class="btn btn-default" type="submit">' . self::h(self::t('Show')) . '</button></noscript>'
+            . '<div class="sv-segs" role="group">' . $seg . '</div>'
+            . '<span class="sv-total">' . number_format($total) . ' ' . self::h(self::t($total === 1 ? 'entry' : 'entries')) . '</span></form>';
         if (!$rows) {
-            return $filter . '<p class="text-muted">' . self::t('Nothing caught yet. Spam and viruses sent to your mailboxes appear here within 5 minutes.') . '</p>';
+            return $out . '<p class="sv-empty">' . self::h(self::t($box !== '' || $kind !== '' ? 'Nothing caught that matches.' : 'Nothing caught yet. Spam and viruses sent to your mailboxes appear here within 5 minutes.')) . '</p>';
         }
-        $actions = array('marked' => 'Marked as spam', 'rejected' => 'Refused (never delivered)', 'quarantined' => 'Held by the administrator', 'dropped' => 'Deleted');
-        $out = $filter . $nav . '<div class="sv-scroll"><table class="table table-striped table-condensed"><thead><tr><th>' . self::t('When') . '</th><th>' . self::t('Mailbox') . '</th><th>' . self::t('From') . '</th><th>' . self::t('What') . '</th><th>' . self::t('What happened') . '</th></tr></thead><tbody>';
+        $actions = array('marked' => array('Marked as spam', ''), 'rejected' => array('Refused', 'bad'), 'quarantined' => array('Held by the administrator', 'warn'), 'dropped' => array('Deleted', 'bad'));
+        $out .= '<div class="sv-scroll"><table class="sv-table"><thead><tr><th>' . self::h(self::t('When')) . '</th><th>' . self::h(self::t('What')) . '</th><th>' . self::h(self::t('Mailbox')) . '</th><th>' . self::h(self::t('From')) . '</th><th>' . self::h(self::t('Details')) . '</th><th>' . self::h(self::t('What happened')) . '</th></tr></thead><tbody>';
         foreach ($rows as $r) {
-            $what = ($r['ev_kind_vc'] === 'virus')
-                ? ui_status::Bad('Virus') . ' ' . self::t('Virus') . ': <strong>' . self::h($r['ev_detail_vc']) . '</strong>' . ($r['ev_subject_vc'] !== '' ? '<br><span class="text-muted">' . self::t('Subject') . ': ' . self::h($r['ev_subject_vc']) . '</span>' : '')
-                : ui_status::Warn('Spam') . ' ' . self::t('Spam') . ($r['ev_score_vc'] !== '' ? ', ' . self::t('score') . ' ' . self::h($r['ev_score_vc']) : '')
-                  . ($r['ev_detail_vc'] !== '' ? '<br><span class="text-muted" style="font-size: 12px;">' . self::h($r['ev_detail_vc']) . '</span>' : '');
-            $out .= '<tr><td style="white-space: nowrap;">' . self::h(date('Y-m-d H:i', (int) $r['ev_ts'])) . '</td><td>' . self::h($r['ev_mailbox_vc']) . ($r['ev_direction_vc'] === 'out' ? ' <span class="label label-default">' . self::t('sent by you') . '</span>' : '') . '</td>'
-                . '<td>' . self::h($r['ev_sender_vc'] !== '' ? $r['ev_sender_vc'] : '-') . '</td><td>' . $what . '</td><td>' . self::h(self::t($actions[$r['ev_action_vc']] ?? $r['ev_action_vc'])) . '</td></tr>';
+            $virus = $r['ev_kind_vc'] === 'virus';
+            $what = $virus ? '<span class="sv-kind virus">' . self::h(self::t('Virus')) . '</span>'
+                : '<span class="sv-kind spam">' . self::h(self::t('Spam')) . '</span>' . ($r['ev_score_vc'] !== '' ? '<span class="sv-score">' . self::h($r['ev_score_vc']) . '</span>' : '');
+            $detail = $virus ? '<b>' . self::h($r['ev_detail_vc']) . '</b>' : '<span class="sv-tests">' . self::h($r['ev_detail_vc']) . '</span>';
+            if ($r['ev_subject_vc'] !== '') {
+                $detail .= '<small>' . self::h(self::t('Subject')) . ': ' . self::h($r['ev_subject_vc']) . '</small>';
+            }
+            $a = $actions[$r['ev_action_vc']] ?? array($r['ev_action_vc'], '');
+            $out .= '<tr><td class="sv-when" title="' . self::h(date('Y-m-d H:i:s', (int) $r['ev_ts'])) . '">' . self::h(date('j M', (int) $r['ev_ts'])) . '<small>' . self::h(date('H:i', (int) $r['ev_ts'])) . '</small></td>'
+                . '<td class="sv-what">' . $what . '</td>'
+                . '<td class="sv-mb">' . self::h($r['ev_mailbox_vc']) . ($r['ev_direction_vc'] === 'out' ? ' <span class="sv-out">' . self::h(self::t('sent by you')) . '</span>' : '') . '</td>'
+                . '<td class="sv-from">' . self::h($r['ev_sender_vc'] !== '' ? $r['ev_sender_vc'] : '-') . '</td><td class="sv-detail">' . $detail . '</td>'
+                . '<td><span class="sv-did ' . $a[1] . '">' . self::h(self::t($a[0])) . '</span></td></tr>';
         }
-        return $out . '</tbody></table></div>' . ($pages > 1 ? $nav : '');
+        $out .= '</tbody></table></div>';
+        if ($pages > 1) {
+            $out .= '<div class="sv-pager">'
+                . ($page > 1 ? '<a class="btn btn-default btn-sm" href="' . $link($page - 1) . '">&lsaquo; ' . self::h(self::t('Newer')) . '</a>' : '<span class="btn btn-default btn-sm disabled">&lsaquo; ' . self::h(self::t('Newer')) . '</span>')
+                . '<span>' . self::h(self::t('Page')) . ' <b>' . $page . '</b> ' . self::h(self::t('of')) . ' ' . $pages . '</span>'
+                . ($page < $pages ? '<a class="btn btn-default btn-sm" href="' . $link($page + 1) . '">' . self::h(self::t('Older')) . ' &rsaquo;</a>' : '<span class="btn btn-default btn-sm disabled">' . self::h(self::t('Older')) . ' &rsaquo;</span>')
+                . '</div>';
+        }
+        return $out;
     }
 
     /**
-     * Builds the whole module page (<@ Page @>): styles, totals, mailboxes and activity.
+     * How many mailboxes the account has (template <@ MailboxCount @>).
      *
-     * @return string The HTML.
+     * @return int
      */
-    static function getPage()
+    static function getMailboxCount()
     {
-        sys_spamav::Ensure();
-        $off = !sys_spamav::On('sa_enabled') || !sys_spamav::On('clam_enabled');
-        return '<style>.sv-cards{display:flex;gap:14px;flex-wrap:wrap;margin:8px 0 6px}.sv-card{flex:1 1 160px;border:1px solid var(--sn-line, #ddd);border-radius:6px;padding:12px 16px;background:var(--sn-card, #fff)}'
-            . '.sv-num{font-size:26px;font-weight:600}.sv-label{color:var(--sn-muted, #777)}.sv-card.is-spam .sv-num{color:var(--sn-warn, #a86b00)}.sv-card.is-virus .sv-num{color:var(--sn-bad, #c62f2b)}.sv-form{border:1px solid var(--sn-line, #ddd);border-radius:6px;padding:4px 16px 14px;margin:10px 0 20px;background:var(--sn-soft, #fafafa)}'
-            . '.sv-scroll{max-height:620px;overflow-y:auto;border:1px solid var(--sn-line, #ddd);border-radius:4px;margin:6px 0}.sv-scroll table{margin:0}'
-            . '.sv-scroll thead th{position:sticky;top:0;background:var(--sn-soft, #f5f5f5);z-index:1;box-shadow:0 1px 0 var(--sn-line, #ddd)}'
-            . '.sv-nav{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin:6px 0}</style>'
-            . ($off ? '<p class="text-muted">' . ui_status::Warn('Off') . ' ' . self::h(self::t(!sys_spamav::On('sa_enabled') && !sys_spamav::On('clam_enabled') ? 'Spam and virus filtering are switched off on this server.' : (!sys_spamav::On('sa_enabled') ? 'Spam filtering is switched off on this server.' : 'Virus scanning is switched off on this server.'))) . '</p>' : '')
-            . self::Totals()
-            . '<h2>' . self::t('Your mailboxes') . '</h2>' . self::MailboxTable()
-            . '<h2>' . self::t('Recent activity') . '</h2>' . self::Activity();
+        return count(self::Mailboxes());
     }
 
     /**

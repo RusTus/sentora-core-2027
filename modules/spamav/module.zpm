@@ -4,8 +4,83 @@
         <div class="zmodule_title"><@ ModuleName @></div>
         <div class="zmodule_desc" id="zmodule_desc_<@ ModuleName @>"><@ ModuleDesc @></div>
     </div>
-    <div class="zgrid_wrapper">
-        <@ Result @>
-        <@ Page @>
+    <@ Result @>
+    <link rel="stylesheet" href="modules/spamav/assets/spamav.css">
+
+    <div class="sv" id="sv"<% if ShowActivity %> data-tab="activity"<% endif %>>
+        <div class="sv-top">
+            <div class="sv-tiles"><@ Totals @></div>
+            <div class="sv-card sv-trend">
+                <div class="sv-trend-head"><h4><: Last 14 days :></h4>
+                    <span class="sv-key"><i class="sv-b-spam"></i><: Spam :> <i class="sv-b-virus"></i><: Viruses :></span></div>
+                <@ Chart @>
+            </div>
+        </div>
+
+        <div class="sv-card">
+            <div class="sv-head">
+                <div class="sv-tabs" role="tablist">
+                    <button type="button" class="sv-tab" role="tab" data-tab="boxes"><: Your mailboxes :> <span class="sv-count"><@ MailboxCount @></span></button>
+                    <button type="button" class="sv-tab" role="tab" data-tab="activity" id="activity"><: What was caught :></button>
+                </div>
+                <div class="sv-state"><@ ServerState @></div>
+            </div>
+
+            <section class="sv-pane" data-pane="boxes" role="tabpanel">
+                <p class="sv-intro"><: Last 7 days for each mailbox. :> <% if CanEdit %><: Open Settings to change how spam is handled, and which senders are always or never spam. :><% else %><: Your administrator sets how spam is handled. :><% endif %></p>
+                <input type="search" class="form-control sv-find" placeholder="<: Find a mailbox :>" aria-label="<: Find a mailbox :>" hidden>
+                <div class="sv-boxes"><@ MailboxRows @></div>
+            </section>
+
+            <section class="sv-pane" data-pane="activity" role="tabpanel">
+                <@ Activity @>
+            </section>
+        </div>
     </div>
 </div>
+<script>
+(function () {
+    'use strict';
+    var sv = document.getElementById('sv'); if (!sv) { return; }
+    var each = function (sel, fn) { Array.prototype.forEach.call(sv.querySelectorAll(sel), fn); };
+    var show = function (tab) {
+        each('.sv-tab', function (b) { var on = b.getAttribute('data-tab') === tab; b.classList.toggle('active', on); b.setAttribute('aria-selected', on ? 'true' : 'false'); });
+        each('.sv-pane', function (p) { p.hidden = p.getAttribute('data-pane') !== tab; });
+        try { sessionStorage.setItem('sv-tab', tab); } catch (e) {}
+    };
+    each('.sv-tab', function (b) { b.addEventListener('click', function () { show(b.getAttribute('data-tab')); }); });
+    var start = sv.getAttribute('data-tab');
+    if (!start && !sv.querySelector('.sv-box.open')) { try { start = sessionStorage.getItem('sv-tab'); } catch (e) {} }
+    show(start === 'activity' ? 'activity' : 'boxes');
+
+    // a mailbox's settings open in place
+    var toggle = function (box, open) {
+        box.classList.toggle('open', open);
+        box.querySelector('.sv-open').setAttribute('aria-expanded', open ? 'true' : 'false');
+    };
+    each('.sv-box', function (box) {
+        box.querySelector('.sv-open').addEventListener('click', function () { toggle(box, !box.classList.contains('open')); });
+        box.querySelector('.sv-close').addEventListener('click', function () { toggle(box, false); });
+        // the count beside each list follows what is typed
+        Array.prototype.forEach.call(box.querySelectorAll('.sv-list'), function (ta) {
+            ta.addEventListener('input', function () {
+                var n = ta.value.split(/[\r\n,]+/).filter(function (l) { return l.trim() !== ''; }).length;
+                var lab = box.querySelector('label[for="' + ta.id + '"] .sv-n'); if (lab) { lab.textContent = n; }
+            });
+        });
+        box.querySelector('form').addEventListener('submit', function () { if (window.Sentora && Sentora.loader) { Sentora.loader.showLoader(); } });
+    });
+    var opened = sv.querySelector('.sv-box.open');
+    if (opened) { opened.scrollIntoView({ block: 'center' }); }
+
+    // with many mailboxes, a search
+    var boxes = sv.querySelectorAll('.sv-box'), find = sv.querySelector('.sv-find');
+    if (boxes.length > 6) {
+        find.hidden = false;
+        find.addEventListener('input', function () {
+            var q = find.value.trim().toLowerCase();
+            Array.prototype.forEach.call(boxes, function (b) { b.hidden = q !== '' && b.getAttribute('data-s').indexOf(q) < 0; });
+        });
+    }
+})();
+</script>
