@@ -103,7 +103,8 @@ function FtpHashStoredPasswords()
 
 /**
  * The access types of the FTP accounts (FTP Accounts: Read-only, Write-only, Full access) as
- * ProFTPD rules. They used to be stored only: every FTP account could read and write.
+ * ProFTPD rules, and AuthOrder mod_sql.c when ProFTPD's configuration has no AuthOrder (so only the
+ * panel's FTP accounts log in, not the server's own Linux users). They used to be stored only: every FTP account could read and write.
  *
  * Writes ftp-access.conf next to ProFTPD's configuration (one DenyUser line per account: no WRITE
  * for read-only ones, so no upload, delete, rename or new folder; no READ for write-only ones, so
@@ -137,6 +138,12 @@ function FtpWriteAccessRules($conf = null, $reload = true)
         }
     }
     $text = "# Made by the Sentora daemon from the access type of each FTP account (FTP Accounts).\n# Do not edit: it is written again when an account changes.\n";
+    $main = (string) file_get_contents($real);
+    // only the panel's FTP accounts may log in (ProFTPD also took the server's own Linux users
+    // with their system passwords); new installs have it in the configuration itself
+    if (!preg_match('/^\s*AuthOrder\b/mi', $main)) {
+        $text .= "AuthOrder mod_sql.c\n";
+    }
     if ($deny['WRITE'] || $deny['READ']) {
         $text .= "<Directory />\n";
         foreach ($deny as $cmd => $users) {
@@ -147,7 +154,6 @@ function FtpWriteAccessRules($conf = null, $reload = true)
         $text .= "</Directory>\n";
     }
     $old = is_file($rules) ? (string) file_get_contents($rules) : null;
-    $main = (string) file_get_contents($real);
     $include = "Include " . $rules;
     $hasInclude = preg_match('/^\s*Include\s+' . preg_quote($rules, '/') . '\s*$/m', $main) === 1;
     if ($old === $text && $hasInclude) {
