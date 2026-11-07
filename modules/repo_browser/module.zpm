@@ -7,7 +7,7 @@
     <@ result @>
     <link rel="stylesheet" href="modules/repo_browser/assets/repo.css">
 
-    <div class="rb" id="rb" data-queued="<: Queued :>" data-installed="<: Installed :>" data-not="<: Not installed :>" data-remove="<: Remove it? :>">
+    <div class="rb" id="rb" data-queued="<: Queued :>" data-installed="<: Installed :>" data-not="<: Not installed :>" data-remove="<: Remove it? :>" data-update="<: Update available :>">
     <@ ZppyOut @>
 
     <% if isConfirmDeleteRepo %>
@@ -77,29 +77,41 @@
 
     <% if isMain %>
     <!-- Modules -->
-    <div class="rb-card">
-        <div class="rb-head"><div><h4><: Available modules :></h4>
+    <div class="rb-card rb-modules">
+        <div class="rb-head"><div><h4><: Modules :></h4>
             <p class="rb-sub"><% if TotalPackages %><b><@ totalpackages @></b> <: modules in your repositories. :><% endif %> <: Changes are made by the daemon within 5 minutes. :></p></div>
             <input type="search" class="form-control rb-find" placeholder="<: Find a module :>" aria-label="<: Find a module :>"></div>
         <% if ModuleList %>
+        <div class="rb-tabs" role="tablist">
+            <button type="button" class="rb-tab" role="tab" data-tab="installed"><: Installed :> <span class="rb-count"></span></button>
+            <button type="button" class="rb-tab" role="tab" data-tab="update" hidden><: Updates :> <span class="rb-count"></span></button>
+            <button type="button" class="rb-tab" role="tab" data-tab="notinstalled"><: Available :> <span class="rb-count"></span></button>
+            <span class="rb-checking rb-sub" hidden><span class="rb-wait short"></span> <: Checking for updates :></span>
+        </div>
         <form action="./?module=repo_browser&amp;action=DeleteModule" method="post">
-            <div class="rb-mods">
+            <div class="rb-list">
             <% loop ModuleList %>
-            <div class="rb-mod is-<& installed &>" data-s="<& modulename &> <& reponame &>">
-                <div class="rb-mod-head">
-                    <div class="rb-mod-name"><b><& installedhtml &></b><span class="rb-state"></span></div>
-                    <button class="<& buttoncss &>" type="submit" <& buttonattr &> title="<& title &>" name="in<& buttonaction &>Module" value="<& reponame &>:::<& modulename &>"><& buttonaction &></button>
+            <div class="rb-row" data-tab="<& installed &>" data-s="<& modulename &> <& reponame &>" hidden>
+                <div class="rb-row-main">
+                    <div class="rb-row-name"><b><& installedhtml &></b><span class="rb-state"></span></div>
+                    <div class="modinfo" item_id="<& reponame &>:::<& modulename &>"><span class="rb-wait wide"></span></div>
+                    <div class="update" item_id="<& reponame &>:::<& modulename &>"></div>
                 </div>
-                <div class="modinfo" item_id="<& reponame &>:::<& modulename &>"><span class="rb-wait wide"></span><span class="rb-wait"></span></div>
-                <div class="update" item_id="<& reponame &>:::<& modulename &>"></div>
-                <div class="rb-mod-foot">
-                    <span class="controls" item_id="M:::<& url &>"><span class="rb-wait short"></span></span>
+                <div class="rb-row-side">
+                    <span class="controls" item_id="M:::<& url &>"></span>
                     <span class="repostats" item_id="<& reponame &>:::<& modulename &>"></span>
-                    <span class="rb-repo" title="<: Repository :>"><& reponame &></span>
+                    <span class="rb-repo" title="<: Repository :>: <& reponame &>"><& reponame &></span>
                     <a class="rb-dl" href="<& url &>" title="<: Download the package :>">.zpp &darr;</a>
                 </div>
+                <div class="rb-row-act"><button class="<& buttoncss &>" type="submit" <& buttonattr &> title="<& title &>" name="in<& buttonaction &>Module" value="<& reponame &>:::<& modulename &>"><& buttonaction &></button></div>
             </div>
             <% endloop %>
+            </div>
+            <p class="rb-empty rb-none" data-installed="<: No modules from your repositories are installed yet: see Available. :>" data-update="<: Every installed module is up to date. :>" data-notinstalled="<: Every module in your repositories is installed. :>" data-find="<: No modules match your search. :>" hidden></p>
+            <div class="rb-pager" hidden>
+                <button type="button" class="btn btn-default btn-sm rb-prev" aria-label="<: Previous page :>">&lsaquo;</button>
+                <span class="rb-range"></span> <: of :> <b class="rb-total"></b>
+                <button type="button" class="btn btn-default btn-sm rb-next" aria-label="<: Next page :>">&rsaquo;</button>
             </div>
             <@ CSFR_Tag @>
         </form>
@@ -194,25 +206,91 @@
             el.load(base + '&' + param + '=' + encodeURIComponent(el.attr('item_id')), function () { if (done) { done(el); } });
         });
     };
-    load('.controls', 'request', function (el) {
+    // the repositories' own state
+    load('.rb-repo-row .controls', 'request', function (el) {
         // a repository that can not be reached: offer Retry beside Remove
         if (el.find('.label-danger').length) { el.closest('.rb-repo-row').find('.retry-repo').show(); }
     });
-    load('.modinfo', 'modinfo');
-    load('.update', 'update');
-    load('.repostats', 'repostat');
-    // the module's state beside its name
-    $('.rb-mod').each(function () {
-        var m = $(this), b = m.find('button[type=submit]').first(), s = m.find('.rb-state');
-        if (b.is(':disabled')) { s.text($('#rb').attr('data-queued')).addClass('label label-warning'); }
-        else if (m.hasClass('is-installed')) { s.text($('#rb').attr('data-installed')).addClass('label label-success'); }
-        else { s.text($('#rb').attr('data-not')).addClass('label label-default'); }
+
+    // Modules: one tab each for installed, updates and available, a page at a time. A row's
+    // details come from the repository, so they are fetched only when the row is first shown.
+    var rb = $('#rb'), rows = $('.rb-row'), PAGE = 25, tab = null, page = 0, query = '';
+    var fill = function (row) {
+        if (row.data('filled')) { return; }
+        row.data('filled', true);
+        row.find('.modinfo').each(function () { $(this).load(base + '&modinfo=' + encodeURIComponent($(this).attr('item_id'))); });
+        row.find('.controls').each(function () { $(this).load(base + '&request=' + encodeURIComponent($(this).attr('item_id'))); });
+        row.find('.repostats').each(function () { $(this).load(base + '&repostat=' + encodeURIComponent($(this).attr('item_id'))); });
+    };
+    var inTab = function (row, t) { return t === 'update' ? row.hasClass('has-update') : row.attr('data-tab') === t; };
+    var matches = function (row) { return query === '' || (row.attr('data-s') || '').toLowerCase().indexOf(query) >= 0; };
+    var show = function () {
+        var list = rows.filter(function () { var r = $(this); return inTab(r, tab) && matches(r); });
+        var pages = Math.max(1, Math.ceil(list.length / PAGE));
+        if (page >= pages) { page = pages - 1; }
+        rows.attr('hidden', true);
+        list.slice(page * PAGE, page * PAGE + PAGE).removeAttr('hidden').each(function () { fill($(this)); });
+        $('.rb-tab').each(function () {
+            var b = $(this), t = b.attr('data-tab');
+            b.toggleClass('active', t === tab).attr('aria-selected', t === tab ? 'true' : 'false');
+            b.find('.rb-count').text(rows.filter(function () { var r = $(this); return inTab(r, t) && matches(r); }).length);
+        });
+        var none = $('.rb-none');
+        none.text(none.attr(query !== '' ? 'data-find' : 'data-' + tab)).attr('hidden', list.length ? true : null);
+        $('.rb-pager').attr('hidden', list.length > PAGE ? null : true);
+        $('.rb-range').text(list.length ? (page * PAGE + 1) + '–' + Math.min(list.length, page * PAGE + PAGE) : '0');
+        $('.rb-total').text(list.length);
+        $('.rb-prev').prop('disabled', page === 0);
+        $('.rb-next').prop('disabled', page >= pages - 1);
+    };
+    var go = function (t) {
+        tab = t; page = 0; show();
+        try { sessionStorage.setItem('rb-tab', t); } catch (e) {}
+    };
+    $('.rb-tab').on('click', function () { go($(this).attr('data-tab')); });
+    $('.rb-prev').on('click', function () { if (page > 0) { page--; show(); } });
+    $('.rb-next').on('click', function () { page++; show(); });
+    $('.rb-find').on('input', function () { query = $.trim($(this).val()).toLowerCase(); page = 0; show(); });
+
+    // the repository as a short name; the full address stays in the tooltip
+    $('.rb-row .rb-repo').each(function () {
+        var t = $(this).text().replace(/^https?:\/\//i, ''), g = t.match(/^raw\.githubusercontent\.com\/([^\/]+\/[^\/]+)/i);
+        $(this).text(g ? 'GitHub: ' + g[1] : t);
     });
-    // find a module
-    $('.rb-find').on('input', function () {
-        var q = $.trim($(this).val()).toLowerCase();
-        $('.rb-mod').each(function () { $(this).toggle(q === '' || ($(this).attr('data-s') || '').toLowerCase().indexOf(q) >= 0); });
+
+    // each module's state beside its name
+    rows.each(function () {
+        var m = $(this), b = m.find('.rb-row-act button').first(), s = m.find('.rb-state');
+        if (b.is(':disabled')) { s.text(rb.attr('data-queued')).addClass('label label-warning'); }
+        else if (m.attr('data-tab') === 'installed') { s.text(rb.attr('data-installed')).addClass('label label-success'); }
+        else { s.text(rb.attr('data-not')).addClass('label label-default'); }
     });
+
+    if (rows.length) {
+        var saved = null;
+        try { saved = sessionStorage.getItem('rb-tab'); } catch (e) {}
+        var installed = rows.filter('[data-tab=installed]');
+        go(saved === 'installed' || saved === 'notinstalled' ? saved : (installed.length ? 'installed' : 'notinstalled'));
+
+        // look for updates of every installed module, a few at a time; those with one get the Updates tab
+        var queue = installed.toArray(), busy = 0, checking = $('.rb-checking');
+        var next = function () {
+            if (!queue.length) { if (!busy) { checking.attr('hidden', true); show(); } return; }
+            var row = $(queue.shift()), u = row.find('.update');
+            busy++;
+            u.load(base + '&update=' + encodeURIComponent(u.attr('item_id')), function () {
+                busy--;
+                if ($.trim(u.html()) !== '') {
+                    row.addClass('has-update');
+                    $('.rb-tab[data-tab=update]').removeAttr('hidden');
+                    row.find('.rb-state').text(rb.attr('data-update')).attr('class', 'rb-state label label-info');
+                }
+                next();
+            });
+        };
+        if (queue.length) { checking.removeAttr('hidden'); for (var i = 0; i < 4; i++) { next(); } }
+    }
+
     // removing asks first; the panel's "working" overlay while a form is sent
     $('#rb form').on('submit', function (e) {
         var btn = $(document.activeElement);

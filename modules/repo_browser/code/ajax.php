@@ -79,9 +79,10 @@ function AjaxReturnStatus($request)
         if (!repo_browser_helper::KnownRepo($repo) && !repo_browser_helper::KnownRepo($repo . '/')) {
             return;
         }
-        $ok = repo_browser_helper::UrlExists($parts[1]);
-        echo Label($ok, $ok ? 'Module appears to exist in the repository and is available for installation.'
-            : 'Can not find module in the repository! Module is currently not available for installation.');
+        // only a missing package is shown: a pill on every row of a long list would say nothing
+        if (!repo_browser_helper::UrlExists($parts[1])) {
+            echo Label(false, 'The package is not in the repository, so it can not be installed or updated from here right now.', 'Package missing');
+        }
     }
 }
 
