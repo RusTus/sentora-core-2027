@@ -132,99 +132,147 @@ class module_controller extends ctrl_module
     }
 
     /**
-     * List the variations of the logged-in user's current theme.
+     * List the variations of a theme.
      *
+     * @param string|null $theme Optional. The theme; null for the logged-in user's. Default null.
      * @return array<int, array<string, string>> One entry per variation: 'name'.
      */
-    static function ExecuteCSSList()
+    static function ExecuteCSSList($theme = null)
     {
-        $currentuser = ctrl_users::GetUserDetail();
-        return ui_template::ListAvaliableCSS(self::ExecuteShowCurrentTheme($currentuser['userid']));
+        // (the theme passed in used to be ignored)
+        return ui_template::ListAvaliableCSS($theme !== null ? ctrl_users::SafeTheme($theme) : self::ExecuteShowCurrentTheme(0));
     }
 
     // End 'worker' methods.
 
     /**
+     * Escape a value for HTML.
+     *
+     * @param mixed $s The value (cast to string).
+     * @return string The escaped text.
+     */
+    static function h($s)
+    {
+        return htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
+    }
+
+    /**
+     * Translate and escape a text.
+     *
+     * @param string $s The English text.
+     * @return string The escaped translation.
+     */
+    static function t($s)
+    {
+        return self::h(ui_language::translate($s));
+    }
+
+    /**
      * The logged-in user's theme (start of the web interface methods).
      *
-     * @global runtime_controller $controller The request controller (not used).
      * @return string The theme name.
      */
     static function getCurrentTheme()
     {
-        global $controller;
-        $currentuser = ctrl_users::GetUserDetail();
-        return self::ExecuteShowCurrentTheme($currentuser['userid']);
+        return self::ExecuteShowCurrentTheme(0);
     }
 
     /**
-     * The logged-in user's theme variation.
+     * The logged-in user's theme variation (the default it sets for its clients).
      *
-     * @global runtime_controller $controller The request controller (not used).
      * @return string|false The variation name, or false.
      */
     static function getCurrentCSS()
     {
-        global $controller;
-        $currentuser = ctrl_users::GetUserDetail();
-        return self::ExecuteShowCurrentCSS($currentuser['userid']);
+        return self::ExecuteShowCurrentCSS(ctrl_users::GetUserDetail()['userid']);
     }
 
     /**
-     * Template value <@ SelectThemeMenu @>: the <option> list of themes.
+     * What a variation is, in words, for the known ones (Modern's Light, Dark and Auto).
      *
-     * @return string The HTML options, the current theme selected.
+     * @param string $name The variation name.
+     * @return string The English text ('' when unknown).
      */
-    static function getSelectThemeMenu()
+    static function CSSHelp($name)
     {
-        $html = "";
-        foreach (self::ExecuteStylesList() as $theme) {
-            if ($theme['name'] != self::getCurrentTheme()) {
-                $html .="<option value = \"" . $theme['name'] . "\">" . $theme['name'] . "</option>\n";
-            } else {
-                $html .="<option value = \"" . $theme['name'] . "\" selected=\"selected\">" . $theme['name'] . "</option>\n";
-            }
+        $help = array('light' => 'Light backgrounds, dark text.', 'dark' => 'Dark backgrounds, light text: easier on the eyes at night.',
+            'auto' => 'Follows each computer\'s own light or dark setting.', 'default' => 'The theme\'s own look.');
+        return isset($help[strtolower($name)]) ? $help[strtolower($name)] : '';
+    }
+
+    /**
+     * The theme choices (<@ ThemeChoices @>): a card per installed theme.
+     *
+     * @return string The HTML.
+     */
+    static function getThemeChoices()
+    {
+        $cur = self::getCurrentTheme();
+        $out = '';
+        foreach (self::ExecuteStylesList() as $t) {
+            $n = count(self::ExecuteCSSList($t['name']));
+            $out .= '<label class="tm-theme"><input type="radio" name="inTheme" value="' . self::h($t['name']) . '"' . ($t['name'] === $cur ? ' checked' : '') . '>'
+                . '<span class="tm-theme-art" aria-hidden="true"><i></i><i></i><i></i></span><b>' . self::h($t['name']) . '</b>'
+                . '<small>' . ($n > 1 ? $n . ' ' . self::t('variations') : self::t('one look')) . '</small></label>';
         }
-        return $html;
+        return $out;
     }
 
     /**
-     * Template value <@ SelectCSSMenu @>: the <option> list of variations.
+     * The variation choices of every theme (<@ CSSChoices @>), each theme's in its own group (the script shows the chosen theme's).
      *
-     * @return string The HTML options, the current variation selected.
+     * @return string The HTML.
      */
-    static function getSelectCSSMenu()
+    static function getCSSChoices()
     {
-        $html = "";
-        foreach (self::ExecuteCSSList() as $css) {
-            $label = htmlspecialchars(ui_template::CSSLabel($css['name']), ENT_QUOTES);
-            if ($css['name'] != self::getCurrentCSS()) {
-                $html .="<option value = \"" . $css['name'] . "\">" . $label . "</option>\n";
-            } else {
-                $html .="<option value = \"" . $css['name'] . "\" selected=\"selected\">" . $label . "</option>\n";
+        $curTheme = self::getCurrentTheme();
+        $curCss = (string) self::getCurrentCSS();
+        $out = '';
+        foreach (self::ExecuteStylesList() as $t) {
+            $list = self::ExecuteCSSList($t['name']);
+            $mine = $t['name'] === $curTheme;
+            $sel = $mine && in_array($curCss, array_column($list, 'name'), true) ? $curCss : ui_template::DefaultCSS($t['name']);
+            $cards = '';
+            foreach ($list as $c) {
+                $help = self::CSSHelp($c['name']);
+                $cards .= '<label class="tm-var tm-v-' . self::h(strtolower($c['name'])) . '"><input type="radio" name="inCSS_' . self::h($t['name']) . '" value="' . self::h($c['name']) . '"' . ($c['name'] === $sel ? ' checked' : '') . '>'
+                    . '<span class="tm-swatch" aria-hidden="true"><i></i><i></i><i></i></span><b>' . self::h(ui_language::translate(ui_template::CSSLabel($c['name']))) . '</b>'
+                    . ($help !== '' ? '<small>' . self::t($help) . '</small>' : '') . '</label>';
             }
+            $out .= '<div class="tm-vars" data-theme="' . self::h($t['name']) . '"' . ($mine ? '' : ' hidden') . '>'
+                . ($cards !== '' ? $cards : '<p class="tm-sub">' . self::t('This theme has one look.') . '</p>') . '</div>';
         }
-        return $html;
+        return $out;
     }
 
     /**
-     * Template flag <% if IsSelectCSS %>: does the current theme have more than one variation?
+     * Who the choice reaches (<@ Reach @>): the account and its clients, and how many of them chose their own look in My Account.
      *
-     * @global runtime_controller $controller The request controller (not used).
-     * @return bool
+     * @global db_driver $zdbh The panel's database connection.
+     * @return string The HTML.
      */
-    static function getIsSelectCSS()
+    static function getReach()
     {
-        global $controller;
-        // Whenever the current theme has more than one variation (for example Modern:
-        // Light and Dark), so it can be switched without choosing the theme again
-        return count(self::ExecuteCSSList()) > 1;
+        global $zdbh;
+        $me = (int) ctrl_users::GetUserDetail()['userid'];
+        $q = $zdbh->prepare("SELECT COUNT(*) FROM x_accounts WHERE ac_reseller_fk = :u AND ac_id_pk <> :u2 AND ac_deleted_ts IS NULL");
+        $q->execute(array(':u' => $me, ':u2' => $me));
+        $n = (int) $q->fetchColumn();
+        $own = 0;
+        if ((int) $zdbh->query("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'x_user_styles'")->fetchColumn() > 0) {
+            $q = $zdbh->prepare("SELECT COUNT(*) FROM x_user_styles s JOIN x_accounts a ON a.ac_id_pk = s.us_acc_fk WHERE a.ac_reseller_fk = :u AND a.ac_id_pk <> :u2 AND a.ac_deleted_ts IS NULL");
+            $q->execute(array(':u' => $me, ':u2' => $me));
+            $own = (int) $q->fetchColumn();
+        }
+        $mine = ui_template::GetStylePref($me);
+        return '<p class="tm-reach"><b>' . self::t('You and your') . ' ' . $n . ' ' . self::t($n === 1 ? 'client' : 'clients') . '</b> '
+            . self::t('get this look. Each person can still pick Light, Dark or Auto for themselves in My Account.') . '</p>'
+            . ($own ? '<p class="tm-sub">' . $own . ' ' . self::t($own === 1 ? 'client has chosen its own appearance there; it keeps it.' : 'clients have chosen their own appearance there; they keep it.') . '</p>' : '')
+            . ($mine !== '' ? '<p class="tm-sub">' . self::t('You chose') . ' <b>' . self::h(ui_language::translate(ui_template::CSSLabel($mine))) . '</b> ' . self::t('for yourself in My Account, so your own panel keeps that.') . '</p>' : '');
     }
 
     /**
-     * Handle the theme form: save the theme and redirect, then exit.
-     *
-     * Redirects with selectcss=true when the theme has several variations, else saved=true.
+     * Handle the form: save the theme and its variation for the account and its clients, then back with saved=true.
      *
      * @global runtime_controller $controller The request controller.
      * @return void Always ends with exit.
@@ -237,22 +285,24 @@ class module_controller extends ctrl_module
         $formvars = $controller->GetAllControllerRequests('FORM');
         // Only one of the installed themes (the name is used as a folder to include
         // templates from, so "../" could run files from anywhere)
-        if (!isset($formvars['inTheme']) || ctrl_users::SafeTheme($formvars['inTheme']) !== (string) $formvars['inTheme'] || $formvars['inTheme'] === '') {
+        $theme = isset($formvars['inTheme']) ? (string) $formvars['inTheme'] : '';
+        if ($theme === '' || ctrl_users::SafeTheme($theme) !== $theme) {
             header("location: ./?module=" . $controller->GetCurrentModule());
             exit;
         }
-        self::ExecuteUpdateTheme($currentuser['userid'], $formvars['inTheme']);
-        if (count(self::ExecuteCSSList($formvars['inTheme'])) > 1) {
-            header("location: ./?module=" . $controller->GetCurrentModule() . "&selectcss=true");
-        } else {
-            self::ExecuteUpdateCSS($currentuser['userid'], "");
-            header("location: ./?module=" . $controller->GetCurrentModule() . "&saved=true");
+        $list = array_column(self::ExecuteCSSList($theme), 'name');
+        $css = isset($formvars['inCSS_' . $theme]) ? (string) $formvars['inCSS_' . $theme] : (isset($formvars['inCSS']) ? (string) $formvars['inCSS'] : '');
+        if (!in_array($css, $list, true)) {
+            $css = $list ? ui_template::DefaultCSS($theme) : '';
         }
+        self::ExecuteUpdateTheme($currentuser['userid'], $theme);
+        self::ExecuteUpdateCSS($currentuser['userid'], $css);
+        header("location: ./?module=" . $controller->GetCurrentModule() . "&saved=true");
         exit;
     }
 
     /**
-     * Handle the variation form: save it, redirect with saved=true and exit.
+     * The old second form (a variation alone): save it for the account and its clients.
      *
      * @global runtime_controller $controller The request controller.
      * @return void Always ends with exit.
@@ -262,12 +312,10 @@ class module_controller extends ctrl_module
         global $controller;
         runtime_csfr::Protect();
         $currentuser = ctrl_users::GetUserDetail();
-        $formvars = $controller->GetAllControllerRequests('FORM');
-        if (!isset($formvars['inCSS']) || !preg_match('/^[A-Za-z0-9_-]{1,64}$/', (string) $formvars['inCSS'])) {
-            header("location: ./?module=" . $controller->GetCurrentModule());
-            exit;
+        $css = (string) $controller->GetControllerRequest('FORM', 'inCSS');
+        if (in_array($css, array_column(self::ExecuteCSSList(), 'name'), true)) {
+            self::ExecuteUpdateCSS($currentuser['userid'], $css);
         }
-        self::ExecuteUpdateCSS($currentuser['userid'], $formvars['inCSS']);
         header("location: ./?module=" . $controller->GetCurrentModule() . "&saved=true");
         exit;
     }
@@ -281,13 +329,8 @@ class module_controller extends ctrl_module
     static function getResult()
     {
         global $controller;
-        $currentuser = ctrl_users::GetUserDetail();
-        $urlvars = $controller->GetAllControllerRequests('URL');
-        if (isset($urlvars['saved'])) {
-            return ui_sysmessage::shout(ui_language::translate("Your theme configuration has been saved and has been updated for all clients!"), "zannounceok");
-        }
-        if (isset($urlvars['selectcss'])) {
-            return ui_sysmessage::shout(ui_language::translate("This theme has more than one variation, please choose a variation you'd like to use.."), "zannounceerror");
+        if ($controller->GetControllerRequest('URL', 'saved')) {
+            return ui_sysmessage::shout(ui_language::translate('Saved: your clients see the new look on their next page.'), 'zannounceok');
         }
         return false;
     }

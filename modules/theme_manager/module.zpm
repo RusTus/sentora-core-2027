@@ -1,57 +1,38 @@
 <div class="zmodule_content panel" id="zmodule_header_<@ ModuleName @>">
     <div class="panel-heading">
         <img src="<@ ModuleIcon @>" width="35" height="35" border="0" alt="<@ ModuleName @>">
-
-        <div class="zmodule_title">
-            <@ ModuleName @>
-        </div>
-
-        <div class="zmodule_desc" id="zmodule_desc_<@ ModuleName @>"><p><: As a reseller you can configure theme settings for your clients. If the theme you select has multiple CSS versions you will be prompted for which theme 'version' you would like to use after you 'save' the changes. :></p></div>
-
+        <div class="zmodule_title"><@ ModuleName @></div>
+        <div class="zmodule_desc" id="zmodule_desc_<@ ModuleName @>"><: Choose how the panel looks for you and your clients. :></div>
     </div>
-
     <@ Result @>
+    <link rel="stylesheet" href="modules/theme_manager/assets/themes.css">
 
-
-    <div class="zform_wrapper">
-        <h2><: Select a theme :></h2>
-        <form action="./?module=theme_manager&action=SaveTheme" method="post">
-            <table class="table table-striped">
-                <tr>
-                    <th><: Theme name :>:</th>
-                    <td><select name = "inTheme" id="inTheme">
-                            <@ SelectThemeMenu @>
-                        </select></td>
-                </tr>
-                <tr>
-                    <th colspan="2" align="right">
-                        <button class="button-loader btn btn-primary" type="submit" ><: Save :></button>
-                    </th>
-                </tr>
-            </table>
-            <@ CSFR_Tag @>
-        </form>
-    </div>
-
-    <% if IsSelectCSS %>
-    <div class="zform_wrapper">
-        <h2><: Theme variation :></h2>
-        <form action="./?module=theme_manager&action=SaveCSS" method="post">
-            <table class="table table-striped">
-                <tr>
-                    <th><: Theme variation :>:</th>
-                    <td><select name = "inCSS" id="inCSS">
-                            <@ SelectCSSMenu @>
-                        </select></td>
-                </tr>
-                <tr>
-                    <th colspan="2" align="right">
-                        <button class="button-loader btn btn-primary" type="submit" ><: Update :></button>
-                    </th>
-                </tr>
-            </table>
-            <@ CSFR_Tag @>
-        </form>
-    </div>
-    <% endif %>
+    <form class="tm" id="tm" action="./?module=theme_manager&amp;action=SaveTheme" method="post">
+        <div class="tm-main">
+            <div class="tm-box">
+                <h4><: Theme :></h4>
+                <div class="tm-themes"><@ ThemeChoices @></div>
+            </div>
+            <div class="tm-box">
+                <h4><: Appearance :></h4>
+                <p class="tm-sub tm-lead"><: The look your clients start with. :></p>
+                <@ CSSChoices @>
+            </div>
+            <div class="tm-foot"><button class="btn btn-primary" type="submit"><: Save for me and my clients :></button></div>
+        </div>
+        <aside class="tm-box tm-side"><h4><: Who gets it :></h4><@ Reach @></aside>
+        <@ CSFR_Tag @>
+    </form>
 </div>
+<script>
+(function () {
+    'use strict';
+    var tm = document.getElementById('tm'); if (!tm) { return; }
+    var show = function () {
+        var t = tm.querySelector('input[name=inTheme]:checked');
+        Array.prototype.forEach.call(tm.querySelectorAll('.tm-vars'), function (v) { v.hidden = !t || v.getAttribute('data-theme') !== t.value; });
+    };
+    Array.prototype.forEach.call(tm.querySelectorAll('input[name=inTheme]'), function (r) { r.addEventListener('change', show); });
+    show();
+})();
+</script>
