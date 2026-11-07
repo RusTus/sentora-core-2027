@@ -1,23 +1,89 @@
 <div class="zmodule_content panel" id="zmodule_header_<@ ModuleName @>">
     <div class="panel-heading">
         <img src="<@ ModuleIcon @>" width="35" height="35" border="0" alt="<@ ModuleName @>">
+        <div class="zmodule_title"><@ ModuleName @></div>
+        <div class="zmodule_desc" id="zmodule_desc_<@ ModuleName @>"><@ ModuleDesc @></div>
+    </div>
+    <@ Result @>
+    <link rel="stylesheet" href="modules/cron/assets/cron.css">
 
-        <div class="zmodule_title">
-            <@ ModuleName @>
+    <div class="cr" id="cr" data-delete="<: Delete this task? It stops within 5 minutes. :>">
+        <@ Summary @>
+
+        <div class="cr-card">
+            <h4><: Your tasks :></h4>
+            <div class="cr-tasks"><@ Tasks @></div>
         </div>
 
-        <div class="zmodule_desc" id="zmodule_desc_<@ ModuleName @>"><@ ModuleDesc @></div>
-
+        <div class="cr-card" id="new">
+            <h4><: Schedule a script :></h4>
+            <% if CanAdd %>
+            <form id="cr-form" class="cr-new" method="post" action="./?module=cron&amp;action=CreateCron">
+                <div class="cr-step">
+                    <span class="cr-num">1</span>
+                    <div class="cr-step-body">
+                        <span class="cr-label"><: The PHP script to run :></span>
+                        <p class="cr-sub"><: Open your folders and click a .php file. Greyed-out files have spaces or other characters a task can not use in their name or folder. :></p>
+                        <div class="cr-tree" id="cr-tree" data-url="modules/cron/code/files.php" data-loading="<: Loading... :>" data-none="<: no PHP files here :>" data-bad="<: Can not be scheduled: use only letters, digits, dots, dashes and underscores in its folder and file names :>">
+                            <div class="cr-tree-msg"><: Loading... :></div>
+                        </div>
+                        <div class="cr-chosen"><span><: Chosen :></span><code id="cr-chosen" class="is-empty"><: nothing yet :></code></div>
+                        <input type="hidden" name="inScript" id="cr-path" value="">
+                    </div>
+                </div>
+                <div class="cr-step">
+                    <span class="cr-num">2</span>
+                    <div class="cr-step-body">
+                        <span class="cr-label"><: How often :></span>
+                        <@ NewTimings @>
+                    </div>
+                </div>
+                <div class="cr-step">
+                    <span class="cr-num">3</span>
+                    <div class="cr-step-body">
+                        <label class="cr-label" for="cr-desc"><: Description :> <small><: optional :></small></label>
+                        <input class="form-control" type="text" id="cr-desc" name="inDescription" maxlength="100" placeholder="<: for example: clear the cache :>">
+                    </div>
+                </div>
+                <div class="cr-foot">
+                    <@ CSFR_Tag @><button class="btn btn-primary" type="submit" id="cr-submit" disabled><: Schedule :></button>
+                    <span class="cr-hint"><: The script runs as your account, with its domain's PHP version, and can only use files in your account. It starts within 5 minutes. :></span>
+                </div>
+            </form>
+            <% else %>
+            <p class="cr-sub"><: You have the most tasks an account can have ( :><@ MaxJobs @><: ). Delete one to schedule another. :></p>
+            <% endif %>
+        </div>
     </div>
-
-    <@ Result @>
-
-    <div class="zgrid_wrapper">
-        <@ Crons @>
-    </div>
-
-    <div class="zform_wrapper">
-        <@ CreateCron @>
-    </div>
-
 </div>
+<script>
+(function () {
+    'use strict';
+    var cr = document.getElementById('cr'); if (!cr) { return; }
+    // Output and Change open in place
+    Array.prototype.forEach.call(cr.querySelectorAll('.cr-task'), function (task) {
+        var panels = { out: task.querySelector('.cr-out'), edit: task.querySelector('.cr-edit') };
+        Array.prototype.forEach.call(task.querySelectorAll('.cr-toggle'), function (a) {
+            a.addEventListener('click', function (e) {
+                var p = panels[a.getAttribute('data-panel')]; if (!p) { return; }
+                e.preventDefault();
+                var open = p.hidden;
+                Object.keys(panels).forEach(function (k) { if (panels[k]) { panels[k].hidden = true; } });
+                p.hidden = !open;
+                Array.prototype.forEach.call(task.querySelectorAll('.cr-toggle'), function (b) { b.classList.toggle('active', !panels[b.getAttribute('data-panel')].hidden); });
+                if (open && a.getAttribute('data-panel') === 'out') { var pre = p.querySelector('pre'); pre.scrollTop = pre.scrollHeight; }
+            });
+            if (panels[a.getAttribute('data-panel')] && !panels[a.getAttribute('data-panel')].hidden) { a.classList.add('active'); }
+        });
+        var cancel = task.querySelector('.cr-cancel');
+        if (cancel) { cancel.addEventListener('click', function () { panels.edit.hidden = true; task.querySelector('[data-panel=edit]').classList.remove('active'); }); }
+        var del = task.querySelector('.cr-del');
+        del.addEventListener('submit', function (e) { if (!window.confirm(cr.getAttribute('data-delete'))) { e.preventDefault(); } });
+        var out = panels.out && !panels.out.hidden ? panels.out.querySelector('pre') : null;
+        if (out) { out.scrollTop = out.scrollHeight; }
+    });
+    var open = cr.querySelector('.cr-panel:not([hidden])');
+    if (open) { open.closest('.cr-task').scrollIntoView({ block: 'center' }); }
+})();
+</script>
+<script src="modules/cron/assets/files.js"></script>
