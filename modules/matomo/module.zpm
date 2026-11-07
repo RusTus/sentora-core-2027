@@ -5,21 +5,94 @@
         <div class="zmodule_desc" id="zmodule_desc_<@ ModuleName @>"><@ ModuleDesc @></div>
     </div>
     <@ Result @>
-    <div class="zgrid_wrapper">
+    <link rel="stylesheet" href="modules/matomo/assets/matomo.css">
+
+    <div class="mt" id="mt">
         <% if IsNotInstalled %>
-        <div class="alert alert-warning"><: Matomo is not set up on this server. :></div>
+        <div class="mt-card mt-state">
+            <svg class="mt-ico-lg warn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
+            <b><: Matomo is not set up on this server :></b>
+            <span><: The Sentora installer sets it up in etc/apps/matomo. :></span>
+        </div>
         <% endif %>
         <% if IsInstalled %>
-        <p><: Every domain starts with visits from the web server logs, imported every hour. For more detail (time on page, screen sizes, live visitors) add the tracking code to your pages and switch the domain to it. :></p>
-        <table class="table table-striped">
-            <tr><th><: Domain :></th><th><: Visits from :></th><th></th></tr>
-            <@ DomainRows @>
-        </table>
-        <@ Code @>
-        <@ Frame @>
+        <% if Showing %>
+        <div class="mt-card mt-bar"><@ ViewerBar @></div>
+        <div class="mt-frame-wrap"><@ Frame @></div>
+        <p class="mt-note"><: This is Matomo's own page, opened with your view-only Matomo user: it shows only your domains. Use the date and period at the top to look further back. :></p>
+        <% endif %>
+        <% if Listing %>
+        <div class="mt-tiles"><@ Summary @></div>
+        <div class="mt-card">
+            <div class="mt-head"><div><h4><: Your domains :></h4>
+                <p class="mt-sub"><: Every domain starts with visits from the web server logs, imported every hour. For more detail (time on page, screen sizes, live visitors) add the tracking code to your pages and switch the domain to it. :></p></div>
+                <input type="search" class="form-control mt-findlist" placeholder="<: Find a domain :>" aria-label="<: Find a domain :>" hidden></div>
+            <div class="mt-doms"><@ DomainRows @></div>
+            <p class="mt-empty mt-nomatch" hidden><: No domain matches. :></p>
+        </div>
+        <% endif %>
         <% if IsAdmin %>
-        <p class="text-muted"><: Administrators: the full Matomo (all sites, settings) is at :> <a href="<@ MatomoUrl @>" target="_blank" rel="noopener"><@ MatomoUrl @></a> <: with the Matomo super user from the installer's password list. :></p>
+        <div class="mt-card mt-admin">
+            <svg class="mt-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            <span><: Administrators: the full Matomo (all sites, settings) is at :> <a href="<@ MatomoUrl @>" target="_blank" rel="noopener"><@ MatomoUrl @></a>, <: with the Matomo super user from the installer's password list. :></span>
+        </div>
         <% endif %>
         <% endif %>
     </div>
 </div>
+<script>
+(function () {
+    'use strict';
+    var mt = document.getElementById('mt'); if (!mt) { return; }
+    var each = function (sel, fn) { Array.prototype.forEach.call(mt.querySelectorAll(sel), fn); };
+
+    // a domain's tracking code opens in place
+    each('.mt-dom', function (dom) {
+        var b = dom.querySelector('.mt-code-btn'); if (!b) { return; }
+        b.addEventListener('click', function () { var o = !dom.classList.contains('open'); dom.classList.toggle('open', o); b.setAttribute('aria-expanded', o ? 'true' : 'false'); });
+        dom.querySelector('.mt-src').addEventListener('submit', function () { if (window.Sentora && Sentora.loader) { Sentora.loader.showLoader(); } });
+    });
+    var open = mt.querySelector('.mt-dom.open'); if (open) { open.scrollIntoView({ block: 'center' }); }
+
+    // Copy buttons: the code, address or site ID beside them
+    each('.mt-copy', function (b) {
+        b.addEventListener('click', function () {
+            var box = b.closest('.mt-kv') || b.closest('.mt-snippet');
+            var text = (box.querySelector('pre') || box.querySelector('code')).textContent;
+            var done = function () { var old = b.textContent; b.textContent = b.getAttribute('data-done'); b.classList.add('done'); setTimeout(function () { b.textContent = old; b.classList.remove('done'); }, 1500); };
+            if (navigator.clipboard && window.isSecureContext) { navigator.clipboard.writeText(text).then(done, function () {}); return; }
+            var ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select();
+            try { document.execCommand('copy'); done(); } catch (e) {} document.body.removeChild(ta);
+        });
+    });
+
+    // with many domains, a search
+    var doms = mt.querySelectorAll('.mt-dom'), find = mt.querySelector('.mt-findlist');
+    if (find && doms.length > 6) {
+        find.hidden = false;
+        find.addEventListener('input', function () {
+            var q = find.value.trim().toLowerCase(), n = 0;
+            Array.prototype.forEach.call(doms, function (d) { var on = q === '' || d.getAttribute('data-s').indexOf(q) >= 0; d.hidden = !on; if (on) { n++; } });
+            mt.querySelector('.mt-nomatch').hidden = n > 0;
+        });
+    }
+
+    // the domain picker above the reports
+    var pick = mt.querySelector('.mt-pick'); if (!pick) { return; }
+    var btn = pick.querySelector('.mt-pick-btn'), pop = pick.querySelector('.mt-pop'), pf = pick.querySelector('.mt-find'), items = pick.querySelectorAll('.mt-item');
+    pick.querySelector('.mt-plain').hidden = true; btn.hidden = false;
+    var filter = function () {
+        var q = pf.value.trim().toLowerCase(), n = 0;
+        Array.prototype.forEach.call(items, function (a) { var on = q === '' || a.getAttribute('data-s').indexOf(q) >= 0; a.parentNode.hidden = !on; if (on) { n++; } });
+        pick.querySelector('.mt-none').hidden = n > 0;
+    };
+    var show = function (on) { pop.hidden = !on; btn.setAttribute('aria-expanded', on ? 'true' : 'false'); if (on) { pf.value = ''; filter(); pf.focus(); } };
+    btn.addEventListener('click', function () { show(pop.hidden); });
+    pf.addEventListener('input', filter);
+    pf.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { var f = Array.prototype.filter.call(items, function (a) { return !a.parentNode.hidden; })[0]; if (f) { window.location = f.href; } e.preventDefault(); }
+    });
+    pop.addEventListener('keydown', function (e) { if (e.key === 'Escape') { show(false); btn.focus(); } });
+    document.addEventListener('click', function (e) { if (!pick.contains(e.target)) { show(false); } });
+})();
+</script>
