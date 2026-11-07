@@ -1,490 +1,185 @@
-<style>
-
-/* Style all input fields */
-input {
-  width: 100%;
-  padding: 12px;
-  border: 1px solid var(--sn-line, #ccc);
-  border-radius: 4px;
-  box-sizing: border-box;
-  margin-top: 6px;
-  margin-bottom: 16px;
-}
-
-/* Style the submit button */
-input[type=submit] {
-  background-color: var(--sn-ok, #4CAF50);
-  color: white;
-}
-
-/* tg - input field overflow fix */
-#inUserName {
-  width: 85%;
-}
-
-/* Style the container for inputs */
-.check_container {
-  background-color: var(--sn-soft, #f1f1f1);
-  padding: 0px;
-}
-
-/* The message box is shown when the user clicks on the password field */
-#message {
-  display:none;
-  background: var(--sn-soft, #f1f1f1);
-  color: var(--sn-ink, #000);
-  position: relative;
-  padding: 20px;
-  margin-top: 5px;
-}
-
-#message p {
-  padding: 0px 35px;
-  font-size: 14px;
-}
-
-/* Add a green text color and a checkmark when the requirements are right */
-.valid {
-  color: var(--sn-ok, green);
-}
-
-.valid:before {
-  position: relative;
-  left: -35px;
-  content: "\2714";
-}
-
-/* Add a red text color and an "x" icon when the requirements are wrong */
-.invalid {
-  color: var(--sn-bad, red);
-}
-
-.invalid:before {
-  position: relative;
-  left: -35px;
-  content: "\2718";
-}
-
-</style>
-
 <div class="zmodule_content panel" id="zmodule_header_<@ ModuleName @>">
     <div class="panel-heading">
         <img src="<@ ModuleIcon @>" width="35" height="35" border="0" alt="<@ ModuleName @>">
-
-        <div class="zmodule_title">
-            <@ ModuleName @>
-        </div>
-
+        <div class="zmodule_title"><@ ModuleName @></div>
         <div class="zmodule_desc" id="zmodule_desc_<@ ModuleName @>"><@ ModuleDesc @></div>
-
     </div>
-
     <@ Result @>
+    <link rel="stylesheet" href="modules/mysql_users/assets/mysql_users.css">
 
-    <% if isDeleteUser %>
-    <div class="zform_wrapper alert alert-danger">
-        <h2><: Delete User :>: <@ EditCurrentUserName @> ?</h2>
-        <p><: Please confirm that you want to delete this MySQL user. :></p>
-        <form action="./?module=mysql_users&action=ConfirmDeleteUser" method="post">
-            <table class="none" cellpadding="0" cellspacing="0">
-                <tr>
-                    <td colspan="2" align="right">
-                        <input type="hidden" name="inDelete" value="<@ EditCurrentUserID @>">
-                        <button class="button-loader delete btn btn-danger" type="submit" ><: Delete :></button>
-                        <button class="button-loader btn btn-default" type="button" onclick="window.location.href='./?module=mysql_users';return false;"><: Cancel :></button>
-                    </td>
-                </tr>
-            </table>
+    <div class="mu" id="mu">
+        <@ SecretCard @>
+
+        <% if isDeleteUser %>
+        <form class="mu-card mu-confirm" action="./?module=mysql_users&amp;action=ConfirmDeleteUser" method="post">
+            <h4><svg class="mu-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg><: Delete the MySQL user :> <code><@ EditCurrentUserName @></code>?</h4>
+            <@ DeleteDetails @>
+            <div class="mu-foot"><input type="hidden" name="inDelete" value="<@ EditCurrentUserID @>">
+                <button class="btn btn-danger" type="submit"><: Delete :></button>
+                <a class="btn btn-default" href="./?module=mysql_users"><: Cancel :></a></div>
             <@ CSFR_Tag @>
         </form>
-    </div>
-    <% endif %>
-
-    <% if isEditUser %>
-    <div class="zgrid_wrapper">
-        <h2><: Databases for user :>: <@ EditCurrentUserName @></h2>
-        <% if UserDatabaseList %>
-        <form action="./?module=mysql_users&action=RemoveDB" method="post">
-            <table class="table table-striped">
-                <tr>
-                    <th><: Database name :></th>
-                    <th><: Remove from user :></th>
-                </tr>
-                <% loop UserDatabaseList %>
-                <tr>
-                    <td><& mmdbname &></td>
-                    <td><button class="button-loader delete btn btn-danger" type="submit" name="inRemove_<& mmid &>" id="inRemove_<& mmid &>" value="<& mmid &>"><: Remove database :></button></td>
-                </tr>
-                <% endloop %>
-                <input type="hidden" name="inUser" value="<@ EditCurrentUserID @>">
-            </table>
-            <@ CSFR_Tag @>
-        </form>
-        <% else %>
-        <: This user currently has no databases. Assign a database using the form below. :>
         <% endif %>
 
-        <p>&nbsp;</p>
+        <% if isEditUser %>
+        <div class="mu-card mu-edit-head">
+            <a href="./?module=mysql_users" class="btn btn-default btn-sm mu-back"><svg class="mu-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg><: All MySQL users :></a>
+            <div class="mu-title"><span class="mu-avatar lg" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></span>
+                <div><small><: MySQL user :></small><div class="mu-name big"><@ EditNameHtml @> <@ EditAccess @></div></div></div>
+        </div>
 
-        <h2><: Add Database :></h2>
-        <form action="./?module=mysql_users&action=AddDB" method="post">
-            <table class="table table-striped">
-                <tr>
-                    <th nowrap="nowrap"><: Database :>:</th>
-                    <td width="250px">
-                        <select name="inDatabase" id="inDatabase">
-                            <option value="" selected="selected">-- Select a database --</option>
-                            <% if DatabaseList %>
+        <div class="mu-cols">
+            <div class="mu-card">
+                <h4><: Databases it can use :></h4>
+                <form action="./?module=mysql_users&amp;show=Edit&amp;other=<@ EditCurrentUserID @>&amp;action=RemoveDB" method="post" class="mu-dblist">
+                    <@ UserDatabaseRows @>
+                    <input type="hidden" name="inUser" value="<@ EditCurrentUserID @>">
+                    <@ CSFR_Tag @>
+                </form>
+                <% if CanAddDatabase %>
+                <form action="./?module=mysql_users&amp;show=Edit&amp;other=<@ EditCurrentUserID @>&amp;action=AddDB" method="post" class="mu-add">
+                    <label class="mu-label" for="mu-adddb"><: Give it access to :></label>
+                    <div class="mu-inline"><select class="form-control" name="inDatabase" id="mu-adddb" required><option value=""><: Choose a database :></option><@ AddDatabaseOptions @></select>
+                        <input type="hidden" name="inUser" value="<@ EditCurrentUserID @>">
+                        <button class="btn btn-primary" type="submit"><: Add :></button></div>
+                    <@ CSFR_Tag @>
+                </form>
+                <% else %>
+                <p class="mu-sub"><: It can use all your databases. Make more in MySQL Databases. :></p>
+                <% endif %>
+            </div>
+
+            <div class="mu-card">
+                <h4><: New password :></h4>
+                <form action="./?module=mysql_users&amp;show=Edit&amp;other=<@ EditCurrentUserID @>&amp;action=ResetPW" method="post" class="mu-pwform">
+                    <div class="mu-pass"><input class="form-control" type="password" name="inResetPW" id="inPassword" value="" aria-label="<: New password :>" pattern="(?=.*\d)(?=.*[a-z])(?=.*[A-Z]).{<@ MinPassLength @>,}" autocomplete="new-password" required>
+                        <button type="button" class="btn btn-default mu-show" data-show="<: Show :>" data-hide="<: Hide :>"><: Show :></button>
+                        <button type="button" class="btn btn-default mu-gen" data-len="<@ MinPassLength @>"><: Make one :></button></div>
+                    <ul class="mu-rules">
+                        <li data-rule="lower"><: A lower case letter :></li>
+                        <li data-rule="upper"><: A capital letter :></li>
+                        <li data-rule="digit"><: A digit :></li>
+                        <li data-rule="len" data-len="<@ MinPassLength @>"><@ MinPassLength @> <: characters or more :></li>
+                    </ul>
+                    <p class="mu-sub"><: Applications that log in with this user need the new password too. :></p>
+                    <input type="hidden" name="inUser" value="<@ EditCurrentUserID @>">
+                    <div class="mu-foot"><button class="btn btn-primary" type="submit"><: Save password :></button></div>
+                    <@ CSFR_Tag @>
+                </form>
+            </div>
+        </div>
+        <% endif %>
+
+        <% if isCreateUser %>
+        <div class="mu-tiles"><@ Summary @></div>
+
+        <div class="mu-card">
+            <div class="mu-head"><h4><: Your MySQL users :></h4>
+                <input type="search" class="form-control mu-find" placeholder="<: Find a user or database :>" aria-label="<: Find a user or database :>" hidden></div>
+            <% if UserList %>
+            <form action="./?module=mysql_users&amp;action=EditUser" method="post" class="mu-list">
+                <@ UserCards @>
+                <@ CSFR_Tag @>
+            </form>
+            <p class="mu-empty mu-nomatch" hidden><: No user matches. :></p>
+            <% else %>
+            <div class="mu-empty"><b><: You have no MySQL users yet :></b><span><: Applications log in to their database with a MySQL user: make one below. :></span></div>
+            <% endif %>
+        </div>
+
+        <div class="mu-card">
+            <h4><: Create a MySQL user :></h4>
+            <% if DatabaseList %>
+            <form action="./?module=mysql_users&amp;action=CreateUser" method="post" class="mu-create">
+                <div class="mu-grid">
+                    <div>
+                        <label class="mu-label" for="inUserName"><: User name :></label>
+                        <div class="mu-name-field"><span class="mu-pre"><@ CurrentUserName @>_</span>
+                            <input class="form-control" name="inUserName" type="text" id="inUserName" value="<@ PostedUserName @>" maxlength="<@ MaxCharAllowed @>" pattern="[A-Za-z0-9]([A-Za-z0-9_\-]*[A-Za-z0-9_])?" autocomplete="off" spellcheck="false" required></div>
+                        <p class="mu-sub mu-hint"><span class="mu-left" data-max="<@ MaxCharAllowed @>"></span> <: Letters, digits, dashes and underscores. :></p>
+                    </div>
+                    <div>
+                        <label class="mu-label" for="inDatabase"><: Database it can use :></label>
+                        <select class="form-control" name="inDatabase" id="inDatabase" required>
+                            <option value=""><: Choose a database :></option>
                             <% loop DatabaseList %>
                             <option value="<& mysqlid &>"><& mysqlname &></option>
                             <% endloop %>
-                            <% endif %>
                         </select>
-                    </td>
-                    <td>
-                        <input type="hidden" name="inUser" value="<@ EditCurrentUserID @>">
-                        <button class="button-loader btn btn-primary" type="submit" ><: Add Database :></button>
-                    </td>
-                </tr>
-            </table>
-            <@ CSFR_Tag @>
-        </form>
-
-        <p>&nbsp;</p>
-
-        <h2><: Reset Password :></h2>
-        <form action="./?module=mysql_users&action=ResetPW" method="post">
-            <table class="zform">
-                <tr>
-                    <th nowrap="nowrap"><: Password :>:</th>
-                    <td width="250px">
-                        <input class="inPassword" type="text" name="inResetPW" id="inPassword" value="" pattern="(?=.*\d)(?=.*[a-z])(?=.*[A-Z]).{<@ MinPassLength @>,}" required /><a href="#" class="link-password" id="generate" onclick="passwordShow(), check()" ><: Generate Password :></a>
-                    </td>
-					<td><input id="showPassword" type="checkbox" onclick="passwordShowHide()" >Show Password</td>
-					<td style="width:20px"></td>
-                    <td>
-                        <input type="hidden" name="inUser" value="<@ EditCurrentUserID @>">
-                        <button class="button-nonloader btn btn-primary" type="submit" ><: Save Password :></button>
-                        <button class="button-loader btn btn-default" type="button" onclick="window.location.href='./?module=mysql_users';return false;"><: Cancel :></button>
-                    </td>
-                </tr>
-            </table>
-			
-			<div class="check_container">
-				<div id="message">
-					<h4>Password must contain the following:</h4>
-					<p id="letter" class="invalid">A <b>lowercase</b> letter</p>
-					<p id="capital" class="invalid">A <b>capital (uppercase)</b> letter</p>
-					<p id="number" class="invalid">A <b>number</b></p>
-					<p id="length" class="invalid">Minimum <b><@ MinPassLength @> characters</b></p>
-				</div>
-			</div>
-			
-            <@ CSFR_Tag @>
-        </form>
-
-    </div>
-    <% endif %>
-
-    <div class="zgrid_wrapper">
-        <h2><: Current MySQL&reg; Users :></h2>
-        <% if UserList %>
-        <form action="./?module=mysql_users&action=EditUser" method="post">
-            <table class="table table-striped">
-                <tr>
-                    <th><: User name :></th>
-                    <th><: Access :></th>
-                    <th><: Databases :></th>
-                    <th></th>
-                </tr>
-                <% loop UserList %>
-                <tr>
-                    <td><& username &></td>
-                    <td><& accesshtml &></td>
-                    <td><& totaldb &></td>
-                    <td>
-                        <button class="button-loader btn btn-info" type="submit" name="inShow_<& userid &>" id="inShow_<& userid &>" value="<& userid &>"><: Show password :></button>
-                        <button class="button-loader btn btn-default" type="submit" name="inEdit_<& userid &>" id="inEdit_<& userid &>" value="<& userid &>"><: Edit :></button>
-                        <button class="button-loader delete btn btn-danger" type="submit" name="inDelete_<& userid &>" id="inDelete_<& userid &>" value="<& userid &>"><: Delete :></button>
-                    </td>
-                </tr>
-                <% endloop %>
-            </table>
-            <@ CSFR_Tag @>
-        </form>
-        <% else %>
-        <: You have no MySQL&reg; users at this time. Create a user using the form below. :>
+                        <p class="mu-sub mu-hint"><: More can be added afterwards. :></p>
+                    </div>
+                </div>
+                <span class="mu-label"><: It can connect from :></span>
+                <div class="mu-choices">
+                    <label class="mu-choice"><input type="radio" name="inAccess" value="1" checked><span><b><: Any address :></b><small><: This server and remote tools :></small></span></label>
+                    <label class="mu-choice"><input type="radio" name="inAccess" value="3"><span><b><: This server only :></b><small><: Websites on this server (localhost) :></small></span></label>
+                    <label class="mu-choice"><input type="radio" name="inAccess" value="2"><span><b><: One IP address :></b><small><: For example your office :></small></span></label>
+                </div>
+                <input type="text" class="form-control mu-ip" name="inAccessIP" id="inAccessIP" placeholder="<: IP address, for example 203.0.113.10 :>" aria-label="<: IP address :>" hidden>
+                <div class="mu-foot"><@ CSFR_Tag @><button class="btn btn-primary" type="submit"><: Create :></button>
+                    <span class="mu-sub"><: A strong password is made for it and shown once you create it. :></span></div>
+            </form>
+            <% else %>
+            <div class="mu-limit"><: Make a database first in MySQL Databases: a MySQL user is always made for a database. :></div>
+            <% endif %>
+        </div>
         <% endif %>
     </div>
-
-    <% if isCreateUser %>
-    <div class="zform_wrapper">
-        <table class="none" width="100%" cellborder="0" cellspacing="0">
-            <tr valign="top">
-                <td>
-                    <h2><: Create a new MySQL&reg; User :></h2>
-                    <form action="./?module=mysql_users&action=CreateUser" method="post">
-                        <table class="table table-striped">
-                            <tr>
-								<!-- TG - Added username prefix and available user name characters -->
-                                <th nowrap="nowrap">
-									<: User name :>:<br />
-									(<@ MaxCharAllowed @> <: Characters max :>)
-								</th>
-								<td nowrap="nowrap">
-									<@ CurrentUserName @>_<input maxlength="<@ MaxCharAllowed @>" name="inUserName" type="text" id="inUserName" size="30" />
-								</td>
-                            </tr>
-                            <tr>
-                                <th nowrap="nowrap"><: Map Database :>:</th>
-                                <td>
-                                    <select name="inDatabase" id="inDatabase">
-                                        <option value="" selected="selected">-- Select a database --</option>
-                                        <% if DatabaseList %>
-                                        <% loop DatabaseList %>
-                                        <option value="<& mysqlid &>"><& mysqlname &></option>
-                                        <% endloop %>
-                                        <% endif %>
-                                    </select>
-                                </td>
-                            </tr>
-                            <tr>
-                                <th nowrap="nowrap"><: Remote Access :>:</th>
-                                <td><input name="inAccess" type="radio" id="inAccess" value="1" onclick="hide_div('showaccess');" CHECKED />&nbsp;<: Allow from any IP :></td>
-                            </tr>
-                            <tr>
-                                <th>&nbsp;</th>
-                                <td><input name="inAccess" type="radio" id="inAccess" value="2" onclick="show_div('showaccess');" />&nbsp;<: Only from single IP :></td>
-                            </tr>
-                            <tr>
-                                <th>&nbsp;</th>
-                                <td>
-                                    <div id="showaccess" style="display:none;">
-                                        <input type="text" size="30" name="inAccessIP" id="inAccessIP" />
-                                    </div>
-                                </td>
-                            </tr>
-                            <tr>
-                                <th colspan="2" align="right">
-                                    <button class="button-loader btn btn-primary" type="submit" ><: Create :></button></th>
-                            </tr>
-                        </table>
-                        <@ CSFR_Tag @>
-                    </form>
-                </td>
-                <td align="right"><@ MysqlUsagepChart @></td>
-            </tr></table>
-    </div>
-    <% endif %>
-
 </div>
-
-<script type="text/javascript">
-    <!--
-    function show_div(id) {
-        var e = document.getElementById(id);
-        if(e.style.display == 'none')
-            e.style.display = 'block';
-    }
-    //-->
-</script>
-<script type="text/javascript">
-    <!--
-    function hide_div(id) {
-        var e = document.getElementById(id);
-        if(e.style.display == 'block')
-            e.style.display = 'none';
-    }
-    //-->
-</script>
-<script type="text/JavaScript">
-    $.extend({
-        password: function (length, special) {
-            var iteration = 0;
-            var password = "";
-			
-			var chars = "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-			var string_length = Math.max(12, <@ MinPassLength @>);
-			// Sentora: the browser's cryptographic generator, each character from the whole
-			// set (this used Math.random(), and only the digits 0-4); retried until it has a
-			// lower case letter, a capital and a digit
-			var randomstring = '';
-			var buf = new Uint32Array(1);
-			var limit = Math.floor(4294967296 / chars.length) * chars.length;
-			do {
-				randomstring = '';
-				while (randomstring.length < string_length) {
-					window.crypto.getRandomValues(buf);
-					if (buf[0] < limit) {
-						randomstring += chars.charAt(buf[0] % chars.length);
-					}
-				}
-			} while (!/[a-z]/.test(randomstring) || !/[A-Z]/.test(randomstring) || !/[0-9]/.test(randomstring));
-		
-		return (randomstring);
-			
-        }
-    });	
-	
-    $(document).ready(function() {
-		var ShowPass = false;
-        $('.link-password').click(function(e){
-            linkId = $(this).attr('id');
-            if (linkId == 'generate'){
-                password = $.password(<@ MinPassLength @>,false);
-                $('.inPassword').val(password);
-            }
-            e.preventDefault();
-        });
-		$('#btn_sh').click(function(e){
-		  if (!ShowPass)
-		  { 
-			  $('.passRow').css({'visibility': 'visible'});
-			  $('#btn_sh').innerHTML = 'Hide passwords';
-			  ShowPass = true;
-		  }
-		  else 
-		  {
-			  $('.passRow').css({'visibility': 'collapse'});
-			  $('#btn_sh').innerHTML = 'Show passwords';
-			  ShowPass = false;
-		  }
-		  e.preventDefault();
-		});
-		
-	  
-    });
-
-</script>
-
-<script type="text/JavaScript">
-	
-	var myInput = document.getElementById("inPassword");
-	var letter = document.getElementById("letter");
-	var capital = document.getElementById("capital");
-	var number = document.getElementById("number");
-	var length = document.getElementById("length");
-	
-	// When the user clicks on the password field, show the message box
-	myInput.onfocus = function() {
-	  	document.getElementById("message").style.display = "block";
-	}
-	
-	// When the user clicks outside of the password field, hide the message box
-	myInput.onblur = function() {
-	  	document.getElementById("message").style.display = "none";
-	}
-	
-	// When the user starts to type something inside the password field
-	myInput.onclick = function() {
-		  // Validate lowercase letters
-		  var lowerCaseLetters = /[a-z]/g;
-		  if(myInput.value.match(lowerCaseLetters)) {
-			letter.classList.remove("invalid");
-			letter.classList.add("valid");
-		  } else {
-			letter.classList.remove("valid");
-			letter.classList.add("invalid");
-	}
-	
-	  // Validate capital letters
-	  var upperCaseLetters = /[A-Z]/g;
-	  if(myInput.value.match(upperCaseLetters)) {
-			capital.classList.remove("invalid");
-			capital.classList.add("valid");
-	  } else {
-			capital.classList.remove("valid");
-			capital.classList.add("invalid");
-	  }
-	
-	  // Validate numbers
-	  var numbers = /[0-9]/g;
-	  if(myInput.value.match(numbers)) {
-			number.classList.remove("invalid");
-			number.classList.add("valid");
-	  } else {
-			number.classList.remove("valid");
-			number.classList.add("invalid");
-	  }
-	
-	  // Validate length
-	  if(myInput.value.length >= <@ MinPassLength @>) {
-			length.classList.remove("invalid");
-			length.classList.add("valid");
-	  } else {
-			length.classList.remove("valid");
-			length.classList.add("invalid");
-	  }
-	}
-	
-	
-	// When the user clicks inside the password field
-	myInput.onkeyup = function() {
-		  // Validate lowercase letters
-		  var lowerCaseLetters = /[a-z]/g;
-		  if(myInput.value.match(lowerCaseLetters)) {
-			letter.classList.remove("invalid");
-			letter.classList.add("valid");
-		  } else {
-			letter.classList.remove("valid");
-			letter.classList.add("invalid");
-	}
-	
-	  // Validate capital letters
-	  var upperCaseLetters = /[A-Z]/g;
-	  if(myInput.value.match(upperCaseLetters)) {
-			capital.classList.remove("invalid");
-			capital.classList.add("valid");
-	  } else {
-			capital.classList.remove("valid");
-			capital.classList.add("invalid");
-	  }
-	
-	  // Validate numbers
-	  var numbers = /[0-9]/g;
-	  if(myInput.value.match(numbers)) {
-			number.classList.remove("invalid");
-			number.classList.add("valid");
-	  } else {
-			number.classList.remove("valid");
-			number.classList.add("invalid");
-	  }
-	
-	  // Validate length
-	  if(myInput.value.length >= <@ MinPassLength @>) {
-			length.classList.remove("invalid");
-			length.classList.add("valid");
-	  } else {
-			length.classList.remove("valid");
-			length.classList.add("invalid");
-	  }
-	}
-	
-</script>
-
 <script>
-
-function passwordShowHide() {
-  var x = document.getElementById("inPassword");
-  if (x.type === "password") {
-    x.type = "text";
-  } else {
-    x.type = "password";
-  }
-}
-
-function passwordShow() {
-  var x = document.getElementById("inPassword");
-  if (x.type === "password") {
-    x.type = "text";
-  } 
-}
-
-function check() {
-  document.getElementById("showPassword").checked = true;
-}
-function uncheck() {
-  document.getElementById("showPassword").checked = false;
-}
-
+(function () {
+    'use strict';
+    var mu = document.getElementById('mu'); if (!mu) { return; }
+    var each = function (sel, fn) { Array.prototype.forEach.call(mu.querySelectorAll(sel), fn); };
+    // Copy
+    each('.mu-copy', function (b) {
+        b.addEventListener('click', function () {
+            var text = b.parentNode.querySelector('code').textContent;
+            var done = function () { var o = b.textContent; b.textContent = b.getAttribute('data-done'); b.classList.add('done'); setTimeout(function () { b.textContent = o; b.classList.remove('done'); }, 1500); };
+            if (navigator.clipboard && window.isSecureContext) { navigator.clipboard.writeText(text).then(done, function () {}); return; }
+            var ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select();
+            try { document.execCommand('copy'); done(); } catch (e) {} document.body.removeChild(ta);
+        });
+    });
+    // one IP address: its field
+    var ip = mu.querySelector('.mu-ip');
+    each('input[name=inAccess]', function (r) { r.addEventListener('change', function () { ip.hidden = r.value !== '2' || !r.checked; ip.required = !ip.hidden; if (!ip.hidden) { ip.focus(); } }); });
+    // characters left for the name
+    var name = mu.querySelector('#inUserName'), left = mu.querySelector('.mu-left');
+    if (name && left) {
+        var max = parseInt(left.getAttribute('data-max'), 10) || 0;
+        var upd = function () { name.value = name.value.replace(/\s+/g, ''); var n = max - name.value.length; left.textContent = n + ' / ' + max; left.classList.toggle('low', n < 4); };
+        name.addEventListener('input', upd); upd();
+    }
+    // new password: Show, Make one (the browser's secure random numbers) and the rules ticked as you type
+    var pw = mu.querySelector('#inPassword');
+    if (pw) {
+        var show = mu.querySelector('.mu-show'), gen = mu.querySelector('.mu-gen');
+        var vis = function (on) { pw.type = on ? 'text' : 'password'; show.textContent = show.getAttribute(on ? 'data-hide' : 'data-show'); };
+        var rules = function () {
+            var v = pw.value, ok = { lower: /[a-z]/.test(v), upper: /[A-Z]/.test(v), digit: /[0-9]/.test(v), len: v.length >= parseInt(mu.querySelector('[data-rule=len]').getAttribute('data-len'), 10) };
+            each('.mu-rules li', function (li) { li.classList.toggle('ok', !!ok[li.getAttribute('data-rule')]); });
+        };
+        show.addEventListener('click', function () { vis(pw.type === 'password'); });
+        gen.addEventListener('click', function () {
+            var chars = 'abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789', len = Math.max(16, parseInt(gen.getAttribute('data-len'), 10) || 0), out, buf = new Uint32Array(1), lim = Math.floor(4294967296 / chars.length) * chars.length;
+            do { out = ''; while (out.length < len) { window.crypto.getRandomValues(buf); if (buf[0] < lim) { out += chars.charAt(buf[0] % chars.length); } } }
+            while (!/[a-z]/.test(out) || !/[A-Z]/.test(out) || !/[0-9]/.test(out));
+            pw.value = out; vis(true); rules(); pw.select();
+        });
+        pw.addEventListener('input', rules); rules();
+    }
+    // Delete and Remove access ask first only on the confirmation page; the rest shows the loader
+    each('form', function (f) { f.addEventListener('submit', function () { if (window.Sentora && Sentora.loader) { Sentora.loader.showLoader(); } }); });
+    // with many users, a search
+    var users = mu.querySelectorAll('.mu-user'), find = mu.querySelector('.mu-find');
+    if (find && users.length > 6) {
+        find.hidden = false;
+        find.addEventListener('input', function () {
+            var q = find.value.trim().toLowerCase(), n = 0;
+            Array.prototype.forEach.call(users, function (u) { var on = q === '' || u.getAttribute('data-s').indexOf(q) >= 0; u.hidden = !on; if (on) { n++; } });
+            mu.querySelector('.mu-nomatch').hidden = n > 0;
+        });
+    }
+})();
 </script>

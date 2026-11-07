@@ -144,3 +144,5 @@ modules/sentoraconfig/assets/bar.gif
 modules/protected_directories/assets/tree.css
 # MySQL Databases: the old "unlimited" picture (the theme has its own)
 modules/mysql_databases/assets/unlimited.png
+# MySQL Users: the old "unlimited" picture (never shown since the theme has its own)
+modules/mysql_users/assets/unlimited.png

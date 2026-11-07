@@ -1,0 +1,119 @@
+/* MySQL Users in the panel's style. Colours come from the theme's shared --sn-* variables
+   (etc/styles/THEMES.md), with these as the fallback, so it follows Light, Dark and Auto. */
+.mu { --mu-ink: var(--sn-ink, #1f2933); --mu-muted: var(--sn-muted, #6b7785); --mu-line: var(--sn-line, #e6e9ee);
+      --mu-card: var(--sn-card, #ffffff); --mu-bg: var(--sn-soft, #f4f6f9); --mu-field-line: var(--sn-line-strong, #cfd6de);
+      --mu-accent: var(--sn-accent, #447fb3); --mu-accent-soft: var(--sn-accent-soft, #e3edf6); --mu-bad: var(--sn-bad, #b42b27); --mu-ok: var(--sn-ok, #1e8a4c);
+      color: var(--mu-ink); background: var(--mu-bg); border-radius: 8px; padding: 18px; margin-top: 10px; }
+.mu * { box-sizing: border-box; }
+.mu [hidden] { display: none !important; }
+.mu-ico { width: 16px; height: 16px; flex: none; }
+.mu-ico-lg { width: 40px; height: 40px; padding: 8px; border-radius: 9px; flex: none; background: var(--mu-accent-soft); color: var(--mu-accent); }
+.mu-card { background: var(--mu-card); border-radius: 6px; box-shadow: 0 1px 3px rgba(20,30,40,0.08); padding: 16px 18px; margin-bottom: 14px; min-width: 0; }
+.mu-card:last-child { margin-bottom: 0; }
+.mu-card h4 { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0 0 12px; font-size: 15px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; }
+.mu-card h4 code { text-transform: none; letter-spacing: 0; font-size: 14px; }
+.mu-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.mu-find { max-width: 260px; margin-bottom: 10px; }
+.mu-sub { color: var(--mu-muted); font-size: 12px; margin: 8px 0 0; }
+.mu-hint { margin-top: 6px; }
+.mu-label { display: block; font-size: 13px; font-weight: 600; margin: 0 0 6px; }
+.mu-empty { display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; padding: 14px 10px; color: var(--mu-muted); font-size: 13px; margin: 0; }
+.mu-empty b { color: var(--mu-ink); font-size: 14px; }
+.mu-prefix { color: var(--mu-muted); }
+.mu-inline { display: flex; gap: 8px; flex-wrap: wrap; }
+.mu-inline .form-control { flex: 1 1 220px; min-width: 0; }
+.mu-foot { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--mu-line); }
+.mu-foot .mu-sub { margin: 0; }
+.mu-limit { padding: 10px 12px; border-radius: 6px; font-size: 13px; background: var(--sn-info-soft, #e4f1f8); border: 1px solid var(--sn-info-line, #b3d5e8); color: var(--sn-info, #2a5f80); }
+
+/* figures */
+.mu-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 14px; }
+.mu-tile { display: flex; gap: 12px; align-items: center; background: var(--mu-card); border-radius: 6px; box-shadow: 0 1px 3px rgba(20,30,40,0.08); padding: 14px 16px; min-width: 0; }
+.mu-tile b { display: block; font-size: 22px; line-height: 1.1; }
+.mu-tile span { display: block; font-size: 12px; color: var(--mu-muted); margin-top: 2px; }
+.mu-tile.warn .mu-ico-lg { background: var(--sn-warn-soft, #fff4d6); color: var(--sn-warn, #8f5b00); }
+.mu-tile.warn b { color: var(--sn-warn, #8f5b00); }
+
+/* users */
+.mu-list { display: grid; gap: 8px; margin: 0; }
+.mu-user { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border: 1px solid var(--mu-line); border-radius: 6px; }
+.mu-avatar { flex: none; width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--mu-accent-soft); color: var(--mu-accent); }
+.mu-avatar svg { width: 18px; height: 18px; }
+.mu-avatar.lg { width: 44px; height: 44px; }
+.mu-avatar.lg svg { width: 22px; height: 22px; }
+.mu-main { flex: 1; min-width: 0; }
+.mu-name { display: flex; align-items: center; gap: 4px 10px; flex-wrap: wrap; font-family: SFMono-Regular, Menlo, Consolas, monospace; font-size: 14px; overflow-wrap: anywhere; }
+.mu-name.big { font-size: 17px; }
+.mu-acc { font-family: inherit; font-size: 11px; font-weight: 600; padding: 1px 8px; border-radius: 10px; border: 1px solid; white-space: nowrap; }
+.mu-name .mu-acc { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.mu-acc.any { background: var(--sn-warn-soft, #fff4d6); color: var(--sn-warn, #8f5b00); border-color: var(--sn-warn-line, #f2cf7a); }
+.mu-acc.local { background: var(--sn-ok-soft, #e3f4ea); color: var(--mu-ok); border-color: var(--sn-ok-line, #a9dcbd); }
+.mu-acc.ip { background: var(--sn-info-soft, #e4f1f8); color: var(--sn-info, #2a5f80); border-color: var(--sn-info-line, #b3d5e8); }
+.mu-dbs { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
+.mu-db { font-size: 11px; font-family: SFMono-Regular, Menlo, Consolas, monospace; padding: 0 7px; border-radius: 9px; background: var(--mu-bg); border: 1px solid var(--mu-line); color: var(--mu-ink); }
+.mu-nodb { font-size: 12px; color: var(--sn-warn, #8f5b00); }
+.mu-act { display: flex; gap: 6px; flex-wrap: wrap; flex: none; }
+.mu-act .btn, .mu-back { display: inline-flex; align-items: center; gap: 6px; }
+.mu-del { padding-left: 8px; padding-right: 8px; }
+.mu-del:hover { color: var(--mu-bad) !important; border-color: var(--sn-bad-line, #f0a9a7) !important; }
+
+/* a password shown, or asked for */
+.mu-secret { border-left: 4px solid var(--mu-accent); }
+.mu-secret.new { border-left-color: #2db87d; }
+.mu-secret.new h4 .mu-ico { color: #2db87d; }
+.mu-secret .mu-sub { margin-top: 10px; }
+.mu-secret .mu-inline .form-control { max-width: 320px; }
+.mu-kv { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; font-size: 13px; }
+.mu-kv span { min-width: 90px; color: var(--mu-muted); font-size: 12px; }
+.mu-kv code { font-size: 14px; padding: 4px 10px; border-radius: 4px; background: var(--mu-bg); color: var(--mu-ink); border: 1px solid var(--mu-line); user-select: all; overflow-wrap: anywhere; }
+.mu-copy.done { background: #2db87d !important; border-color: #2db87d !important; color: #fff !important; }
+
+/* one user */
+.mu-edit-head { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; }
+.mu-title { display: flex; align-items: center; gap: 12px; }
+.mu-title small { display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: var(--mu-muted); }
+.mu-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; align-items: start; margin-bottom: 14px; }
+.mu-cols .mu-card { margin: 0; }
+.mu-dblist { display: grid; gap: 6px; margin: 0 0 14px; }
+.mu-dbrow { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--mu-line); border-radius: 6px; }
+.mu-dbico { color: var(--mu-accent); }
+.mu-dbname { flex: 1; min-width: 0; font-family: SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; overflow-wrap: anywhere; }
+.mu-all { font-size: 11px; color: var(--mu-muted); white-space: nowrap; }
+.mu-add { margin: 0; padding-top: 12px; border-top: 1px solid var(--mu-line); }
+.mu-pwform { margin: 0; }
+.mu-pass { display: flex; min-width: 0; }
+.mu-pass .form-control { flex: 1; min-width: 0; border-radius: 4px 0 0 4px; font-family: SFMono-Regular, Menlo, Consolas, monospace; }
+.mu-pass .btn { border-radius: 0; margin-left: -1px; }
+.mu-pass .btn:last-child { border-radius: 0 4px 4px 0; }
+.mu-rules { list-style: none; margin: 10px 0 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 12px; font-size: 12px; color: var(--mu-muted); }
+.mu-rules li::before { content: "\2715"; display: inline-block; width: 16px; color: var(--mu-bad); font-weight: 700; }
+.mu-rules li.ok { color: var(--mu-ok); }
+.mu-rules li.ok::before { content: "\2713"; color: var(--mu-ok); }
+
+/* create */
+.mu-create { margin: 0; }
+.mu-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px 20px; margin-bottom: 14px; }
+.mu-name-field { display: flex; min-width: 0; }
+.mu-pre { display: flex; align-items: center; padding: 0 10px; font-family: SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; color: var(--mu-muted); background: var(--mu-bg); border: 1px solid var(--mu-field-line); border-right: 0; border-radius: 4px 0 0 4px; white-space: nowrap; }
+.mu-name-field .form-control { border-radius: 0 4px 4px 0; font-family: SFMono-Regular, Menlo, Consolas, monospace; min-width: 0; }
+.mu-left { display: inline-block; font-weight: 700; color: var(--mu-ink); margin-right: 4px; }
+.mu-left.low { color: var(--sn-warn, #8f5b00); }
+.mu-choices { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.mu-choice { position: relative; margin: 0; cursor: pointer; font-weight: normal; }
+.mu-choice input { position: absolute; opacity: 0; }
+.mu-choice span { display: block; height: 100%; padding: 8px 12px; border: 1px solid var(--mu-field-line); border-radius: 6px; background: var(--mu-card); }
+.mu-choice b { display: block; font-size: 13px; }
+.mu-choice small { display: block; font-size: 11px; color: var(--mu-muted); }
+.mu-choice input:checked + span { border-color: var(--mu-accent); box-shadow: 0 0 0 1px var(--mu-accent); background: var(--mu-accent-soft); }
+.mu-choice input:focus-visible + span { outline: 2px solid var(--mu-accent); outline-offset: 2px; }
+.mu-ip { max-width: 320px; margin-top: 8px; }
+
+/* delete */
+.mu-confirm { border-left: 4px solid var(--mu-bad); }
+.mu-confirm h4 { text-transform: none; letter-spacing: 0; font-size: 17px; }
+.mu-confirm h4 .mu-ico { color: var(--mu-bad); width: 20px; height: 20px; }
+.mu-lose { margin: 0; padding-left: 20px; font-size: 13px; line-height: 1.5; }
+
+@media (max-width: 900px) { .mu-cols, .mu-grid { grid-template-columns: 1fr; } }
+@media (max-width: 760px) { .mu-tiles, .mu-choices { grid-template-columns: 1fr; } }
+@media (max-width: 640px) { .mu { padding: 12px; } .mu-card { padding: 14px 12px; } .mu-user { flex-wrap: wrap; } .mu-act { width: 100%; padding-left: 46px; } .mu-rules { grid-template-columns: 1fr; } }

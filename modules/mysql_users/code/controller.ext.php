@@ -326,6 +326,12 @@ class module_controller extends ctrl_module
         $currentuser = ctrl_users::GetUserDetail($uid);
         // Check for spaces and remove if found...
         $username = strtolower(str_replace(' ', '', $username));
+        // the part typed must start with a letter or digit, not end with a dash (the whole
+        // name is checked again with its prefix below)
+        if ($username !== '' && !preg_match('/^[a-z\d]([a-z\d_-]*[a-z\d_])?$/', $username)) {
+            self::$badname = true;
+            return false;
+        }
 		// tg - Add prefix to DB user name
 		$username = $currentuser['username'] . "_" . $username;
         // If errors are found, then exit before creating user...
@@ -774,7 +780,7 @@ class module_controller extends ctrl_module
             return false;
         }
 		// Check for password length...
-		if (strlen($password) < ctrl_options::GetSystemOption('password_minlength')) {
+		if (strlen($password) < (int) self::getMinPassLength()) { // the same minimum the form asks for
 			self::$badpasswordlength = true;
 			return false;
 		}
@@ -794,7 +800,8 @@ class module_controller extends ctrl_module
     static function IsValidUserName($username)
     {
 		// tg - Added regx [a-z\d_] to allow underscore
-        if (!preg_match('/^[a-z\d][a-z\d-][a-z\d_]{0,62}$/i', $username) || preg_match('/-$/', $username)) {
+        // letters, digits, '_' and '-' after the first character (this only let a dash be the second one)
+        if (!preg_match('/^[a-z\d][a-z\d_-]{0,62}$/i', $username) || preg_match('/-$/', $username)) {
             return false;
         } else {
 			// tg - Updated user name max size check
@@ -833,12 +840,15 @@ class module_controller extends ctrl_module
         runtime_csfr::Protect();
         $currentuser = ctrl_users::GetUserDetail();
         $formvars = $controller->GetAllControllerRequests('FORM');
-        if ($formvars['inAccess'] == 1) {
-            $access = "%";
+        $choice = isset($formvars['inAccess']) ? (string) $formvars['inAccess'] : '1';
+        if ($choice === '3') {
+            $access = 'localhost'; // this server only
+        } elseif ($choice === '2') {
+            $access = isset($formvars['inAccessIP']) ? trim((string) $formvars['inAccessIP']) : '';
         } else {
-            $access = $formvars['inAccessIP'];
+            $access = '%';
         }
-        if (self::ExecuteCreateUser($currentuser['userid'], $formvars['inUserName'], $formvars['inDatabase'], $access))
+        if (self::ExecuteCreateUser($currentuser['userid'], isset($formvars['inUserName']) ? $formvars['inUserName'] : '', isset($formvars['inDatabase']) ? $formvars['inDatabase'] : '', $access))
             return true;
         return false;
     }
@@ -1158,13 +1168,259 @@ class module_controller extends ctrl_module
     }
 
     /**
-     * Template value <@ MysqlUsagepChart @>: always the "unlimited" image.
+     * Escape a value for HTML.
      *
-     * @return string An <img> tag.
+     * @param mixed $s The value (cast to string).
+     * @return string The escaped text.
      */
-    static function getMysqlUsagepChart()
+    static function h($s)
     {
-        return '<img src="' . ui_template::AssetPath('img/misc/unlimited.png') . '" alt="' . ui_language::translate('Unlimited') . '"/>';
+        return htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
+    }
+
+    /**
+     * Translate and escape a text.
+     *
+     * @param string $s The English text.
+     * @return string The escaped translation.
+     */
+    static function t($s)
+    {
+        return self::h(ui_language::translate($s));
+    }
+
+    /**
+     * A MySQL user or database name with the account's prefix muted.
+     *
+     * @param string $name The full name.
+     * @return string The HTML.
+     */
+    static function NameHtml($name)
+    {
+        $prefix = ctrl_users::GetUserDetail()['username'] . '_';
+        return strpos($name, $prefix) === 0 ? '<span class="mu-prefix">' . self::h($prefix) . '</span><b>' . self::h(substr($name, strlen($prefix))) . '</b>' : '<b>' . self::h($name) . '</b>';
+    }
+
+    /**
+     * Where a user may connect from, in words.
+     *
+     * @param string $access The host: '%', 'localhost' or an IP address.
+     * @return array{0: string, 1: string} The words and a class for the pill.
+     */
+    static function AccessLabel($access)
+    {
+        if ($access === '%') {
+            return array(ui_language::translate('Any address'), 'any');
+        }
+        if (strtolower($access) === 'localhost') {
+            return array(ui_language::translate('This server only'), 'local');
+        }
+        return array(ui_language::translate('Only from') . ' ' . $access, 'ip');
+    }
+
+    /**
+     * The figures at the top (<@ Summary @>): users, databases, and users with no database yet.
+     *
+     * @return string The HTML.
+     */
+    static function getSummary()
+    {
+        $me = ctrl_users::GetUserDetail();
+        $users = self::ListUsers($me['userid']);
+        $users = $users ? $users : array();
+        $dbs = self::ListDatabases($me['userid']);
+        $none = count(array_filter($users, function ($u) { return (int) $u['totaldb'] === 0; }));
+        $tiles = array(
+            array('MySQL users', count($users), '', '<circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 14 0"/><path d="M17 11a3 3 0 1 0 0-6M22 21a6 6 0 0 0-4-5.6"/>'),
+            array('Databases', $dbs ? count($dbs) : 0, '', '<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/>'),
+            array('Users with no database', $none, $none ? 'warn' : '', '<path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/>'),
+        );
+        $out = '';
+        foreach ($tiles as $x) {
+            $out .= '<div class="mu-tile ' . $x[2] . '"><svg class="mu-ico-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' . $x[3] . '</svg>'
+                . '<div><b>' . (int) $x[1] . '</b><span>' . self::t($x[0]) . '</span></div></div>';
+        }
+        return $out;
+    }
+
+    /**
+     * One card per MySQL user (<@ UserCards @>): name, where it may connect from, its databases, and Show password,
+     * Databases and password, and Delete (buttons of the EditUser form).
+     *
+     * @return string The HTML ('' when there are none).
+     */
+    static function getUserCards()
+    {
+        $me = ctrl_users::GetUserDetail();
+        $users = self::ListUsers($me['userid']);
+        if (!$users) {
+            return '';
+        }
+        $out = '';
+        foreach ($users as $u) {
+            $id = (int) $u['userid'];
+            $acc = self::AccessLabel((string) $u['access']);
+            $dbs = self::ListUserDatabases($id);
+            $pills = '';
+            foreach ($dbs ? $dbs : array() as $d) {
+                $pills .= '<span class="mu-db">' . self::h($d['mmdbname']) . '</span>';
+            }
+            $out .= '<div class="mu-user" data-s="' . self::h(strtolower($u['username'] . ' ' . implode(' ', array_column($dbs ? $dbs : array(), 'mmdbname')))) . '">'
+                . '<span class="mu-avatar" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></span>'
+                . '<div class="mu-main"><div class="mu-name">' . self::NameHtml($u['username']) . '<span class="mu-acc ' . $acc[1] . '">' . self::h($acc[0]) . '</span></div>'
+                . '<div class="mu-dbs">' . ($pills !== '' ? $pills : '<span class="mu-nodb">' . self::t('No database yet: open Databases and password to add one') . '</span>') . '</div></div>'
+                . '<div class="mu-act">'
+                . '<button class="btn btn-default btn-sm" type="submit" name="inShow_' . $id . '" value="' . $id . '"><svg class="mu-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>' . self::t('Show password') . '</button>'
+                . '<button class="btn btn-primary btn-sm" type="submit" name="inEdit_' . $id . '" value="' . $id . '"><svg class="mu-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>' . self::t('Databases and password') . '</button>'
+                . '<button class="btn btn-default btn-sm mu-del" type="submit" name="inDelete_' . $id . '" value="' . $id . '" title="' . self::t('Delete') . '" aria-label="' . self::t('Delete') . ' ' . self::h($u['username']) . '"><svg class="mu-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg></button>'
+                . '</div></div>';
+        }
+        return $out;
+    }
+
+    /**
+     * The card for a password: the user just made (shown once here) or the one asked for with Show password,
+     * or the panel password prompt before showing one (<@ SecretCard @>).
+     *
+     * @return string The HTML ('' when there is nothing to show).
+     */
+    static function getSecretCard()
+    {
+        $copy = '<button type="button" class="btn btn-default btn-sm mu-copy" data-done="' . self::t('Copied') . '">' . self::t('Copy') . '</button>';
+        if (self::$askpw !== null) {
+            return '<form class="mu-card mu-secret ask" method="post" action="' . self::h(self::$askpw[0]) . '">'
+                . '<h4><svg class="mu-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>'
+                . self::t('Show the password of') . ' <code>' . self::h(self::$askpw[2]) . '</code></h4>'
+                . '<p class="mu-sub">' . self::t('Enter your own panel password first. Each password shown is written to the panel\'s log.') . '</p>'
+                . '<div class="mu-inline"><input class="form-control" type="password" name="inConfirmPw" autocomplete="current-password" required autofocus aria-label="' . self::t('Your panel password') . '" placeholder="' . self::t('Your panel password') . '">'
+                . '<input type="hidden" name="' . self::h(self::$askpw[1]) . '" value="1">' . runtime_csfr::Token()
+                . '<button class="btn btn-primary" type="submit">' . self::t('Show password') . '</button><a class="btn btn-default" href="./?module=mysql_users">' . self::t('Cancel') . '</a></div></form>';
+        }
+        if (self::$shownuser !== null && self::$shownpass !== '') {
+            return '<div class="mu-card mu-secret"><h4>' . self::t('Password of') . ' <code>' . self::h(self::$shownuser) . '</code></h4>'
+                . '<div class="mu-kv"><code class="mu-pw">' . self::h(self::$shownpass) . '</code>' . $copy . '</div></div>';
+        }
+        if (!fs_director::CheckForEmptyValue(self::$newpass)) {
+            return '<div class="mu-card mu-secret new"><h4><svg class="mu-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>' . self::t('MySQL user created') . '</h4>'
+                . '<div class="mu-kv"><span>' . self::t('User name') . '</span><code>' . self::h(self::$newuser) . '</code>' . $copy . '</div>'
+                . '<div class="mu-kv"><span>' . self::t('Password') . '</span><code class="mu-pw">' . self::h(self::$newpass) . '</code>' . $copy . '</div>'
+                . '<div class="mu-kv"><span>' . self::t('Server') . '</span><code>localhost</code>' . $copy . '</div>'
+                . '<p class="mu-sub">' . self::t('Put these in your application\'s settings (for example wp-config.php). You can see the password again later with Show password.') . '</p></div>';
+        }
+        return '';
+    }
+
+    /**
+     * The databases the edited user has, each with Remove (<@ UserDatabaseRows @>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return string The HTML.
+     */
+    static function getUserDatabaseRows()
+    {
+        global $controller;
+        $list = self::ListUserDatabases($controller->GetControllerRequest('URL', 'other'));
+        if (!$list) {
+            return '<p class="mu-empty">' . self::t('This user has no database yet: add one below.') . '</p>';
+        }
+        $out = '';
+        foreach ($list as $d) {
+            $out .= '<div class="mu-dbrow"><svg class="mu-ico mu-dbico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>'
+                . '<span class="mu-dbname">' . self::NameHtml($d['mmdbname']) . '</span><span class="mu-all">' . self::t('all privileges') . '</span>'
+                . '<button class="btn btn-default btn-sm mu-del" type="submit" name="inRemove_' . (int) $d['mmid'] . '" value="' . (int) $d['mmid'] . '">' . self::t('Remove access') . '</button></div>';
+        }
+        return $out;
+    }
+
+    /**
+     * The options of the databases the edited user does not have yet (<@ AddDatabaseOptions @>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return string The <option> HTML ('' when it has them all).
+     */
+    static function getAddDatabaseOptions()
+    {
+        global $controller;
+        $me = ctrl_users::GetUserDetail();
+        $has = array();
+        foreach (self::ListUserDatabases($controller->GetControllerRequest('URL', 'other')) ?: array() as $d) {
+            $has[(int) $d['mmdbid']] = true;
+        }
+        $out = '';
+        foreach (self::ListDatabases($me['userid']) ?: array() as $d) {
+            if (!isset($has[(int) $d['mysqlid']])) {
+                $out .= '<option value="' . (int) $d['mysqlid'] . '">' . self::h($d['mysqlname']) . '</option>';
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * Template flag <% if CanAddDatabase %>: the edited user does not have every database yet.
+     *
+     * @return bool
+     */
+    static function getCanAddDatabase()
+    {
+        return self::getAddDatabaseOptions() !== '';
+    }
+
+    /**
+     * Where the edited user may connect from, as a pill (<@ EditAccess @>).
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @global runtime_controller $controller The request controller.
+     * @return string The HTML.
+     */
+    static function getEditAccess()
+    {
+        global $zdbh, $controller;
+        $q = $zdbh->prepare("SELECT mu_access_vc FROM x_mysql_users WHERE mu_id_pk = :id AND mu_acc_fk = :a AND mu_deleted_ts IS NULL");
+        $q->execute(array(':id' => (int) $controller->GetControllerRequest('URL', 'other'), ':a' => (int) ctrl_users::GetUserDetail()['userid']));
+        $a = $q->fetchColumn();
+        if ($a === false) {
+            return '';
+        }
+        $l = self::AccessLabel((string) $a);
+        return '<span class="mu-acc ' . $l[1] . '">' . self::h($l[0]) . '</span>';
+    }
+
+    /**
+     * The edited user's name, prefix muted (<@ EditNameHtml @>).
+     *
+     * @return string The HTML.
+     */
+    static function getEditNameHtml()
+    {
+        $n = self::getEditCurrentUserName();
+        return $n ? self::NameHtml($n) : '';
+    }
+
+    /**
+     * What the user to delete loses (<@ DeleteDetails @>): the databases it can use.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return string The HTML.
+     */
+    static function getDeleteDetails()
+    {
+        global $controller;
+        $list = self::ListUserDatabases($controller->GetControllerRequest('URL', 'other'));
+        $names = array_column($list ? $list : array(), 'mmdbname');
+        return '<ul class="mu-lose"><li>' . self::t('The user is removed from MySQL: applications that log in with it stop working.') . '</li>'
+            . ($names ? '<li>' . self::t('It loses access to:') . ' <b>' . self::h(implode(', ', $names)) . '</b> ' . self::t('(the databases and their data stay).') . '</li>' : '') . '</ul>';
+    }
+
+    /**
+     * The user name typed when creating failed, so it is not lost (<@ PostedUserName @>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return string The escaped name.
+     */
+    static function getPostedUserName()
+    {
+        global $controller;
+        return (self::$blank || self::$badname || self::$alreadyexists || self::$badIP || self::$rootabuse) ? self::h((string) $controller->GetControllerRequest('FORM', 'inUserName')) : '';
     }
 
     /**
@@ -1198,16 +1454,16 @@ class module_controller extends ctrl_module
             return ui_sysmessage::shout(ui_language::translate("You cannot create a user named 'root'! This attempt has been logged and the system administrator notified!."), "zannounceerror");
         }
         if (!fs_director::CheckForEmptyValue(self::$alreadyexists)) {
-            return ui_sysmessage::shout(ui_language::translate("A MySQL username with that name already appears to exsist."), "zannounceerror");
+            return ui_sysmessage::shout(ui_language::translate("A MySQL user with that name already exists."), "zannounceerror");
         }
         if (!fs_director::CheckForEmptyValue(self::$badname)) {
-            return ui_sysmessage::shout(ui_language::translate("Your MySQL user name is not valid. Please enter a valid MySQL user name."), "zannounceerror");
+            return ui_sysmessage::shout(ui_language::translate("That user name can not be used: letters, digits, dashes and underscores, not starting with a dash or underscore or ending with a dash."), "zannounceerror");
         }
         if (!fs_director::CheckForEmptyValue(self::$badpass)) {
-            return ui_sysmessage::shout(ui_language::translate("Your MySQL password is not valid. Valid characters are A-Z, a-z, 0-9."), "zannounceerror");
+            return ui_sysmessage::shout(ui_language::translate("The password needs a lower case letter, a capital and a digit."), "zannounceerror");
         }
 		if (!fs_director::CheckForEmptyValue(self::$badpasswordlength)) {
-            return ui_sysmessage::shout(ui_language::translate("Your password did not meet the minimun length requirements. Characters needed for password length") . ": " . ctrl_options::GetSystemOption('password_minlength'), "zannounceerror");
+            return ui_sysmessage::shout(ui_language::translate("The password is too short. Characters needed") . ": " . self::getMinPassLength(), "zannounceerror");
         }
 		if (!fs_director::CheckForEmptyValue(self::$blankpassword)) {
             return ui_sysmessage::shout(ui_language::translate("You entered blank a password. Please retry and enter a valid password."), "zannounceerror");
@@ -1218,26 +1474,15 @@ class module_controller extends ctrl_module
         if (!fs_director::CheckForEmptyValue(self::$dbalreadyadded)) {
             return ui_sysmessage::shout(ui_language::translate("That database has already been added to this user."), "zannounceerror");
         }
-        if (self::$askpw !== null) {
-            return ui_sysmessage::shout(ctrl_secret::ConfirmForm(self::$askpw[0], self::$askpw[1], self::$askpw[2]), "zannounceinfo");
-        }
         if (!fs_director::CheckForEmptyValue(self::$wrongpw)) {
             return ui_sysmessage::shout(ui_language::translate("That is not your panel password: the password was not shown."), "zannounceerror");
         }
-        if (self::$shownuser !== null) {
-            $h = function ($s) { return htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8'); };
-            if (self::$shownpass === '') {
-                return ui_sysmessage::shout(ui_language::translate("The password of") . ' <strong>' . $h(self::$shownuser) . '</strong> '
-                    . ui_language::translate("is not stored (it was set before passwords were kept). Use Reset Password to set a new one; it can be shown after that."), "zannounceerror");
-            }
-            return ui_sysmessage::shout(ui_language::translate("MySQL user") . ' <strong>' . $h(self::$shownuser) . '</strong>, '
-                . ui_language::translate("password:") . ' <code style="user-select: all; font-size: 14px;">' . $h(self::$shownpass) . '</code>', "zannounceok");
+        if (self::$shownuser !== null && self::$shownpass === '') {
+            return ui_sysmessage::shout(ui_language::translate("The password of") . ' <strong>' . self::h(self::$shownuser) . '</strong> '
+                . ui_language::translate("is not stored (it was set before passwords were kept). Set a new one in Databases and password; it can be shown after that."), "zannounceerror");
         }
-        if (!fs_director::CheckForEmptyValue(self::$newpass)) {
-            $h = function ($s) { return htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8'); };
-            return ui_sysmessage::shout(ui_language::translate("MySQL user created:") . ' <strong>' . $h(self::$newuser) . '</strong><br>'
-                . ui_language::translate("Password:") . ' <code style="user-select: all; font-size: 14px;">' . $h(self::$newpass) . '</code><br>'
-                . ui_language::translate("You can see it again later with Show password."), "zannounceok");
+        if (self::$shownuser !== null || self::$askpw !== null || !fs_director::CheckForEmptyValue(self::$newpass)) {
+            return; // shown by getSecretCard()
         }
         if (!fs_director::CheckForEmptyValue(self::$ok)) {
             return ui_sysmessage::shout(ui_language::translate("Changes to your MySQL users have been saved successfully!"), "zannounceok");
