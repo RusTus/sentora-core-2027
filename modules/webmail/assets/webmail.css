@@ -1,0 +1,66 @@
+/* Webmail (the panel's page that opens Roundcube and SOGo) in the panel's style. Colours come from the
+   theme's shared --sn-* variables (etc/styles/THEMES.md), with these as the fallback, so it follows Light,
+   Dark and Auto. Roundcube and SOGo keep their own look. */
+.wm { --wm-ink: var(--sn-ink, #1f2933); --wm-muted: var(--sn-muted, #6b7785); --wm-line: var(--sn-line, #e6e9ee);
+      --wm-card: var(--sn-card, #ffffff); --wm-bg: var(--sn-soft, #f4f6f9); --wm-accent: var(--sn-accent, #447fb3); --wm-accent-soft: var(--sn-accent-soft, #e3edf6);
+      color: var(--wm-ink); background: var(--wm-bg); border-radius: 8px; padding: 18px; margin-top: 10px; }
+.wm * { box-sizing: border-box; }
+.wm-ico { width: 16px; height: 16px; flex: none; }
+.wm-card { background: var(--wm-card); border-radius: 6px; box-shadow: 0 1px 3px rgba(20,30,40,0.08); padding: 16px 18px; min-width: 0; }
+.wm-card h4 { margin: 0 0 10px; font-size: 15px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; }
+.wm-sub { color: var(--wm-muted); font-size: 12px; margin: 0 0 10px; line-height: 1.45; }
+.wm-foot { margin: 10px 0 0; }
+.wm-copy.done { background: #2db87d !important; border-color: #2db87d !important; color: #fff !important; }
+.wm code { font-size: 13px; background: none; border: 0; padding: 0; color: var(--wm-ink); overflow-wrap: anywhere; }
+
+/* open */
+.wm-apps { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 14px; margin-bottom: 14px; }
+.wm-app { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding: 18px 20px; border-radius: 8px; background: var(--wm-card); box-shadow: 0 1px 3px rgba(20,30,40,0.08); border-left: 4px solid var(--wm-accent); }
+.wm-app-sogo { border-left-color: #2db87d; }
+.wm-app-ico { width: 52px; height: 52px; padding: 10px; border-radius: 12px; flex: none; background: var(--wm-accent-soft); color: var(--wm-accent); }
+.wm-app-sogo .wm-app-ico { background: rgba(45,184,125,0.15); color: #2db87d; }
+.wm-app-text { flex: 1 1 220px; min-width: 0; }
+.wm-app-text h3 { margin: 0 0 4px; font-size: 19px; font-weight: 700; }
+.wm-ver { font-size: 12px; font-weight: 600; color: var(--wm-muted); background: var(--wm-bg); border: 1px solid var(--wm-line); border-radius: 10px; padding: 1px 8px; vertical-align: middle; }
+.wm-app-text p { margin: 0; color: var(--wm-muted); font-size: 13px; line-height: 1.5; }
+.wm-open { display: inline-flex; align-items: center; gap: 8px; }
+.wm-open .wm-ico { width: 18px; height: 18px; }
+
+.wm-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+
+/* mailboxes */
+.wm-boxes { display: grid; gap: 6px; }
+.wm-box { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--wm-line); border-radius: 6px; }
+.wm-avatar { width: 28px; height: 28px; border-radius: 50%; flex: none; display: inline-flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; background: var(--wm-accent-soft); color: var(--wm-accent); }
+.wm-addr { flex: 1; min-width: 0; font-size: 13px; overflow-wrap: break-word; }
+.wm-addr span { color: var(--wm-muted); }
+.wm-off { font-size: 11px; font-weight: 600; color: var(--sn-warn, #8f5b00); white-space: nowrap; }
+.wm-box.is-off .wm-avatar { background: var(--wm-bg); color: var(--wm-muted); }
+.wm-box.is-off .wm-addr b { color: var(--wm-muted); text-decoration: line-through; }
+.wm-empty { display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; padding: 14px 10px; color: var(--wm-muted); font-size: 13px; }
+.wm-empty b { color: var(--wm-ink); font-size: 14px; }
+
+/* mail programs */
+.wm-server { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 10px; border-radius: 6px; background: var(--wm-accent-soft); margin-bottom: 10px; }
+.wm-server > span { font-size: 12px; color: var(--wm-muted); }
+.wm-server code { font-weight: 700; min-width: 0; }
+.wm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.wm-table th, .wm-table td { padding: 7px 8px; border-bottom: 1px solid var(--wm-line); text-align: left; }
+.wm-table thead th { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; color: var(--wm-muted); }
+.wm-table tbody th { font-weight: 600; }
+.wm-table tbody tr:last-child th, .wm-table tbody tr:last-child td { border-bottom: 0; }
+.wm-alt { color: var(--wm-muted); font-size: 12px; }
+
+/* sync */
+.wm-sync { margin-top: 14px; }
+.wm-sync-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; }
+.wm-sync-cols > div { min-width: 0; }
+.wm-sync-head { display: block; font-size: 13px; margin-bottom: 2px; }
+.wm-dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; margin: 0; font-size: 13px; }
+.wm-dl dt { font-weight: 600; }
+.wm-dl dd { margin: 0; color: var(--wm-muted); min-width: 0; }
+.wm-dl dd code { color: var(--wm-ink); font-weight: 700; }
+
+@media (max-width: 900px) { .wm-cols, .wm-sync-cols { grid-template-columns: 1fr; } }
+@media (max-width: 640px) { .wm { padding: 12px; } .wm-apps { grid-template-columns: 1fr; } .wm-app { padding: 14px; } .wm-open { width: 100%; justify-content: center; }
+    .wm-box { flex-wrap: wrap; } .wm-off { order: 3; flex-basis: 100%; padding-left: 38px; } .wm-dl { grid-template-columns: 1fr; gap: 2px; } .wm-dl dd { margin-bottom: 6px; } }

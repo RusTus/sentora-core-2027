@@ -1,30 +1,96 @@
 <div class="zmodule_content panel" id="zmodule_header_<@ ModuleName @>">
     <div class="panel-heading">
         <img src="<@ ModuleIcon @>" width="35" height="35" border="0" alt="<@ ModuleName @>">
+        <div class="zmodule_title"><@ ModuleName @></div>
+        <div class="zmodule_desc" id="zmodule_desc_<@ ModuleName @>"><@ ModuleDesc @></div>
+    </div>
+    <link rel="stylesheet" href="modules/webmail/assets/webmail.css">
 
-        <div class="zmodule_title">
-            <@ ModuleName @>
+    <div class="wm" id="wm">
+        <div class="wm-apps">
+            <div class="wm-app">
+                <svg class="wm-app-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>
+                <div class="wm-app-text">
+                    <h3><: Webmail :> <span class="wm-ver">Roundcube <@ RoundcubeVersion @></span></h3>
+                    <p><: Read and send mail in the browser, from anywhere. Log in with the full mailbox address and its password. :></p>
+                </div>
+                <a href="etc/apps/webmail/" class="btn btn-primary btn-lg wm-open" target="_blank" rel="noopener"><svg class="wm-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6"/><path d="M20 4 10 14"/><path d="M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/></svg><@ LaunchWebMail @></a>
+            </div>
+            <% if HasSOGo %>
+            <div class="wm-app wm-app-sogo">
+                <svg class="wm-app-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/><path d="M8 13h3M8 17h6"/></svg>
+                <div class="wm-app-text">
+                    <h3><: Groupware :> <span class="wm-ver">SOGo</span></h3>
+                    <p><: Mail with calendars, contacts and tasks you can share, and that phones and Outlook keep in step. Same login as webmail. :></p>
+                </div>
+                <a href="/SOGo/" class="btn btn-primary btn-lg wm-open" target="_blank" rel="noopener"><svg class="wm-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6"/><path d="M20 4 10 14"/><path d="M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/></svg><: Open SOGo :></a>
+            </div>
+            <% endif %>
         </div>
 
-        <div class="zmodule_desc" id="zmodule_desc_<@ ModuleName @>"><@ ModuleDesc @></div>
+        <div class="wm-cols">
+            <div class="wm-card">
+                <h4><: Log in with :></h4>
+                <% if HasBoxes %>
+                <p class="wm-sub"><: The user name is the full address; the password is the one the mailbox was given. :></p>
+                <div class="wm-boxes"><@ BoxRows @></div>
+                <% if MailboxesOn %><p class="wm-sub wm-foot"><: Forgot a password? Set a new one in :> <a href="./?module=mailboxes"><: Mailboxes :></a>.</p><% endif %>
+                <% endif %>
+                <% if NoBoxes %>
+                <div class="wm-empty">
+                    <b><: You have no mailbox yet :></b>
+                    <span><: Webmail logs in with a mailbox. Make one first: :></span>
+                    <% if MailboxesOn %><a class="btn btn-primary btn-sm" href="./?module=mailboxes"><: Mailboxes :></a><% endif %>
+                </div>
+                <% endif %>
+            </div>
 
+            <div class="wm-card">
+                <h4><: Set up a mail program :></h4>
+                <p class="wm-sub"><: For Outlook, Thunderbird, Apple Mail or a phone's mail app. User name: the full address. Password: the mailbox password. :></p>
+                <@ ClientSettings @>
+            </div>
+        </div>
+
+        <% if HasSOGo %>
+        <div class="wm-card wm-sync">
+            <h4><: Calendars and contacts on phones and Outlook :></h4>
+            <div class="wm-sync-cols">
+                <div>
+                    <b class="wm-sync-head"><: ActiveSync (Exchange account) :></b>
+                    <p class="wm-sub"><: Add an Exchange or ActiveSync account on the device: :></p>
+                    <dl class="wm-dl">
+                        <dt><: Email and user name :></dt><dd><: the full mailbox address :></dd>
+                        <dt><: Password :></dt><dd><: the mailbox password :></dd>
+                        <dt><: Server :></dt><dd><code data-copy="<@ SOGoServer @>"><@ SOGoServer @></code> <button type="button" class="btn btn-default btn-xs wm-copy" data-done="<: Copied :>"><: Copy :></button></dd>
+                        <dt><: Domain :></dt><dd><: leave empty :></dd>
+                        <dt><: SSL / TLS :></dt><dd><: on :></dd>
+                    </dl>
+                </div>
+                <div>
+                    <b class="wm-sync-head"><: CalDAV and CardDAV :></b>
+                    <p class="wm-sub"><: For Thunderbird, macOS and iOS calendars and contacts, or DAVx⁵ on Android: :></p>
+                    <div class="wm-server"><code data-copy="https://<@ SOGoServer @>/SOGo/dav/">https://<@ SOGoServer @>/SOGo/dav/</code> <button type="button" class="btn btn-default btn-xs wm-copy" data-done="<: Copied :>"><: Copy :></button></div>
+                    <p class="wm-sub"><: Same user name and password as above. :></p>
+                </div>
+            </div>
+        </div>
+        <% endif %>
     </div>
-
-    <a href="etc/apps/webmail/" class="btn btn-large btn-primary" target="_blank"><@ LaunchWebMail @></a>
-    <% if HasSOGo %>
-    &nbsp; <a href="/SOGo/" class="btn btn-large btn-primary" target="_blank"><: Launch Groupware (SOGo) :></a>
-    <div class="zgrid_wrapper" style="margin-top: 20px">
-        <h3><: Mail, calendar and contacts on phones and Outlook (ActiveSync) :></h3>
-        <p><: Add an Exchange or ActiveSync account on the device with these settings :>:</p>
-        <table class="table table-striped" style="max-width: 640px">
-            <tr><th><: Email and user name :></th><td><: the full mailbox address :></td></tr>
-            <tr><th><: Password :></th><td><: the mailbox password :></td></tr>
-            <tr><th><: Server :></th><td><code><@ SOGoServer @></code></td></tr>
-            <tr><th><: Domain :></th><td><: leave empty :></td></tr>
-            <tr><th><: SSL / TLS :></th><td><: on :></td></tr>
-        </table>
-        <p><: Calendars and contacts also work over CalDAV and CardDAV at :> <code>https://<@ SOGoServer @>/SOGo/dav/</code></p>
-    </div>
-    <% endif %>
-
 </div>
+<script>
+(function () {
+    'use strict';
+    var wm = document.getElementById('wm'); if (!wm) { return; }
+    Array.prototype.forEach.call(wm.querySelectorAll('.wm-copy'), function (b) {
+        b.addEventListener('click', function () {
+            var src = b.parentNode.querySelector('[data-copy]'); if (!src) { return; }
+            var text = src.getAttribute('data-copy');
+            var done = function () { var o = b.textContent; b.textContent = b.getAttribute('data-done'); b.classList.add('done'); setTimeout(function () { b.textContent = o; b.classList.remove('done'); }, 1500); };
+            if (navigator.clipboard && window.isSecureContext) { navigator.clipboard.writeText(text).then(done, function () {}); return; }
+            var ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select();
+            try { document.execCommand('copy'); done(); } catch (e) {} document.body.removeChild(ta);
+        });
+    });
+})();
+</script>
