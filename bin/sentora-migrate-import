@@ -303,9 +303,21 @@ function cleanup()
 register_shutdown_function('cleanup');
 function load_dump($file, $db)
 {
-    global $MYCNF;
-    // old dumps can hold zero dates and other values MySQL 8.4 refuses by default
-    return sh('gunzip -c ' . q($file) . ' | mysql --defaults-extra-file=' . q($MYCNF) . ' --init-command="SET SESSION sql_mode=\'\', foreign_key_checks=0" ' . q($db), $o) ? true : $o;
+    global $MYCNF, $zdbh;
+    static $init = null;
+    if ($init === null) {
+        // Old dumps can hold zero dates and other values MySQL 8.4 refuses by default. MySQL 8.4
+        // also refuses a foreign key to a column that is not uniquely indexed, which 5.7 took
+        // (OrangeHRM has one): restrict_fk_on_non_standard_key=OFF loads them as before. Only where
+        // the server knows the setting (MariaDB and older MySQL do not, and would refuse it).
+        $init = "SET SESSION sql_mode='', foreign_key_checks=0";
+        try {
+            if ($zdbh->query("SHOW VARIABLES LIKE 'restrict_fk_on_non_standard_key'")->fetch()) {
+                $init .= ', restrict_fk_on_non_standard_key=OFF';
+            }
+        } catch (Exception $e) { }
+    }
+    return sh('gunzip -c ' . q($file) . ' | mysql --defaults-extra-file=' . q($MYCNF) . ' --init-command=' . q($init) . ' ' . q($db), $o) ? true : $o;
 }
 
 
