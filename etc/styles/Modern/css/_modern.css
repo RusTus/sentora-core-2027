@@ -183,3 +183,7 @@ legend { color: var(--ml-ink); border-bottom-color: var(--ml-line); }
 .zshadowbar-ico { width: 20px; height: 20px; flex: none; color: color-mix(in srgb, var(--ml-amber) 70%, var(--ml-ink)); }
 .zshadowbar span { flex: 1 1 260px; }
 .zshadowbar-back, .zshadowbar-back:hover, .zshadowbar-back:focus { background: var(--ml-ink); color: var(--ml-card) !important; border: 0; font-weight: 600; }
+
+/* Room under the last sidebar item, so it can be scrolled clear of the bottom edge (where
+   Chrome shows a hovered link's address on top of it) */
+#menu-sidebar::after { content: ""; display: block; height: 96px; }
