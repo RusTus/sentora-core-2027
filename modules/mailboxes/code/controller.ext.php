@@ -29,6 +29,9 @@
 class module_controller extends ctrl_module
 {
 
+    /** @var bool|null True when the domain is not one of the account's own (shown by getResult()). */
+    static $baddomain;
+
     /** @var bool|null True after a mailbox change was saved (shown by getResult()). */
     static $ok;
     /** @var bool|null True when the password was left blank. */
@@ -157,7 +160,7 @@ class module_controller extends ctrl_module
             $res = array();
             $sql->execute();
             while ($rowdomains = $sql->fetch()) {
-                $res[] = array('domain' => ui_language::translate($rowdomains['vh_name_vc']));
+                $res[] = array('domain' => $rowdomains['vh_name_vc']); // a domain name, never translated
             }
             return $res;
         } else {
@@ -238,6 +241,10 @@ class module_controller extends ctrl_module
             include($MailServerFile);
         }
         $time = time();
+        // its own forwarders went from Postfix with the mailbox: mark them deleted too, so they no
+        // longer show in Forwarders (and count toward the limit) without working
+        $fq = $zdbh->prepare("UPDATE x_forwarders SET fw_deleted_ts = :t WHERE fw_address_vc = :a AND fw_acc_fk = :u AND fw_deleted_ts IS NULL");
+        $fq->execute(array(':t' => time(), ':a' => $rowmailbox['mb_address_vc'], ':u' => (int) $rowmailbox['mb_acc_fk']));
         $sql = "UPDATE x_mailboxes SET mb_deleted_ts=:time WHERE mb_id_pk=:mid";
         $sql = $zdbh->prepare($sql);
         $sql->bindParam(':time', $time);
@@ -349,7 +356,7 @@ class module_controller extends ctrl_module
             return false;
         }
 		// Check for password length...
-		if (strlen($password) < ctrl_options::GetSystemOption('password_minlength')) {
+		if (strlen($password) < (int) self::getMinPassLength()) {
 			self::$badpasswordlength = true;
 			return false;
 		}
@@ -360,6 +367,18 @@ class module_controller extends ctrl_module
         }
         if (!self::IsValidEmail($fulladdress)) {
             self::$validemail = true;
+            return false;
+        }
+        // The domain must be one of the account's own: it came from the form unchecked, so a
+        // mailbox could be made at another account's domain and receive its mail
+        $own = false;
+        foreach (self::ListDomains(ctrl_users::GetUserDetail()['userid']) ?: array() as $d) {
+            if (strtolower($d['domain']) === strtolower((string) $domain)) {
+                $own = true;
+            }
+        }
+        if (!$own) {
+            self::$baddomain = true;
             return false;
         }
         $sql = "SELECT * FROM x_mailboxes WHERE mb_address_vc=:fulladdress AND mb_deleted_ts IS NULL";
@@ -442,7 +461,7 @@ class module_controller extends ctrl_module
         }
 		// Check for password length... (true = there IS an error; this returned false, so
 		// a password shorter than password_minlength was accepted)
-		if (strlen($password) < ctrl_options::GetSystemOption('password_minlength')) {
+		if (strlen($password) < (int) self::getMinPassLength()) {
 			self::$badpasswordlength = true;
 			return true;
 		}
@@ -723,24 +742,224 @@ class module_controller extends ctrl_module
     }
 
     /**
-     * Template HTML: the mailbox quota pie chart, or the "unlimited" image.
+     * Escape a value for HTML.
      *
-     * @return string HTML img tag.
+     * @param mixed $s The value (cast to string).
+     * @return string The escaped text.
      */
-    static function getEmailUsagepChart()
+    static function h($s)
     {
-        $currentuser = ctrl_users::GetUserDetail();
-        $maximum = $currentuser['mailboxquota'];
-        if ($maximum < 0) { //-1 = unlimited
-            return '<img src="' . ui_template::AssetPath('img/misc/unlimited.png') . '" alt="' . ui_language::translate('Unlimited') . '"/>';
-        } else {
-            $used = ctrl_users::GetQuotaUsages('mailboxes', $currentuser['userid']);
-            $free = max($maximum - $used, 0);
-            return '<img src="etc/lib/pChart2/sentora/z3DPie.php?score=' . $free . '::' . $used
-                    . '&labels=Free: ' . $free . '::Used: ' . $used
-                    . '&legendfont=verdana&legendfontsize=8&imagesize=240::190&chartsize=120::90&radius=100&legendsize=150::160"'
-                    . ' alt="' . ui_language::translate('Pie chart') . '"/>';
+        return htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
+    }
+
+    /**
+     * Translate and escape a text.
+     *
+     * @param string $s The English text.
+     * @return string The escaped translation.
+     */
+    static function t($s)
+    {
+        return self::h(ui_language::translate($s));
+    }
+
+    /**
+     * The account's mailboxes as plain rows.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return array<int, array<string, mixed>> x_mailboxes rows, by address.
+     */
+    static function Rows()
+    {
+        global $zdbh;
+        $q = $zdbh->prepare("SELECT * FROM x_mailboxes WHERE mb_acc_fk = :u AND mb_deleted_ts IS NULL ORDER BY mb_address_vc");
+        $q->execute(array(':u' => (int) ctrl_users::GetUserDetail()['userid']));
+        return $q->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /**
+     * What else uses each of the account's mailboxes: aliases delivering to it, its forwarders, and the lists it is on.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return array<string, array{aliases: array<int, string>, forwards: array<int, string>, lists: array<int, string>}> Mailbox address (lower case) => what uses it.
+     */
+    static function Links()
+    {
+        global $zdbh;
+        $uid = (int) ctrl_users::GetUserDetail()['userid'];
+        $out = array();
+        $add = function ($box, $kind, $what) use (&$out) {
+            $box = strtolower((string) $box);
+            if (!isset($out[$box])) {
+                $out[$box] = array('aliases' => array(), 'forwards' => array(), 'lists' => array());
+            }
+            $out[$box][$kind][] = (string) $what;
+        };
+        $q = $zdbh->prepare("SELECT al_destination_vc, al_address_vc FROM x_aliases WHERE al_acc_fk = :u AND al_deleted_ts IS NULL");
+        $q->execute(array(':u' => $uid));
+        foreach ($q->fetchAll(PDO::FETCH_NUM) as $r) {
+            $add($r[0], 'aliases', $r[1]);
         }
+        $q = $zdbh->prepare("SELECT fw_address_vc, fw_destination_vc FROM x_forwarders WHERE fw_acc_fk = :u AND fw_deleted_ts IS NULL");
+        $q->execute(array(':u' => $uid));
+        foreach ($q->fetchAll(PDO::FETCH_NUM) as $r) {
+            $add($r[0], 'forwards', $r[1]);
+        }
+        $q = $zdbh->prepare("SELECT u.du_address_vc, l.dl_address_vc FROM x_distlistusers u JOIN x_distlists l ON l.dl_id_pk = u.du_distlist_fk
+            WHERE l.dl_acc_fk = :u AND u.du_deleted_ts IS NULL AND l.dl_deleted_ts IS NULL");
+        $q->execute(array(':u' => $uid));
+        foreach ($q->fetchAll(PDO::FETCH_NUM) as $r) {
+            $add($r[0], 'lists', $r[1]);
+        }
+        return $out;
+    }
+
+    /**
+     * The figures at the top (<@ Tiles @>): mailboxes against the package's limit, switched on, and switched off.
+     *
+     * @return string The HTML.
+     */
+    static function getTiles()
+    {
+        $me = ctrl_users::GetUserDetail();
+        $rows = self::Rows();
+        $on = count(array_filter($rows, function ($r) { return (int) $r['mb_enabled_in'] === 1; }));
+        $max = (int) $me['mailboxquota'];
+        $used = count($rows);
+        $pct = $max > 0 ? min(100, round($used / $max * 100)) : 0;
+        $ico = function ($d) { return '<svg class="mb-ico-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' . $d . '</svg>'; };
+        return '<div class="mb-tile' . ($max >= 0 && $used >= $max ? ' full' : '') . '">' . $ico('<path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.5 5.1 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.5-6.9A2 2 0 0 0 16.8 4H7.2a2 2 0 0 0-1.7 1.1z"/>')
+            . '<div><b>' . $used . ($max < 0 ? '' : ' <small>/ ' . $max . '</small>') . '</b><span>' . self::t('Mailboxes') . ($max < 0 ? ' &middot; ' . self::t('no limit') : '') . '</span>'
+            . ($max > 0 ? '<div class="mb-bar"><i style="width:' . $pct . '%"></i></div>' : '') . '</div></div>'
+            . '<div class="mb-tile ok">' . $ico('<circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/>') . '<div><b>' . $on . '</b><span>' . self::t('Receiving mail') . '</span></div></div>'
+            . '<div class="mb-tile' . ($used - $on ? ' warn' : '') . '">' . $ico('<circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/>') . '<div><b>' . ($used - $on) . '</b><span>' . self::t('Switched off') . '</span></div></div>';
+    }
+
+    /**
+     * One row per mailbox (<@ MailboxRows @>): the address, on or off, when it was made, what else uses it,
+     * Change and Delete (buttons of the EditMailbox form).
+     *
+     * @return string The HTML ('' when there are none).
+     */
+    static function getMailboxRows()
+    {
+        $rows = self::Rows();
+        if (!$rows) {
+            return '';
+        }
+        $links = self::Links();
+        $out = '';
+        foreach ($rows as $r) {
+            $addr = (string) $r['mb_address_vc'];
+            $at = strrpos($addr, '@');
+            $on = (int) $r['mb_enabled_in'] === 1;
+            $l = isset($links[strtolower($addr)]) ? $links[strtolower($addr)] : array('aliases' => array(), 'forwards' => array(), 'lists' => array());
+            $chips = '';
+            if ($l['aliases']) {
+                $chips .= '<span class="mb-chip" title="' . self::h(implode(', ', $l['aliases'])) . '">' . count($l['aliases']) . ' ' . self::t(count($l['aliases']) === 1 ? 'alias' : 'aliases') . '</span>';
+            }
+            if ($l['forwards']) {
+                $chips .= '<span class="mb-chip fw" title="' . self::h(implode(', ', $l['forwards'])) . '">' . self::t('forwards to') . ' ' . self::h($l['forwards'][0]) . (count($l['forwards']) > 1 ? ' +' . (count($l['forwards']) - 1) : '') . '</span>';
+            }
+            if ($l['lists']) {
+                $chips .= '<span class="mb-chip" title="' . self::h(implode(', ', $l['lists'])) . '">' . self::t('on') . ' ' . count($l['lists']) . ' ' . self::t(count($l['lists']) === 1 ? 'list' : 'lists') . '</span>';
+            }
+            $out .= '<div class="mb-row' . ($on ? '' : ' is-off') . '" data-s="' . self::h(strtolower($addr)) . '">'
+                . '<span class="mb-avatar" aria-hidden="true">' . self::h(strtoupper(substr($addr, 0, 1))) . '</span>'
+                . '<div class="mb-main"><div class="mb-addr"><b>' . self::h($at === false ? $addr : substr($addr, 0, $at)) . '</b><span class="mb-dom">' . self::h($at === false ? '' : substr($addr, $at)) . '</span>'
+                . '<span class="mb-state ' . ($on ? 'on' : 'off') . '">' . self::t($on ? 'Receiving mail' : 'Switched off') . '</span></div>'
+                . '<div class="mb-meta">' . (!empty($r['mb_created_ts']) ? '<span>' . self::t('Made') . ' ' . self::h(date('Y-m-d', (int) $r['mb_created_ts'])) . '</span>' : '') . $chips . '</div></div>'
+                . '<div class="mb-act"><button class="btn btn-default btn-sm" type="submit" name="inEdit_' . (int) $r['mb_id_pk'] . '" value="inEdit_' . (int) $r['mb_id_pk'] . '">'
+                . '<svg class="mb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="15" r="4"/><path d="m11 12 9-9M17 6l3 3"/></svg>' . self::t('Password and on/off') . '</button>'
+                . '<button class="btn btn-default btn-sm mb-del" type="submit" name="inDelete_' . (int) $r['mb_id_pk'] . '" value="inDelete_' . (int) $r['mb_id_pk'] . '" title="' . self::t('Delete') . '" aria-label="' . self::t('Delete') . ' ' . self::h($addr) . '">'
+                . '<svg class="mb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg></button></div>'
+                . '</div>';
+        }
+        return $out;
+    }
+
+    /**
+     * What deleting the mailbox does (<@ DeleteDetails @>): its mail goes, its forwarders go with it, and what still delivers to it.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return string The HTML.
+     */
+    static function getDeleteDetails()
+    {
+        global $controller;
+        $cur = self::ListCurrentMailboxes($controller->GetControllerRequest('URL', 'other'));
+        if (!$cur) {
+            return '';
+        }
+        $links = self::Links();
+        $l = isset($links[strtolower($cur[0]['address'])]) ? $links[strtolower($cur[0]['address'])] : array('aliases' => array(), 'forwards' => array(), 'lists' => array());
+        $out = '<ul class="mb-lose"><li>' . self::t('It stops receiving mail and can no longer be logged in to. The mail stored in it stays on the server until the administrator removes it.') . '</li>';
+        if ($l['forwards']) {
+            $out .= '<li>' . self::t('Its forwarders go with it:') . ' <b>' . self::h(implode(', ', $l['forwards'])) . '</b></li>';
+        }
+        if ($l['aliases']) {
+            $out .= '<li class="mb-warnline">' . self::t('These aliases deliver to it and will stop working until you change or delete them in Aliases:') . ' <b>' . self::h(implode(', ', $l['aliases'])) . '</b></li>';
+        }
+        if ($l['lists']) {
+            $out .= '<li class="mb-warnline">' . self::t('It is a member of these distribution lists, which will bounce for it:') . ' <b>' . self::h(implode(', ', $l['lists'])) . '</b></li>';
+        }
+        return $out . '</ul>';
+    }
+
+    /**
+     * Whether the mailbox being changed receives mail (<@ EditOnChecked @>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return string ' checked' or ''.
+     */
+    static function getEditOnChecked()
+    {
+        global $controller;
+        $cur = self::ListCurrentMailboxes($controller->GetControllerRequest('URL', 'other'));
+        return ($cur && $cur[0]['ischeck']) ? ' checked' : '';
+    }
+
+    /**
+     * The domain choices for a new mailbox, the one picked before selected (<@ DomainOptions @>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return string The <option> HTML.
+     */
+    static function getDomainOptions()
+    {
+        global $controller;
+        $picked = (string) $controller->GetControllerRequest('FORM', 'inDomain');
+        $out = '';
+        foreach (self::getDomainList() ?: array() as $d) {
+            $out .= '<option value="' . self::h($d['domain']) . '"' . ($d['domain'] === $picked ? ' selected' : '') . '>@' . self::h($d['domain']) . '</option>';
+        }
+        return $out;
+    }
+
+    /**
+     * The name typed when making a mailbox failed, so it is not lost (<@ PostedAddress @>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return string The escaped text.
+     */
+    static function getPostedAddress()
+    {
+        global $controller;
+        return self::$ok ? '' : self::h((string) $controller->GetControllerRequest('FORM', 'inAddress'));
+    }
+
+    /**
+     * Template flag <% if WebmailOn %>: Webmail is switched on, for its link.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return bool
+     */
+    static function getWebmailOn()
+    {
+        global $zdbh;
+        $q = $zdbh->prepare("SELECT COUNT(*) FROM x_modules WHERE mo_folder_vc = 'webmail' AND mo_enabled_en = 'true'");
+        $q->execute();
+        return (int) $q->fetchColumn() > 0;
     }
 
     /**
@@ -770,8 +989,11 @@ class module_controller extends ctrl_module
      */
     static function getResult()
     {
+        if (!fs_director::CheckForEmptyValue(self::$baddomain)) {
+            return ui_sysmessage::shout(ui_language::translate("Choose one of your own domains for the mailbox."), "zannounceerror");
+        }
         if (!fs_director::CheckForEmptyValue(self::$alreadyexists)) {
-            return ui_sysmessage::shout(ui_language::translate('A mailbox, alias, forwarder or distribution list already exists with that name.'), "zannounceerror");
+            return ui_sysmessage::shout(ui_language::translate('A mailbox, alias, forwarder or distribution list already has that address.'), "zannounceerror");
         }
         if (!fs_director::CheckForEmptyValue(self::$validemail)) {
             return ui_sysmessage::shout(ui_language::translate("Your email address is not valid."), "zannounceerror");
@@ -780,10 +1002,10 @@ class module_controller extends ctrl_module
             return ui_sysmessage::shout(ui_language::translate("Your password cannot be blank."), "zannounceerror");
         }
 		if (!fs_director::CheckForEmptyValue(self::$badpass)) {
-            return ui_sysmessage::shout(ui_language::translate("Your password is not valid. Valid characters are A-Z, a-z, 0-9."), "zannounceerror");
+            return ui_sysmessage::shout(ui_language::translate("The password needs a lower case letter, a capital and a digit."), "zannounceerror");
         }
 		if (!fs_director::CheckForEmptyValue(self::$badpasswordlength)) {
-            return ui_sysmessage::shout(ui_language::translate("Your password did not meet the minimun length requirements. Characters needed for password length") . ": " . ctrl_options::GetSystemOption('password_minlength'), "zannounceerror");
+            return ui_sysmessage::shout(ui_language::translate("The password is too short. Characters needed") . ": " . self::getMinPassLength(), "zannounceerror");
         }
         if (!fs_director::CheckForEmptyValue(self::$noaddress)) {
             return ui_sysmessage::shout(ui_language::translate("Your email address cannot be blank."), "zannounceerror");

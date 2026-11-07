@@ -159,3 +159,5 @@ modules/aliases/assets/unlimited.png
 modules/distlists/assets/unlimited.png
 # Forwarders: the old "unlimited" picture
 modules/forwarders/assets/unlimited.png
+# Mailboxes: the old "unlimited" picture
+modules/mailboxes/assets/unlimited.png

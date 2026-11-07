@@ -1,443 +1,122 @@
-<style>
-
-
-/* Style all input fields */
-input {
-  width: 100%;
-  padding: 12px;
-  border: 1px solid var(--sn-line, #ccc);
-  border-radius: 4px;
-  box-sizing: border-box;
-  margin-top: 6px;
-  margin-bottom: 16px;
-}
-
-/* Style the submit button */
-input[type=submit] {
-  background-color: var(--sn-ok, #4CAF50);
-  color: white;
-}
-
-/* Style the container for inputs */
-.check_container {
-  background-color: var(--sn-soft, #f1f1f1);
-  padding: 0px;
-}
-
-/* The message box is shown when the user clicks on the password field */
-#message {
-  display:none;
-  background: var(--sn-soft, #f1f1f1);
-  color: var(--sn-ink, #000);
-  position: relative;
-  padding: 20px;
-  margin-top: 5px;
-}
-
-#message p {
-  padding: 0px 35px;
-  font-size: 14px;
-}
-
-/* Add a green text color and a checkmark when the requirements are right */
-.valid {
-  color: var(--sn-ok, green);
-}
-
-.valid:before {
-  position: relative;
-  left: -35px;
-  content: "\2714";
-}
-
-/* Add a red text color and an "x" icon when the requirements are wrong */
-.invalid {
-  color: var(--sn-bad, red);
-}
-
-.invalid:before {
-  position: relative;
-  left: -35px;
-  content: "\2718";
-}
-
-</style>
-
 <div class="zmodule_content panel" id="zmodule_header_<@ ModuleName @>">
     <div class="panel-heading">
         <img src="<@ ModuleIcon @>" width="35" height="35" border="0" alt="<@ ModuleName @>">
+        <div class="zmodule_title"><@ ModuleName @></div>
+        <div class="zmodule_desc" id="zmodule_desc_<@ ModuleName @>"><@ ModuleDesc @></div>
+    </div>
+    <@ Result @>
+    <link rel="stylesheet" href="modules/mailboxes/assets/mailboxes.css">
 
-        <div class="zmodule_title">
-            <@ ModuleName @>
+    <div class="mb" id="mb">
+        <% if isDeleteMailbox %>
+        <form class="mb-box mb-confirm" action="./?module=mailboxes&amp;action=ConfirmDeleteMailbox" method="post">
+            <h4><svg class="mb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg><: Delete the mailbox :> <code><@ EditCurrentMailboxName @></code>?</h4>
+            <@ DeleteDetails @>
+            <div class="mb-foot"><input type="hidden" name="inDelete" value="<@ EditCurrentMailboxID @>">
+                <button class="btn btn-danger" type="submit"><: Delete :></button>
+                <a class="btn btn-default" href="./?module=mailboxes"><: Cancel :></a></div>
+            <@ CSFR_Tag @>
+        </form>
+        <% endif %>
+
+        <% if isEditMailbox %>
+        <form class="mb-box mb-edit" action="./?module=mailboxes&amp;show=Edit&amp;other=<@ EditCurrentMailboxID @>&amp;action=UpdateMailbox" method="post">
+            <a href="./?module=mailboxes" class="btn btn-default btn-sm mb-back"><svg class="mb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg><: All mailboxes :></a>
+            <div class="mb-title"><span class="mb-avatar lg" aria-hidden="true">@</span><div><small><: Mailbox :></small><b><@ EditCurrentMailboxName @></b></div></div>
+            <div class="mb-switchrow"><div><label for="inEnabled"><: Receiving mail :></label><small><: Off: mail sent to it is refused and it can not be logged in to; the mail in it stays. :></small></div>
+                <label class="mb-switch"><input type="checkbox" name="inEnabled" id="inEnabled" value="1"<@ EditOnChecked @>><span class="mb-toggle"></span></label></div>
+            <label class="mb-label" for="inPassword"><: New password :> <small><: leave empty to keep the current one :></small></label>
+            <div class="mb-pass"><input class="form-control" type="password" name="inPassword" id="inPassword" autocomplete="new-password">
+                <button type="button" class="btn btn-default mb-show" data-show="<: Show :>" data-hide="<: Hide :>"><: Show :></button>
+                <button type="button" class="btn btn-default mb-gen" data-len="<@ MinPassLength @>"><: Make one :></button></div>
+            <ul class="mb-rules" data-len="<@ MinPassLength @>"><li data-rule="lower"><: A lower case letter :></li><li data-rule="upper"><: A capital letter :></li><li data-rule="digit"><: A digit :></li><li data-rule="len"><@ MinPassLength @> <: characters or more :></li></ul>
+            <p class="mb-sub"><: The panel keeps no copy: tell the person who uses the mailbox, and update the password in their mail program. :></p>
+            <div class="mb-foot"><@ CSFR_Tag @><button class="btn btn-primary" type="submit" name="inSave" value="<@ EditCurrentMailboxID @>"><: Save :></button>
+                <a class="btn btn-default" href="./?module=mailboxes"><: Cancel :></a></div>
+        </form>
+        <% endif %>
+
+        <% if isCreateMailbox %>
+        <div class="mb-tiles"><@ Tiles @></div>
+
+        <div class="mb-box">
+            <div class="mb-head"><div><h4><: Your mailboxes :></h4>
+                <p class="mb-sub"><: Each mailbox has its own address, password and mail. :></p></div>
+                <div class="mb-headact"><input type="search" class="form-control mb-find" placeholder="<: Find a mailbox :>" aria-label="<: Find a mailbox :>" hidden>
+                <% if WebmailOn %><a class="btn btn-default btn-sm" href="./?module=webmail"><svg class="mb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16v16H4z"/><path d="m4 7 8 6 8-6"/></svg><: Webmail :></a><% endif %></div></div>
+            <% if MailboxList %>
+            <form action="./?module=mailboxes&amp;action=EditMailbox" method="post" class="mb-list">
+                <@ MailboxRows @>
+                <@ CSFR_Tag @>
+            </form>
+            <p class="mb-empty mb-nomatch" hidden><: No mailbox matches. :></p>
+            <% else %>
+            <div class="mb-empty"><b><: You have no mailboxes yet :></b><span><: Make the first one below. :></span></div>
+            <% endif %>
         </div>
 
-        <div class="zmodule_desc" id="zmodule_desc_<@ ModuleName @>"><@ ModuleDesc @></div>
-
+        <div class="mb-box">
+            <h4><: Make a mailbox :></h4>
+            <% if QuotaLimit %>
+            <% if DomainList %>
+            <form action="./?module=mailboxes&amp;action=AddMailbox" method="post" class="mb-create">
+                <div class="mb-grid">
+                    <div><label class="mb-label" for="inAddress"><: Address :></label>
+                        <div class="mb-addrfield"><input class="form-control" type="text" name="inAddress" id="inAddress" value="<@ PostedAddress @>" placeholder="name" autocomplete="off" spellcheck="false" required>
+                            <select class="form-control" name="inDomain" id="inDomain" aria-label="<: Domain :>"><@ DomainOptions @></select></div></div>
+                    <div><label class="mb-label" for="inNewPassword"><: Password :></label>
+                        <div class="mb-pass"><input class="form-control" type="password" name="inPassword" id="inNewPassword" autocomplete="new-password" required>
+                            <button type="button" class="btn btn-default mb-show" data-show="<: Show :>" data-hide="<: Hide :>"><: Show :></button>
+                            <button type="button" class="btn btn-default mb-gen" data-len="<@ MinPassLength @>"><: Make one :></button></div>
+                        <ul class="mb-rules" data-len="<@ MinPassLength @>"><li data-rule="lower"><: A lower case letter :></li><li data-rule="upper"><: A capital letter :></li><li data-rule="digit"><: A digit :></li><li data-rule="len"><@ MinPassLength @> <: characters or more :></li></ul></div>
+                </div>
+                <div class="mb-foot"><@ CSFR_Tag @><button class="btn btn-primary" type="submit" name="inCreate" value="inCreate"><: Make mailbox :></button>
+                    <span class="mb-sub"><: Note the password: the panel keeps no copy. Mail programs use the full address as the user name. :></span></div>
+            </form>
+            <% else %>
+            <div class="mb-limit"><: Add a domain first in Domains: a mailbox is always at one of your domains. :></div>
+            <% endif %>
+            <% else %>
+            <div class="mb-limit"><: You have as many mailboxes as your package allows. Delete one, or ask your host for a bigger package. :></div>
+            <% endif %>
+        </div>
+        <% endif %>
     </div>
-
-    <@ Result @>
-
-    <% if isDeleteMailbox %>
-    <div class="zform_wrapper alert alert-danger">
-        <h2><: Delete Mailbox :>: <@ EditCurrentMailboxName @> ?</h2>
-        <p><: Please confirm that you want to delete this mailbox. :></p>
-        <form action="./?module=mailboxes&action=ConfirmDeleteMailbox" method="post">
-            <table class="none" cellpadding="0" cellspacing="0">
-                <tr>
-                    <td colspan="2" align="right">
-                        <input type="hidden" name="inDelete" value="<@ EditCurrentMailboxID @>">
-                        <button class="button-loader delete btn btn-danger" type="submit" ><: Delete :></button>
-                        <button class="button-loader btn btn-default" type="button" onclick="window.location.href='./?module=mailboxes';return false;"><: Cancel :></button>
-                    </td>
-                </tr>
-            </table>
-            <@ CSFR_Tag @>
-        </form>
-    </div>
-    <% endif %>
-
-    <% if isEditMailbox %>
-    <div class="zform_wrapper">
-        <h2><: Edit mailbox :>: <@ EditCurrentMailboxName @></h2>
-        <form action="./?module=mailboxes&action=UpdateMailbox" method="post">
-            <table class="table table-striped">
-                <% loop CurrentMailboxList %>
-                <tr>
-                    <th><: Email Address :>:</th>
-                    <td><& address &></td>
-                </tr>
-                <tr>
-                    <th><: Set Password :>:</th>
-                    <td><input class="inPassword" type="password" name="inPassword" id="inPassword" pattern="(?=.*\d)(?=.*[a-z])(?=.*[A-Z]).{4,}" required /></td>
-					<td><input id="showPassword" type="checkbox" onclick="passwordShowHide()" >Show Password</td>
-                </tr>
-                <% endloop %>
-				
-				<tr>
-                    <th></th>
-                    <td><a href="#" class="link-password" id="generate" onclick="passwordShow(), check()" ><: Generate Password :></a></td>
-                    <td></td>
-                </tr>
-				
-				</table>
-						
-				<div class="check_container">
-					<div id="message">
-						<h4>Password must contain the following:</h4>
-						<p id="letter" class="invalid">A <b>lowercase</b> letter</p>
-						<p id="capital" class="invalid">A <b>capital (uppercase)</b> letter</p>
-						<p id="number" class="invalid">A <b>number</b></p>
-						<p id="length" class="invalid">Minimum <b><@ MinPassLength @> characters</b></p>
-					</div>
-				</div>
-						
-				<table class="table table-striped">
-				
-                <tr>
-                    <th><: Enabled :>:</th>
-                    <td><input type="checkbox" name="inEnabled" id="inEnabled" value="1" <& ischeck &> /></td>
-                </tr>
-                <tr>
-                    <th>
-                        <button class="button-nonloader btn btn-primary" type="submit" id="button-nonloader" name="inSave" id="inSave" value="<& id &>"><: Save :></button>
-                        <button class="button-loader btn btn-default" type="button" onclick="window.location.href='./?module=mailboxes';return false;"><: Cancel :></button>
-                    </th>
-                    <td></td>
-                </tr>
-            </table>
-            <@ CSFR_Tag @>
-        </form>
-    </div>
-    <% endif %>
-
-    <div class="zgrid_wrapper">
-        <h2><: Current mailboxes :></h2>
-        <% if MailboxList %>
-        <form action="./?module=mailboxes&action=EditMailbox" method="post">
-            <table class="table table-striped">
-                <tr>
-                    <th><: Address :></th>
-                    <th><: Date created :></th>
-                    <th><: Status :></th>
-                    <th></th>
-                    <th></th>
-                </tr>
-                <% loop MailboxList %>
-                <tr>
-                    <td><& address &></td>
-                    <td><& created &></td>
-                    <td><& status &></td>
-                    <td><button class="button-loader btn btn-default" type="submit" id="button" name="inEdit_<& id &>" id="inEdit_<& id &>" value="inEdit_<& id &>"><: Edit :></button></td>
-                    <td><button class="button-loader delete btn btn-danger" type="submit" id="button" name="inDelete_<& id &>" id="inDelete_<& id &>" value="inDelete_<& id &>"><: Delete :></button></td>
-                </tr>
-                <% endloop %>
-            </table>
-            <@ CSFR_Tag @>
-        </form>
-        <% else %><!-- ELSE MailboxList -->
-        <: Sorry there are currently no mailboxes configured! :>
-        <% endif %><!-- END MailboxList -->
-    </div>
-
-    <% if isCreateMailbox %>
-    <div class="zgrid_wrapper">
-        <table class="none" width="100%" cellborder="0" cellspacing="0">
-            <tr valign="top">
-                <td>
-                    <h2><: Create a new mailbox :></h2>
-                    <% if QuotaLimit %>
-                    <form action="./?module=mailboxes&action=AddMailbox" method="post">
-                        <table class="table table-striped">
-                            <tr>
-                                <th nowrap="nowrap"><: Email Address :>:</th>
-                                <td><input type="text" name="inAddress" id="inAddress" /></td>
-                                <td>
-                                    <select name="inDomain" id="inDomain">
-                                        <option value="" selected="selected">-- <: Select a domain :> --</option>
-                                        <% loop DomainList %>
-                                        <option value="<& domain &>">@<& domain &></option>
-                                        <% endloop %>
-                                    </select>
-                                </td>
-                            </tr>
-                            <tr>
-                                <th nowrap="nowrap"><: Password :>:</th>
-                                <td><input class="inPassword" type="password" name="inPassword" id="inPassword" pattern="(?=.*\d)(?=.*[a-z])(?=.*[A-Z]).{4,}" required/></td>
-								<td><input id="showPassword" type="checkbox" onclick="passwordShowHide()" >Show Password</td>
-                                <td></td>
-                            </tr>
-							
-							<tr>
-								<th></th>
-								<td><a href="#" class="link-password" id="generate" onclick="passwordShow(), check()" ><: Generate Password :></a></td>
-								<td></td>
-							</tr>
-							
-						</table>
-						
-						<div class="check_container">
-							<div id="message">
-								<h4>Password must contain the following:</h4>
-								<p id="letter" class="invalid">A <b>lowercase</b> letter</p>
-								<p id="capital" class="invalid">A <b>capital (uppercase)</b> letter</p>
-								<p id="number" class="invalid">A <b>number</b></p>
-								<p id="length" class="invalid">Minimum <b><@ MinPassLength @> characters</b></p>
-							</div>
-						</div>
-						
-						<table class="table table-striped">
-							
-                            <tr>
-                                <th><button class="button-nonloader btn btn-primary" type="submit" id="button-nonloader" name="inCreate" id="inCreate" value="inCreate"><: Create :></button></th>
-                                <td></td>
-                                <td></td>
-                            </tr>
-                        </table>
-                        <@ CSFR_Tag @>
-                    </form>
-                    <% else %><!-- ELSE QuotaLimit -->
-                    <: Sorry, you have reached your mailbox quota limit! :>
-                    <% endif %><!-- END QuotaLimit -->
-                </td>
-                <td align="right"><@ EmailUsagepChart @></td>
-            </tr>
-        </table>
-    </div>
-    <% endif %>
-
-
 </div>
-
-<script type="text/JavaScript">
-    $.extend({
-        password: function (length, special) {
-            var iteration = 0;
-            var password = "";
-			
-			var chars = "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-			var string_length = Math.max(12, <@ MinPassLength @>);
-			// Sentora: the browser's cryptographic generator, each character from the whole
-			// set (this used Math.random(), and only the digits 0-4); retried until it has a
-			// lower case letter, a capital and a digit
-			var randomstring = '';
-			var buf = new Uint32Array(1);
-			var limit = Math.floor(4294967296 / chars.length) * chars.length;
-			do {
-				randomstring = '';
-				while (randomstring.length < string_length) {
-					window.crypto.getRandomValues(buf);
-					if (buf[0] < limit) {
-						randomstring += chars.charAt(buf[0] % chars.length);
-					}
-				}
-			} while (!/[a-z]/.test(randomstring) || !/[A-Z]/.test(randomstring) || !/[0-9]/.test(randomstring));
-		
-		return (randomstring);
-			
-        }
-    });
-	
-	
-	
-    $(document).ready(function() {
-		var ShowPass = false;
-        $('.link-password').click(function(e){
-            linkId = $(this).attr('id');
-            if (linkId == 'generate'){
-                password = $.password(<@ MinPassLength @>,false);
-                $('.inPassword').val(password);
-            }
-            e.preventDefault();
-        });
-		$('#btn_sh').click(function(e){
-		  if (!ShowPass)
-		  { 
-			  $('.passRow').css({'visibility': 'visible'});
-			  $('#btn_sh').innerHTML = 'Hide passwords';
-			  ShowPass = true;
-		  }
-		  else 
-		  {
-			  $('.passRow').css({'visibility': 'collapse'});
-			  $('#btn_sh').innerHTML = 'Show passwords';
-			  ShowPass = false;
-		  }
-		  e.preventDefault();
-		});
-		
-	  
-    });
-
-</script>
-
-<script type="text/JavaScript">
-	
-	var myInput = document.getElementById("inPassword");
-	var letter = document.getElementById("letter");
-	var capital = document.getElementById("capital");
-	var number = document.getElementById("number");
-	var length = document.getElementById("length");
-	
-	// When the user clicks on the password field, show the message box
-	myInput.onfocus = function() {
-	  	document.getElementById("message").style.display = "block";
-	}
-	
-	// When the user clicks outside of the password field, hide the message box
-	myInput.onblur = function() {
-	  	document.getElementById("message").style.display = "none";
-	}
-	
-	// When the user starts to type something inside the password field
-	myInput.onclick = function() {
-		  // Validate lowercase letters
-		  var lowerCaseLetters = /[a-z]/g;
-		  if(myInput.value.match(lowerCaseLetters)) {
-			letter.classList.remove("invalid");
-			letter.classList.add("valid");
-		  } else {
-			letter.classList.remove("valid");
-			letter.classList.add("invalid");
-	}
-	
-	  // Validate capital letters
-	  var upperCaseLetters = /[A-Z]/g;
-	  if(myInput.value.match(upperCaseLetters)) {
-			capital.classList.remove("invalid");
-			capital.classList.add("valid");
-	  } else {
-			capital.classList.remove("valid");
-			capital.classList.add("invalid");
-	  }
-	
-	  // Validate numbers
-	  var numbers = /[0-9]/g;
-	  if(myInput.value.match(numbers)) {
-			number.classList.remove("invalid");
-			number.classList.add("valid");
-	  } else {
-			number.classList.remove("valid");
-			number.classList.add("invalid");
-	  }
-	
-	  // Validate length
-	  if(myInput.value.length >= <@ MinPassLength @>) {
-			length.classList.remove("invalid");
-			length.classList.add("valid");
-	  } else {
-			length.classList.remove("valid");
-			length.classList.add("invalid");
-	  }
-	}
-	
-	
-	// When the user clicks inside the password field
-	myInput.onkeyup = function() {
-		  // Validate lowercase letters
-		  var lowerCaseLetters = /[a-z]/g;
-		  if(myInput.value.match(lowerCaseLetters)) {
-			letter.classList.remove("invalid");
-			letter.classList.add("valid");
-		  } else {
-			letter.classList.remove("valid");
-			letter.classList.add("invalid");
-	}
-	
-	  // Validate capital letters
-	  var upperCaseLetters = /[A-Z]/g;
-	  if(myInput.value.match(upperCaseLetters)) {
-			capital.classList.remove("invalid");
-			capital.classList.add("valid");
-	  } else {
-			capital.classList.remove("valid");
-			capital.classList.add("invalid");
-	  }
-	
-	  // Validate numbers
-	  var numbers = /[0-9]/g;
-	  if(myInput.value.match(numbers)) {
-			number.classList.remove("invalid");
-			number.classList.add("valid");
-	  } else {
-			number.classList.remove("valid");
-			number.classList.add("invalid");
-	  }
-	
-	  // Validate length
-	  if(myInput.value.length >= <@ MinPassLength @>) {
-			length.classList.remove("invalid");
-			length.classList.add("valid");
-	  } else {
-			length.classList.remove("valid");
-			length.classList.add("invalid");
-	  }
-	}
-	
-</script>
-
 <script>
-
-function passwordShowHide() {
-  var x = document.getElementById("inPassword");
-  if (x.type === "password") {
-    x.type = "text";
-  } else {
-    x.type = "password";
-  }
-}
-
-function passwordShow() {
-  var x = document.getElementById("inPassword");
-  if (x.type === "password") {
-    x.type = "text";
-  } 
-}
-
-function check() {
-  document.getElementById("showPassword").checked = true;
-}
-function uncheck() {
-  document.getElementById("showPassword").checked = false;
-}
-
+(function () {
+    'use strict';
+    var mb = document.getElementById('mb'); if (!mb) { return; }
+    var each = function (root, sel, fn) { Array.prototype.forEach.call(root.querySelectorAll(sel), fn); };
+    // password fields: Show, Make one (the browser's secure random numbers) and the rules ticked as you type
+    each(mb, '.mb-pass', function (box) {
+        var pw = box.querySelector('input'), show = box.querySelector('.mb-show'), gen = box.querySelector('.mb-gen');
+        var rules = box.parentNode.querySelector('.mb-rules');
+        var vis = function (on) { pw.type = on ? 'text' : 'password'; show.textContent = show.getAttribute(on ? 'data-hide' : 'data-show'); };
+        var tick = function () {
+            if (!rules) { return; }
+            var v = pw.value, ok = { lower: /[a-z]/.test(v), upper: /[A-Z]/.test(v), digit: /[0-9]/.test(v), len: v.length >= parseInt(rules.getAttribute('data-len'), 10) };
+            rules.classList.toggle('idle', v === '');
+            each(rules, 'li', function (li) { li.classList.toggle('ok', !!ok[li.getAttribute('data-rule')]); });
+        };
+        show.addEventListener('click', function () { vis(pw.type === 'password'); });
+        gen.addEventListener('click', function () {
+            var chars = 'abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789', len = Math.max(16, parseInt(gen.getAttribute('data-len'), 10) || 0), out, buf = new Uint32Array(1), lim = Math.floor(4294967296 / chars.length) * chars.length;
+            do { out = ''; while (out.length < len) { window.crypto.getRandomValues(buf); if (buf[0] < lim) { out += chars.charAt(buf[0] % chars.length); } } }
+            while (!/[a-z]/.test(out) || !/[A-Z]/.test(out) || !/[0-9]/.test(out));
+            pw.value = out; vis(true); tick(); pw.select();
+        });
+        pw.addEventListener('input', tick); tick();
+    });
+    var rows = mb.querySelectorAll('.mb-row'), find = mb.querySelector('.mb-find');
+    if (find && rows.length > 6) {
+        find.hidden = false;
+        find.addEventListener('input', function () {
+            var q = find.value.trim().toLowerCase(), n = 0;
+            Array.prototype.forEach.call(rows, function (r) { var on = q === '' || r.getAttribute('data-s').indexOf(q) >= 0; r.hidden = !on; if (on) { n++; } });
+            mb.querySelector('.mb-nomatch').hidden = n > 0;
+        });
+    }
+    each(mb, 'form', function (f) { f.addEventListener('submit', function () { if (window.Sentora && Sentora.loader) { Sentora.loader.showLoader(); } }); });
+})();
 </script>
