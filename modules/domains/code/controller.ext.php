@@ -32,6 +32,8 @@
  * Lists, creates and deletes the account's domains (x_vhosts type 1), sets their PHP
  * version, and flags the Apache config for rewriting by the daemon.
  */
+require_once dirname(__FILE__) . '/domainsui.php';
+
 class module_controller extends ctrl_module
 {
 
@@ -542,82 +544,100 @@ class module_controller extends ctrl_module
     /**
      * Is the page showing the delete confirmation for a domain of this account (template: <% if isDeleteDomain %>)?
      *
-     * @global runtime_controller $controller The request controller.
-     * @global db_driver $zdbh The panel's database connection.
-     * @param int|string|null $uid Optional. The account ID. Default null (the logged-in user).
-     * @return bool|null Null when the domain in ?domain= is not the account's.
+     * @param int|string|null $uid Optional. Not used (always the logged-in account). Default null.
+     * @return bool True for ?show=Delete with the ?id= of one of the account's domains.
      */
     static function getisDeleteDomain($uid = null)
     {
-        global $controller;
-        global $zdbh;
-
-        $urlvars = $controller->GetAllControllerRequests('URL');
-
-        // Verify if Current user can Delete user domains.
-        // This shall avoid exposing domain based on ID lookups.
-        $currentuser = ctrl_users::GetUserDetail($uid);
-
-    	$sql = "SELECT * FROM x_vhosts WHERE vh_acc_fk=:userid AND vh_name_vc=:editedDomainID AND vh_deleted_ts IS NULL";
-    	$numrows = $zdbh->prepare($sql);
-    	$numrows->bindParam(':userid', $currentuser['userid']);
-		$numrows->bindParam(':editedDomainID', $urlvars['domain']);
-    	$numrows->execute();
-
-        if( $numrows->rowCount() == 0 ) {
-            return;
-        }
-
-        // Show User Info
-        return (isset($urlvars['show'])) && ($urlvars['show'] == "Delete");
+        return domains_ui::Confirming(1) !== false;
     }
 
     /**
-     * Return the domain ID in ?id= (template: <@ CurrentID @>).
+     * Return the domain ID in ?id= when it is one of the account's (template: <@ CurrentID @>).
      *
-     * @global runtime_controller $controller The request controller.
      * @return string|int The ID, or ''.
      */
     static function getCurrentID()
     {
-        global $controller;
-        $id = $controller->GetControllerRequest('URL', 'id');
-        return ($id) ? $id : '';
+        $row = domains_ui::Confirming(1);
+        return $row ? (int) $row['vh_id_pk'] : '';
     }
 
     /**
      * Return the domain name in ?domain= (template: <@ CurrentDomain @>).
      *
-     * Note: the value is returned as is, not HTML-escaped.
-     * @global runtime_controller $controller The request controller.
+     * The name of the account's own domain with that ?id= (not ?domain=), HTML-escaped.
      * @return string The domain, or ''.
      */
     static function getCurrentDomain()
     {
-        global $controller;
-        $domain = $controller->GetControllerRequest('URL', 'domain');
-        return ($domain) ? $domain : '';
+        $row = domains_ui::Confirming(1);
+        return $row ? domains_ui::h($row['vh_name_vc']) : '';
     }
 
     /**
-     * Return the domain quota pie chart (template: <@ DomainUsagepChart @>).
+     * The figures at the top (<@ Tiles @>): domains against the package's limit, live, and waiting.
      *
-     * @return string An <img> tag: the "unlimited" image, or the pChart pie of free/used.
+     * @return string The HTML.
      */
-    static function getDomainUsagepChart()
+    static function getTiles()
     {
-        $currentuser = ctrl_users::GetUserDetail();
-        $maximum = $currentuser['domainquota'];
-        if ($maximum < 0) { //-1 = unlimited
-            return '<img src="' . ui_template::AssetPath('img/misc/unlimited.png') . '" alt="' . ui_language::translate('Unlimited') . '"/>';
-        } else {
-            $used = ctrl_users::GetQuotaUsages('domains', $currentuser['userid']);
-            $free = max($maximum - $used, 0);
-            return '<img src="etc/lib/pChart2/sentora/z3DPie.php?score=' . $free . '::' . $used
-                    . '&labels=Free: ' . $free . '::Used: ' . $used
-                    . '&legendfont=verdana&legendfontsize=8&imagesize=240::190&chartsize=120::90&radius=100&legendsize=150::160"'
-                    . ' alt="' . ui_language::translate('Pie chart') . '"/>';
+        $me = ctrl_users::GetUserDetail();
+        $rows = self::ListDomains($me['userid']);
+        return domains_ui::Tiles($rows ? $rows : array(), $me['domainquota'], 'Domains', 'globe');
+    }
+
+    /**
+     * One card per domain (<@ Cards @>), with its folder, state, PHP version, Visit and Delete.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return string The HTML.
+     */
+    static function getCards()
+    {
+        global $zdbh;
+        $me = ctrl_users::GetUserDetail();
+        $q = $zdbh->prepare("SELECT * FROM x_vhosts WHERE vh_acc_fk = :u AND vh_type_in = 1 AND vh_deleted_ts IS NULL ORDER BY vh_name_vc");
+        $q->execute(array(':u' => (int) $me['userid']));
+        $rows = array();
+        foreach ($q->fetchAll(PDO::FETCH_ASSOC) as $r) {
+            $rows[] = array('id' => $r['vh_id_pk'], 'name' => $r['vh_name_vc'], 'active' => $r['vh_active_in'], 'dir' => $r['vh_directory_vc'],
+                'php' => isset($r['vh_php_version_vc']) ? (string) $r['vh_php_version_vc'] : '', 'created' => $r['vh_created_ts']);
         }
+        return domains_ui::Cards($rows, array('module' => 'domains', 'phpAction' => 'SetPhpVersion', 'phpField' => 'inDomainId'));
+    }
+
+    /**
+     * The folders of public_html as choices for "a folder that is already there" (<@ FolderOptions @>).
+     *
+     * @return string The <option> HTML.
+     */
+    static function getFolderOptions()
+    {
+        return domains_ui::FolderOptions(self::ListDomainDirs(ctrl_users::GetUserDetail()['userid']));
+    }
+
+    /**
+     * What deleting the domain in the confirmation does (<@ DeleteDetails @>).
+     *
+     * @return string The HTML ('' when there is no confirmation).
+     */
+    static function getDeleteDetails()
+    {
+        $row = domains_ui::Confirming(1);
+        return $row ? domains_ui::DeleteDetails($row) : '';
+    }
+
+    /**
+     * The domain name typed when creating failed, so it is not lost (<@ PostedDomain @>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return string The escaped name.
+     */
+    static function getPostedDomain()
+    {
+        global $controller;
+        return self::$ok ? '' : domains_ui::h((string) $controller->GetControllerRequest('FORM', 'inDomain'));
     }
 
     /**
@@ -632,13 +652,10 @@ class module_controller extends ctrl_module
     {
         global $controller;
         if ($int == 1) {
-            return '<td><font color="green">' . ui_language::translate('Live') . '</font></td>'
+            return '<td><span class="label label-success">' . ui_language::translate('Live') . '</span></td>'
                     . '<td></td>';
         } else {
-            return '<td><font color="orange">' . ui_language::translate('Pending') . '</font></td>'
-                    . '<td><a href="#" class="help_small" id="help_small_' . $id . '_a"'
-                    . 'title="' . ui_language::translate('Your domain will become active at the next scheduled update.  This can take up to one hour.') . '">'
-                    . '<img src="/modules/' . $controller->GetControllerRequest('URL', 'module') . '/assets/help_small.png" border="0" /></a>';
+            return '<td><span class="label label-warning" title="' . htmlspecialchars(ui_language::translate('It goes live at the next update of the web server, within an hour.'), ENT_QUOTES, 'UTF-8') . '">' . ui_language::translate('Pending') . '</span></td><td></td>';
         }
     }
 
@@ -719,7 +736,7 @@ class module_controller extends ctrl_module
             return ui_sysmessage::shout(ui_language::translate("Please remove 'www'. The 'www' will automatically work with all Domains / Subdomains."), "zannounceerror");
         }
         if (!fs_director::CheckForEmptyValue(self::$writeerror)) {
-            return ui_sysmessage::shout(ui_language::translate("There was a problem writting to the virtual host container file. Please contact your administrator and report this error. Your domain will not function until this error is corrected."), "zannounceerror");
+            return ui_sysmessage::shout(ui_language::translate("There was a problem writing to the virtual host container file. Please contact your administrator and report this error. Your domain will not function until this error is corrected."), "zannounceerror");
         }
         if (!fs_director::CheckForEmptyValue(self::$ok)) {
             return ui_sysmessage::shout(ui_language::translate("Changes to your domain web hosting has been saved successfully."), "zannounceok");

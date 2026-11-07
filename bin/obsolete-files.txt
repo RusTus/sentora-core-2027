@@ -146,3 +146,10 @@ modules/protected_directories/assets/tree.css
 modules/mysql_databases/assets/unlimited.png
 # MySQL Users: the old "unlimited" picture (never shown since the theme has its own)
 modules/mysql_users/assets/unlimited.png
+# Domains, Sub Domains and Parked Domains: the old help icon and "unlimited" pictures
+modules/domains/assets/help_small.png
+modules/domains/assets/unlimited.png
+modules/sub_domains/assets/help_small.png
+modules/sub_domains/assets/unlimited.png
+modules/parked_domains/assets/help_small.png
+modules/parked_domains/assets/unlimited.png

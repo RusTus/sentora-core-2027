@@ -26,6 +26,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
  */
+require_once dirname(__FILE__) . '/../../domains/code/domainsui.php';
+
 class module_controller extends ctrl_module
 {
 
@@ -441,83 +443,85 @@ class module_controller extends ctrl_module
     }
 
     /**
-     * Template flag: show the delete confirmation for an own vhost (?show=Delete&id=<id>).
+     * Template flag <% if isDeleteDomain %>: show the delete confirmation?
      *
-     * @global runtime_controller $controller The request controller.
-     * @global db_driver $zdbh The panel's database connection.
-     * @param int|null $uid Optional. The account ID; null for the logged-in account. Default null.
-     * @return bool|null Null when the vhost is not the account's own.
+     * @param int|string|null $uid Optional. Not used (always the logged-in account). Default null.
+     * @return bool True for ?show=Delete with the ?id= of one of the account's parked domains.
      */
     static function getisDeleteDomain($uid = null)
     {
-        global $controller;
-        global $zdbh;
-
-        $urlvars = $controller->GetAllControllerRequests('URL');
-
-        // Verify if Current user can Delete Parked Domains.
-        // This shall avoid exposing Parked Domains based on ID lookups.
-        $currentuser = ctrl_users::GetUserDetail($uid);
-
-    	$sql = "SELECT * FROM x_vhosts WHERE vh_acc_fk=:userid AND vh_id_pk=:editedUsrID AND vh_deleted_ts IS NULL";
-    	$numrows = $zdbh->prepare($sql);
-    	$numrows->bindParam(':userid', $currentuser['userid']);
-		$numrows->bindParam(':editedUsrID', $urlvars['id']);
-    	$numrows->execute();
-
-        if( $numrows->rowCount() == 0 ) {
-            return;
-        }
-
-        // Show User Info
-        return (isset($urlvars['show'])) && ($urlvars['show'] == "Delete");
+        return domains_ui::Confirming(3) !== false;
     }
 
     /**
-     * Template value: the ?id= of the URL.
+     * Template value <@ CurrentID @>: the ID in ?id= when it is one of the account's parked domains.
      *
-     * @global runtime_controller $controller The request controller.
-     * @return string The ID, or ''.
+     * @return int|string The ID, or ''.
      */
     static function getCurrentID()
     {
-        global $controller;
-        $id = $controller->GetControllerRequest('URL', 'id');
-        return ($id) ? $id : '';
+        $row = domains_ui::Confirming(3);
+        return $row ? (int) $row['vh_id_pk'] : '';
     }
 
     /**
-     * Template value: the ?domain= of the URL.
+     * Template value <@ CurrentDomain @>: the name of the parked domain in ?id=, HTML-escaped (never ?domain=, which was printed as it came).
      *
-     * @global runtime_controller $controller The request controller.
-     * @return string The domain, or ''.
+     * @return string The name, or ''.
      */
     static function getCurrentDomain()
     {
-        global $controller;
-        $domain = $controller->GetControllerRequest('URL', 'domain');
-        return ($domain) ? $domain : '';
+        $row = domains_ui::Confirming(3);
+        return $row ? domains_ui::h($row['vh_name_vc']) : '';
     }
 
     /**
-     * Template HTML: the parked domain quota pie chart, or the "unlimited" image.
+     * The figures at the top (<@ Tiles @>): parked domains against the package's limit, live, and waiting.
      *
-     * @return string HTML img tag.
+     * @return string The HTML.
      */
-    static function getParkedDomainUsagepChart()
+    static function getTiles()
     {
-        $currentuser = ctrl_users::GetUserDetail();
-        $maximum = $currentuser['parkeddomainquota'];
-        if ($maximum < 0) { //-1 = unlimited
-            return '<img src="' . ui_template::AssetPath('img/misc/unlimited.png') . '" alt="' . ui_language::translate('Unlimited') . '"/>';
-        } else {
-            $used = ctrl_users::GetQuotaUsages('parkeddomains', $currentuser['userid']);
-            $free = max($maximum - $used, 0);
-            return '<img src="etc/lib/pChart2/sentora/z3DPie.php?score=' . $free . '::' . $used
-                    . '&labels=Free: ' . $free . '::Used: ' . $used
-                    . '&legendfont=verdana&legendfontsize=8&imagesize=240::190&chartsize=120::90&radius=100&legendsize=150::160"'
-                    . ' alt="' . ui_language::translate('Pie chart') . '"/>';
+        $me = ctrl_users::GetUserDetail();
+        $rows = self::ListParkedDomains($me['userid']);
+        return domains_ui::Tiles($rows ? $rows : array(), $me['parkeddomainquota'], 'Parked domains', 'park');
+    }
+
+    /**
+     * One card per parked domain (<@ Cards @>), with its state, when it was parked, Visit and Delete.
+     *
+     * @return string The HTML.
+     */
+    static function getCards()
+    {
+        $rows = array();
+        foreach (self::ListParkedDomains(ctrl_users::GetUserDetail()['userid']) ?: array() as $r) {
+            $rows[] = array('id' => $r['id'], 'name' => $r['name'], 'active' => $r['active'], 'created' => $r['created']);
         }
+        return domains_ui::Cards($rows, array('module' => 'parked_domains', 'phpAction' => null, 'phpField' => null, 'parked' => true));
+    }
+
+    /**
+     * What deleting the parked domain in the confirmation does (<@ DeleteDetails @>).
+     *
+     * @return string The HTML ('' when there is no confirmation).
+     */
+    static function getDeleteDetails()
+    {
+        $row = domains_ui::Confirming(3);
+        return $row ? domains_ui::DeleteDetails($row) : '';
+    }
+
+    /**
+     * The name typed when parking failed, so it is not lost (<@ PostedDomain @>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return string The escaped name.
+     */
+    static function getPostedDomain()
+    {
+        global $controller;
+        return self::$ok ? '' : domains_ui::h((string) $controller->GetControllerRequest('FORM', 'inDomain'));
     }
 
     /**
@@ -532,13 +536,10 @@ class module_controller extends ctrl_module
     {
         global $controller;
         if ($int == 1) {
-            return '<td><font color="green">' . ui_language::translate('Live') . '</font></td>'
+            return '<td><span class="label label-success">' . ui_language::translate('Live') . '</span></td>'
                     . '<td></td>';
         } else {
-            return '<td><font color="orange">' . ui_language::translate("Pending") . '</font></td>'
-                    . '<td><a href="#" class="help_small" id="help_small_' . $id . '_a"'
-                    . 'title="' . ui_language::translate('Your domain will become active at the next scheduled update.  This can take up to one hour.') . '">'
-                    . '<img src="/modules/' . $controller->GetControllerRequest('URL', 'module') . '/assets/help_small.png" border="0" /></a></td>';
+            return '<td><span class="label label-warning" title="' . htmlspecialchars(ui_language::translate('It goes live at the next update of the web server, within an hour.'), ENT_QUOTES, 'UTF-8') . '">' . ui_language::translate('Pending') . '</span></td><td></td>';
         }
     }
 
@@ -556,7 +557,7 @@ class module_controller extends ctrl_module
             return ui_sysmessage::shout(ui_language::translate("Your Domain name is not valid. Please enter a valid Domain Name: i.e. 'domain.com'"), "zannounceerror");
         }
         if (!fs_director::CheckForEmptyValue(self::$alreadyexists)) {
-            return ui_sysmessage::shout(ui_language::translate("The domain already appears to exsist on this server."), "zannounceerror");
+            return ui_sysmessage::shout(ui_language::translate("The domain already exists on this server."), "zannounceerror");
         }
         if (!fs_director::CheckForEmptyValue(self::$error)) {
             return ui_sysmessage::shout(ui_language::translate("Please remove 'www'. The 'www' will automatically work with all Domains / Subdomains."), "zannounceerror");

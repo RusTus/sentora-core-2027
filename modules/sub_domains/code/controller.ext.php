@@ -30,6 +30,8 @@
 /**
  * Sub-domains module: list, create and delete the account's subdomains and choose their PHP version.
  */
+require_once dirname(__FILE__) . '/../../domains/code/domainsui.php';
+
 class module_controller extends ctrl_module
 {
 
@@ -47,6 +49,9 @@ class module_controller extends ctrl_module
     static $badname;
     /** @var bool|null True when no domain name was entered (shown by getResult()). */
     static $blank;
+    /** @var bool|null True when the parent domain is not one of the account's own (shown by getResult()). */
+    static $notowner;
+
     /** @var bool|null True when the last change was saved (shown by getResult()). */
     static $ok;
 
@@ -186,7 +191,7 @@ class module_controller extends ctrl_module
      * @param string $destination An existing folder in public_html (ignored with $autohome).
      * @param int|string $autohome 1 to make a new folder named after the subdomain.
      * @param string $phpversion Optional. PHP version ('' for the default). Default ''.
-     * @return bool|null True when created; false when the folder is not valid; null when CheckCreateForErrors() failed.
+     * @return bool|null True when created; false when it is not under one of the account's own domains or the folder is not valid; null when CheckCreateForErrors() failed.
      */
     static function ExecuteAddSubDomain($uid, $domain, $destination, $autohome, $phpversion = '')
     {
@@ -195,6 +200,18 @@ class module_controller extends ctrl_module
         runtime_hook::Execute('OnBeforeAddSubDomain');
         $currentuser = ctrl_users::GetUserDetail($uid);
         $domain = strtolower(str_replace(' ', '', $domain));
+        // Only under one of the account's own domains (the form and the API both come here)
+        $under = false;
+        foreach (self::ListDomains($uid) ?: array() as $d) {
+            $parent = strtolower((string) $d['name']);
+            if (strlen($domain) > strlen($parent) + 1 && substr($domain, -strlen($parent) - 1) === '.' . $parent) {
+                $under = true;
+            }
+        }
+        if (!$under) {
+            self::$notowner = true;
+            return false;
+        }
         if (!fs_director::CheckForEmptyValue(self::CheckCreateForErrors($domain))) {
             //** New Home Directory **//
             if ($autohome == 1) {
@@ -469,7 +486,25 @@ class module_controller extends ctrl_module
         }
         $currentuser = ctrl_users::GetUserDetail();
         $formvars = $controller->GetAllControllerRequests('FORM');
-        if (self::ExecuteAddSubDomain($currentuser['userid'], $formvars['inSub'] . "." . $formvars['inDomain'], $formvars['inDestination'], $formvars['inAutoHome'], isset($formvars['inPhpVersion']) ? $formvars['inPhpVersion'] : '')) {
+        // The parent must be one of this account's own domains: it came from the form, so any
+        // name was accepted, and a sub-domain of another account's domain took over its traffic
+        $parent = strtolower(trim(isset($formvars['inDomain']) ? (string) $formvars['inDomain'] : ''));
+        $own = false;
+        foreach (self::ListDomains($currentuser['userid']) ?: array() as $d) {
+            if (strtolower($d['name']) === $parent) {
+                $own = true;
+            }
+        }
+        if (!$own) {
+            self::$notowner = true;
+            return false;
+        }
+        $sub = strtolower(trim(isset($formvars['inSub']) ? (string) $formvars['inSub'] : ''));
+        if ($sub === '') {
+            self::$blank = true;
+            return false;
+        }
+        if (self::ExecuteAddSubDomain($currentuser['userid'], $sub . "." . $parent, isset($formvars['inDestination']) ? $formvars['inDestination'] : '', isset($formvars['inAutoHome']) ? $formvars['inAutoHome'] : 1, isset($formvars['inPhpVersion']) ? $formvars['inPhpVersion'] : '')) {
             self::$ok = TRUE;
             return true;
         } else {
@@ -525,83 +560,120 @@ class module_controller extends ctrl_module
     }
 	
     /**
-     * Check whether the delete confirmation is shown for a subdomain of the user (<% if isDeleteDomain %>).
+     * Template flag <% if isDeleteDomain %>: show the delete confirmation?
      *
-     * @global runtime_controller $controller The request controller.
-     * @global db_driver $zdbh The panel's database connection.
-     * @param int|string|null $uid Optional. The account ID; null for the logged-in user. Default null.
-     * @return bool|null Null when the subdomain in the URL is not the user's, else whether show=Delete.
+     * @param int|string|null $uid Optional. Not used (always the logged-in account). Default null.
+     * @return bool True for ?show=Delete with the ?id= of one of the account's sub-domains.
      */
     static function getisDeleteDomain($uid = null)
     {
-        global $controller;
-        global $zdbh;
-
-        $urlvars = $controller->GetAllControllerRequests('URL');
-
-        // Verify if Current user can Delete Sub_Domains.
-        // This shall avoid exposing Sub_Domains based on ID lookups.
-        $currentuser = ctrl_users::GetUserDetail($uid);
-
-    	$sql = "SELECT * FROM x_vhosts WHERE vh_acc_fk=:userid AND vh_name_vc=:editedDomainID AND vh_deleted_ts IS NULL";
-    	$numrows = $zdbh->prepare($sql);
-    	$numrows->bindParam(':userid', $currentuser['userid']);
-		$numrows->bindParam(':editedDomainID', $urlvars['domain']);
-    	$numrows->execute();
-
-        if( $numrows->rowCount() == 0 ) {
-            return;
-        }
-
-        // Show User Info
-        return (isset($urlvars['show'])) && ($urlvars['show'] == "Delete");
+        return domains_ui::Confirming(2) !== false;
     }
 
     /**
      * Return the subdomain ID from the URL ('id') (<@ CurrentID @>).
      *
-     * @global runtime_controller $controller The request controller.
      * @return mixed The URL value, or '' when none.
      */
     static function getCurrentID()
     {
-        global $controller;
-        $id = $controller->GetControllerRequest('URL', 'id');
-        return ($id) ? $id : '';
+        $row = domains_ui::Confirming(2);
+        return $row ? (int) $row['vh_id_pk'] : '';
     }
 
     /**
      * Return the subdomain name from the URL ('domain') (<@ CurrentDomain @>).
      *
-     * @global runtime_controller $controller The request controller.
      * @return mixed The URL value, or '' when none.
      */
     static function getCurrentDomain()
     {
-        global $controller;
-        $domain = $controller->GetControllerRequest('URL', 'domain');
-        return ($domain) ? $domain : '';
+        $row = domains_ui::Confirming(2);
+        return $row ? domains_ui::h($row['vh_name_vc']) : '';
     }
 
     /**
-     * Build the subdomain quota chart (<@ SubDomainUsagepChart @>).
+     * The figures at the top (<@ Tiles @>): sub-domains against the package's limit, live, and waiting.
      *
-     * @return string HTML <img> (a pie chart, or the unlimited image).
+     * @return string The HTML.
      */
-    static function getSubDomainUsagepChart()
+    static function getTiles()
     {
-        $currentuser = ctrl_users::GetUserDetail();
-        $maximum = $currentuser['subdomainquota'];
-        if ($maximum < 0) { //-1 = unlimited
-            return '<img src="' . ui_template::AssetPath('img/misc/unlimited.png') . '" alt="' . ui_language::translate('Unlimited') . '"/>';
-        } else {
-            $used = ctrl_users::GetQuotaUsages('subdomains', $currentuser['userid']);
-            $free = max($maximum - $used, 0);
-            return '<img src="etc/lib/pChart2/sentora/z3DPie.php?score=' . $free . '::' . $used
-                    . '&labels=Free: ' . $free . '::Used: ' . $used
-                    . '&legendfont=verdana&legendfontsize=8&imagesize=240::190&chartsize=120::90&radius=100&legendsize=150::160"'
-                    . ' alt="' . ui_language::translate('Pie chart') . '"/>';
+        $me = ctrl_users::GetUserDetail();
+        $rows = array();
+        foreach (self::ListSubDomains($me['userid']) ?: array() as $r) {
+            $rows[] = array('active' => $r['subactive']);
         }
+        return domains_ui::Tiles($rows, $me['subdomainquota'], 'Sub-domains', 'sub');
+    }
+
+    /**
+     * One card per sub-domain (<@ Cards @>), with its folder, state, PHP version, Visit and Delete.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return string The HTML.
+     */
+    static function getCards()
+    {
+        global $zdbh;
+        $q = $zdbh->prepare("SELECT * FROM x_vhosts WHERE vh_acc_fk = :u AND vh_type_in = 2 AND vh_deleted_ts IS NULL ORDER BY vh_name_vc");
+        $q->execute(array(':u' => (int) ctrl_users::GetUserDetail()['userid']));
+        $rows = array();
+        foreach ($q->fetchAll(PDO::FETCH_ASSOC) as $r) {
+            $rows[] = array('id' => $r['vh_id_pk'], 'name' => $r['vh_name_vc'], 'active' => $r['vh_active_in'], 'dir' => $r['vh_directory_vc'],
+                'php' => isset($r['vh_php_version_vc']) ? (string) $r['vh_php_version_vc'] : '', 'created' => $r['vh_created_ts']);
+        }
+        return domains_ui::Cards($rows, array('module' => 'sub_domains', 'phpAction' => 'SetPhpVersion', 'phpField' => 'inSubDomainId', 'sub' => true));
+    }
+
+    /**
+     * The folders of public_html as choices for "a folder that is already there" (<@ FolderOptions @>).
+     *
+     * @return string The <option> HTML.
+     */
+    static function getFolderOptions()
+    {
+        return domains_ui::FolderOptions(self::ListDomainDirs(ctrl_users::GetUserDetail()['userid']));
+    }
+
+    /**
+     * What deleting the sub-domain in the confirmation does (<@ DeleteDetails @>).
+     *
+     * @return string The HTML ('' when there is no confirmation).
+     */
+    static function getDeleteDetails()
+    {
+        $row = domains_ui::Confirming(2);
+        return $row ? domains_ui::DeleteDetails($row) : '';
+    }
+
+    /**
+     * The name typed when creating failed, so it is not lost (<@ PostedSub @>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return string The escaped name.
+     */
+    static function getPostedSub()
+    {
+        global $controller;
+        return self::$ok ? '' : domains_ui::h((string) $controller->GetControllerRequest('FORM', 'inSub'));
+    }
+
+    /**
+     * The account's domains as choices for the parent, the one picked before selected (<@ ParentOptions @>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return string The <option> HTML.
+     */
+    static function getParentOptions()
+    {
+        global $controller;
+        $picked = (string) $controller->GetControllerRequest('FORM', 'inDomain');
+        $out = '';
+        foreach (self::ListDomains(ctrl_users::GetUserDetail()['userid']) ?: array() as $d) {
+            $out .= '<option value="' . domains_ui::h($d['name']) . '"' . ($d['name'] === $picked ? ' selected' : '') . '>' . domains_ui::h($d['name']) . '</option>';
+        }
+        return $out;
     }
 
     /**
@@ -616,13 +688,10 @@ class module_controller extends ctrl_module
     {
         global $controller;
         if ($int == 1) {
-            return '<td><font color="green">' . ui_language::translate('Live') . '</font></td>'
+            return '<td><span class="label label-success">' . ui_language::translate('Live') . '</span></td>'
                     . '<td></td>';
         } else {
-            return '<td><font color="orange">' . ui_language::translate("Pending") . '</font></td>'
-                    . '<td><a href="#" class="help_small" id="help_small_' . $id . '_a"'
-                    . 'title="' . ui_language::translate('Your domain will become active at the next scheduled update.  This can take up to one hour.') . '">'
-                    . '<img src="/modules/' . $controller->GetControllerRequest('URL', 'module') . '/assets/help_small.png" border="0" /></a></td>';
+            return '<td><span class="label label-warning" title="' . htmlspecialchars(ui_language::translate('It goes live at the next update of the web server, within an hour.'), ENT_QUOTES, 'UTF-8') . '">' . ui_language::translate('Pending') . '</span></td><td></td>';
         }
     }
 
@@ -684,6 +753,9 @@ class module_controller extends ctrl_module
      */
     static function getResult()
     {
+        if (!fs_director::CheckForEmptyValue(self::$notowner)) {
+            return ui_sysmessage::shout(ui_language::translate("Choose one of your own domains for the sub-domain."), "zannounceerror");
+        }
         if (!fs_director::CheckForEmptyValue(self::$blank)) {
             return ui_sysmessage::shout(ui_language::translate("Your Domain can not be empty. Please enter a valid Domain Name and try again."), "zannounceerror");
         }
