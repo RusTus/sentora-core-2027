@@ -274,6 +274,19 @@ foreach ($svJustStarted as $unit) {
     }
     if ($unit === 'clamav-milter' && !$clamReady) {
         $svLog('clamav-milter waits for ClamAV to load its virus signatures; it is started on a later daemon run');
+        continue;
+    }
+    // a slow first start (right after an install): one more try before it counts as a problem
+    $sv('systemctl restart ' . escapeshellarg($unit));
+    for ($i = 0; $i < 20; $i++) {
+        list($rc) = $sv('systemctl is-active --quiet ' . escapeshellarg($unit));
+        if ($rc === 0) {
+            break;
+        }
+        sleep(1);
+    }
+    if ($rc === 0) {
+        $svLog($unit . ' started on the second try');
     } else {
         $svLog($unit . ' did not start (systemctl status ' . $unit . ')');
     }

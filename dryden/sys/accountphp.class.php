@@ -461,6 +461,15 @@ class sys_accountphp
             shell_exec($cmd);
             echo "Permissions: " . $before . " file(s) or folder(s) in /etc/sentora and /var/sentora were writable by everyone: closed." . fs_filehandler::NewLine();
         }
+        // BIND's main file holds the rndc key (whoever reads it can stop or reconfigure BIND): root
+        // and BIND only. The installer sets it so; this keeps it so whatever rewrites it later.
+        $named = '/etc/bind/named.conf';
+        if (is_file($named) && !is_link($named) && (fileperms($named) & 0007)) {
+            @chown($named, 'root');
+            @chgrp($named, 'bind');
+            @chmod($named, 0640);
+            echo "Permissions: /etc/bind/named.conf (it holds BIND's control key) was readable by every user: closed." . fs_filehandler::NewLine();
+        }
         // the panel's log: written by the daemon (root) and the panel (its own user)
         $log = (string) ctrl_options::GetSystemOption('logfile');
         if ($log !== '' && strpos($log, '/var/sentora/logs/') === 0 && is_file($log) && !is_link($log)) {
