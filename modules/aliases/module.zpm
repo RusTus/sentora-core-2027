@@ -1,111 +1,96 @@
 <div class="zmodule_content panel" id="zmodule_header_<@ ModuleName @>">
     <div class="panel-heading">
         <img src="<@ ModuleIcon @>" width="35" height="35" border="0" alt="<@ ModuleName @>">
+        <div class="zmodule_title"><@ ModuleName @></div>
+        <div class="zmodule_desc" id="zmodule_desc_<@ ModuleName @>"><@ ModuleDesc @></div>
+    </div>
+    <@ Result @>
+    <link rel="stylesheet" href="modules/aliases/assets/aliases.css">
 
-        <div class="zmodule_title">
-            <@ ModuleName @>
+    <div class="al" id="al">
+        <% if isDeleteAlias %>
+        <form class="al-box al-confirm" action="./?module=aliases&amp;action=ConfirmDeleteAlias" method="post">
+            <h4><svg class="al-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg><: Delete the alias :> <code><@ DeleteName @></code>?</h4>
+            <@ DeleteDetails @>
+            <div class="al-foot"><input type="hidden" name="inDelete" value="<@ EditCurrentAliasID @>">
+                <button class="btn btn-danger" type="submit"><: Delete :></button>
+                <a class="btn btn-default" href="./?module=aliases"><: Cancel :></a></div>
+            <@ CSFR_Tag @>
+        </form>
+        <% endif %>
+
+        <div class="al-tiles"><@ Tiles @></div>
+
+        <div class="al-box">
+            <div class="al-head"><div><h4><: Your aliases :></h4>
+                <p class="al-sub"><: An alias is another address for a mailbox: mail sent to it arrives in that mailbox, and replies come from the mailbox's own address. :></p></div>
+                <input type="search" class="form-control al-find" placeholder="<: Find an address :>" aria-label="<: Find an address :>" hidden></div>
+            <% if AliasList %>
+            <form action="./?module=aliases&amp;action=DeleteAlias" method="post" class="al-list">
+                <@ AliasRows @>
+                <@ CSFR_Tag @>
+            </form>
+            <p class="al-empty al-nomatch" hidden><: No alias matches. :></p>
+            <% else %>
+            <div class="al-empty"><b><: You have no aliases yet :></b><span><: For example sales@ or info@ delivered to your own mailbox. :></span></div>
+            <% endif %>
         </div>
 
-        <div class="zmodule_desc" id="zmodule_desc_<@ ModuleName @>"><@ ModuleDesc @></div>
-
+        <div class="al-box">
+            <h4><: Add an alias :></h4>
+            <% if QuotaLimit %>
+            <% if CanCreate %>
+            <form action="./?module=aliases&amp;action=CreateAlias" method="post" class="al-create">
+                <div class="al-grid">
+                    <div>
+                        <label class="al-label" for="inAddress"><: Address :></label>
+                        <div class="al-addr"><input class="form-control" type="text" name="inAddress" id="inAddress" value="<@ PostedAddress @>" placeholder="sales" autocomplete="off" spellcheck="false" required>
+                            <select class="form-control" name="inDomain" id="inDomain" aria-label="<: Domain :>"><@ DomainOptions @></select></div>
+                        <label class="al-check"><input type="checkbox" name="inCatchAll" value="1" id="inCatchAll"> <: Every address at this domain that has no mailbox, alias or forwarder (catch-all) :></label>
+                    </div>
+                    <div>
+                        <label class="al-label" for="inDestination"><: Delivered to :></label>
+                        <select class="form-control" name="inDestination" id="inDestination" required><@ MailboxOptions @></select>
+                    </div>
+                </div>
+                <div class="al-preview"><span class="al-pv-from"></span><svg class="al-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg><span class="al-pv-to"></span></div>
+                <div class="al-foot"><@ CSFR_Tag @><button class="btn btn-primary" type="submit" name="inCreate" value="inCreate"><: Add alias :></button>
+                    <span class="al-sub"><: To send mail on to an address somewhere else, use Forwarders. :></span></div>
+            </form>
+            <% endif %>
+            <% if CannotCreate %>
+            <div class="al-limit"><: An alias needs a domain and a mailbox to deliver to: make a mailbox first in Mailboxes. :></div>
+            <% endif %>
+            <% else %>
+            <div class="al-limit"><: You have as many aliases and forwarders as your package allows. Delete one, or ask your host for a bigger package. :></div>
+            <% endif %>
+        </div>
     </div>
-
-    <@ Result @>
-
-    <% if isDeleteAlias %>
-    <div class="zform_wrapper alert alert-danger">
-        <h2><: Delete Alias :>: <@ EditCurrentAliasName @> ?</h2>
-        <p><: Please confirm that you want to delete this Alias. :></p>
-        <form action="./?module=aliases&action=ConfirmDeleteAlias" method="post">
-            <table class="none" cellpadding="0" cellspacing="0">
-                <tr>
-                    <td colspan="2" align="right">
-                        <input type="hidden" name="inDelete" value="<@ EditCurrentAliasID @>">
-                        <button class="delete btn btn-danger" type="submit" ><: Delete :></button>
-                        <button class="btn btn-default" type="button" onclick="window.location.href='./?module=aliases';return false;"><: Cancel :></button>
-                    </td>
-                </tr>
-            </table>
-            <@ CSFR_Tag @>
-        </form>
-    </div>
-    <% endif %>
-
-    <div class="zgrid_wrapper">
-        <h2><: Current Aliases :></h2>
-        <% if AliasList %>
-        <form action="./?module=aliases&action=DeleteAlias" method="post">
-            <table class="table table-striped">
-                <tr>
-                    <th><: Address :></th>
-                    <th><: Destination :></th>
-                    <th>&nbsp;</th>
-                </tr>
-                <% loop AliasList %>
-                <tr>
-                    <td><& address &></td>
-                    <td><& destination &></td>
-                    <td><button class="delete btn btn-danger" type="submit" id="button" name="inDelete_<& id &>" id="inDelete_<& id &>" value="inDelete_<& id &>"><: Delete :></button></td>
-                </tr>
-                <% endloop %>
-            </table>
-            <@ CSFR_Tag @>
-        </form>
-        <% else %>
-        <: You currently do not have any aliases configured on this server. :>
-        <% endif %>
-    </div>
-
-    <div class="zform_wrapper">
-        <table class="none" width="100%" cellborder="0" cellspacing="0">
-            <tr valign="top">
-                <td>
-                    <h2><: Create a new Alias :></h2>
-                    <% if QuotaLimit %>
-                    <form action="./?module=aliases&action=CreateAlias" method="post">
-                        <table class="table table-striped">
-                            <tr>
-                                <th nowrap="nowrap"><: Alias Address :>:</th>
-                                <td nowrap="nowrap">
-                                    <input type="text" name="inAddress" id="inAddress" />
-                                </td>
-                                <td nowrap="nowrap">
-                                    <select name="inDomain" id="inDomain">
-                                        <option value="" selected="selected">-- <: Select a domain :> --</option>
-                                        <% if DomainList %>
-                                        <% loop DomainList %>
-                                        <option value="<& domain &>">@<& domain &></option>
-                                        <% endloop %>
-                                        <% endif %>
-                                    </select>
-                                </td>
-                            </tr>
-                            <tr>
-                                <th nowrap="nowrap"><: Destination :>:</th>
-                                <td>
-                                    <select name="inDestination" id="inDestination">
-                                        <option value="" selected="selected">-- <: Select a mailbox :> --</option>
-                                        <% if MailboxList %>
-                                        <% loop MailboxList %>
-                                        <option value="<& address &>"><& address &></option>
-                                        <% endloop %>
-                                        <% endif %>
-                                    </select>
-                                </td>
-                            </tr>
-                            <tr>
-                                <th><button class="btn btn-primary" type="submit" id="button" name="inCreate" id="inCreate" value="inCreate"><: Create :></button></th>
-                                <td></td>
-                            </tr>
-                        </table>
-                        <@ CSFR_Tag @>
-                    </form>
-                    <% else %><!-- ELSE QuotaLimit -->
-                    <: Sorry, you have reached your mailbox forward quota limit! :>
-                    <% endif %><!-- END QuotaLimit -->
-                </td>
-            </tr>
-        </table><hr><@ ForwardUsagepChart @>
-    </div>
-
 </div>
+<script>
+(function () {
+    'use strict';
+    var al = document.getElementById('al'); if (!al) { return; }
+    var addr = al.querySelector('#inAddress'), dom = al.querySelector('#inDomain'), dest = al.querySelector('#inDestination'), all = al.querySelector('#inCatchAll');
+    if (addr) {
+        var anything = '<: anything :>';
+        var sync = function () {
+            addr.disabled = all.checked; addr.required = !all.checked;
+            al.querySelector('.al-pv-from').textContent = (all.checked ? anything : (addr.value.trim().toLowerCase() || '…')) + '@' + (dom.value || '…');
+            al.querySelector('.al-pv-to').textContent = dest.value || '…';
+        };
+        [addr, dom, dest, all].forEach(function (e) { e.addEventListener('input', sync); e.addEventListener('change', sync); });
+        sync();
+    }
+    var rows = al.querySelectorAll('.al-row'), find = al.querySelector('.al-find');
+    if (find && rows.length > 6) {
+        find.hidden = false;
+        find.addEventListener('input', function () {
+            var q = find.value.trim().toLowerCase(), n = 0;
+            Array.prototype.forEach.call(rows, function (r) { var on = q === '' || r.getAttribute('data-s').indexOf(q) >= 0; r.hidden = !on; if (on) { n++; } });
+            al.querySelector('.al-nomatch').hidden = n > 0;
+        });
+    }
+    Array.prototype.forEach.call(al.querySelectorAll('form'), function (f) { f.addEventListener('submit', function () { if (window.Sentora && Sentora.loader) { Sentora.loader.showLoader(); } }); });
+})();
+</script>

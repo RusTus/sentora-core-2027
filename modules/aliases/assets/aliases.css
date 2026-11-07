@@ -1,0 +1,63 @@
+/* Aliases in the panel's style. Colours come from the theme's shared --sn-* variables
+   (etc/styles/THEMES.md), with these as the fallback, so it follows Light, Dark and Auto. */
+.al { --al-ink: var(--sn-ink, #1f2933); --al-muted: var(--sn-muted, #6b7785); --al-line: var(--sn-line, #e6e9ee);
+      --al-card: var(--sn-card, #ffffff); --al-bg: var(--sn-soft, #f4f6f9); --al-field-line: var(--sn-line-strong, #cfd6de);
+      --al-accent: var(--sn-accent, #447fb3); --al-accent-soft: var(--sn-accent-soft, #e3edf6); --al-bad: var(--sn-bad, #b42b27);
+      color: var(--al-ink); background: var(--al-bg); border-radius: 8px; padding: 18px; margin-top: 10px; }
+.al * { box-sizing: border-box; }
+.al [hidden] { display: none !important; }
+.al-ico { width: 15px; height: 15px; flex: none; }
+.al-ico-lg { width: 40px; height: 40px; padding: 8px; border-radius: 9px; flex: none; background: var(--al-accent-soft); color: var(--al-accent); }
+.al-box { background: var(--al-card); border-radius: 6px; box-shadow: 0 1px 3px rgba(20,30,40,0.08); padding: 16px 18px; margin-bottom: 14px; }
+.al-box:last-child { margin-bottom: 0; }
+.al-box h4 { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0 0 6px; font-size: 15px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; }
+.al-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.al-find { max-width: 260px; }
+.al-sub { color: var(--al-muted); font-size: 12px; margin: 0; max-width: 760px; }
+.al-label { display: block; font-size: 13px; font-weight: 600; margin: 0 0 6px; }
+.al-empty { display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; padding: 16px 10px; color: var(--al-muted); font-size: 13px; margin: 0; }
+.al-empty b { color: var(--al-ink); font-size: 14px; }
+.al-limit { padding: 10px 12px; border-radius: 6px; font-size: 13px; background: var(--sn-info-soft, #e4f1f8); border: 1px solid var(--sn-info-line, #b3d5e8); color: var(--sn-info, #2a5f80); }
+
+.al-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 14px; }
+.al-tile { display: flex; gap: 12px; align-items: center; background: var(--al-card); border-radius: 6px; box-shadow: 0 1px 3px rgba(20,30,40,0.08); padding: 14px 16px; min-width: 0; }
+.al-tile > div { flex: 1; min-width: 0; }
+.al-tile b { display: block; font-size: 22px; line-height: 1.1; }
+.al-tile b small { font-size: 13px; color: var(--al-muted); font-weight: 600; }
+.al-tile span { display: block; font-size: 12px; color: var(--al-muted); margin-top: 2px; }
+.al-tile.full b { color: var(--sn-warn, #8f5b00); }
+.al-bar { height: 6px; border-radius: 3px; background: var(--al-bg); margin-top: 7px; overflow: hidden; }
+.al-bar i { display: block; height: 100%; background: var(--al-accent); border-radius: 3px; }
+.al-tile.full .al-bar i { background: #e8a33d; }
+
+.al-list { display: grid; gap: 6px; margin: 0; }
+.al-row { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 9px 12px; border: 1px solid var(--al-line); border-radius: 6px; }
+.al-from { font-size: 14px; overflow-wrap: anywhere; }
+.al-from b { font-weight: 700; }
+.al-dom { color: var(--al-muted); }
+.al-catch { display: inline-block; font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 10px; background: var(--sn-warn-soft, #fff4d6); color: var(--sn-warn, #8f5b00); border: 1px solid var(--sn-warn-line, #f2cf7a); margin-right: 2px; }
+.al-arrow { width: 18px; height: 18px; color: var(--al-accent); flex: none; }
+.al-to { display: flex; align-items: center; gap: 6px; font-size: 13px; overflow-wrap: anywhere; min-width: 0; }
+.al-to .al-ico { color: var(--al-muted); }
+.al-del { padding-left: 8px; padding-right: 8px; display: inline-flex; }
+.al-del:hover { color: var(--al-bad) !important; border-color: var(--sn-bad-line, #f0a9a7) !important; }
+
+.al-create { margin: 8px 0 0; }
+.al-grid { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 14px 20px; }
+.al-addr { display: flex; min-width: 0; }
+.al-addr .form-control:first-child { border-radius: 4px 0 0 4px; flex: 1 1 50%; min-width: 0; }
+.al-addr select { border-radius: 0 4px 4px 0; margin-left: -1px; flex: 1 1 50%; min-width: 0; }
+.al-check { display: flex; align-items: flex-start; gap: 6px; margin: 8px 0 0; font-size: 12px; font-weight: normal; color: var(--al-muted); }
+.al-check input { margin: 2px 0 0; }
+.al-preview { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 14px; padding: 10px 12px; border-radius: 6px; background: var(--al-bg); font-family: SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; }
+.al-foot { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--al-line); }
+
+.al-confirm { border-left: 4px solid var(--al-bad); }
+.al-confirm h4 { text-transform: none; letter-spacing: 0; font-size: 17px; margin-bottom: 10px; }
+.al-confirm h4 .al-ico { color: var(--al-bad); width: 20px; height: 20px; }
+.al-lose { margin: 0 0 12px; padding-left: 20px; font-size: 13px; line-height: 1.5; }
+.al-confirm .al-foot { margin-top: 0; }
+
+@media (max-width: 860px) { .al-grid { grid-template-columns: 1fr; } }
+@media (max-width: 760px) { .al-tiles { grid-template-columns: 1fr; } }
+@media (max-width: 640px) { .al { padding: 12px; } .al-box { padding: 14px 12px; } .al-row { grid-template-columns: minmax(0, 1fr) auto; } .al-arrow { display: none; } .al-to { grid-column: 1; grid-row: 2; } .al-del { grid-row: 1 / span 2; grid-column: 2; } }

@@ -153,3 +153,5 @@ modules/sub_domains/assets/help_small.png
 modules/sub_domains/assets/unlimited.png
 modules/parked_domains/assets/help_small.png
 modules/parked_domains/assets/unlimited.png
+# Aliases: the old "unlimited" picture
+modules/aliases/assets/unlimited.png

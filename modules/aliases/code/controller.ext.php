@@ -35,6 +35,9 @@
 class module_controller extends ctrl_module
 {
 
+    /** @var bool|null True when the destination is not one of the account's own mailboxes (shown by getResult()). */
+    static $baddestination;
+
     /** @var bool|null True when the last change was saved (shown by getResult()). */
     static $ok;
     /** @var bool|null True when the address is already used by a mailbox, alias, forwarder or list. */
@@ -270,7 +273,9 @@ class module_controller extends ctrl_module
         $sqlStatmentUpdate = "UPDATE x_aliases SET al_deleted_ts=:time WHERE al_id_pk=:id";
         $sql = $zdbh->prepare($sqlStatmentUpdate);
         $sql->bindParam(':id', $al_id_pk);
-        $sql->bindParam(':time', time());
+        // bindValue: PHP 8 refuses time() in bindParam (it stopped here, after Postfix had
+        // already dropped the alias, so the panel still listed it)
+        $sql->bindValue(':time', time(), PDO::PARAM_INT);
         $sql->execute();
         runtime_hook::Execute('OnAfterDeleteAlias');
         self::$ok = true;
@@ -305,6 +310,19 @@ class module_controller extends ctrl_module
         if(!self::IsValidDomain($domain)){
             self::$validdomain = true;
             return false;        
+        }
+        // The destination must be one of the account's own mailboxes: it came from the form
+        // unchecked, so mail could be sent on to any address (another account's mailbox, or
+        // outside this server) without counting as a forwarder
+        $own = false;
+        foreach (self::getMailboxList() ?: array() as $mb) {
+            if (strtolower($mb['address']) === $destination) {
+                $own = true;
+            }
+        }
+        if (!$own) {
+            self::$baddestination = true;
+            return false;
         }
         $sql = "SELECT * FROM x_mailboxes WHERE mb_address_vc=:fulladdress AND mb_deleted_ts IS NULL";
         $numrows = $zdbh->prepare($sql);
@@ -406,7 +424,9 @@ class module_controller extends ctrl_module
         }
         $currentuser = ctrl_users::GetUserDetail();
         $formvars = $controller->GetAllControllerRequests('FORM');
-        if (self::ExecuteCreateAlias($currentuser['userid'], $formvars['inAddress'], $formvars['inDomain'], $formvars['inDestination']))
+        // "Every other address" is the catch-all, written as * (as before)
+        $address = !empty($formvars['inCatchAll']) ? '*' : (isset($formvars['inAddress']) ? strtolower(trim((string) $formvars['inAddress'])) : '');
+        if (self::ExecuteCreateAlias($currentuser['userid'], $address, isset($formvars['inDomain']) ? $formvars['inDomain'] : '', isset($formvars['inDestination']) ? $formvars['inDestination'] : ''))
             self::$ok = true;
         return true;
     }
@@ -592,30 +612,170 @@ class module_controller extends ctrl_module
     }
 
     /**
-     * Return the forwarder quota pie chart (template: <@ ForwardUsagepChart @>).
+     * Escape a value for HTML.
+     *
+     * @param mixed $s The value (cast to string).
+     * @return string The escaped text.
+     */
+    static function h($s)
+    {
+        return htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
+    }
+
+    /**
+     * Translate and escape a text.
+     *
+     * @param string $s The English text.
+     * @return string The escaped translation.
+     */
+    static function t($s)
+    {
+        return self::h(ui_language::translate($s));
+    }
+
+    /**
+     * The figures at the top (<@ Tiles @>): aliases, catch-alls, and aliases and forwarders against the package's forwarder limit.
+     *
+     * @return string The HTML.
+     */
+    static function getTiles()
+    {
+        $me = ctrl_users::GetUserDetail();
+        $list = self::ListAliases($me['userid']) ?: array();
+        $catch = count(array_filter($list, function ($a) { return strpos($a['address'], '@') === 0; }));
+        $max = (int) $me['forwardersquota'];
+        $used = self::UsedForwards($me['userid']);
+        $pct = $max > 0 ? min(100, round($used / $max * 100)) : 0;
+        $ico = function ($d) { return '<svg class="al-ico-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' . $d . '</svg>'; };
+        return '<div class="al-tile">' . $ico('<path d="M4 4h16v16H4z"/><path d="m4 7 8 6 8-6"/>') . '<div><b>' . count($list) . '</b><span>' . self::t('Aliases') . '</span></div></div>'
+            . '<div class="al-tile">' . $ico('<circle cx="12" cy="12" r="4"/><path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8"/>') . '<div><b>' . $catch . '</b><span>' . self::t('Catch-all addresses') . '</span></div></div>'
+            . '<div class="al-tile' . ($max >= 0 && $used >= $max ? ' full' : '') . '">' . $ico('<path d="M5 12h14"/><path d="m13 6 6 6-6 6"/>')
+            . '<div><b>' . $used . ($max < 0 ? '' : ' <small>/ ' . $max . '</small>') . '</b><span>' . self::t('Aliases and forwarders') . ($max < 0 ? ' &middot; ' . self::t('no limit') : '') . '</span>'
+            . ($max > 0 ? '<div class="al-bar"><i style="width:' . $pct . '%"></i></div>' : '') . '</div></div>';
+    }
+
+    /**
+     * One row per alias (<@ AliasRows @>): the address (a catch-all marked as such), the mailbox it delivers to, and Delete.
+     *
+     * @return string The HTML ('' when there are none).
+     */
+    static function getAliasRows()
+    {
+        $list = self::ListAliases(ctrl_users::GetUserDetail()['userid']);
+        if (!$list) {
+            return '';
+        }
+        $out = '';
+        foreach ($list as $a) {
+            $addr = (string) $a['address'];
+            $at = strrpos($addr, '@');
+            $local = $at === false ? $addr : substr($addr, 0, $at);
+            $domain = $at === false ? '' : substr($addr, $at + 1);
+            $from = $local === '' ? '<span class="al-catch">' . self::t('Anything') . '</span><span class="al-dom">@' . self::h($domain) . '</span>'
+                : '<b>' . self::h($local) . '</b><span class="al-dom">@' . self::h($domain) . '</span>';
+            $out .= '<div class="al-row" data-s="' . self::h(strtolower($addr . ' ' . $a['destination'])) . '">'
+                . '<div class="al-from">' . $from . '</div>'
+                . '<svg class="al-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>'
+                . '<div class="al-to"><svg class="al-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.5 5.1 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.5-6.9A2 2 0 0 0 16.8 4H7.2a2 2 0 0 0-1.7 1.1z"/></svg>' . self::h($a['destination']) . '</div>'
+                . '<button class="btn btn-default btn-sm al-del" type="submit" name="inDelete_' . (int) $a['id'] . '" value="inDelete_' . (int) $a['id'] . '" title="' . self::t('Delete') . '" aria-label="' . self::t('Delete') . ' ' . self::h($addr) . '">'
+                . '<svg class="al-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg></button>'
+                . '</div>';
+        }
+        return $out;
+    }
+
+    /**
+     * The alias address shown in the delete confirmation, a catch-all spelled out (<@ DeleteName @>).
+     *
+     * @return string The escaped address.
+     */
+    static function getDeleteName()
+    {
+        $n = (string) self::getEditCurrentAliasName();
+        return strpos($n, '@') === 0 ? self::t('anything') . self::h($n) : self::h($n);
+    }
+
+    /**
+     * What deleting the alias does (<@ DeleteDetails @>).
      *
      * @global runtime_controller $controller The request controller.
-     * @return string An <img> tag: the "unlimited" image, or the pChart pie of free/used.
+     * @return string The HTML.
      */
-    static function getForwardUsagepChart()
+    static function getDeleteDetails()
     {
         global $controller;
-        $currentuser = ctrl_users::GetUserDetail();
-        $maximum = $currentuser['forwardersquota'];
-        if ($maximum < 0) { //-1 = unlimited
-            if (file_exists(ui_template::AssetPath('img/misc/unlimited.png'))) {
-				return '<img src="' . ui_template::AssetPath('img/misc/unlimited.png') . '" alt="' . ui_language::translate('Unlimited') . '"/>';
-			} else {
-				return '<img src="modules/' . $controller->GetControllerRequest('URL', 'module') . '/assets/unlimited.png" alt="' . ui_language::translate('Unlimited') . '"/>';
-			}
-        } else {
-            $used = ctrl_users::GetQuotaUsages('forwarders', $currentuser['userid']);
-            $free = max($maximum - $used, 0);
-            return '<img src="etc/lib/pChart2/sentora/z3DPie.php?score=' . $free . '::' . $used
-                    . '&labels=Free: ' . $free . '::Used: ' . $used
-                    . '&legendfont=verdana&legendfontsize=8&imagesize=240::190&chartsize=120::90&radius=100&legendsize=150::160"'
-                    . ' alt="' . ui_language::translate('Pie chart') . '"/>';
+        $cur = self::ListCurrentAlias($controller->GetControllerRequest('URL', 'other'));
+        if (!$cur) {
+            return '';
         }
+        return '<ul class="al-lose"><li>' . self::t('Mail sent to it is no longer delivered to') . ' <b>' . self::h($cur[0]['destination']) . '</b> '
+            . self::t('(it is refused, unless another address catches it).') . '</li><li>' . self::t('The mailbox itself and the mail already in it stay.') . '</li></ul>';
+    }
+
+    /**
+     * The domain choices for a new alias, the one picked before selected (<@ DomainOptions @>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return string The <option> HTML.
+     */
+    static function getDomainOptions()
+    {
+        global $controller;
+        $picked = (string) $controller->GetControllerRequest('FORM', 'inDomain');
+        $out = '';
+        foreach (self::getDomainList() ?: array() as $d) {
+            $out .= '<option value="' . self::h($d['domain']) . '"' . ($d['domain'] === $picked ? ' selected' : '') . '>@' . self::h($d['domain']) . '</option>';
+        }
+        return $out;
+    }
+
+    /**
+     * The mailbox choices for a new alias, the one picked before selected (<@ MailboxOptions @>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return string The <option> HTML.
+     */
+    static function getMailboxOptions()
+    {
+        global $controller;
+        $picked = strtolower((string) $controller->GetControllerRequest('FORM', 'inDestination'));
+        $out = '';
+        foreach (self::getMailboxList() ?: array() as $m) {
+            $out .= '<option value="' . self::h($m['address']) . '"' . (strtolower($m['address']) === $picked ? ' selected' : '') . '>' . self::h($m['address']) . '</option>';
+        }
+        return $out;
+    }
+
+    /**
+     * Template flag <% if CanCreate %>: the account has a domain and a mailbox to make an alias with.
+     *
+     * @return bool
+     */
+    static function getCanCreate()
+    {
+        return self::getDomainList() && self::getMailboxList();
+    }
+
+    /**
+     * Template flag <% if CannotCreate %>: no domain or no mailbox yet.
+     *
+     * @return bool
+     */
+    static function getCannotCreate()
+    {
+        return !self::getCanCreate();
+    }
+
+    /**
+     * The name part typed when adding failed, so it is not lost (<@ PostedAddress @>).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return string The escaped text.
+     */
+    static function getPostedAddress()
+    {
+        global $controller;
+        return self::$ok ? '' : self::h((string) $controller->GetControllerRequest('FORM', 'inAddress'));
     }
 
     /**
@@ -627,7 +787,23 @@ class module_controller extends ctrl_module
     {
         $currentuser = ctrl_users::GetUserDetail();
         return ($currentuser['forwardersquota'] < 0 ) or //-1 = unlimited
-                ($currentuser['forwardersquota'] > ctrl_users::GetQuotaUsages('forwarders', $currentuser['userid']));
+                ($currentuser['forwardersquota'] > self::UsedForwards($currentuser['userid']));
+    }
+
+    /**
+     * How many aliases and forwarders the account has: both count toward the package's forwarder limit
+     * (only forwarders were counted, so aliases had no limit at all).
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int|string $uid The account ID.
+     * @return int The number.
+     */
+    static function UsedForwards($uid)
+    {
+        global $zdbh;
+        $q = $zdbh->prepare("SELECT COUNT(*) FROM x_aliases WHERE al_acc_fk = :u AND al_deleted_ts IS NULL");
+        $q->execute(array(':u' => (int) $uid));
+        return (int) ctrl_users::GetQuotaUsages('forwarders', $uid) + (int) $q->fetchColumn();
     }
 
     /**
@@ -637,8 +813,11 @@ class module_controller extends ctrl_module
      */
     static function getResult()
     {
+        if (!fs_director::CheckForEmptyValue(self::$baddestination)) {
+            return ui_sysmessage::shout(ui_language::translate("Choose one of your own mailboxes for the alias to deliver to."), "zannounceerror");
+        }
         if (!fs_director::CheckForEmptyValue(self::$alreadyexists)) {
-            return ui_sysmessage::shout(ui_language::translate("A mailbox, alias, forwarder or distrubution list already exists with that name."), "zannounceerror");
+            return ui_sysmessage::shout(ui_language::translate("A mailbox, alias, forwarder or distribution list already has that address."), "zannounceerror");
         }
         if (!fs_director::CheckForEmptyValue(self::$validemail)) {
             return ui_sysmessage::shout(ui_language::translate("Your email address is not valid."), "zannounceerror");
