@@ -186,7 +186,7 @@ class module_controller extends ctrl_module
                 . (!$a['enabled'] ? '<em class="sh-badge off">' . self::t('Switched off') . '</em>' : '') . '</div>'
                 . '<div class="sh-sub"><span class="sh-chip">' . self::h($a['package']) . '</span><span>' . self::h(ui_language::GroupName($a['group'])) . '</span>'
                 . ($admin ? '<span>' . str_replace('%s', '<b>' . self::h($a['reseller']) . '</b>', self::t('Client of %s')) . '</span>' : '')
-                . '<span>' . ($a['lastlogon'] ? str_replace('%s', self::h(date('j M Y', $a['lastlogon'])), self::t('Last login %s')) : self::t('Never logged in')) . '</span>'
+                . '<span>' . ($a['lastlogon'] ? str_replace('%s', self::h(ui_language::Date('j M Y', $a['lastlogon'])), self::t('Last login %s')) : self::t('Never logged in')) . '</span>'
                 . '<span>' . str_replace('%s', self::h(fs_director::ShowHumanFileSize($a['disk'])), self::t('%s disk')) . '</span></div></div>'
                 . '<button class="btn btn-primary btn-sm sh-go" type="submit" name="inShadow_' . $a['id'] . '" value="inShadow_' . $a['id'] . '">'
                 . '<svg class="sh-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="m10 17 5-5-5-5"/><path d="M15 12H3"/></svg>'
@@ -278,7 +278,7 @@ class module_controller extends ctrl_module
             if (!$admin && strtok($by, ' ') !== $me) {
                 continue;
             }
-            $out .= '<li><span class="sh-when">' . self::h(date('j M, H:i', (int) strtotime($f[0]))) . '</span><span>' . strtr(self::t('%1$s as %2$s'), array('%1$s' => '<b>' . self::h($by) . '</b>', '%2$s' => '<b>' . self::h(substr($f[2], 3)) . '</b>')) . '</span></li>';
+            $out .= '<li><span class="sh-when">' . self::h(ui_language::Date('j M, H:i', (int) strtotime($f[0]))) . '</span><span>' . strtr(self::t('%1$s as %2$s'), array('%1$s' => '<b>' . self::h($by) . '</b>', '%2$s' => '<b>' . self::h(substr($f[2], 3)) . '</b>')) . '</span></li>';
             if (++$n >= 12) {
                 break;
             }

@@ -197,6 +197,47 @@ class ui_language {
     }
 
     /**
+     * Like date(), but month and weekday names (F, M, l, D) in the account's language.
+     *
+     * The names come from the language file (keys @months, @months_short, @days, @days_short,
+     * kept apart from the English texts: "May" is also a word on the pages). Other format
+     * characters, and every format in English, are exactly date()'s.
+     *
+     * @param string $format A date() format.
+     * @param int|null $ts Optional. A Unix time. Default null (now).
+     * @return string The date (not HTML-escaped).
+     */
+    static function Date($format, $ts = null)
+    {
+        $ts = $ts === null ? time() : (int) $ts;
+        if (empty(self::$LangCol)) {
+            self::translate('');
+        }
+        $names = self::Shipped(substr((string) self::$LangCol, 3, 2));
+        if (empty($names['@months'])) {
+            return date($format, $ts);
+        }
+        $out = '';
+        $len = strlen($format);
+        for ($i = 0; $i < $len; $i++) {
+            $c = $format[$i];
+            if ($c === '\\' && $i + 1 < $len) {
+                $out .= $format[++$i];
+                continue;
+            }
+            switch ($c) {
+                case 'F': $out .= $names['@months'][(int) date('n', $ts) - 1]; break;
+                case 'M': $out .= $names['@months_short'][(int) date('n', $ts) - 1]; break;
+                case 'l': $out .= $names['@days'][(int) date('w', $ts)]; break;
+                case 'D': $out .= $names['@days_short'][(int) date('w', $ts)]; break;
+                case 'S': break; // the English 1st/2nd/3rd ending: none in other languages
+                default: $out .= date($c, $ts);
+            }
+        }
+        return $out;
+    }
+
+    /**
      * Return array of column names for a table of the panel's database.
      * @author Russell Skinner (rskinner@zpanelcp.com)
      * @global db_driver $zdbh The panel's database connection.

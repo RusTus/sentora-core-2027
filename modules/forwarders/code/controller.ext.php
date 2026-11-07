@@ -37,8 +37,6 @@ class module_controller extends ctrl_module
 
     /** @var bool|null True when the last change was saved (shown by getResult()). */
     static $ok;
-    /** @var bool|null True when a password was missing (never set in this module). */
-    static $password;
     /** @var bool|null True when the address already exists (never set in this module). */
     static $alreadyexists;
     /** @var bool|null True when the mailbox would be forwarded to itself. */
@@ -677,9 +675,6 @@ class module_controller extends ctrl_module
         }
         if (!fs_director::CheckForEmptyValue(self::$validemail)) {
             return ui_sysmessage::shout(ui_language::translate("Your email address is not valid."), "zannounceerror");
-        }
-        if (!fs_director::CheckForEmptyValue(self::$password)) {
-            return ui_sysmessage::shout(ui_language::translate("Your password cannot be blank."), "zannounceerror");
         }
         if (!fs_director::CheckForEmptyValue(self::$noaddress)) {
             return ui_sysmessage::shout(ui_language::translate("Your email address cannot be blank."), "zannounceerror");

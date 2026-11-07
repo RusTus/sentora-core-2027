@@ -143,7 +143,6 @@ class module_controller extends ctrl_module
         $line .= "<td><button class=\"button-loader btn btn-primary\" type=\"submit\" id=\"button\" name=\"inResetAll\" value=\"1\">" . ui_language::translate("GO") . "</button></td>";
         $line .= "</tr>";
         $line .= "<tr>";
-        $line .= "<tr>";
         $line .= "<th>" . ui_language::translate("Reset Records to Default on Single Domain") . " ";
         $line .= "<select name=\"inResetDomainID\">";
         $line .= "<option value=\"\">--- " . ui_language::translate("Select Domain") . " ---</option>";
@@ -153,7 +152,7 @@ class module_controller extends ctrl_module
                 $sql = $zdbh->prepare("SELECT * FROM x_vhosts WHERE vh_deleted_ts IS NULL");
                 $sql->execute();
                 while ($row = $sql->fetch()) {
-                    $line .= " <option value=\"" . $row['vh_id_pk'] . "\">" . $row['vh_name_vc'] . "</option>";
+                    $line .= " <option value=\"" . (int) $row['vh_id_pk'] . "\">" . htmlspecialchars((string) $row['vh_name_vc'], ENT_QUOTES, 'UTF-8') . "</option>";
                 }
             }
         }
@@ -161,6 +160,7 @@ class module_controller extends ctrl_module
         $line .= "</th>";
         $line .= "<td><button class=\"button-loader btn btn-primary\" type=\"submit\" id=\"button\" name=\"inResetDomain\" value=\"1\">" . ui_language::translate("GO") . "</button></td>";
         $line .= "</tr>";
+        $line .= "<tr>";
         $line .= "<th>" . ui_language::translate("Add Default Records to Missing Domains") . "";
         $line .= "</th>";
         $line .= "<td><button class=\"button-loader btn btn-primary\" type=\"submit\" id=\"button\" name=\"inAddMissing\" value=\"1\">" . ui_language::translate("GO") . "</button></td>";
@@ -188,6 +188,7 @@ class module_controller extends ctrl_module
         $line .= "<th>" . ui_language::translate("Delete ALL Zone Records") . "</th>";
         $line .= "<td><button class=\"button-loader btn btn-primary\" type=\"submit\" id=\"button\" name=\"inDeleteAll\" value=\"1\">" . ui_language::translate("GO") . "</button></td>";
         $line .= "</tr>";
+        $line .= "<tr>";
         $line .= "<th>" . ui_language::translate("Force Records Update on Next Daemon Run") . "</th>";
         $line .= "<td><button class=\"button-loader btn btn-primary\" type=\"submit\" id=\"button\" name=\"inForceUpdate\" value=\"1\">" . ui_language::translate("GO") . "</button></td>";
         $line .= "</tr>";
@@ -1260,19 +1261,19 @@ class module_controller extends ctrl_module
             return ui_sysmessage::shout(ui_language::translate("All zone records will be updated on next daemon run."), "zannounceok");
         }
         if (!fs_director::CheckForEmptyValue(self::$reset)) {
-            return ui_sysmessage::shout(number_format(self::$reset) . " " . ui_language::translate("Domains records where reset to default"), "zannounceok");
+            return ui_sysmessage::shout(str_replace('%s', number_format(self::$reset), ui_language::translate("Records of %s domain(s) were reset to the defaults.")), "zannounceok");
         }
         if (!fs_director::CheckForEmptyValue(self::$addmissing)) {
-            return ui_sysmessage::shout(number_format(self::$addmissing) . " " . ui_language::translate("Domains records were created"), "zannounceok");
+            return ui_sysmessage::shout(str_replace('%s', number_format(self::$addmissing), ui_language::translate("Default records were created for %s domain(s).")), "zannounceok");
         }
         if (!fs_director::CheckForEmptyValue(self::$deletedtype)) {
-            return ui_sysmessage::shout(number_format(self::$deletedtype) . " '" . self::$type . "' " . ui_language::translate("Records where marked as deleted from the database"), "zannounceok");
+            return ui_sysmessage::shout(sprintf(ui_language::translate('%1$s %2$s record(s) were marked as deleted.'), number_format(self::$deletedtype), htmlspecialchars((string) self::$type, ENT_QUOTES, 'UTF-8')), "zannounceok");
         }
         if (!fs_director::CheckForEmptyValue(self::$deleted)) {
-            return ui_sysmessage::shout(number_format(self::$deleted) . " " . ui_language::translate("Records where marked as deleted from the database"), "zannounceok");
+            return ui_sysmessage::shout(str_replace('%s', number_format(self::$deleted), ui_language::translate("%s record(s) were marked as deleted.")), "zannounceok");
         }
         if (!fs_director::CheckForEmptyValue(self::$purged)) {
-            return ui_sysmessage::shout(number_format(self::$purged) . " " . ui_language::translate("Records where purged from the database"), "zannounceok");
+            return ui_sysmessage::shout(str_replace('%s', number_format(self::$purged), ui_language::translate("%s record(s) were purged from the database.")), "zannounceok");
         }
         return;
     }

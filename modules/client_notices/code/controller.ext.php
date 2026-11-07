@@ -418,7 +418,7 @@ class module_controller extends ctrl_module
      */
     static function When($n)
     {
-        $d = function ($t) { return self::h(date('j M Y, H:i', $t)); };
+        $d = function ($t) { return self::h(ui_language::Date('j M Y, H:i', $t)); };
         switch (ctrl_notices::State($n)) {
             case 'ended':
                 return '<span class="cn-state ended">' . self::t('Ended') . '</span> ' . $d($n['end']);
@@ -675,7 +675,7 @@ class module_controller extends ctrl_module
      */
     static function getServerTime()
     {
-        return self::h(date_default_timezone_get()) . ', ' . str_replace('%s', self::h(date('j M Y, H:i')), self::t('now %s'));
+        return self::h(date_default_timezone_get()) . ', ' . str_replace('%s', self::h(ui_language::Date('j M Y, H:i')), self::t('now %s'));
     }
 
     /**

@@ -540,7 +540,7 @@ class module_controller extends ctrl_module
         for ($i = 13; $i >= 0; $i--) {
             $t = time() - $i * 86400;
             $v = isset($by[date('Y-m-d', $t)]) ? $by[date('Y-m-d', $t)] : array(0, 0);
-            $tip = ($i === 0 ? self::t('Today') : date('D j M', $t)) . ': ' . $v[0] . ' ' . self::t('spam') . ', ' . $v[1] . ' ' . self::t($v[1] === 1 ? 'virus' : 'viruses');
+            $tip = ($i === 0 ? self::t('Today') : ui_language::Date('D j M', $t)) . ': ' . $v[0] . ' ' . self::t('spam') . ', ' . $v[1] . ' ' . self::t($v[1] === 1 ? 'virus' : 'viruses');
             $bars .= '<div class="sa-bar" title="' . self::h($tip) . '"><div class="sa-stack"><i class="sa-b-virus" style="height:' . round($v[1] / $max * 100, 1) . '%"></i>'
                 . '<i class="sa-b-spam" style="height:' . round($v[0] / $max * 100, 1) . '%"></i></div><span>' . date('j', $t) . '</span></div>';
         }

@@ -1338,7 +1338,7 @@ class module_controller extends ctrl_module
                 . ($r['twofactor'] ? '<span class="mc-badge ok" title="' . self::t('Two-factor login is on') . '">2FA</span>' : '') . '</div>'
                 . '<div class="mc-sub">' . ($r['email'] !== '' ? '<span>' . self::h($r['email']) . '</span>' : '')
                 . '<span class="mc-chip">' . self::h($r['package'] !== '' ? $r['package'] : '?') . '</span><span>' . self::h(ui_language::GroupName($r['group'])) . '</span>'
-                . '<span>' . ($r['lastlogon'] ? str_replace('%s', self::h(date('j M Y', $r['lastlogon'])), self::t('Last login %s')) : self::t('Never logged in')) . '</span></div></div>'
+                . '<span>' . ($r['lastlogon'] ? str_replace('%s', self::h(ui_language::Date('j M Y', $r['lastlogon'])), self::t('Last login %s')) : self::t('Never logged in')) . '</span></div></div>'
                 . '<div class="mc-uses">' . self::Bar($r['disk'], $r['diskmax'], 'Disk') . self::Bar($r['bw'], $r['bwmax'], 'Bandwidth') . '</div>'
                 . '<div class="mc-act">'
                 . '<a class="btn btn-default btn-sm" href="./?module=manage_clients&amp;show=Edit&amp;other=' . $id . '">' . self::t('Edit') . '</a>'
@@ -1601,7 +1601,7 @@ class module_controller extends ctrl_module
         if (!$r) {
             return '';
         }
-        $d = function ($t) { return $t ? self::h(date('j M Y, H:i', $t)) : self::t('never'); };
+        $d = function ($t) { return $t ? self::h(ui_language::Date('j M Y, H:i', $t)) : self::t('never'); };
         $out = '<div class="mc-sum-head"><span class="mc-avatar lg" aria-hidden="true">' . self::h(strtoupper(substr($r['user'], 0, 1))) . '</span><div><b>' . self::h($r['user']) . '</b>'
             . '<span>' . self::h($r['package']) . ' &middot; ' . self::h(ui_language::GroupName($r['group'])) . '</span></div></div>'
             . self::Bar($r['disk'], $r['diskmax'], 'Disk') . self::Bar($r['bw'], $r['bwmax'], 'Bandwidth')

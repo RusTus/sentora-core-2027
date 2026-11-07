@@ -252,14 +252,14 @@ class dashboard_widgets
     }
 
     /**
-     * Translate a text into the user's language.
+     * Translate a text into the user's language, HTML-escaped (for use in the widgets' HTML).
      *
      * @param string $s The English text.
      * @return string
      */
     static function t($s)
     {
-        return ui_language::translate($s);
+        return htmlspecialchars(ui_language::translate($s), ENT_QUOTES, 'UTF-8');
     }
 
     /**
@@ -395,10 +395,10 @@ class dashboard_widgets
                 $done++;
             }
             // steps that can be checked are numbered (or ticked); the others are tips
-            $mark = ($s[3] === true) ? '<span class="dw-done" title="' . self::h(self::t('Done')) . '">&#10003;</span>'
-                : (($s[3] === null) ? '<span class="dw-tip" title="' . self::h(self::t('Tip')) . '">i</span>' : '<span class="dw-todo">&bull;</span>');
-            $items .= '<li class="' . ($s[3] === true ? 'is-done' : '') . '">' . $mark . '<div><a href="./?module=' . self::h($s[0]) . '"><strong>' . self::h(self::t($s[1])) . '</strong></a>'
-                . '<br><span class="text-muted">' . self::h(self::t($s[2])) . '</span></div></li>';
+            $mark = ($s[3] === true) ? '<span class="dw-done" title="' . self::t('Done') . '">&#10003;</span>'
+                : (($s[3] === null) ? '<span class="dw-tip" title="' . self::t('Tip') . '">i</span>' : '<span class="dw-todo">&bull;</span>');
+            $items .= '<li class="' . ($s[3] === true ? 'is-done' : '') . '">' . $mark . '<div><a href="./?module=' . self::h($s[0]) . '"><strong>' . self::t($s[1]) . '</strong></a>'
+                . '<br><span class="text-muted">' . self::t($s[2]) . '</span></div></li>';
         }
         $counted = 0;
         foreach ($steps as $s) {
@@ -407,7 +407,7 @@ class dashboard_widgets
             }
         }
         $bar = $counted > 0 ? '<div class="dw-bar"><span style="width: ' . (int) round(100 * $done / $counted) . '%"></span></div>'
-            . '<p class="text-muted" style="margin-top: 4px;">' . str_replace(array('%done%', '%total%'), array((string) $done, (string) $counted), self::h(self::t('%done% of %total% steps done'))) . ' &middot; <span class="dw-tip" style="display:inline-block">i</span> ' . self::t('tips') . '</p>' : '';
+            . '<p class="text-muted" style="margin-top: 4px;">' . str_replace(array('%done%', '%total%'), array((string) $done, (string) $counted), self::t('%done% of %total% steps done')) . ' &middot; <span class="dw-tip" style="display:inline-block">i</span> ' . self::t('tips') . '</p>' : '';
         return $bar . '<ol class="dw-steps">' . $items . '</ol>';
     }
 
@@ -436,7 +436,7 @@ class dashboard_widgets
             $limit = ($max > 0) ? $fmt($max) : self::t('no limit');
             $pct = ($max > 0) ? min(100, (int) round(100 * $used / $max)) : 0;
             $cls = $pct >= 90 ? 'is-high' : ($pct >= 75 ? 'is-mid' : '');
-            $out .= '<tr><th>' . self::h(self::t($r[0])) . '</th><td>' . self::h($fmt($used)) . ' / ' . self::h($limit)
+            $out .= '<tr><th>' . self::t($r[0]) . '</th><td>' . self::h($fmt($used)) . ' / ' . self::h($limit)
                 . ($max > 0 ? '<div class="dw-bar ' . $cls . '"><span style="width: ' . $pct . '%"></span></div>' : '') . '</td></tr>';
         }
         return $out . '</table>';
@@ -462,12 +462,12 @@ class dashboard_widgets
         $out = '<ul class="dw-list">';
         foreach ($rows as $r) {
             $out .= '<li><a href="http://' . self::h($r['vh_name_vc']) . '/" target="_blank" rel="noopener">' . self::h($r['vh_name_vc']) . '</a>'
-                . ' <span class="label label-default">' . self::h(self::t($types[(int) $r['vh_type_in']] ?? 'domain')) . '</span></li>';
+                . ' <span class="label label-default">' . self::t($types[(int) $r['vh_type_in']] ?? 'domain') . '</span></li>';
         }
         $out .= '</ul>';
         foreach (array('domains' => 'Domains', 'sub_domains' => 'Subdomains', 'parked_domains' => 'Parked domains') as $m => $label) {
             if (self::CanOpen($user, $m)) {
-                $out .= '<a class="btn btn-default btn-sm" href="./?module=' . $m . '">' . self::h(self::t($label)) . '</a> ';
+                $out .= '<a class="btn btn-default btn-sm" href="./?module=' . $m . '">' . self::t($label) . '</a> ';
             }
         }
         return $out;
@@ -562,13 +562,13 @@ class dashboard_widgets
             $u = is_array($st) && isset($st['units']) ? $st['units'] : array();
             $line = function ($label, $on, $units) use ($u) {
                 if (!$on) {
-                    return '<tr><th>' . self::h(self::t($label)) . '</th><td class="text-muted">' . self::t('off') . '</td></tr>';
+                    return '<tr><th>' . self::t($label) . '</th><td class="text-muted">' . self::t('off') . '</td></tr>';
                 }
                 $up = true;
                 foreach ($units as $x) {
                     $up = $up && !empty($u[$x]);
                 }
-                return '<tr><th>' . self::h(self::t($label)) . '</th><td>' . ($up ? ui_status::Ok('Running') . ' ' . self::t('running') : ui_status::Bad('Not running') . ' ' . self::t('not running')) . '</td></tr>';
+                return '<tr><th>' . self::t($label) . '</th><td>' . ($up ? ui_status::Ok('Running') . ' ' . self::t('running') : ui_status::Bad('Not running') . ' ' . self::t('not running')) . '</td></tr>';
             };
             $clam = sys_spamav::On('clam_enabled');
             $out .= '<table class="dw-usage">' . $line('SpamAssassin', sys_spamav::On('sa_enabled'), array('spamd', 'spamass-milter'));
@@ -587,7 +587,7 @@ class dashboard_widgets
         $out .= '<table class="dw-usage" style="margin-top: 6px;"><tr><th></th><th>' . self::t('Spam') . '</th><th>' . self::t('Viruses') . '</th><th>' . self::t('Refused') . '</th></tr>'
             . '<tr><th>' . self::t('Today') . '</th><td>' . number_format((int) $t[1]) . '</td><td>' . number_format((int) $t[2]) . '</td><td>' . number_format((int) $t[3]) . '</td></tr>'
             . '<tr><th>' . self::t('Last 7 days') . '</th><td>' . number_format((int) $w[1]) . '</td><td>' . number_format((int) $w[2]) . '</td><td>' . number_format((int) $w[3]) . '</td></tr></table>'
-            . '<p class="text-muted" style="margin: 4px 0 8px;">' . ($admin ? str_replace('%s', number_format((int) $w[0]), self::h(self::t('All mail on this server, %s checked in 7 days'))) : self::h(self::t('For your mailboxes'))) . '</p>';
+            . '<p class="text-muted" style="margin: 4px 0 8px;">' . ($admin ? str_replace('%s', number_format((int) $w[0]), self::t('All mail on this server, %s checked in 7 days')) : self::t('For your mailboxes')) . '</p>';
         // the latest few events (the whole server for administrators, else the account's own)
         $q = $zdbh->prepare("SELECT * FROM x_spamav_events" . ($admin ? '' : ' WHERE ev_acc_fk = :a') . " ORDER BY ev_ts DESC, ev_id_pk DESC LIMIT 5");
         $q->execute($admin ? array() : array(':a' => $acc));
@@ -596,7 +596,7 @@ class dashboard_widgets
             $out .= '<ul class="dw-list" style="list-style: none; padding-left: 0;">';
             foreach ($rows as $r) {
                 $what = ($r['ev_kind_vc'] === 'virus') ? ui_status::Bad('Virus') . ' ' . self::h($r['ev_detail_vc']) : ui_status::Warn('Spam') . ' ' . self::t('Spam') . ($r['ev_score_vc'] !== '' ? ', ' . self::t('score') . ' ' . self::h($r['ev_score_vc']) : '');
-                $out .= '<li style="margin-bottom: 4px;">' . $what . ' <span class="text-muted">' . str_replace('%s', self::h($r['ev_mailbox_vc']), self::h(self::t('to %s'))) . ', ' . self::h(date('M j H:i', (int) $r['ev_ts'])) . '</span></li>';
+                $out .= '<li style="margin-bottom: 4px;">' . $what . ' <span class="text-muted">' . str_replace('%s', self::h($r['ev_mailbox_vc']), self::t('to %s')) . ', ' . self::h(ui_language::Date('M j H:i', (int) $r['ev_ts'])) . '</span></li>';
             }
             $out .= '</ul>';
         } else {
@@ -646,7 +646,7 @@ class dashboard_widgets
         $out .= '</table>';
         foreach (array('server_monitor' => 'Server Monitor', 'services' => 'Service Status') as $m => $label) {
             if (self::CanOpen($user, $m)) {
-                $out .= '<a class="btn btn-default btn-sm" href="./?module=' . $m . '">' . self::h(self::t($label)) . '</a> ';
+                $out .= '<a class="btn btn-default btn-sm" href="./?module=' . $m . '">' . self::t($label) . '</a> ';
             }
         }
         return $out;

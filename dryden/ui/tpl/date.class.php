@@ -24,7 +24,7 @@ class ui_tpl_date {
      * @return string The date, e.g. 'Friday November 6th, 2026'.
      */
     public static function Template() {
-        return date('l F jS\, Y');
+        return ui_language::Date('l j F Y'); // the account's language (and day-first order: right for every language)
     }
 
 }

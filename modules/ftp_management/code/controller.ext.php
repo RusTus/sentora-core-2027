@@ -803,7 +803,7 @@ class module_controller extends ctrl_module
                 . '<span class="ft-acc ft-acc-' . self::h(strtolower($a['access'])) . '" title="' . self::t($t[1]) . '">' . self::t($t[0]) . '</span></div>'
                 . '<div class="ft-sub"><span class="ft-dir"><svg class="ft-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>'
                 . '<code>' . self::h($a['dir'] === '' ? '/' : $a['dir']) . '</code></span>'
-                . ($a['created'] ? '<span>' . self::t('Added') . ' ' . self::h(date('j M Y', $a['created'])) . '</span>' : '') . '</div></div>'
+                . ($a['created'] ? '<span>' . self::t('Added') . ' ' . self::h(ui_language::Date('j M Y', $a['created'])) . '</span>' : '') . '</div></div>'
                 . '<div class="ft-act">'
                 . '<button class="btn btn-default btn-sm" type="submit" form="ft-act" name="inShow_' . $a['id'] . '" value="inShow_' . $a['id'] . '">'
                 . '<svg class="ft-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>' . self::t('Password') . '</button>'

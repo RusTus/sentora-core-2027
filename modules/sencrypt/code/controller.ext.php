@@ -51,6 +51,10 @@ class module_controller extends ctrl_module {
 	static $revokecert;
 	/** @var bool|null True after a CSR was made and emailed. */
 	static $keyadd;
+	/** @var bool|null True when the key or the request could not be made or kept. */
+	static $csrFailed;
+	/** @var bool|null True when the certificate does not belong to the private key. */
+	static $keymismatch;
 	/** @var bool|null True when Let's Encrypt did not issue the certificate. */
 	static $certFailed;
 	/** @var bool|null True when a form was sent with a required field empty. */
@@ -586,10 +590,9 @@ class module_controller extends ctrl_module {
 	}
 		
 	/**
-	 * Make a 4096-bit key and a CSR and email both to the given address.
+	 * Make a 4096-bit key and a CSR: the key is kept in the account's SSL folder (RequestKeyFile()),
+	 * the CSR is emailed to the given address.
 	 *
-	 * @global db_driver $zdbh The panel's database connection (unused).
-	 * @global runtime_controller $controller The request controller.
 	 * @param string $domain The common name.
 	 * @param string $name The state or province.
 	 * @param string $address The email address (also the CSR's emailAddress).
@@ -597,19 +600,12 @@ class module_controller extends ctrl_module {
 	 * @param string $country The two-letter country code.
 	 * @param string $company The organization.
 	 * @param string|null $password The pass phrase for the exported key.
-	 * @return true Always true.
+	 * @return bool True when the key is kept and the request sent, false when either failed.
 	 */
 	static function ExecuteCSR($domain, $name, $address, $city, $country, $company, $password) {
-		global $zdbh;
-		global $controller;
 		$currentuser = ctrl_users::GetUserDetail();
-		$formvars = $controller->GetAllControllerRequests('FORM');
-		$config = array('digest_alg' => 'sha256', 'private_key_bits' => 4096, 'private_key_type' => OPENSSL_KEYTYPE_RSA,  'encrypt_key' => true);
+		$config = array('digest_alg' => 'sha256', 'private_key_bits' => 4096, 'private_key_type' => OPENSSL_KEYTYPE_RSA);
 		$csrconfig = array('digest_alg' => 'sha256');
-		if (!is_dir(ctrl_options::GetSystemOption('hosted_dir') . $currentuser["username"] . "/ssl/sencrypt/third_party/key/") ) {
-			fs_director::CreateDirectory(ctrl_options::GetSystemOption('hosted_dir') . $currentuser["username"] . "/ssl/sencrypt/third_party/key/" );
-		}
-			
 		$dn = array(
 					"countryName" => "$country",
 					"stateOrProvinceName" => "$name",
@@ -618,38 +614,66 @@ class module_controller extends ctrl_module {
 					"commonName" => "$domain",
 					"emailAddress" => "$address"
 		);
-			
 		$privkey = openssl_pkey_new($config);
-		$csr = openssl_csr_new($dn, $privkey, $csrconfig);
-			
-		openssl_csr_export($csr, $csrout);
-		openssl_pkey_export($privkey, $pkeyout, $password);
-			
-		openssl_pkey_export_to_file($privkey, ctrl_options::GetSystemOption('hosted_dir'). $currentuser["username"] . "/ssl/sencrypt/third_party/key/" . $domain . ".key");
-			
-			$email = $address;
-			$emailsubject = "Certificate Signing Request";
-			$emailbody = "Hi $currentuser[username]\n\n
-			---------------------------------CSR START-------------------------------
-			\n\n\n
-			$csrout
-			\n\n\n
-			---------------------------------CSR END-------------------------------";
-			
-			// PHP Mailer option
-			$phpmailer = new sys_email();
-			//$phpmailer->From = "info@sentora.org";
-			$phpmailer->Subject = $emailsubject;
-			$phpmailer->Body = $emailbody;
-			$phpmailer->AddAttachment(ctrl_options::GetSystemOption('hosted_dir'). $currentuser["username"] . "/ssl/sencrypt/third_party/key/" . $domain . ".key");
-			$phpmailer->AddAddress($email);
-			$phpmailer->SendEmail();
+		$csr = $privkey ? openssl_csr_new($dn, $privkey, $csrconfig) : false;
+		if (!$csr || !openssl_csr_export($csr, $csrout) || !openssl_pkey_export($privkey, $pkeyout, $password)) {
+			self::$csrFailed = true;
+			return false;
+		}
+		// The private key stays on the server, in the account's own SSL folder (where the installed
+		// certificate's key lives too), and "Install a signed certificate" uses it. It used to be
+		// e-mailed as an unencrypted attachment and deleted here.
+		$keyfile = self::RequestKeyFile($currentuser['username'], $domain, true);
+		if ($keyfile === false || file_put_contents($keyfile, $pkeyout) === false) {
+			self::$csrFailed = true;
+			return false;
+		}
+		@chmod($keyfile, 0600);
 
-			unlink(ctrl_options::GetSystemOption('hosted_dir') . $currentuser["username"] . "/ssl/sencrypt/third_party/key/" . $domain . ".key");
-			rmdir(ctrl_options::GetSystemOption('hosted_dir') . $currentuser["username"] . "/ssl/sencrypt/third_party/key/");
-			self::$keyadd = true;
-			return true;
-			
+		// Only the request (no secret in it) is e-mailed, for the certificate seller
+		$phpmailer = new sys_email();
+		$phpmailer->Subject = "Certificate Signing Request for " . $domain;
+		$phpmailer->Body = "Hi " . $currentuser['username'] . ",\n\n"
+			. "Here is the certificate signing request (CSR) for " . $domain . ". Give it to the certificate seller.\n"
+			. "Its private key stays on the server: when you have the certificate, install it in the panel under\n"
+			. "Sencrypt > Third-party > Install a signed certificate (the key is filled in for you).\n\n"
+			. $csrout . "\n";
+		$phpmailer->AddAddress($address);
+		$phpmailer->SendEmail();
+		self::$keyadd = true;
+		return true;
+	}
+
+	/**
+	 * Where the private key of a certificate request waits for the signed certificate:
+	 * <account>/ssl/sencrypt/third_party/requests/<domain>.key.
+	 *
+	 * Every folder on the way must be a real folder of the account (a link there would make the
+	 * panel read or write wherever it points), and the key file itself must not be a link.
+	 *
+	 * @param string $username The account's user name.
+	 * @param string $domain The domain (already checked to be the account's own).
+	 * @param bool $create Optional. Make the folders that are missing. Default false.
+	 * @return string|false The key file's path, or false when a folder is not safe (or missing).
+	 */
+	static function RequestKeyFile($username, $domain, $create = false) {
+		$home = rtrim(ctrl_options::GetSystemOption('hosted_dir'), '/') . '/' . $username;
+		$path = $home;
+		foreach (array('/ssl', '/sencrypt', '/third_party', '/requests') as $sub) {
+			$path .= $sub;
+			clearstatcache(true, $path);
+			if ($create && !file_exists($path) && !is_link($path)) {
+				@mkdir($path, $sub === '/requests' ? 0700 : 0755);
+			}
+			if (is_link($path) || !is_dir($path) || realpath($path) !== $path) {
+				return false;
+			}
+		}
+		$file = $path . '/' . $domain . '.key';
+		if (is_link($file)) {
+			return false;
+		}
+		return $file;
 	}
 
 	/**
@@ -907,9 +931,19 @@ class module_controller extends ctrl_module {
 		}
 		$domain = $formvars["inDomain"];
 
-		if (empty($_FILES["inkey"]["name"]) || empty($_FILES["inWCA"]["name"])) { 
+		// the key: uploaded, or the one kept from "Make a Certificate Signing Request"
+		$waiting = self::RequestKeyFile($currentuser['username'], $domain);
+		$useWaiting = empty($_FILES["inkey"]["name"]) && $waiting !== false && is_file($waiting);
+		if ((empty($_FILES["inkey"]["name"]) && !$useWaiting) || empty($_FILES["inWCA"]["name"])) {
 			self::$empty = true;
-			return false; 
+			return false;
+		}
+		// the certificate must belong to the key: a wrong pair would stop HTTPS for the domain
+		$keyPem = $useWaiting ? (string) @file_get_contents($waiting) : (string) @file_get_contents($_FILES["inkey"]["tmp_name"]);
+		$certPem = (string) @file_get_contents($_FILES["inWCA"]["tmp_name"]);
+		if ($keyPem === '' || $certPem === '' || !@openssl_x509_check_private_key($certPem, $keyPem)) {
+			self::$keymismatch = true;
+			return false;
 		}
 		
 		if (!is_dir(ctrl_options::GetSystemOption('hosted_dir') . $currentuser["username"] . "/ssl/sencrypt/third_party/") ) {
@@ -940,7 +974,12 @@ class module_controller extends ctrl_module {
 			$uploadwcrt = $target_dir . "cert.pem";
 			$uploadicrt = $target_dir . "intermediate.crt";
 			
-			move_uploaded_file($_FILES["inkey"]["tmp_name"], $uploadkey);
+			if ($useWaiting) {
+				file_put_contents($uploadkey, $keyPem);
+				@unlink($waiting); // used: no second copy of the key
+			} else {
+				move_uploaded_file($_FILES["inkey"]["tmp_name"], $uploadkey);
+			}
 			move_uploaded_file($_FILES["inWCA"]["tmp_name"], $uploadwcrt);
 			move_uploaded_file($_FILES["inICA"]["tmp_name"], $uploadicrt);
 			// the private key: the panel and Apache (root) only
@@ -2129,22 +2168,12 @@ class module_controller extends ctrl_module {
 	 * @param string $ipStatus The ip-api.com 'status' value.
 	 * @param string $querydata The ip-api.com 'query' value (the IP it looked up).
 	 * @param string $server_ip The server's IP (server_ip option).
-	 * @return bool|null True when live, false without an A record, null when the IP check fails.
+	 * @return bool True when the domain has an A record and it points to this server.
 	 */
 	static function checkDNSIsLive ($domain, $ipStatus, $querydata, $server_ip) { 
-		// Check DNS for domain is live and public before continuing
-		 
-		 // Pull IP from sentora
-		 ctrl_options::GetSystemOption('server_ip');
-		
-		if(checkdnsrr($domain,"A")) {
-			
-			if (($ipStatus == "success") && ($querydata == $server_ip)) {
-				return true;		
-			}
-		} else {
-			return false;
-		}
+		// the domain must have an A record, and the public lookup must have found this server's IP
+		// (it returned nothing at all when the record pointed elsewhere)
+		return checkdnsrr($domain, "A") && $ipStatus == "success" && $querydata == $server_ip;
 	}
 	
 
@@ -2156,7 +2185,7 @@ class module_controller extends ctrl_module {
 	static function getResult() {
 		if (self::$modReqsError)
 		{
-			return ui_sysmessage::shout(ui_language::translate("You need at least PHP 5.3.0+ with OpenSSL and curl extension installed. Contact your admin for help. This Module may not work correctly until the issues are fixed."), "zannounceerror");
+			return ui_sysmessage::shout(ui_language::translate("Sencrypt needs PHP 5.5 or newer with the OpenSSL and curl extensions. Ask your administrator to install them; until then this module may not work correctly."), "zannounceerror");
 		}
 		if (self::$portReqsError)
 		{
@@ -2190,7 +2219,13 @@ class module_controller extends ctrl_module {
             return ui_sysmessage::shout(ui_language::translate("The Requested Certificate has been revoked"), "zannounceok");
         }
 		if (self::$keyadd) {
-            return ui_sysmessage::shout(ui_language::translate("Certificate Signing Request was made and sent to the mail you have entered"), "zannounceok");
+            return ui_sysmessage::shout(ui_language::translate("The certificate signing request was e-mailed to the address you entered. Its private key stays on the server and is used when you install the certificate."), "zannounceok");
+        }
+		if (self::$csrFailed) {
+            return ui_sysmessage::shout(ui_language::translate("The request could not be made or its key could not be kept. Nothing was sent; try again."), "zannounceerror");
+        }
+		if (self::$keymismatch) {
+            return ui_sysmessage::shout(ui_language::translate("That certificate does not belong to the private key. Nothing was installed: use the certificate issued for this domain's request."), "zannounceerror");
         }
 		if (self::$certFailed) {
             return ui_sysmessage::shout(ui_language::translate("Oops! Something went wrong. Your Let's Encrypt certificate was not created. Check if your website is LIVE."), "zannounceerror");

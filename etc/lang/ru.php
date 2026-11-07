@@ -6,7 +6,8 @@
  * English text => Russian. ui_language::translate() reads this file for accounts that chose
  * this language in My Account. Keep placeholders (%s, %d, %1$d ...), **bold**, [text](link)
  * addresses and HTML entities exactly as in the English. A text not listed here stays English
- * (or uses x_translations, where an administrator may add translations).
+ * (or uses x_translations, where an administrator may add translations). The @months, @months_short,
+ * @days and @days_short lists are the month and weekday names ui_language::Date() uses.
  *
  * @package Sentora
  * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
@@ -14,6 +15,7 @@
 return array(
     '	Path to named-compilezone bind utility.' => '	Путь к утилите BIND named-compilezone.',
     '%1$d of %2$d ticked' => 'Отмечено: %1$d из %2$d',
+    '%1$s %2$s record(s) were marked as deleted.' => 'Записи %2$s помечены как удалённые: %1$s.',
     '%1$s as %2$s' => '%1$s как %2$s',
     '%1$s of %2$s used, %3$s left.' => 'Использовано %1$s из %2$s, осталось %3$s.',
     '%d accounts' => 'Аккаунтов: %d',
@@ -61,6 +63,8 @@ return array(
     '%s of the worker slots have no process. That is normal on a quiet server: Apache starts more when traffic grows.' => 'Свободных слотов обработчиков: %s. Это нормально для малонагруженного сервера: Apache запускает новые процессы при росте трафика.',
     '%s per request' => '%s на запрос',
     '%s processes' => 'Процессов: %s',
+    '%s record(s) were marked as deleted.' => 'Записи помечены как удалённые: %s.',
+    '%s record(s) were purged from the database.' => 'Записи окончательно удалены из базы данных: %s.',
     '%s requests' => 'Запросов: %s',
     '%s requests running' => 'Выполняется запросов: %s',
     '%s since the restart' => '%s с момента перезапуска',
@@ -600,6 +604,7 @@ return array(
     'Databases it can use' => 'Доступные базы данных',
     'Date format' => 'Формат даты',
     'Default' => 'По умолчанию',
+    'Default records were created for %s domain(s).' => 'Созданы стандартные записи, доменов: %s.',
     'Delete' => 'Удалить',
     'Delete %s' => 'Удалить %s',
     'Delete ALL Zone Records' => 'Удалить ВСЕ записи зон',
@@ -1568,6 +1573,7 @@ return array(
     'Print' => 'Печать',
     'Priority' => 'Приоритет',
     'Private key (.key)' => 'Закрытый ключ (.key)',
+    'Private key (.key), only for a certificate requested elsewhere' => 'Закрытый ключ (.key), только для сертификата, запрошенного в другом месте',
     'Process' => 'Процесс',
     'Processes' => 'Процессы',
     'Processes waiting for a CPU; above the number of cores means the server is busy' => 'Процессы, ожидающие CPU; если их больше, чем ядер, сервер перегружен',
@@ -1621,6 +1627,7 @@ return array(
     'Recently' => 'Недавно',
     'Record Types Usage' => 'Использование типов записей',
     'Records' => 'Записи',
+    'Records of %s domain(s) were reset to the defaults.' => 'Записи сброшены на стандартные, доменов: %s.',
     'Records where marked as deleted from the database' => 'Записи помечены в базе данных как удалённые',
     'Records where purged from the database' => 'Записи окончательно удалены из базы данных',
     'Recovery codes left' => 'Осталось кодов восстановления',
@@ -1796,6 +1803,7 @@ return array(
     'Self-signed' => 'Самоподписанный',
     'Self-signed or bought; renew it yourself' => 'Самоподписанный или купленный; продлевайте сами',
     'Sencrypt SSL' => 'Sencrypt SSL',
+    'Sencrypt needs PHP 5.5 or newer with the OpenSSL and curl extensions. Ask your administrator to install them; until then this module may not work correctly.' => 'Для Sencrypt нужен PHP 5.5 или новее с расширениями OpenSSL и curl. Попросите администратора установить их; до этого модуль может работать неправильно.',
     'Send a notice' => 'Отправить уведомление',
     'Send a welcome email' => 'Отправить приветственное письмо',
     'Send email with' => 'Отправлять почту через',
@@ -1981,6 +1989,7 @@ return array(
     'Thailand' => 'Таиланд',
     'That address is on the list already.' => 'Этот адрес уже есть в списке.',
     'That backup was not found. It may have been removed; make a new one.' => 'Эта резервная копия не найдена. Возможно, она была удалена; создайте новую.',
+    'That certificate does not belong to the private key. Nothing was installed: use the certificate issued for this domain\'s request.' => 'Этот сертификат не соответствует закрытому ключу. Ничего не установлено: используйте сертификат, выданный по запросу для этого домена.',
     'That code is not right. Check the time on your phone and try the next code.' => 'Неверный код. Проверьте время на телефоне и попробуйте следующий код.',
     'That database has already been added to this user.' => 'Эта база данных уже добавлена этому пользователю.',
     'That database name can not be used: letters, digits and dashes only (not at the start or end), and at most %d characters.' => 'Такое имя базы данных использовать нельзя: только буквы, цифры и дефисы (не в начале и не в конце), не более %d символов.',
@@ -2022,6 +2031,7 @@ return array(
     'The backups clients make on their Backup page (Advanced > Backup), and the daily backup of every account.' => 'Резервные копии, которые клиенты создают на своей странице (Дополнительно > Резервное копирование), и ежедневная резервная копия каждого аккаунта.',
     'The backups could not be read' => 'Не удалось прочитать резервные копии',
     'The certificate of the panel\'s own address, so you and your clients log in over https.' => 'Сертификат для адреса самой панели, чтобы вы и ваши клиенты входили по https.',
+    'The certificate signing request was e-mailed to the address you entered. Its private key stays on the server and is used when you install the certificate.' => 'Запрос на подпись сертификата отправлен на указанный адрес. Его закрытый ключ остаётся на сервере и будет использован при установке сертификата.',
     'The control panel' => 'Панель управления',
     'The daemon (root) makes the change (this can take up to 5 minutes); the result appears under Recent ZPPY commands.' => 'Демон (root) вносит изменение (это может занять до 5 минут); результат появится в разделе «Последние команды ZPPY».',
     'The daemon applies changes within 5 minutes; only the parts that changed are restarted.' => 'Демон применяет изменения в течение 5 минут; перезапускаются только изменённые части.',
@@ -2040,6 +2050,7 @@ return array(
     'The fewest characters a new password may have.' => 'Минимальное число символов в новом пароле.',
     'The files Apache looks for when a folder is asked for, in order.' => 'Файлы, которые Apache ищет при запросе папки, по порядку.',
     'The files the seller sent, and the private key made with the request.' => 'Файлы, присланные продавцом, и закрытый ключ, созданный вместе с запросом.',
+    'The files the seller sent. The private key is the one kept from your request; upload a key only for a certificate requested elsewhere.' => 'Файлы, присланные продавцом. Закрытый ключ берётся из вашего запроса; загружайте ключ только для сертификата, запрошенного в другом месте.',
     'The folder' => 'Папка',
     'The folder is protected. Add a user below so that someone can open it.' => 'Папка защищена. Добавьте пользователя ниже, чтобы её можно было открыть.',
     'The full path of a file owned by root that only root may change. It is run with the new and the old IP address as its two arguments.' => 'Полный путь к файлу, принадлежащему root, который может изменять только root. Он запускается с новым и старым IP-адресом в качестве двух аргументов.',
@@ -2099,6 +2110,8 @@ return array(
     'The repository could not be checked:' => 'Не удалось проверить репозиторий:',
     'The repository that could not be added has been removed from the list.' => 'Репозиторий, который не удалось добавить, удалён из списка.',
     'The request and its private key are emailed to the address below; no copy stays on the server, so keep that email. Give the request to the seller; when you have the certificate, install it with the key under "Install a signed certificate".' => 'Запрос и его закрытый ключ отправляются на указанный ниже адрес; копия на сервере не остаётся, поэтому сохраните это письмо. Передайте запрос продавцу; получив сертификат, установите его вместе с ключом в разделе «Установить подписанный сертификат».',
+    'The request could not be made or its key could not be kept. Nothing was sent; try again.' => 'Не удалось создать запрос или сохранить его ключ. Ничего не отправлено; попробуйте ещё раз.',
+    'The request is e-mailed to the address below; give it to the certificate seller. Its private key stays on the server, and is used when you install the certificate under "Install a signed certificate".' => 'Запрос отправляется на адрес ниже; передайте его продавцу сертификата. Закрытый ключ остаётся на сервере и используется при установке сертификата в разделе «Установить подписанный сертификат».',
     'The same from the server\'s console, as root:' => 'То же самое из консоли сервера от имени root:',
     'The script runs as your account, with its domain\'s PHP version, and can only use files in your account. It starts within 5 minutes.' => 'Скрипт выполняется от имени вашего аккаунта с версией PHP его домена и может использовать только файлы вашего аккаунта. Он начнёт работу в течение 5 минут.',
     'The selected certificate has been deleted.' => 'Выбранный сертификат удалён.',
@@ -2779,4 +2792,8 @@ return array(
     'your mailbox' => 'ваш почтовый ящик',
     'zip, rar, 7z, tar and similar.' => 'zip, rar, 7z, tar и подобные.',
     'Åland Islands' => 'Аландские острова',
+    '@months' => array('января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'),
+    '@months_short' => array('янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'),
+    '@days' => array('воскресенье', 'понедельник', 'вторник', 'среда', 'четверг', 'пятница', 'суббота'),
+    '@days_short' => array('вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'),
 );

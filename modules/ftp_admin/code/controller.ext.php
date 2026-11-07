@@ -130,7 +130,7 @@ class module_controller extends ctrl_module
                 . ($off ? '<span class="fa-off" title="' . self::t('Its FTP accounts can not log in until it is switched on again in Manage Clients.') . '">' . self::t('Switched off') . '</span>' : '') . '</td>'
                 . '<td><code>' . self::h($a['dir'] === '' ? '/' : $a['dir']) . '</code></td><td><span class="fa-acc fa-acc-' . self::h(strtolower($a['access'])) . '">'
                 . self::t(isset($names[$a['access']]) ? $names[$a['access']] : $a['access']) . '</span></td>'
-                . '<td>' . ($a['created'] ? self::h(date('j M Y', (int) $a['created'])) : '') . '</td></tr>';
+                . '<td>' . ($a['created'] ? self::h(ui_language::Date('j M Y', (int) $a['created'])) : '') . '</td></tr>';
         }
         return $out;
     }

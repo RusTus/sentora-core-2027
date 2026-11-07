@@ -79,7 +79,7 @@ class module_controller extends ctrl_module
     public function ListCurrentFAQ($fid)
     {
         global $zdbh;
-        $sql = "SELECT * FROM x_faqs WHERE fq_id_pk=:fid IS NOT NULL AND fq_deleted_ts IS NULL";
+        $sql = "SELECT * FROM x_faqs WHERE fq_id_pk=:fid AND fq_deleted_ts IS NULL";
         //$numrows = $zdbh->query($sql);
         $numrows = $zdbh->prepare($sql);
         $numrows->bindParam(':fid', $fid);

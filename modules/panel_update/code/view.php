@@ -75,7 +75,7 @@ class panel_update_view
         if ($s < 129600) {
             return str_replace('%d', (string) (int) round($s / 3600), self::t('%d hours ago'));
         }
-        return self::t('on') . ' ' . self::h(date('j M Y', (int) $t));
+        return self::t('on') . ' ' . self::h(ui_language::Date('j M Y', (int) $t));
     }
 
     /**
@@ -147,7 +147,7 @@ class panel_update_view
         $pct = $live ? (int) floor($done * 100 / $total) : 100;
         $title = $live ? ($roll ? 'Going back to the version before' : 'Updating the panel') : ($roll ? 'The last rollback' : 'The last update');
         $out = '<div class="pu-box pu-run' . ($live ? ' is-live' : '') . '"><div class="pu-head"><h4>' . self::t($title) . '</h4>'
-            . '<small>' . self::t('started') . ' ' . self::h(date('j M Y H:i', (int) $run['started'])) . ' ' . self::t($run['from'] === 'panel' ? 'from the panel' : 'from the console') . '</small></div>';
+            . '<small>' . self::t('started') . ' ' . self::h(ui_language::Date('j M Y H:i', (int) $run['started'])) . ' ' . self::t($run['from'] === 'panel' ? 'from the panel' : 'from the console') . '</small></div>';
         if ($live) {
             $out .= '<div class="pu-bar"><i style="width:' . $pct . '%"></i></div><p class="pu-sub">' . $done . ' / ' . $total . ' ' . self::t('steps')
                 . ' &middot; ' . self::t('You can leave this page: the job carries on on the server.') . '</p>';

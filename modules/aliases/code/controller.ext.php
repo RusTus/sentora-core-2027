@@ -510,21 +510,6 @@ class module_controller extends ctrl_module
     }
 
     /**
-     * Return the alias list for ?other=.
-     *
-     * Broken: calls self::ListCurrentMailboxes(), which this class does not define (fatal
-     * error if called). Not used by the template.
-     * @global runtime_controller $controller The request controller.
-     * @return mixed
-     */
-    static function getCurrentAliasList()
-    {
-        global $controller;
-        $currentuser = ctrl_users::GetUserDetail();
-        return self::ListCurrentMailboxes($controller->GetControllerRequest('URL', 'other'));
-    }
-
-    /**
      * Is the page in its default (create) view, i.e. no ?show=?
      *
      * @global runtime_controller $controller The request controller.

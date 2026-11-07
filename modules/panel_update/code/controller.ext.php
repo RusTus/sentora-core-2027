@@ -215,7 +215,7 @@ class module_controller extends ctrl_module
         $wait = $checking > 0 && $a['checked'] < $checking && time() - $checking < 60;
         $ver = panel_update_state::Version();
         $inst = panel_update_state::Installed();
-        $release = ($a['tag'] !== '' ? ui_language::translate('release') . ' ' . $a['tag'] : '') . ($a['date'] !== '' ? ', ' . date('j M Y', strtotime($a['date'])) : '');
+        $release = ($a['tag'] !== '' ? ui_language::translate('release') . ' ' . $a['tag'] : '') . ($a['date'] !== '' ? ', ' . ui_language::Date('j M Y', strtotime($a['date'])) : '');
         $pub = array(
             'available' => array('warn', 'cloud', 'Update available', ''),
             'current' => array('ok', 'ok', 'Up to date', 'the newest release is installed'),
@@ -273,7 +273,7 @@ class module_controller extends ctrl_module
         if ($a['state'] === 'current') {
             $out .= '<p class="pu-lead">' . $v::Icon('ok') . ' ' . $v::t('The panel is up to date.') . '</p>';
         } elseif ($a['state'] === 'available') {
-            $out .= '<p class="pu-lead">' . $v::t('A newer panel is published') . ': <b>' . $v::h(($a['tag'] !== '' ? ui_language::translate('release') . ' ' . $a['tag'] : '') . ($a['date'] !== '' ? ', ' . date('j M Y', strtotime($a['date'])) : '')) . '</b>'
+            $out .= '<p class="pu-lead">' . $v::t('A newer panel is published') . ': <b>' . $v::h(($a['tag'] !== '' ? ui_language::translate('release') . ' ' . $a['tag'] : '') . ($a['date'] !== '' ? ', ' . ui_language::Date('j M Y', strtotime($a['date'])) : '')) . '</b>'
                 . ($a['repo'] !== '' ? ' &middot; <a href="https://github.com/' . $v::h($a['repo']) . '/blob/master2027/CHANGELOG.md" target="_blank" rel="noopener noreferrer">' . $v::t('what changed') . '</a>' : '') . '</p>';
         } else {
             $out .= '<p class="pu-lead">' . $v::t('It is not known yet whether a newer panel is published. Updating anyway is safe: when the newest release is already installed, nothing is changed.') . '</p>';
@@ -304,7 +304,7 @@ class module_controller extends ctrl_module
         $busy = self::Busy();
         $out .= '<ul class="pu-backups">';
         foreach ($list as $i => $b) {
-            $out .= '<li><details' . ($busy ? ' class="is-off"' : '') . '><summary>' . $v::Icon('back') . '<span><b>' . $v::t('Before the update of') . ' ' . $v::h(date('j M Y H:i', $b['time'])) . '</b>'
+            $out .= '<li><details' . ($busy ? ' class="is-off"' : '') . '><summary>' . $v::Icon('back') . '<span><b>' . $v::t('Before the update of') . ' ' . $v::h(ui_language::Date('j M Y H:i', $b['time'])) . '</b>'
                 . '<small>' . $v::h($b['name']) . ' &middot; ' . $v::h(round($b['size'] / 1048576)) . ' MB' . ($i === 0 ? ' &middot; ' . $v::t('the newest') : '') . '</small></span></summary>'
                 . ($busy ? '' : '<div class="pu-confirm">' . $v::Console($b['name'], 'The same from the server\'s console, as root (it works also when the panel does not):')
                     . $v::ActionForm('RollbackPanel', 'Go back to this version', 'btn-danger', $b['name']) . '</div>')

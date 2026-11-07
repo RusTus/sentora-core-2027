@@ -230,7 +230,7 @@ class module_controller extends ctrl_module
         $changed = (string) ctrl_options::GetSystemOption('apache_changed');
         $ico = function ($d) { return '<svg class="aa-ico-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' . $d . '</svg>'; };
         $when = strtolower($changed) === 'true' ? ui_language::translate('Being written: within 5 minutes')
-            : (ctype_digit($changed) && (int) $changed > 0 ? ui_language::translate('Written') . ' ' . date('j M, H:i', (int) $changed) : ui_language::translate('Up to date'));
+            : (ctype_digit($changed) && (int) $changed > 0 ? ui_language::translate('Written') . ' ' . ui_language::Date('j M, H:i', (int) $changed) : ui_language::translate('Up to date'));
         return '<div class="aa-tile ' . ($up ? 'ok' : 'bad') . '">' . $ico($up ? '<circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/>' : '<circle cx="12" cy="12" r="9"/><path d="M15 9l-6 6M9 9l6 6"/>')
             . '<div><b>' . self::t($up ? 'Running' : 'Not answering') . '</b><span>' . str_replace('%d', (string) ($port > 0 ? $port : 80), self::t('Apache, port %d')) . '</span></div></div>'
             . '<div class="aa-tile">' . $ico('<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>') . '<div><b>' . $n . '</b><span>' . str_replace('%d', (string) $over, self::t('domains, %d with their own settings')) . '</span></div></div>'
@@ -348,7 +348,7 @@ class module_controller extends ctrl_module
         $types = array(1 => 'Domain', 2 => 'Sub-domain', 3 => 'Parked domain');
         return '<dl class="aa-dl"><dt>' . self::t('Client') . '</dt><dd>' . self::h($r['owner']) . '</dd><dt>' . self::t('Kind') . '</dt><dd>' . self::t(isset($types[(int) $r['vh_type_in']]) ? $types[(int) $r['vh_type_in']] : 'Domain') . '</dd>'
             . '<dt>' . self::t('Folder') . '</dt><dd><code>public_html/' . self::h($r['vh_directory_vc']) . '</code></dd>'
-            . ($r['vh_created_ts'] ? '<dt>' . self::t('Added') . '</dt><dd>' . self::h(date('j M Y', (int) $r['vh_created_ts'])) . '</dd>' : '') . '</dl>';
+            . ($r['vh_created_ts'] ? '<dt>' . self::t('Added') . '</dt><dd>' . self::h(ui_language::Date('j M Y', (int) $r['vh_created_ts'])) . '</dd>' : '') . '</dl>';
     }
 
     /**

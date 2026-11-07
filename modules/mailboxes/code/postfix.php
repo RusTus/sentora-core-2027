@@ -64,7 +64,8 @@ $z_db_pass = $pass;
 try {
     $mail_db = new db_driver("mysql:host=" . $host . ";dbname=" . $mailserver_db . "", $z_db_user, $z_db_pass);
 } catch (PDOException $e) {
-    echo $e;
+    // to the PHP log only: printed into the page, the exception's trace showed the database login
+    error_log('Sentora mailboxes: the mail server database could not be reached: ' . $e->getMessage());
 }
 
 // Adding PostFix Mailboxes

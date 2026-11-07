@@ -105,7 +105,7 @@
             <div class="sc-card">
                 <div class="sc-card-head">
                     <h4><: Make a Certificate Signing Request :></h4>
-                    <p><: The request and its private key are emailed to the address below; no copy stays on the server, so keep that email. Give the request to the seller; when you have the certificate, install it with the key under "Install a signed certificate". :></p>
+                    <p><: The request is e-mailed to the address below; give it to the certificate seller. Its private key stays on the server, and is used when you install the certificate under "Install a signed certificate". :></p>
                 </div>
                 <form class="sc-form sc-act" action="./?module=sencrypt&amp;ShowPanel=third-party&amp;action=MakeCSR" method="post">
                     <label><span><: Domain :></span>
@@ -135,7 +135,7 @@
             <div class="sc-card">
                 <div class="sc-card-head">
                     <h4><: Install a signed certificate :></h4>
-                    <p><: The files the seller sent, and the private key made with the request. :></p>
+                    <p><: The files the seller sent. The private key is the one kept from your request; upload a key only for a certificate requested elsewhere. :></p>
                 </div>
                 <form class="sc-form sc-act" action="./?module=sencrypt&amp;ShowPanel=third-party&amp;action=UploadSSL" method="post" enctype="multipart/form-data">
                     <label><span><: Domain :></span>
@@ -143,7 +143,7 @@
                             <option value="">-- <: Select a domain :> --</option>
                             <% loop DomainList %><option value="<& domain &>"><& domain &></option><% endloop %>
                         </select></label>
-                    <label class="sc-file"><span><: Private key (.key) :></span><input type="file" name="inkey" required></label>
+                    <label class="sc-file"><span><: Private key (.key), only for a certificate requested elsewhere :></span><input type="file" name="inkey"></label>
                     <label class="sc-file"><span><: Certificate (.crt or .cer) :></span><input type="file" name="inWCA" required></label>
                     <label class="sc-file"><span><: CA chain, the intermediate certificate (.crt or .cer) :></span><input type="file" name="inICA" required></label>
                     <div class="sc-form-foot">

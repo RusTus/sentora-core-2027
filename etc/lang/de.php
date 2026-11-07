@@ -6,7 +6,8 @@
  * English text => German. ui_language::translate() reads this file for accounts that chose
  * this language in My Account. Keep placeholders (%s, %d, %1$d ...), **bold**, [text](link)
  * addresses and HTML entities exactly as in the English. A text not listed here stays English
- * (or uses x_translations, where an administrator may add translations).
+ * (or uses x_translations, where an administrator may add translations). The @months, @months_short,
+ * @days and @days_short lists are the month and weekday names ui_language::Date() uses.
  *
  * @package Sentora
  * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
@@ -14,6 +15,7 @@
 return array(
     '	Path to named-compilezone bind utility.' => '	Pfad zum BIND-Hilfsprogramm named-compilezone.',
     '%1$d of %2$d ticked' => '%1$d von %2$d ausgewählt',
+    '%1$s %2$s record(s) were marked as deleted.' => '%1$s %2$s-Einträge wurden als gelöscht markiert.',
     '%1$s as %2$s' => '%1$s als %2$s',
     '%1$s of %2$s used, %3$s left.' => '%1$s von %2$s belegt, %3$s frei.',
     '%d accounts' => '%d Konten',
@@ -61,6 +63,8 @@ return array(
     '%s of the worker slots have no process. That is normal on a quiet server: Apache starts more when traffic grows.' => '%s der Worker-Slots haben keinen Prozess. Das ist auf einem wenig ausgelasteten Server normal: Apache startet weitere, wenn der Datenverkehr zunimmt.',
     '%s per request' => '%s pro Anfrage',
     '%s processes' => '%s Prozesse',
+    '%s record(s) were marked as deleted.' => '%s Einträge wurden als gelöscht markiert.',
+    '%s record(s) were purged from the database.' => '%s Einträge wurden endgültig aus der Datenbank entfernt.',
     '%s requests' => '%s Anfragen',
     '%s requests running' => '%s laufende Anfragen',
     '%s since the restart' => '%s seit dem Neustart',
@@ -600,6 +604,7 @@ return array(
     'Databases it can use' => 'Zugängliche Datenbanken',
     'Date format' => 'Datumsformat',
     'Default' => 'Standard',
+    'Default records were created for %s domain(s).' => 'Für %s Domain(s) wurden die Standardeinträge angelegt.',
     'Delete' => 'Löschen',
     'Delete %s' => '%s löschen',
     'Delete ALL Zone Records' => 'ALLE Zoneneinträge löschen',
@@ -1568,6 +1573,7 @@ return array(
     'Print' => 'Drucken',
     'Priority' => 'Priorität',
     'Private key (.key)' => 'Privater Schlüssel (.key)',
+    'Private key (.key), only for a certificate requested elsewhere' => 'Privater Schlüssel (.key), nur für ein anderswo angefordertes Zertifikat',
     'Process' => 'Prozess',
     'Processes' => 'Prozesse',
     'Processes waiting for a CPU; above the number of cores means the server is busy' => 'Prozesse, die auf eine CPU warten; mehr als die Anzahl der Kerne bedeutet, dass der Server ausgelastet ist',
@@ -1621,6 +1627,7 @@ return array(
     'Recently' => 'Zuletzt',
     'Record Types Usage' => 'Nutzung der Eintragstypen',
     'Records' => 'Einträge',
+    'Records of %s domain(s) were reset to the defaults.' => 'Die Einträge von %s Domain(s) wurden auf die Standardwerte zurückgesetzt.',
     'Records where marked as deleted from the database' => 'Die Einträge wurden in der Datenbank als gelöscht markiert',
     'Records where purged from the database' => 'Die Einträge wurden endgültig aus der Datenbank entfernt',
     'Recovery codes left' => 'Verbleibende Wiederherstellungscodes',
@@ -1796,6 +1803,7 @@ return array(
     'Self-signed' => 'Selbstsigniert',
     'Self-signed or bought; renew it yourself' => 'Selbstsigniert oder gekauft; selbst verlängern',
     'Sencrypt SSL' => 'Sencrypt SSL',
+    'Sencrypt needs PHP 5.5 or newer with the OpenSSL and curl extensions. Ask your administrator to install them; until then this module may not work correctly.' => 'Sencrypt benötigt PHP 5.5 oder neuer mit den Erweiterungen OpenSSL und curl. Bitten Sie Ihren Administrator, sie zu installieren; bis dahin funktioniert dieses Modul möglicherweise nicht richtig.',
     'Send a notice' => 'Hinweis senden',
     'Send a welcome email' => 'Willkommens-E-Mail senden',
     'Send email with' => 'E-Mail senden mit',
@@ -1981,6 +1989,7 @@ return array(
     'Thailand' => 'Thailand',
     'That address is on the list already.' => 'Diese Adresse ist bereits in der Liste.',
     'That backup was not found. It may have been removed; make a new one.' => 'Dieses Backup wurde nicht gefunden. Möglicherweise wurde es entfernt; erstellen Sie ein neues.',
+    'That certificate does not belong to the private key. Nothing was installed: use the certificate issued for this domain\'s request.' => 'Dieses Zertifikat gehört nicht zum privaten Schlüssel. Es wurde nichts installiert: Verwenden Sie das Zertifikat, das für die Anforderung dieser Domain ausgestellt wurde.',
     'That code is not right. Check the time on your phone and try the next code.' => 'Dieser Code ist falsch. Prüfen Sie die Uhrzeit auf Ihrem Smartphone und versuchen Sie es mit dem nächsten Code.',
     'That database has already been added to this user.' => 'Diese Datenbank ist diesem Benutzer bereits zugewiesen.',
     'That database name can not be used: letters, digits and dashes only (not at the start or end), and at most %d characters.' => 'Dieser Datenbankname ist nicht zulässig: nur Buchstaben, Ziffern und Bindestriche (nicht am Anfang oder Ende), höchstens %d Zeichen.',
@@ -2022,6 +2031,7 @@ return array(
     'The backups clients make on their Backup page (Advanced > Backup), and the daily backup of every account.' => 'Die Backups, die Kunden auf ihrer Backup-Seite erstellen (Erweitert > Backup), und das tägliche Backup jedes Kontos.',
     'The backups could not be read' => 'Die Backups konnten nicht eingelesen werden',
     'The certificate of the panel\'s own address, so you and your clients log in over https.' => 'Das Zertifikat für die Adresse des Panels selbst, damit Sie und Ihre Kunden sich über https anmelden.',
+    'The certificate signing request was e-mailed to the address you entered. Its private key stays on the server and is used when you install the certificate.' => 'Die Zertifikatsanforderung (CSR) wurde an die angegebene Adresse gesendet. Der private Schlüssel bleibt auf dem Server und wird bei der Installation des Zertifikats verwendet.',
     'The control panel' => 'Das Panel',
     'The daemon (root) makes the change (this can take up to 5 minutes); the result appears under Recent ZPPY commands.' => 'Der Daemon (root) nimmt die Änderung vor (das kann bis zu 5 Minuten dauern); das Ergebnis erscheint unter „Letzte ZPPY-Befehle“.',
     'The daemon applies changes within 5 minutes; only the parts that changed are restarted.' => 'Der Daemon übernimmt Änderungen innerhalb von 5 Minuten; nur die geänderten Teile werden neu gestartet.',
@@ -2040,6 +2050,7 @@ return array(
     'The fewest characters a new password may have.' => 'Die Mindestanzahl an Zeichen für ein neues Passwort.',
     'The files Apache looks for when a folder is asked for, in order.' => 'Die Dateien, nach denen Apache beim Aufruf eines Ordners sucht, in dieser Reihenfolge.',
     'The files the seller sent, and the private key made with the request.' => 'Die Dateien des Anbieters und der zusammen mit der Anforderung erstellte private Schlüssel.',
+    'The files the seller sent. The private key is the one kept from your request; upload a key only for a certificate requested elsewhere.' => 'Die Dateien des Zertifikatsanbieters. Als privater Schlüssel wird der aus Ihrer Anforderung verwendet; laden Sie nur für ein anderswo angefordertes Zertifikat einen Schlüssel hoch.',
     'The folder' => 'Der Ordner',
     'The folder is protected. Add a user below so that someone can open it.' => 'Der Ordner ist geschützt. Fügen Sie unten einen Benutzer hinzu, damit jemand ihn öffnen kann.',
     'The full path of a file owned by root that only root may change. It is run with the new and the old IP address as its two arguments.' => 'Der vollständige Pfad einer Datei, die root gehört und nur von root geändert werden darf. Sie wird mit der neuen und der alten IP-Adresse als Argumente ausgeführt.',
@@ -2099,6 +2110,8 @@ return array(
     'The repository could not be checked:' => 'Das Repository konnte nicht geprüft werden:',
     'The repository that could not be added has been removed from the list.' => 'Das Repository, das nicht hinzugefügt werden konnte, wurde aus der Liste entfernt.',
     'The request and its private key are emailed to the address below; no copy stays on the server, so keep that email. Give the request to the seller; when you have the certificate, install it with the key under "Install a signed certificate".' => 'Die Anforderung und ihr privater Schlüssel werden an die unten angegebene Adresse gesendet; auf dem Server bleibt keine Kopie, bewahren Sie die E-Mail also auf. Geben Sie die Anforderung an den Anbieter weiter; sobald Sie das Zertifikat haben, installieren Sie es mit dem Schlüssel unter „Signiertes Zertifikat installieren“.',
+    'The request could not be made or its key could not be kept. Nothing was sent; try again.' => 'Die Anforderung konnte nicht erstellt oder ihr Schlüssel nicht gespeichert werden. Es wurde nichts gesendet; versuchen Sie es erneut.',
+    'The request is e-mailed to the address below; give it to the certificate seller. Its private key stays on the server, and is used when you install the certificate under "Install a signed certificate".' => 'Die Anforderung wird an die unten angegebene Adresse gesendet; geben Sie sie an den Zertifikatsanbieter weiter. Ihr privater Schlüssel bleibt auf dem Server und wird verwendet, wenn Sie das Zertifikat unter „Signiertes Zertifikat installieren“ installieren.',
     'The same from the server\'s console, as root:' => 'Dasselbe über die Server-Konsole, als root:',
     'The script runs as your account, with its domain\'s PHP version, and can only use files in your account. It starts within 5 minutes.' => 'Das Skript läuft unter Ihrem Konto mit der PHP-Version seiner Domain und kann nur Dateien in Ihrem Konto verwenden. Es startet innerhalb von 5 Minuten.',
     'The selected certificate has been deleted.' => 'Das ausgewählte Zertifikat wurde gelöscht.',
@@ -2779,4 +2792,8 @@ return array(
     'your mailbox' => 'Ihr Postfach',
     'zip, rar, 7z, tar and similar.' => 'zip, rar, 7z, tar und ähnliche.',
     'Åland Islands' => 'Ålandinseln',
+    '@months' => array('Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'),
+    '@months_short' => array('Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'),
+    '@days' => array('Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'),
+    '@days_short' => array('So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'),
 );

@@ -804,7 +804,7 @@ class module_controller extends ctrl_module
             return ui_sysmessage::shout(htmlspecialchars(ui_language::translate($m[1]), ENT_QUOTES, 'UTF-8'), $m[0] === 'ok' ? 'zannounceok' : 'zannounceerror');
         }
         if (!fs_director::CheckForEmptyValue(self::$ok)) {
-            return ui_sysmessage::shout(ui_language::translate("Changes to your settings have been saved successfully!"));
+            return ui_sysmessage::shout(ui_language::translate("Changes to your settings have been saved successfully!"), "zannounceok");
         }
         return;
     }

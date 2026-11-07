@@ -619,16 +619,6 @@ class module_controller extends ctrl_module
     }
 
     /**
-     * The question before deleting a database (<@ ConfirmText @>), translated and escaped for an attribute.
-     *
-     * @return string
-     */
-    static function getConfirmText()
-    {
-        return htmlspecialchars(ui_language::translate('Delete this database and everything in it?'), ENT_QUOTES, 'UTF-8');
-    }
-
-    /**
      * Returns the message for the last action (<@ Result @>): the first error flag set, else success.
      *
      * @return string|null The alert HTML, or null when there is nothing to show.
