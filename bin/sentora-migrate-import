@@ -21,7 +21,12 @@
  *                       move to a .user.ini); each changed file is kept as .htaccess.before-migrate
  *     --no-fix-htaccess only list them (the default when there is no keyboard to ask on)
  *
- * The new account must exist (Admin > Manage Clients, or zadmin itself). Moved for it: its domains,
+ * An account moved under its own name that is not here yet is made from the old one, matched by NAME,
+ * not by the old panel's IDs: its owner (the old reseller, made first when missing; the old zadmin is
+ * this server's administrator), its package (with the old limits) and its group (with the modules that
+ * exist here) are looked up by name and made when missing; it gets the old contact details and a new
+ * panel password, shown at the end and saved in /root/sentora-migrate-passwords-<date>.txt (root only).
+ * Moved under another name, the new account must exist first (Admin > Manage Clients). Moved for it: its domains,
  * sub-domains and parked domains, their website files, DNS records, MySQL databases and users (with
  * their passwords, so the sites' settings keep working), FTP accounts, cron jobs, protected folders,
  * mailboxes (with their mail), aliases, forwarders and distribution lists. Never moved: the old
@@ -266,8 +271,11 @@ global $zdbh;
 $q = $zdbh->prepare("SELECT ac_id_pk FROM x_accounts WHERE ac_user_vc = :u AND ac_deleted_ts IS NULL");
 $q->execute(array(':u' => $NEWU));
 $NEWID = (int) $q->fetchColumn();
+if (!$NEWID && $NEWU !== $OLDU) {
+    stop("the account $NEWU does not exist on this server: make it first (Admin > Manage Clients), then run this again. (An account moved under its own name, $OLDU, is made here when it is missing.)");
+}
 if (!$NEWID) {
-    stop("the account $NEWU does not exist on this server: make it first (Admin > Manage Clients), then run this again.");
+    ui_info("the account $NEWU is not on this server yet: it is made from the old one (see below)");
 }
 $HOSTED = rtrim((string) ctrl_options::GetSystemOption('hosted_dir'), '/') . '/';
 $NEWHOME = $HOSTED . $NEWU;
@@ -382,6 +390,158 @@ if (!$r) {
     stop("the export has no account $OLDU (see: sentora-migrate-import " . $args[0] . ")");
 }
 $OLDID = (int) $r[0]['ac_id_pk'];
+
+// --- accounts, packages and groups that are not here yet: matched by NAME, made from the old ones -----
+// (the old panel's IDs mean nothing here: an account's owner (reseller), package and group are looked up by
+// name on this server, and made from the old panel's when missing; the owner first, so a reseller's client
+// lands under that reseller)
+$MADE = array('accounts' => array(), 'packages' => array(), 'groups' => array(), 'warn' => array());
+$CREATED_PW = array();   // user name => new panel password (shown at the end)
+$adminId = function () {
+    static $id = null;
+    if ($id === null) {
+        $id = (int) $GLOBALS['zdbh']->query("SELECT ac_id_pk FROM x_accounts WHERE ac_group_fk = 1 AND ac_deleted_ts IS NULL ORDER BY ac_id_pk LIMIT 1")->fetchColumn();
+    }
+    return $id;
+};
+$newIdByName = function ($table, $idCol, $where, $params) {
+    $q = $GLOBALS['zdbh']->prepare("SELECT $idCol FROM $table WHERE $where LIMIT 1");
+    $q->execute($params);
+    return (int) $q->fetchColumn();
+};
+// $mapAccount(old id, $apply): the account's id here (made when $apply; -1 = would be made)
+$mapAccount = null;
+$mapGroup = function ($oldGid, $ownerNew, $ownerIsAdmin, $apply) use ($old, $O, $newIdByName, &$MADE) {
+    $g = $old("SELECT * FROM `$O`.x_groups WHERE ug_id_pk = :g", array(':g' => (int) $oldGid));
+    if (!$g) {
+        return 3;   // unknown: Users
+    }
+    $g = $g[0];
+    $name = (string) $g['ug_name_vc'];
+    if ((int) $g['ug_reseller_fk'] === 1 && in_array($name, array('Administrators', 'Resellers', 'Users'), true) || $name === 'Administrators') {
+        return $newIdByName('x_groups', 'ug_id_pk', "ug_name_vc = :n AND ug_reseller_fk = 1", array(':n' => $name)) ?: 3;
+    }
+    if ($ownerNew > 0 && ($id = $newIdByName('x_groups', 'ug_id_pk', "ug_name_vc = :n AND ug_reseller_fk = :r", array(':n' => $name, ':r' => $ownerNew)))) {
+        return $id;
+    }
+    // its modules, by folder name, that exist here (an administrator's modules only in an administrator's group)
+    $mods = $old("SELECT m.mo_folder_vc FROM `$O`.x_permissions p JOIN `$O`.x_modules m ON m.mo_id_pk = p.pe_module_fk WHERE p.pe_group_fk = :g", array(':g' => (int) $oldGid));
+    $folders = array_unique(array_column($mods, 'mo_folder_vc'));
+    $key = $name . '|' . $ownerNew;
+    if (!$apply) {
+        $MADE['groups'][$key] = $name . ' (' . count($folders) . ' module(s) asked)';
+        return -1;
+    }
+    $GLOBALS['zdbh']->prepare("INSERT INTO x_groups (ug_name_vc, ug_notes_tx, ug_reseller_fk) VALUES (:n, :d, :r)")
+        ->execute(array(':n' => $name, ':d' => (string) ($g['ug_notes_tx'] ?? ''), ':r' => $ownerNew));
+    $gid = (int) $GLOBALS['zdbh']->lastInsertId();
+    $n = 0;
+    foreach ($folders as $f) {
+        $q = $GLOBALS['zdbh']->prepare("SELECT mo_id_pk FROM x_modules WHERE mo_folder_vc = :f AND mo_enabled_en = 'true'"
+            . ($ownerIsAdmin ? '' : " AND mo_type_en = 'user' AND mo_category_fk <> 2"));
+        $q->execute(array(':f' => $f));
+        if ($mid = (int) $q->fetchColumn()) {
+            ctrl_groups::AddGroupModulePermissions($gid, $mid);
+            $n++;
+        }
+    }
+    $MADE['groups'][$key] = "$name ($n module(s))";
+    return $gid;
+};
+$mapPackage = function ($oldPid, $apply) use ($old, $O, $newIdByName, &$MADE, &$mapAccount, $adminId) {
+    $p = $old("SELECT * FROM `$O`.x_packages WHERE pk_id_pk = :p", array(':p' => (int) $oldPid));
+    if (!$p) {
+        return 0;
+    }
+    $p = $p[0];
+    $owner = (int) $p['pk_reseller_fk'] > 0 ? $mapAccount((int) $p['pk_reseller_fk'], $apply) : $adminId();
+    $name = (string) $p['pk_name_vc'];
+    if ($owner > 0 && ($id = $newIdByName('x_packages', 'pk_id_pk', "pk_name_vc = :n AND pk_reseller_fk = :r AND pk_deleted_ts IS NULL", array(':n' => $name, ':r' => $owner)))) {
+        return $id;
+    }
+    $qt = $old("SELECT * FROM `$O`.x_quotas WHERE qt_package_fk = :p", array(':p' => (int) $oldPid));
+    if (!$apply) {
+        $MADE['packages'][$name . '|' . $owner] = $name;
+        return -1;
+    }
+    $GLOBALS['zdbh']->prepare("INSERT INTO x_packages (pk_name_vc, pk_reseller_fk, pk_enablephp_in, pk_created_ts) VALUES (:n, :r, 1, :t)")
+        ->execute(array(':n' => $name, ':r' => $owner, ':t' => time()));
+    $pid = (int) $GLOBALS['zdbh']->lastInsertId();
+    $row = array('qt_package_fk' => $pid);
+    if ($qt) {
+        foreach (array('qt_domains_in', 'qt_subdomains_in', 'qt_parkeddomains_in', 'qt_mailboxes_in', 'qt_fowarders_in', 'qt_distlists_in', 'qt_ftpaccounts_in', 'qt_mysql_in', 'qt_diskspace_bi', 'qt_bandwidth_bi', 'qt_bwenabled_in', 'qt_dlenabled_in') as $c) {
+            if (array_key_exists($c, $qt[0])) {
+                $row[$c] = $qt[0][$c];
+            }
+        }
+    }
+    $GLOBALS['zdbh']->prepare("INSERT INTO x_quotas (" . implode(', ', array_keys($row)) . ") VALUES (:" . implode(', :', array_keys($row)) . ")")
+        ->execute(array_combine(array_map(function ($k) { return ':' . $k; }, array_keys($row)), array_values($row)));
+    $MADE['packages'][$name . '|' . $owner] = $name;
+    return $pid;
+};
+$mapAccount = function ($oldAid, $apply, $depth = 0) use ($old, $O, $newIdByName, &$MADE, &$CREATED_PW, &$mapAccount, $mapPackage, $mapGroup, $adminId) {
+    $a = $old("SELECT a.*, p.ud_fullname_vc, p.ud_address_tx, p.ud_postcode_vc, p.ud_phone_vc, p.ud_language_vc FROM `$O`.x_accounts a
+        LEFT JOIN `$O`.x_profiles p ON p.ud_user_fk = a.ac_id_pk WHERE a.ac_id_pk = :a", array(':a' => (int) $oldAid));
+    if (!$a) {
+        return $adminId();
+    }
+    $a = $a[0];
+    $user = strtolower((string) $a['ac_user_vc']);
+    if ($id = $newIdByName('x_accounts', 'ac_id_pk', "ac_user_vc = :u AND ac_deleted_ts IS NULL", array(':u' => $user))) {
+        return $id;
+    }
+    if (isset($MADE['accounts'][$user])) {
+        return $apply ? $MADE['accounts'][$user]['id'] : -1;
+    }
+    if ($depth > 10 || !preg_match('/^[a-z0-9_-]{1,64}$/', $user)) {
+        return $adminId();
+    }
+    // its owner first (the old zadmin, or an account that owns itself: this server's administrator)
+    $oldRes = (int) $a['ac_reseller_fk'];
+    $owner = ($oldRes <= 0 || $oldRes === (int) $oldAid) ? $adminId() : $mapAccount($oldRes, $apply, $depth + 1);
+    $ownerIsAdmin = $owner > 0 && (int) $GLOBALS['zdbh']->query("SELECT ac_group_fk FROM x_accounts WHERE ac_id_pk = " . (int) $owner)->fetchColumn() === 1;
+    $pkg = $mapPackage((int) $a['ac_package_fk'], $apply);
+    $grp = $mapGroup((int) $a['ac_group_fk'], $owner, $ownerIsAdmin, $apply);
+    $gname = $old("SELECT ug_name_vc FROM `$O`.x_groups WHERE ug_id_pk = :g", array(':g' => (int) $a['ac_group_fk']));
+    $gname = $gname ? (string) $gname[0]['ug_name_vc'] : 'Users';
+    $pname = $old("SELECT pk_name_vc FROM `$O`.x_packages WHERE pk_id_pk = :p", array(':p' => (int) $a['ac_package_fk']));
+    $pname = $pname ? (string) $pname[0]['pk_name_vc'] : '?';
+    $rname = ($oldRes <= 0 || $oldRes === (int) $oldAid) ? 'the administrator' : (string) ($old("SELECT ac_user_vc FROM `$O`.x_accounts WHERE ac_id_pk = :a", array(':a' => $oldRes))[0]['ac_user_vc'] ?? '?');
+    $email = trim((string) $a['ac_email_vc']);
+    $emailNote = '';
+    if ($email !== '' && $newIdByName('x_accounts', 'ac_id_pk', "LOWER(ac_email_vc) = :e AND ac_deleted_ts IS NULL", array(':e' => strtolower($email)))) {
+        $emailNote = "its email $email is another account's here: left empty, set one in Manage Clients";
+        $email = '';
+    }
+    $info = array('group' => $gname, 'package' => $pname, 'owner' => $rname, 'note' => $emailNote, 'admin' => $gname === 'Administrators', 'id' => -1);
+    if (!$apply) {
+        $MADE['accounts'][$user] = $info;
+        return -1;
+    }
+    $pw = substr(strtr(base64_encode(random_bytes(18)), '+/=', 'xyz'), 0, 16);
+    $crypto = new runtime_hash;
+    $crypto->SetPassword($pw);
+    $salt = $crypto->RandomSalt();
+    $crypto->SetSalt($salt);
+    $hash = $crypto->CryptParts($crypto->Crypt())->Hash;
+    $theme = $GLOBALS['zdbh']->query("SELECT ac_usertheme_vc, ac_usercss_vc FROM x_accounts WHERE ac_id_pk = " . (int) $owner)->fetch(PDO::FETCH_ASSOC) ?: array('ac_usertheme_vc' => 'Modern', 'ac_usercss_vc' => 'default');
+    $GLOBALS['zdbh']->prepare("INSERT INTO x_accounts (ac_user_vc, ac_pass_vc, ac_passsalt_vc, ac_email_vc, ac_package_fk, ac_group_fk, ac_usertheme_vc, ac_usercss_vc, ac_reseller_fk, ac_enabled_in, ac_created_ts)
+        VALUES (:u, :p, :s, :e, :pk, :g, :t, :c, :r, :on, :ts)")->execute(array(':u' => $user, ':p' => $hash, ':s' => $salt, ':e' => $email, ':pk' => $pkg, ':g' => $grp,
+        ':t' => $theme['ac_usertheme_vc'] ?: 'Modern', ':c' => $theme['ac_usercss_vc'] ?: 'default', ':r' => $owner, ':on' => (int) $a['ac_enabled_in'] === 1 ? 1 : 0, ':ts' => time()));
+    $id = (int) $GLOBALS['zdbh']->lastInsertId();
+    $GLOBALS['zdbh']->prepare("INSERT INTO x_profiles (ud_user_fk, ud_fullname_vc, ud_group_fk, ud_package_fk, ud_address_tx, ud_postcode_vc, ud_phone_vc, ud_language_vc, ud_created_ts)
+        VALUES (:id, :n, :g, :pk, :a, :pc, :ph, :l, :ts)")->execute(array(':id' => $id, ':n' => (string) $a['ud_fullname_vc'], ':g' => $grp, ':pk' => $pkg,
+        ':a' => (string) $a['ud_address_tx'], ':pc' => (string) $a['ud_postcode_vc'], ':ph' => (string) $a['ud_phone_vc'], ':l' => (string) ($a['ud_language_vc'] ?: 'en'), ':ts' => time()));
+    $GLOBALS['zdbh']->prepare("INSERT INTO x_bandwidth (bd_acc_fk, bd_month_in, bd_transamount_bi, bd_diskamount_bi) VALUES (:a, :m, 0, 0)")->execute(array(':a' => $id, ':m' => date('Ym')));
+    $info['id'] = $id;
+    $MADE['accounts'][$user] = $info;
+    $CREATED_PW[$user] = $pw;
+    return $id;
+};
+if (!$NEWID) {
+    $mapAccount($OLDID, false);   // dry: what would be made
+}
 $PATHFIX = function ($s) use ($OLDHOME, $NEWHOME) { return str_replace($OLDHOME . '/', $NEWHOME . '/', (string) $s); };
 
 // --- what there is, and what is already taken here ------------------------------------------------
@@ -546,6 +706,20 @@ function plan_head($label, $n) { echo "\n  " . c('bold') . $label . c('reset') .
 function plan_item($a, $b = '') { printf("     %-34s %s%s%s\n", $a, c('dim'), $b, c('reset')); }
 function plan_warn($s) { global $WARN; $WARN++; ui_logline('WARNING: ' . $s); echo '  ' . c('yellow') . '[ !! ] ' . $s . c('reset') . "\n"; }
 function plan_line($label, $value) { printf("  %s%-18s%s %s\n", c('bold'), $label, c('reset'), $value); }
+if ($MADE['accounts']) {
+    plan_head('Made here (matched by name; not on this server yet)', null);
+    foreach ($MADE['accounts'] as $u => $i) {
+        plan_item("account $u", "group {$i['group']}, package {$i['package']}, client of " . ($i['owner'] === 'the administrator' ? 'the administrator' : $i['owner']) . ', a new panel password (shown at the end)');
+        if ($i['admin']) {
+            plan_warn("$u was an Administrator on the old server and becomes one here: it can change everything on this server");
+        }
+        if ($i['note'] !== '') {
+            plan_warn("$u: " . $i['note']);
+        }
+    }
+    foreach ($MADE['packages'] as $n) { plan_item("package $n", 'with the old package\'s limits'); }
+    foreach ($MADE['groups'] as $n) { plan_item("group $n", 'its modules that exist here'); }
+}
 plan_head('Domains', count($plan['domains']));
 foreach ($plan['domains'] as $v) {
     plan_item($v['vh_name_vc'], 'public_html' . $v['vh_directory_vc']);
@@ -630,6 +804,27 @@ foreach (array('sentora_core', 'sentora_postfix', $FTPDB) as $db) {
     }
 }
 ui_info("in $PRE");
+
+// --- the account (and its owner, package, group) when it is not here yet ----------------------------
+if (!$NEWID) {
+    ui_step('Making the account (matched by name)');
+    $MADE = array('accounts' => array(), 'packages' => array(), 'groups' => array(), 'warn' => array());
+    $NEWID = (int) $mapAccount($OLDID, true);
+    foreach ($MADE['accounts'] as $u => $i) { ui_info("account $u: group {$i['group']}, package {$i['package']}, client of {$i['owner']}"); if ($i['note'] !== '') { warn("$u: " . $i['note']); } }
+    foreach ($MADE['packages'] as $n) { ui_info("package $n (the old limits)"); }
+    foreach ($MADE['groups'] as $n) { ui_info("group $n"); }
+    if ($NEWID <= 0) {
+        stop("the account $NEWU could not be made");
+    }
+    if ($CREATED_PW) {
+        $pwFile = '/root/sentora-migrate-passwords-' . $STAMP . '.txt';
+        $lines = '';
+        foreach ($CREATED_PW as $u => $pw) { $lines .= "$u\t$pw\n"; }
+        file_put_contents($pwFile, "# panel logins made by sentora-migrate-import (give each client theirs; they can change it in the panel)\n" . $lines);
+        chmod($pwFile, 0600);
+        ui_info('their panel passwords: ' . $pwFile . ' (root only), and at the end');
+    }
+}
 
 // --- the PHP version the domains get: switched on if it is off --------------------------------------
 ui_step('Adding the domains');
@@ -993,6 +1188,11 @@ if ($WARN) {
 }
 ui_logline("Done: $OLDU is in $NEWU, with $WARN warning(s)");
 echo "\n";
+if ($CREATED_PW) {
+    echo '  ' . c('bold') . c('yellow') . 'New panel logins' . c('reset') . c('dim') . '  (accounts made here; give each client theirs, they can change it in the panel; also in ' . $pwFile . ')' . c('reset') . "\n";
+    foreach ($CREATED_PW as $u => $pw) { printf("     %-20s %s\n", $u, $pw); ui_logline("panel login made: $u (password shown on screen and in $pwFile)"); }
+    echo "\n";
+}
 if ($newpass) {
     echo '  ' . c('bold') . c('yellow') . 'New passwords' . c('reset') . c('dim') . "  (these had none that could be used again: change the sites' settings to match)" . c('reset') . "\n";
     foreach ($newpass as $p) { echo "     $p\n"; ui_logline('new password: ' . preg_replace('/:.*/', ': (shown on screen)', $p)); }

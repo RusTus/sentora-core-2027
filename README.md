@@ -492,7 +492,7 @@ All run as root. Most are in `/usr/local/sbin`; `setso`, `setzadmin` and `zppy` 
 
 Accounts move from an old Sentora server (1.0.x or 2.0.x, on Debian, Ubuntu or CentOS) with two commands: one packs the old server, the other takes one account at a time into this one, under the same name.
 
-1. On this server, make the account the sites go into, with the same name as on the old server (Manage Clients; zadmin is there already).
+1. Nothing to prepare on this server: an account that is not here yet is made from the old one (see below). To move an account under a different name, make that account first in Manage Clients.
 2. On the old server, as root, get the export command and run it. It only reads: nothing on the old server changes.
 
    ```bash
@@ -523,6 +523,8 @@ Accounts move from an old Sentora server (1.0.x or 2.0.x, on Debian, Ubuntu or C
 5. Point the domains' DNS to this server and open each site.
 
 What the move takes care of:
+
+- **The account, matched by name.** When the account is not on this server yet, it is made from the old one. Nothing is matched by the old panel's ID numbers, only by name: its owner (the old reseller, made first if it is missing too; the old zadmin is this server's administrator), its package (found by name, or made with the old package's limits) and its group (Administrators, Resellers and Users by name; a reseller's own group found by name or made with the modules that exist here, never an administrator's module for a reseller's group). It keeps its contact details (its email is left empty if another account here uses it) and gets a new panel password: panel passwords can't be carried over, because they are hashed with each server's own key. The new passwords are shown at the end and saved in `/root/sentora-migrate-passwords-<date>.txt` (readable by root only). The dry run lists what will be made, and warns when an old Administrator account would become one here. Moving the reseller's other clients later puts them under the same reseller.
 
 - **PHP 7.1.** The domains get PHP 7.1, made for old sites (switched on if it is off); `--php default` gives them PHP 8.5 instead. Move each site to PHP 8 once it runs: PHP 7.1 gets no security fixes.
 - **Older MySQL logins.** Sites on PHP 7.1 need `mysql_native_password`: their users get it, and the move switches it on in MySQL (`mysql_native_password = ON` in `/etc/mysql/mysql.conf.d/mysqld.cnf`; MySQL restarts once). See [PHP versions](#php-versions) for retiring them.
