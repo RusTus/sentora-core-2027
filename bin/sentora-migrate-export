@@ -144,8 +144,8 @@ warn() { echo "$(date '+%H:%M:%S') WARNING: $*" >> "$LOGF"; WARNS=$((WARNS + 1))
 stop() { echo "$(date '+%H:%M:%S') STOPPED: $*" >> "$LOGF"; ui_end_step fail; echo; ui_bar "$BG_FAIL" "  Stopped: $*"; echo; exit 1; }
 
 VERSION=$(sql "SELECT so_value_tx FROM $DBNAME.x_settings WHERE so_name_vc = 'dbversion'" 2> /dev/null)
-# a clean screen to start on (on a terminal only; what was on it stays in its scrollback)
-[ $UI_TTY -eq 1 ] && printf '\e[H\e[2J'
+# a clean screen to start on, like "clear" (on a terminal only: the screen and its scrollback)
+[ $UI_TTY -eq 1 ] && printf '\e[H\e[2J\e[3J'
 echo
 ui_bar "$BG_TITLE" "  Sentora ${VERSION:-?} on $HOST  -  Export for Sentora-2027"
 printf '%s  Into %s (nothing on this server is changed)%s\n\n' "$C_DIM" "$OUT" "$C_RESET"
