@@ -60,6 +60,20 @@ class module_controller extends ctrl_module
     }
 
     /**
+     * How to add PHP 7.1 for moving old Sentora 2.0.2 websites (<@ LegacyHint @>), when it is not installed.
+     *
+     * @return string The HTML ('' when PHP 7.1 is installed).
+     */
+    static function getLegacyHint()
+    {
+        if (in_array('7.1', sys_phpversions::Installed(), true)) {
+            return '';
+        }
+        return '<p class="pv-sub">' . self::t('To move websites from an old Sentora 2.0.2 server that do not run on PHP 8 yet, PHP 7.1 can be added (switched off; it gets no security fixes). As root on this server:')
+            . ' <code>sentora-php-install 7.1</code></p>';
+    }
+
+    /**
      * The versions as cards (<@ VersionCards @>): the default, then each installed extra version with its switch.
      *
      * @return string The HTML.
@@ -81,8 +95,14 @@ class module_controller extends ctrl_module
             $running = sys_phpversions::IsRunning($v);
             $n = isset($counts[$v]) ? (int) $counts[$v] : 0;
             $field = 'inEnabled_' . str_replace('.', '_', $v);
-            $out .= '<div class="pv-card' . ($on ? '' : ' is-off') . '"><div class="pv-head"><span class="pv-ver">PHP ' . self::h($v) . '</span>'
-                . '<label class="sf-switch" title="' . self::t('Domains may choose it') . '"><input type="checkbox" name="' . $field . '" value="1"' . ($on ? ' checked' : '') . ' aria-label="' . str_replace('%s', self::h($v), self::t('Domains may choose PHP %s')) . '"><span class="sf-toggle"></span></label></div>'
+            // a version kept only to move old websites over: marked, explained, and switched on only after a question
+            $legacy = sys_phpversions::IsMigrationOnly($v);
+            $out .= '<div class="pv-card' . ($on ? '' : ' is-off') . ($legacy ? ' is-legacy' : '') . '"><div class="pv-head"><span class="pv-ver">PHP ' . self::h($v) . '</span>'
+                . ($legacy ? '<span class="pv-tag pv-legacy">' . self::t('For moving old sites only') . '</span>' : '')
+                . '<label class="sf-switch" title="' . self::t('Domains may choose it') . '"><input type="checkbox" name="' . $field . '" value="1"' . ($on ? ' checked' : '')
+                . ($legacy ? ' data-confirm="' . self::t('PHP 7.1 has had no security fixes since 2019. Offer it only while moving websites from an old Sentora 2.0.2 server, and move them to PHP 8 as soon as they run. Offer it now?') . '"' : '')
+                . ' aria-label="' . str_replace('%s', self::h($v), self::t('Domains may choose PHP %s')) . '"><span class="sf-toggle"></span></label></div>'
+                . ($legacy ? '<p class="pv-legacy-note">' . self::t('For websites moved from an old Sentora 2.0.2 server that do not run on PHP 8 yet. It gets no security fixes: switch it on for the move, then move each site to PHP 8 and switch it off again.') . '</p>' : '')
                 . '<p>' . self::t($on ? 'Domains may choose it.' : 'Not offered to domains.') . ' '
                 . ($n ? ($n === 1 ? self::t('1 domain has chosen it') : str_replace('%d', (string) $n, self::t('%d domains have chosen it'))) . ($on ? '.' : ': ' . self::t($n === 1 ? 'it runs on the default until this is offered again.' : 'they run on the default until this is offered again.')) : self::t('No domain uses it.')) . '</p>'
                 . '<div class="pv-meta">' . self::Support($v) . '<span class="pv-svc ' . ($running ? 'ok' : ($on ? 'bad' : '')) . '"><i></i>sentora-php' . self::h($v) . '-fpm ' . self::t($running ? 'running' : 'stopped') . '</span></div></div>';

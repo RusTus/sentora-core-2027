@@ -24,12 +24,32 @@ class sys_phpversions
 
     /** @var array<string, string> Last day of security fixes from the PHP project for each version: version => 'Y-m-d'. */
     static $supportEnds = array(
+        '7.1' => '2019-12-01',
         '8.1' => '2025-12-31',
         '8.2' => '2026-12-31',
         '8.3' => '2027-12-31',
         '8.4' => '2028-12-31',
         '8.5' => '2029-12-31',
     );
+
+    /**
+     * Versions that are only there to move old websites (from Sentora 2.0.2) to this server: no security
+     * fixes for years, installed switched off, and marked as such wherever they can be chosen.
+     *
+     * @var string[]
+     */
+    static $migrationOnly = array('7.1');
+
+    /**
+     * Whether a version is only for moving old websites (see $migrationOnly).
+     *
+     * @param string $version PHP version, e.g. '7.1'.
+     * @return bool
+     */
+    static function IsMigrationOnly($version)
+    {
+        return in_array((string) $version, self::$migrationOnly, true);
+    }
 
     /**
      * Return the system PHP version, used by the panel and by domains without a choice.
@@ -178,7 +198,8 @@ class sys_phpversions
             . ui_language::translate('Default') . ' (PHP ' . self::DefaultVersion() . ')</option>';
         foreach (self::Enabled() as $version) {
             $html .= '<option value="' . $version . '"' . ($selected === $version ? ' selected="selected"' : '') . '>PHP '
-                . $version . ' (' . self::SupportNote($version) . ')</option>';
+                . $version . ' (' . self::SupportNote($version) . ')'
+                . (self::IsMigrationOnly($version) ? ' - ' . ui_language::translate('for moving old sites only') : '') . '</option>';
         }
         return $html;
     }

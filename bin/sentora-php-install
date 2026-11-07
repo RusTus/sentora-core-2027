@@ -1,0 +1,117 @@
+#!/bin/bash
+#
+# sentora-php-install: add an extra PHP version to a running Sentora server, set up exactly as the
+# installer sets up its versions (php.ini, php-fpm.conf, an idle pool, the sentora-php<v>-fpm service).
+# It is installed switched OFF: switch it on in the panel (Admin > Server Admin > PHP Versions).
+#
+#   sentora-php-install 7.1                 PHP 7.1, only for moving old Sentora 2.0.2 websites
+#   sentora-php-install 8.3                 any other bundle the installers release has
+#   sentora-php-install 7.1 <bundle file>   from a file instead of the GitHub release
+#
+# The bundle (sentora-php-<version>-ubuntu26.04-amd64.tar.gz) comes from the "current" release of
+# RusTus/sentora-installers-2027 (TAG=<tag> in the environment for another) and is checked against the
+# SHA-256 GitHub lists for it. A version that is already installed is updated with update-sentora-php.sh.
+set -euo pipefail
+
+MM="${1:-}"
+FILE="${2:-}"
+REPO="RusTus/sentora-installers-2027"
+TAG="${TAG:-current}"
+PANEL=/etc/sentora/panel
+DATA=/var/sentora
+if [[ ! "$MM" =~ ^[78]\.[0-9]+$ ]]; then
+    sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'
+    exit 2
+fi
+[ "$(id -u)" -eq 0 ] || { echo "Run this as root."; exit 1; }
+P="/opt/sentora-php/$MM"
+NAME="sentora-php-$MM-ubuntu26.04-amd64.tar.gz"
+SERVICE="sentora-php$MM-fpm"
+[ -d "$P/etc" ] && { echo "PHP $MM is already installed in $P (to replace its files with a newer build: update-sentora-php.sh $MM)."; exit 1; }
+[ "$MM" = "$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;')" ] && { echo "PHP $MM is this server's own PHP."; exit 1; }
+
+WORK=$(mktemp -d /tmp/sentora-php-install.XXXXXX)
+trap 'rm -rf "$WORK"' EXIT
+if [ -z "$FILE" ]; then
+    FILE="$WORK/$NAME"
+    INFO=$(wget -q -T 20 -O - --header="Accept: application/vnd.github+json" "https://api.github.com/repos/$REPO/releases/tags/$TAG" 2> /dev/null | php -r '
+        $d = json_decode(stream_get_contents(STDIN), true);
+        if (!is_array($d) || empty($d["tag_name"])) { exit(1); }
+        foreach ((array) ($d["assets"] ?? array()) as $a) {
+            if (($a["name"] ?? "") === $argv[1] && !empty($a["digest"])) { echo preg_replace("/^sha256:/", "", $a["digest"]); exit(0); }
+        }
+        exit(1);
+    ' "$NAME" 2> /dev/null) || INFO=""
+    [ -n "$INFO" ] || { echo "Release $TAG of $REPO has no $NAME (or GitHub did not answer). Nothing changed."; exit 1; }
+    echo "Downloading $NAME from release $TAG of $REPO"
+    wget -q -O "$FILE" "https://github.com/$REPO/releases/download/$TAG/$NAME" || { echo "Could not download $NAME."; exit 1; }
+    [ "$(sha256sum "$FILE" | cut -d' ' -f1)" = "$INFO" ] || { echo "$NAME does not match the SHA-256 GitHub lists for it. Nothing changed."; exit 1; }
+    echo "SHA-256 matches the release."
+fi
+tar -tzf "$FILE" "opt/sentora-php/$MM/sbin/php-fpm" > /dev/null 2>&1 || { echo "$FILE is not a PHP $MM bundle. Nothing changed."; exit 1; }
+
+# the libraries the bundles link against (all part of Ubuntu 26.04)
+apt-get -qq -y install libpng16-16t64 libjpeg-turbo8 libfreetype6 libwebp7 libgmp10 zlib1g > /dev/null 2>&1 || true
+tar -xzmf "$FILE" -C /
+if ! "$P/sbin/php-fpm" -v > /dev/null 2>&1; then
+    echo "PHP $MM does not run on this server:"; "$P/sbin/php-fpm" -v 2>&1 | head -3
+    rm -rf "${P:?}"; exit 1
+fi
+
+# php.ini: PHP's production defaults with the installer's changes
+TZ_NAME=$(timedatectl show -p Timezone --value 2> /dev/null || cat /etc/timezone 2> /dev/null || echo UTC)
+mkdir -p "$P/etc/conf.d" "$P/etc/php-fpm.d"
+cp "$P/lib/php.ini-production" "$P/etc/php.ini"
+sed -i "s|^memory_limit = .*|memory_limit = 256M|" "$P/etc/php.ini"
+sed -i "s|^expose_php = .*|expose_php = Off|" "$P/etc/php.ini"
+sed -i "s|^;date.timezone =.*|date.timezone = $TZ_NAME|" "$P/etc/php.ini"
+sed -i "s|^;upload_tmp_dir =.*|upload_tmp_dir = $DATA/temp/|" "$P/etc/php.ini"
+sed -i "s|^mysqli.default_socket =.*|mysqli.default_socket = /var/run/mysqld/mysqld.sock|" "$P/etc/php.ini"
+sed -i "s|^pdo_mysql.default_socket *=.*|pdo_mysql.default_socket = /var/run/mysqld/mysqld.sock|" "$P/etc/php.ini"
+echo "zend_extension=opcache.so" > "$P/etc/conf.d/10-opcache.ini"
+cat > "$P/etc/php-fpm.conf" <<EOF_FPM
+[global]
+pid = /run/sentora-php/php$MM-fpm.pid
+error_log = $DATA/logs/php$MM-fpm.log
+include = $P/etc/php-fpm.d/*.conf
+EOF_FPM
+# PHP-FPM needs one pool to start: an idle one nobody can connect to (accounts get their own)
+cat > "$P/etc/php-fpm.d/00-idle.conf" <<EOF_POOL
+[sentora-idle]
+user = nobody
+group = nogroup
+listen = /run/sentora-php/php$MM-idle.sock
+listen.owner = root
+listen.group = root
+listen.mode = 0600
+pm = ondemand
+pm.max_children = 1
+EOF_POOL
+cat > "/etc/systemd/system/$SERVICE.service" <<EOF_UNIT
+[Unit]
+Description=PHP $MM FastCGI Process Manager for Sentora hosted domains
+After=network.target
+
+[Service]
+Type=simple
+RuntimeDirectory=sentora-php
+RuntimeDirectoryPreserve=yes
+ExecStartPre=$P/sbin/php-fpm --test --fpm-config $P/etc/php-fpm.conf
+ExecStart=$P/sbin/php-fpm --nodaemonize --fpm-config $P/etc/php-fpm.conf
+ExecReload=/bin/kill -USR2 \$MAINPID
+Restart=on-failure
+PrivateTmp=true
+UMask=0002
+
+[Install]
+WantedBy=multi-user.target
+EOF_UNIT
+touch "$DATA/logs/php$MM-fpm.log"
+systemctl daemon-reload
+"$P/sbin/php-fpm" --test --fpm-config "$P/etc/php-fpm.conf" > /dev/null 2>&1 \
+    || { echo "WARNING: PHP $MM's PHP-FPM rejects its settings:"; "$P/sbin/php-fpm" --test --fpm-config "$P/etc/php-fpm.conf" 2>&1 | tail -3; }
+
+echo "Installed: $("$P/sbin/php-fpm" -v | head -1)"
+echo "It is switched off. Switch it on in the panel: Admin > Server Admin > PHP Versions (the daemon starts it within 5 minutes)."
+[ "$MM" = "7.1" ] && echo "PHP 7.1 gets no security fixes: use it only to move old sites, and move them to PHP 8 as soon as they run."
+exit 0
