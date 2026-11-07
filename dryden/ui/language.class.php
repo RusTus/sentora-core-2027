@@ -166,6 +166,11 @@ class ui_language {
         if (isset($shipped[$message]) && $shipped[$message] !== '') {
             return self::$cache[$message] = $shipped[$message];
         }
+        // a text from the database or a Windows-edited file may have \r\n where the file has \n
+        $lf = str_replace("\r\n", "\n", $message);
+        if ($lf !== $message && isset($shipped[$lf]) && $shipped[$lf] !== '') {
+            return self::$cache[$message] = $shipped[$lf];
+        }
         // 2. x_translations: what an administrator added (only when the language has a column there).
         // Older versions stored and looked texts up with addslashes(), so both forms are looked up.
         static $hasCol = null;
