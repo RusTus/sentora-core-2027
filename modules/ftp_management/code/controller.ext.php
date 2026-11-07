@@ -268,6 +268,9 @@ class module_controller extends ctrl_module
 				include($FtpModuleFile);
 			}
 			$retval = TRUE;
+			// still switched off when its client is (an admin can do this while shadowing it)
+			require_once dirname(__FILE__) . '/clientstate.php';
+			FtpSyncClientState();
 			runtime_hook::Execute('OnAfterResetFTPPassword');
 			return $retval;
 
@@ -332,6 +335,9 @@ class module_controller extends ctrl_module
             if (file_exists($FtpModuleFile)) {
                 include($FtpModuleFile);
             }
+            // still switched off when its client is (an admin can do this while shadowing it)
+            require_once dirname(__FILE__) . '/clientstate.php';
+            FtpSyncClientState();
             runtime_hook::Execute('OnAfterCreateFTPAccount');
             return true;
         }
@@ -736,6 +742,22 @@ class module_controller extends ctrl_module
     static function getIsDelete()
     {
         return self::View() === 'delete';
+    }
+
+    /**
+     * A note above the list (<@ SwitchedOff @>) while the account is switched off in Manage
+     * Clients: its FTP accounts can not log in until it is switched on again.
+     *
+     * @return string The HTML, or '' when the account is switched on.
+     */
+    static function getSwitchedOff()
+    {
+        require_once dirname(__FILE__) . '/clientstate.php';
+        if (!FtpClientSwitchedOff(ctrl_users::GetUserDetail()['userid'])) {
+            return '';
+        }
+        return '<div class="ft-off" role="status"><svg class="ft-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.8 0"/></svg>'
+            . '<div><b>' . self::t('This client is switched off') . '</b><span>' . self::t('Its FTP accounts can not log in. They work again, with the same passwords, when the client is switched on in Manage Clients.') . '</span></div></div>';
     }
 
     /**

@@ -93,3 +93,9 @@
 @media (max-width: 900px) { .ft-cols { grid-template-columns: 1fr; } .ft-side { position: static; } }
 @media (max-width: 640px) { .ft { padding: 12px; } .ft-tiles { gap: 6px; } .ft-tile { flex-direction: column; text-align: center; gap: 2px; padding: 8px 6px; } .ft-tile .ft-ico-lg { display: none; } .ft-tile span { font-size: 11px; } .ft-tile > div { width: 100%; }
     .ft-row { flex-wrap: wrap; } .ft-main { flex-basis: calc(100% - 48px); } .ft-act { margin-left: 48px; flex-wrap: wrap; } .ft-new { margin-left: 0; } .ft-choices { grid-template-columns: 1fr; } .ft-rules { grid-template-columns: 1fr; } }
+/* the account is switched off in Manage Clients: so are its FTP logins */
+.ft-off { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 14px; padding: 12px 14px; border-radius: 6px;
+          background: var(--sn-warn-soft, #fdf1dc); color: var(--ft-warn); border-left: 3px solid var(--ft-warn); }
+.ft-off .ft-ico { margin-top: 2px; }
+.ft-off b { display: block; }
+.ft-off span { color: var(--ft-ink); font-size: 13px; }

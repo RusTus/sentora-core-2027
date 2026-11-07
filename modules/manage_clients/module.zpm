@@ -62,7 +62,7 @@
                             <small><: Which modules it can use. :></small></label>
                     </div>
                     <% if IsEdit %>
-                    <div class="mc-switchrow"><div><label for="inEnabled"><: Can log in :></label><small><: Off: the client can not log in and its websites stop answering. Nothing is deleted. :></small></div>
+                    <div class="mc-switchrow"><div><label for="inEnabled"><: Can log in :></label><small><: Off: the client can not log in to the panel, and its websites and FTP accounts stop working. Nothing is deleted. :></small></div>
                         <label class="mc-switch"><input type="checkbox" name="inEnabled" id="inEnabled" value="1"<@ FEnabledChecked @>><span class="mc-toggle"></span></label></div>
                     <% endif %>
                 </div>

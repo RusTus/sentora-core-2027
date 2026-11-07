@@ -14,6 +14,14 @@ echo fs_filehandler::NewLine() . "START FTP access types" . fs_filehandler::NewL
 FtpWriteAccessRules();
 echo "END FTP access types" . fs_filehandler::NewLine();
 
+// a switched-off client's FTP accounts are switched off with it (also done right away by the
+// OnAfterEnable/DisableClient hooks; this covers clients switched off before, or by hand)
+echo fs_filehandler::NewLine() . "START FTP accounts of switched-off clients" . fs_filehandler::NewLine();
+require_once dirname(__FILE__) . '/../code/clientstate.php';
+$ftpState = FtpSyncClientState();
+echo "Switched off " . $ftpState['off'] . " and back on " . $ftpState['on'] . " FTP login(s)" . fs_filehandler::NewLine();
+echo "END FTP accounts of switched-off clients" . fs_filehandler::NewLine();
+
 /**
  * The same hash the FTP module makes (module_controller::HashPassword); a copy, since
  * every module's controller is called module_controller and only one can be loaded.
@@ -82,8 +90,8 @@ function FtpHashStoredPasswords()
         $setFtp->execute(array(':h' => $hash, ':u' => $row['ft_user_vc']));
         $n++;
     }
-    // ProFTPD's table on its own (any user not covered above)
-    $left = $zdbh->query("SELECT userid, passwd FROM `" . $ftpDb . "`.ftpuser WHERE passwd <> '' AND passwd NOT LIKE '$6$%'")->fetchAll();
+    // ProFTPD's table on its own (any user not covered above; "!" + hash is a switched-off client's)
+    $left = $zdbh->query("SELECT userid, passwd FROM `" . $ftpDb . "`.ftpuser WHERE passwd <> '' AND passwd NOT LIKE '$6$%' AND passwd NOT LIKE '!%'")->fetchAll();
     $setOnly = $zdbh->prepare("UPDATE `" . $ftpDb . "`.ftpuser SET passwd = :h WHERE userid = :u");
     foreach ($left as $row) {
         $hash = FtpHashPassword($row['passwd']);

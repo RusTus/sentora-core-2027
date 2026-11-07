@@ -9,6 +9,7 @@
 
     <div class="ft" id="ft">
         <% if IsList %>
+        <@ SwitchedOff @>
         <div class="ft-tiles"><@ Tiles @></div>
         <div class="ft-cols">
             <div class="ft-box">

@@ -39,3 +39,6 @@
 .fa-field small { display: block; font-size: 11px; color: var(--fa-muted); margin-top: 3px; line-height: 1.4; }
 @media (max-width: 900px) { .fa-cols { grid-template-columns: 1fr; } }
 @media (max-width: 640px) { .fa { padding: 12px; } .fa-tiles { grid-template-columns: 1fr; } .fa-find { margin-left: 0; max-width: none; } }
+/* the client is switched off: its FTP accounts can not log in */
+.fa-off { margin-left: 6px; font-size: 11px; font-weight: 600; padding: 1px 8px; border-radius: 9px; background: var(--sn-warn-soft, #fdf1dc); color: var(--sn-warn, #a86b00); white-space: nowrap; }
+tr.fa-row-off code { opacity: 0.6; }

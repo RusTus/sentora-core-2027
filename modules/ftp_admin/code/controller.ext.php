@@ -77,14 +77,14 @@ class module_controller extends ctrl_module
      * Every FTP account on the server, with its owner.
      *
      * @global db_driver $zdbh The panel's database connection.
-     * @return array<int, array<string, mixed>> By name: 'user', 'owner', 'dir', 'access', 'created'.
+     * @return array<int, array<string, mixed>> By name: 'user', 'owner', 'enabled' (0: the client is switched off), 'dir', 'access', 'created'.
      */
     static function Accounts()
     {
         global $zdbh;
         static $rows = null;
         if ($rows === null) {
-            $rows = $zdbh->query("SELECT f.ft_user_vc AS user, a.ac_user_vc AS owner, f.ft_directory_vc AS dir, f.ft_access_vc AS access, f.ft_created_ts AS created
+            $rows = $zdbh->query("SELECT f.ft_user_vc AS user, a.ac_user_vc AS owner, a.ac_enabled_in AS enabled, f.ft_directory_vc AS dir, f.ft_access_vc AS access, f.ft_created_ts AS created
                 FROM x_ftpaccounts f LEFT JOIN x_accounts a ON a.ac_id_pk = f.ft_acc_fk WHERE f.ft_deleted_ts IS NULL ORDER BY a.ac_user_vc, f.ft_user_vc")->fetchAll(PDO::FETCH_ASSOC);
         }
         return $rows;
@@ -125,7 +125,9 @@ class module_controller extends ctrl_module
         $names = array('RW' => 'Full access', 'RO' => 'Read only', 'WO' => 'Upload only');
         $out = '';
         foreach (self::Accounts() as $a) {
-            $out .= '<tr data-s="' . self::h(strtolower($a['user'] . ' ' . $a['owner'] . ' ' . $a['dir'])) . '"><td><code>' . self::h($a['user']) . '</code></td><td>' . self::h($a['owner']) . '</td>'
+            $off = $a['enabled'] !== null && (int) $a['enabled'] === 0;
+            $out .= '<tr' . ($off ? ' class="fa-row-off"' : '') . ' data-s="' . self::h(strtolower($a['user'] . ' ' . $a['owner'] . ' ' . $a['dir'])) . '"><td><code>' . self::h($a['user']) . '</code></td><td>' . self::h($a['owner'])
+                . ($off ? '<span class="fa-off" title="' . self::t('Its FTP accounts can not log in until it is switched on again in Manage Clients.') . '">' . self::t('Switched off') . '</span>' : '') . '</td>'
                 . '<td><code>' . self::h($a['dir'] === '' ? '/' : $a['dir']) . '</code></td><td><span class="fa-acc fa-acc-' . self::h(strtolower($a['access'])) . '">'
                 . self::t(isset($names[$a['access']]) ? $names[$a['access']] : $a['access']) . '</span></td>'
                 . '<td>' . ($a['created'] ? self::h(date('j M Y', (int) $a['created'])) : '') . '</td></tr>';
