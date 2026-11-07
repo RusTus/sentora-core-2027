@@ -262,8 +262,9 @@ class module_controller extends ctrl_module
     /**
      * List the user groups an account may give its clients.
      *
-     * Administrators get every group of their reseller (with 'groupselected'), others
-     * only the "Users" group.
+     * Administrators: every built-in group and their own groups. Others: the built-in Users
+     * group and their own groups (Manage Groups). Before, only the groups of the account's own
+     * reseller were looked at, so a reseller's own groups were never offered.
      *
      * @global db_driver $zdbh The panel's database connection.
      * @param int|string $uid The account ID.
@@ -273,37 +274,17 @@ class module_controller extends ctrl_module
     {
         global $zdbh;
         $currentuser = ctrl_users::GetUserDetail($uid);
-        $sql = "SELECT * FROM x_groups WHERE ug_reseller_fk=:resellerid";
-        //$numrows = $zdbh->query($sql);
-        $numrows = $zdbh->prepare($sql);
-        $numrows->bindParam(':resellerid', $currentuser['resellerid']);
-        $numrows->execute();
-        if ($numrows->fetchColumn() <> 0) {
-            $sql = $zdbh->prepare($sql);
-            $sql->bindParam(':resellerid', $currentuser['resellerid']);
-            $res = array();
-            $sql->execute();
-            while ($rowgroups = $sql->fetch()) {
-                if (strtoupper($currentuser['usergroup']) == "ADMINISTRATORS") {
-                    $selected = "";
-                    if ($rowgroups['ug_id_pk'] == $currentuser['usergroupid']) {
-                        $selected = " selected";
-                    }
-                    array_push($res, array('groupid' => $rowgroups['ug_id_pk'],
-                        'groupname' => runtime_xss::xssClean(ui_language::translate($rowgroups['ug_name_vc'])),
-                        'groupselected' => $selected));
-                } else {
-                    if (strtoupper($rowgroups['ug_name_vc']) == "USERS") {
-                        array_push($res, array('groupid' => $rowgroups['ug_id_pk'],
-                            'groupname' => runtime_xss::xssClean(ui_language::translate($rowgroups['ug_name_vc'])),
-                            'groupselected' => ''));
-                    }
-                }
-            }
-            return $res;
-        } else {
-            return false;
+        $admin = (int) $currentuser['usergroupid'] === 1;
+        $q = $zdbh->prepare("SELECT * FROM x_groups WHERE (ug_reseller_fk = 1 AND ug_name_vc IN (" . ($admin ? "'Administrators', 'Resellers', 'Users'" : "'Users'") . "))
+            OR (ug_reseller_fk = :me AND NOT (ug_reseller_fk = 1 AND ug_name_vc IN ('Administrators', 'Resellers', 'Users'))) ORDER BY ug_id_pk > 3, ug_name_vc");
+        $q->execute(array(':me' => (int) $currentuser['userid']));
+        $res = array();
+        foreach ($q->fetchAll(PDO::FETCH_ASSOC) as $rowgroups) {
+            $res[] = array('groupid' => $rowgroups['ug_id_pk'],
+                'groupname' => htmlspecialchars(ui_language::translate($rowgroups['ug_name_vc']), ENT_QUOTES, 'UTF-8'),
+                'groupselected' => '');
         }
+        return $res ? $res : false;
     }
 
     /**

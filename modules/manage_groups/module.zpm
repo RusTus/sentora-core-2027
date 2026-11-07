@@ -1,146 +1,85 @@
 <div class="zmodule_content panel" id="zmodule_header_<@ ModuleName @>">
     <div class="panel-heading">
         <img src="<@ ModuleIcon @>" width="35" height="35" border="0" alt="<@ ModuleName @>">
+        <div class="zmodule_title"><@ ModuleName @></div>
+        <div class="zmodule_desc" id="zmodule_desc_<@ ModuleName @>"><: A user group decides which modules its members see. Make your own groups to give clients more, or fewer, modules. :></div>
+    </div>
+    <@ Result @>
+    <link rel="stylesheet" href="modules/manage_groups/assets/groups.css">
 
-        <div class="zmodule_title">
-            <@ ModuleName @>
+    <div class="mg" id="mg">
+        <% if IsList %>
+        <div class="mg-box">
+            <div class="mg-head"><h4><: Your groups :></h4>
+                <a class="btn btn-primary mg-new" href="./?module=manage_groups&amp;show=New"><svg class="mg-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><: New group :></a></div>
+            <% if HasOwn %><div class="mg-cards"><@ OwnGroups @></div><% endif %>
+            <% if NoOwn %>
+            <div class="mg-empty"><b><: No groups of your own yet :></b><span><: Your clients are in the built-in groups below. Make a group when some clients should see different modules, for example only mail, or no databases. :></span></div>
+            <% endif %>
         </div>
-
-        <div class="zmodule_desc" id="zmodule_desc_<@ ModuleName @>"><p><: This module enables you to manage user groups for your client, User groups enable you to control what modules your users can see and access.  :></p></div>
-
-    </div>
-
-
-
-
-    <% if isDeleteGroup %>
-    <div class="zform_wrapper alert alert-danger">
-        <h2><: Delete user group :>: <@ EditCurrentName @> ?</h2>
-        <% if GroupMoveToList %>
-        <: Please confirm and choose a group to move any existing clients to before the selected group is deleted. :>
-        <% else %>
-        <: Please confirm that you want to delete this group. :>
+        <div class="mg-box">
+            <div class="mg-head"><h4><: Built-in groups :></h4></div>
+            <p class="mg-sub"><: These are part of the panel and can not be changed here. :><% if IsAdmin %> <: Their modules are set in :> <a href="./?module=moduleadmin"><: Module Admin :></a>.<% endif %></p>
+            <div class="mg-cards"><@ BuiltinGroups @></div>
+        </div>
         <% endif %>
-        <p>&nbsp;</p>
-        <form action="./?module=manage_groups&action=DeleteGroup" method="post">
-            <table class="zform">
-                <% if GroupMoveToList %>
-                <tr>
-                    <th><: Move current group members to :>:</th>
-                    <td><select name="inMoveGroup" id="inMoveGroup">
-                            <% loop GroupMoveToList %>
-                            <option value="<& groupid &>"><& groupname &></option>"
-                            <% endloop %>
-                        </select>
-                    </td>
-                </tr>
-                <% endif %>
-                <tr>
-                    <th colspan="2" align="right">
-                        <input type="hidden" name="inGroupID" value="<@ CurrentID @>">
-                        <button class="button-loader delete btn btn-danger" type="submit" ><: Delete :></button>
-                        <button class="button-loader btn btn-default" type="button" onclick="window.location.href='./?module=manage_groups';return false;"><: Cancel :></button>
-                    </th>
-                </tr>
-            </table>
+
+        <% if IsForm %>
+        <a href="./?module=manage_groups" class="btn btn-default btn-sm mg-back"><svg class="mg-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg><: All groups :></a>
+        <form class="mg-form" id="mg-form" method="post" action="./?module=manage_groups&amp;show=New&amp;action=<% if IsNew %>CreateGroup<% endif %><% if IsEdit %>UpdateGroup<% endif %>">
+            <% if IsEdit %><input type="hidden" name="inGroupID" value="<@ FormId @>"><% endif %>
+            <div class="mg-main">
+                <h3 class="mg-h"><@ FormTitle @></h3>
+                <div class="mg-box">
+                    <h4><: Group :></h4>
+                    <div class="mg-grid">
+                        <label class="mg-field"><span><: Name :></span><input class="form-control" type="text" name="inGroupName" value="<@ FormName @>" maxlength="<@ MaxName @>" required><small><: At most :> <@ MaxName @> <: characters. Your clients do not see it. :></small></label>
+                        <label class="mg-field"><span><: Description :></span><input class="form-control" type="text" name="inDesc" value="<@ FormDesc @>" maxlength="250"><small><: What the group is for. :></small></label>
+                    </div>
+                </div>
+                <div class="mg-box">
+                    <div class="mg-head"><h4><: Modules its members can use :></h4><span class="mg-count" id="mg-count" data-of="<: of :>" data-ticked="<: ticked :>"></span></div>
+                    <p class="mg-sub"><: You can give the modules your own account has. A new group starts with the modules of the built-in Users group. :></p>
+                    <div class="mg-cats"><@ ModuleChoices @></div>
+                </div>
+                <div class="mg-foot">
+                    <button class="btn btn-primary" type="submit"><% if IsNew %><: Create group :><% endif %><% if IsEdit %><: Save changes :><% endif %></button>
+                    <a class="btn btn-default" href="./?module=manage_groups"><: Cancel :></a>
+                </div>
+            </div>
+            <% if IsEdit %><aside class="mg-box mg-side"><h4><: Members :></h4><@ MemberList @></aside><% endif %>
             <@ CSFR_Tag @>
         </form>
-    </div>
-    <% endif %>
-
-    <div class="zgrid_wrapper">
-        <% if DefaultGroupList %>
-        <h2><: Default user groups :></h2>
-        <table class="table table-striped">
-            <tr>
-                <th><: Group :></th>
-                <th nowrap="nowrap"><: Users :></th>
-                <th><: Description  :></th>
-                <th></th>
-            </tr>
-            <% loop DefaultGroupList %>
-            <tr>
-                <td><& groupname &></td>
-                <td><& usersingroup &></td>
-                <td><& groupdesc &></td>
-                <td nowrap="nowrap"></td>
-            </tr>
-            <% endloop %>
-        </table>
         <% endif %>
-        <h2><: Current user groups :></h2>
-        <% if GroupList %>
-        <form action="./?module=manage_groups&action=EditGroup" method="post">
-            <table class="table table-striped">
-                <tr>
-                    <th><: Group :></th>
-                    <th nowrap="nowrap"><: Users :></th>
-                    <th><: Description  :></th>
-                    <th></th>
-                </tr>
-                <% loop GroupList %>
-                <tr>
-                    <td><& groupname &></td>
-                    <td><& usersingroup &></td>
-                    <td><& groupdesc &></td>
-                    <td nowrap="nowrap"><button class="button-loader btn btn-default" type="submit" id="button" name="inEdit_<& groupid &>" id="inEdit_<& groupid &>" value="inEdit_<& groupid &>">Edit</button>  <button class="button-loader delete btn btn-danger" type="submit" id="button" name="inDelete_<& groupid &>" id="inDelete_<& groupid &>" value="inDelete_<& groupid &>">Delete</button></td>
-                </tr>
-                <% endloop %>
-            </table>
+
+        <% if IsDelete %>
+        <form class="mg-box mg-confirm" action="./?module=manage_groups&amp;action=DeleteGroup" method="post">
+            <h4><svg class="mg-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg><: Delete the group :> <code><@ DeleteName @></code>?</h4>
+            <@ DeleteDetails @>
+            <div class="mg-foot"><input type="hidden" name="inGroupID" value="<@ CurrentID @>">
+                <button class="btn btn-danger" type="submit"><: Delete group :></button>
+                <a class="btn btn-default" href="./?module=manage_groups"><: Cancel :></a></div>
             <@ CSFR_Tag @>
         </form>
-        <% else %>
-        <p><: There are currently no custom user groups configured! :></p>
         <% endif %>
     </div>
-
-    <% if isCreateGroup %>
-    <div class="zform_wrapper">
-        <h2><: Create new user group :></h2>
-        <form action="./?module=manage_groups&action=CreateGroup" method="post">
-            <table class="table table-striped">
-                <tr>
-                    <th><: Group name :>:</th>
-                    <td><input name="inGroupName" type="text" id="inGroupName" size="30" /></td>
-                </tr>
-                <tr>
-                    <th><: Description :>:</th>
-                    <td><input name="inDesc" type="text" id="inDesc" size="30" /></td>
-                </tr>
-                <tr>
-                    <th colspan="2" align="right">
-                        <button class="button-loader btn btn-primary" type="submit" ><: Create :></button>
-                    </th>
-                </tr>
-            </table>
-            <@ CSFR_Tag @>
-        </form>
-    </div>
-    <% endif %>
-
-    <% if isEditGroup %>
-    <div class="zform_wrapper">
-        <h2><: Edit user group :></h2>
-        <form action="./?module=manage_groups&action=UpdateGroup" method="post">
-            <table class="table table-striped">
-                <tr>
-                    <th><: Group name :>:</th>
-                    <td><input name="inGroupName" type="text" id="inGroupName" size="30" value="<@ EditCurrentName @>" /></td>
-                </tr>
-                <tr>
-                    <th><: Description :>:</th>
-                    <td><input name="inDesc" type="text" id="inDesc" size="30"  value="<@ EditCurrentDesc @>" /></td>
-                </tr>
-                <tr>
-                    <th colspan="2" align="right">
-                        <input type="hidden" name="inGroupID" value="<@ CurrentID @>">
-                        <button class="button-loader btn btn-primary" type="submit" ><: Save :></button>
-                    </th>
-                </tr>
-            </table>
-            <@ CSFR_Tag @>
-        </form>
-    </div>
-    <% endif %>
-
 </div>
+<script>
+(function () {
+    'use strict';
+    var form = document.getElementById('mg-form'); if (!form) { return; }
+    var boxes = form.querySelectorAll('input[name="inModules[]"]'), count = document.getElementById('mg-count');
+    var tally = function () {
+        var n = 0; Array.prototype.forEach.call(boxes, function (b) { if (b.checked) { n++; } });
+        count.textContent = n + ' ' + count.getAttribute('data-of') + ' ' + boxes.length + ' ' + count.getAttribute('data-ticked');
+    };
+    Array.prototype.forEach.call(form.querySelectorAll('.mg-all'), function (b) {
+        b.addEventListener('click', function () {
+            Array.prototype.forEach.call(b.closest('fieldset').querySelectorAll('input[type=checkbox]'), function (c) { c.checked = b.getAttribute('data-on') === '1'; });
+            tally();
+        });
+    });
+    Array.prototype.forEach.call(boxes, function (b) { b.addEventListener('change', tally); });
+    tally();
+})();
+</script>
