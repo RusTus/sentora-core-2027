@@ -118,7 +118,8 @@ ui_end_step() { # [fail]
     [ $UI_STEP_WARN -eq 1 ] && { mark='[ !! ]'; color="$C_YELLOW"; }
     [ -n "${1:-}" ] && { mark='[FAIL]'; color="$C_RED$C_BOLD"; }
     printf '  %s%s%s %s %s(%d:%02d)%s\n' "$color" "$mark" "$C_RESET" "$UI_TITLE" "$C_DIM" $(( took / 60 )) $(( took % 60 )) "$C_RESET"
-    local n; for n in "${UI_NOTES[@]}"; do printf '%s\n' "$n"; done
+    # ${a[@]+"${a[@]}"}: bash 4.3 (Debian 8) calls an empty array "unbound" under set -u
+    local n; for n in ${UI_NOTES[@]+"${UI_NOTES[@]}"}; do printf '%s\n' "$n"; done
     UI_TITLE=""; UI_ITEM=""; UI_NOTES=()
 }
 ui_step() { # title
