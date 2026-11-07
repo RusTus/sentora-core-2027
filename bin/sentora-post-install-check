@@ -157,6 +157,10 @@ if [ -e "$MCFG" ]; then
     else fail "$MCFG can be read by every user"; fi
 fi
 perm "$PANEL/bin/zsudo" 4750 root sentora
+perm /etc/bind/named.conf 640 root bind
+for b in sentora-notice sentora-update sentora-post-install-check; do
+    if [ -x "$PANEL/bin/$b" ]; then ok "$b can be run"; else fail "$PANEL/bin/$b is not executable (chmod 755 it)"; fi
+done
 perm /var/lib/sentora/phpmyadmin-auth.log 640 sentora sentora
 for d in "$PANEL/etc/tmp" "$PANEL/etc/apps/matomo/tmp" "$PANEL/etc/apps/matomo/config"; do
     [ -d "$d" ] || continue

@@ -246,6 +246,8 @@ fix_permissions() {
     fi
     # the panel's working folders: the panel and Apache only (as the daemon keeps them)
     for d in "$PANEL/etc/tmp" "$m/tmp" "$m/config"; do [ -d "$d" ] && chmod o-rwx,g+s "$d"; done
+    # BIND's main file holds the rndc key: root and BIND only (installers before 2027.5 left it 644)
+    [ -f /etc/bind/named.conf ] && { chown root:bind /etc/bind/named.conf; chmod 640 /etc/bind/named.conf; }
     for b in sentora-notice sentora-update sentora-update-check sentora-post-install-check sentora-restore sentora-smoke-test sentora-offsite-backup sentora-panel-restore sentora-web-probe sentora-php-install; do
         [ -f "$PANEL/bin/$b" ] && ln -sf "$PANEL/bin/$b" "/usr/local/sbin/$b"
     done
