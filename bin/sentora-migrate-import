@@ -1,12 +1,13 @@
 #!/usr/bin/php
 <?php
 /**
- * sentora-migrate-import (run as root on the Sentora-2027 server): take one account of an old
+ * sentora-migrate-import (run as root on the Sentora-2027 server): take accounts of an old
  * Sentora server (1.0.x or 2.0.x) over from a folder made there by sentora-migrate-export.
  *
  *   sentora-migrate-import <export folder>                                  what it holds
  *   sentora-migrate-import <export folder> <old account> [<new account>]       what would be done (nothing changes)
  *   sentora-migrate-import <export folder> <old account> [<new account>] --yes do it
+ *   sentora-migrate-import <export folder> --all [--yes]                       every account in the export, one after another
  *     (without <new account>, the account of the same name here: clients keep their names)
  *     --php <version>   the domains' PHP version. Default: 7.1, the version for moving old sites (it is
  *                       switched on in PHP Versions if it is off); --php default for the server's own PHP 8
@@ -57,7 +58,7 @@ if (!function_exists('posix_geteuid') || posix_geteuid() !== 0) {
 
 /** @var array<int, string> $args The positional arguments. */
 $args = array();
-$opt = array('yes' => false, 'php' => '7.1', 'keep-ip' => false, 'overwrite' => false, 'allow-symlinks' => false, 'fix-htaccess' => null);
+$opt = array('yes' => false, 'php' => '7.1', 'keep-ip' => false, 'overwrite' => false, 'allow-symlinks' => false, 'fix-htaccess' => null, 'all' => false);
 for ($i = 1; $i < $argc; $i++) {
     $a = $argv[$i];
     if ($a === '--yes') { $opt['yes'] = true; }
@@ -66,14 +67,18 @@ for ($i = 1; $i < $argc; $i++) {
     elseif ($a === '--allow-symlinks') { $opt['allow-symlinks'] = true; }
     elseif ($a === '--fix-htaccess') { $opt['fix-htaccess'] = true; }
     elseif ($a === '--no-fix-htaccess') { $opt['fix-htaccess'] = false; }
+    elseif ($a === '--all') { $opt['all'] = true; }
     elseif ($a === '--php') { $opt['php'] = (string) ($argv[++$i] ?? ''); }
     elseif ($a === '-h' || $a === '--help') { $args = array(); break; }
     elseif (strncmp($a, '--', 2) === 0) { fwrite(STDERR, "Unknown option $a\n"); exit(2); }
     else { $args[] = $a; }
 }
 if (!$args) {
-    $lines = file(__FILE__);
-    foreach (array_slice($lines, 3, 17) as $l) {
+    // the description at the top of this file, up to its first blank comment line
+    foreach (array_slice(file(__FILE__), 3) as $l) {
+        if (trim($l) === '*') {
+            break;
+        }
         echo preg_replace('/^ \* ?/', '', rtrim($l)), "\n";
     }
     exit(2);
@@ -108,7 +113,7 @@ function ui_banner($sub)
     global $UI;
     $ver = trim((string) @file_get_contents(dirname(__DIR__) . '/VERSION'));
     // a clean screen to start on, like "clear" (on a terminal only: the screen and its scrollback)
-    echo $UI['tty'] ? "\e[H\e[2J\e[3J" : '', "\n";
+    echo $UI['tty'] && !getenv('SENTORA_MIGRATE_CHILD') ? "\e[H\e[2J\e[3J" : '', "\n";
     ui_bar('bg_title', '  Sentora-' . ($ver !== '' ? preg_replace('/[^A-Za-z0-9._-]/', '', $ver) : '2027') . ' for Ubuntu 26.04  -  Moving accounts from an old server');
     if ($sub !== '') { echo c('dim') . '  ' . $sub . c('reset') . "\n"; }
     echo "\n";
@@ -238,6 +243,87 @@ if (($M['format'] ?? '') !== 'sentora-migrate-1') {
     fwrite(STDERR, "This export's format is not one this panel reads (format=" . ($M['format'] ?? '?') . ").\n");
     exit(1);
 }
+// --- every account in the export, one after another (--all) ---------------------------------------
+// Each account is moved by this same command (so each gets the same checks, matching by name and
+// x_migrate_map), after the copy's checksums are checked once; an account whose reseller is not here yet
+// gets it made first, and that reseller's own run then adds its websites. One that fails does not stop the
+// others. The daemon runs once at the end.
+if ($opt['all']) {
+    $names = array();
+    foreach ($M['accounts'] as $a) {
+        if (preg_match('/^([A-Za-z0-9_-]{1,64}) /', $a, $m)) {
+            $names[] = $m[1];
+        }
+    }
+    $APPLY = $opt['yes'];
+    ui_banner(($APPLY ? 'Moving every account' : 'What moving every account would do (nothing changes until --yes)') . ' from ' . $M['server'] . ' (Sentora ' . $M['sentora'] . '): ' . count($names));
+    if (!$names) {
+        echo "  The export lists no accounts.\n\n";
+        exit(1);
+    }
+    $UI['total'] = 1;
+    ui_step('Checking the copy against its checksums (once, for every account)');
+    if (is_file($EXP . '/SHA256SUMS')) {
+        if (!sh('cd ' . q($EXP) . ' && sha256sum --quiet -c SHA256SUMS', $o)) {
+            ui_end_step(true);
+            echo "\n  The export does not match its checksums (copied incompletely?): " . substr($o, 0, 300) . "\n\n";
+            exit(1);
+        }
+    } else {
+        warn('the export has no checksums (SHA256SUMS): not checked');
+    }
+    ui_info(implode(', ', $names));
+    ui_end_step();
+    $pass = array();
+    foreach (array('php' => '--php', 'keep-ip' => '--keep-ip', 'overwrite' => '--overwrite', 'allow-symlinks' => '--allow-symlinks') as $k => $flag) {
+        if ($k === 'php') { $pass[] = '--php ' . q($opt['php']); }
+        elseif ($opt[$k]) { $pass[] = $flag; }
+    }
+    if ($opt['fix-htaccess'] !== null) { $pass[] = $opt['fix-htaccess'] ? '--fix-htaccess' : '--no-fix-htaccess'; }
+    if ($APPLY) { $pass[] = '--yes'; }
+    $start = time();
+    $result = array();
+    foreach ($names as $n => $u) {
+        echo "\n" . c('bold') . c('cyan') . '  ==== ' . ($n + 1) . '/' . count($names) . ": $u " . str_repeat('=', 40) . c('reset') . "\n";
+        $env = 'SENTORA_MIGRATE_CHILD=1 SENTORA_MIGRATE_NO_DAEMON=1 SENTORA_MIGRATE_CHECKED=' . q($EXP);
+        passthru("$env php -q " . q(__FILE__) . ' ' . q($EXP) . ' ' . q($u) . ' ' . implode(' ', $pass), $rc);
+        $result[$u] = $rc;
+    }
+    if ($APPLY) {
+        echo "\n";
+        $UI['total'] = 1; $UI['step'] = 0;
+        ui_step('Running the Sentora daemon once (websites, PHP pools, DNS, FTP, cron, permissions)');
+        sh('php -q ' . q($rootPath . 'bin/daemon.php') . ' > /var/sentora/logs/daemon-last-run.log', $o) || warn('the daemon run reported problems (see /var/sentora/logs/daemon-last-run.log)');
+        ui_end_step();
+    }
+    echo "\n";
+    $bad = count(array_filter($result, function ($rc) { return $rc !== 0 && $rc !== 3; }));
+    $warned = count(array_filter($result, function ($rc) { return $rc === 3; }));
+    ui_bar($bad ? 'bg_fail' : ($warned ? 'bg_warn' : ($APPLY ? 'bg_ok' : 'bg_title')),
+        '  ' . ($APPLY ? 'Moved' : 'Dry run') . ': ' . count($result) . ' account(s), ' . ($bad ? "$bad stopped, " : '') . ($warned ? "$warned with warnings" : 'no warnings'));
+    echo "\n";
+    foreach ($result as $u => $rc) {
+        printf("     %-20s %s\n", $u, $rc === 0 ? c('green') . 'OK' . c('reset') : ($rc === 3 ? c('yellow') . 'done, with warnings (above)' . c('reset') : c('red') . 'stopped (above): nothing of it changed after that point' . c('reset')));
+    }
+    if ($APPLY) {
+        $pw = array();
+        foreach (glob('/root/sentora-migrate-passwords-*.txt') ?: array() as $f) {
+            if (filemtime($f) >= $start) {
+                foreach (file($f, FILE_IGNORE_NEW_LINES) as $l) {
+                    if ($l !== '' && $l[0] !== '#') { $pw[] = $l; }
+                }
+            }
+        }
+        if ($pw) {
+            echo "\n  " . c('bold') . c('yellow') . 'New panel logins' . c('reset') . c('dim') . '  (accounts made here; give each client theirs; also in /root/sentora-migrate-passwords-*.txt)' . c('reset') . "\n";
+            foreach ($pw as $l) { $p2 = explode("\t", $l, 2); printf("     %-20s %s\n", $p2[0], $p2[1] ?? ''); }
+        }
+        echo "\n  " . c('bold') . 'Next' . c('reset') . "\n     Point the domains' DNS to this server, then open each site.\n\n";
+    } else {
+        echo "\n  Nothing was changed. To move them all, run the same command with --yes\n\n";
+    }
+    exit($bad ? 1 : ($warned ? 3 : 0));
+}
 if (count($args) < 2) {
     ui_banner('The export of ' . $M['server'] . ', made ' . $M['made']);
     printf("  %-16s %s\n", 'Sentora', $M['sentora']);
@@ -251,7 +337,8 @@ if (count($args) < 2) {
             echo "  $a\n";
         }
     }
-    echo "\n  What moving one would do (nothing changes):\n    " . c('bold') . "sentora-migrate-import $args[0] <account>" . c('reset') . "\n\n";
+    echo "\n  What moving one would do (nothing changes):\n    " . c('bold') . "sentora-migrate-import $args[0] <account>" . c('reset') . "\n";
+    echo "  What moving all of them would do:\n    " . c('bold') . "sentora-migrate-import $args[0] --all" . c('reset') . "\n\n";
     exit(0);
 }
 $OLDU = $args[1];
@@ -295,7 +382,9 @@ if ($PHPV !== '' && !is_dir('/opt/sentora-php/' . $PHPV)) {
 
 // the checksums of the copy
 ui_step('Checking the copy against its checksums');
-if (is_file($EXP . '/SHA256SUMS')) {
+if (getenv('SENTORA_MIGRATE_CHECKED') === $EXP) {
+    ui_info('checked once for the whole export (--all)');
+} elseif (is_file($EXP . '/SHA256SUMS')) {
     if (!sh('cd ' . q($EXP) . ' && sha256sum --quiet -c SHA256SUMS', $o)) {
         stop("the export does not match its checksums (copied incompletely?): " . substr($o, 0, 300));
     }
@@ -862,8 +951,10 @@ if ($HTFOUND) {
 plan_line('Never moved', c('dim') . 'the old panel\'s modules (custom ones included) and add-ons, settings, themes, translations' . c('reset'));
 echo "\n";
 if (!$APPLY) {
-    ui_bar('bg_title', '  Nothing was changed. To move it, run the same command with --yes');
-    echo "\n";
+    if (!getenv('SENTORA_MIGRATE_CHILD')) {
+        ui_bar('bg_title', '  Nothing was changed. To move it, run the same command with --yes');
+        echo "\n";
+    }
     cleanup();
     exit(0);
 }

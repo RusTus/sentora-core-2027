@@ -519,6 +519,14 @@ Accounts move from an old Sentora server (1.0.x or 2.0.x, on Debian, Ubuntu or C
    sentora-migrate-import /root/sentora-export-<server>-<date> zadmin
    ```
 
+   To move **every account** in the export in one go, use `--all` instead of an account name (with `--yes` to do it):
+
+   ```bash
+   sentora-migrate-import /root/sentora-export-<server>-<date> --all
+   ```
+
+   It checks the copy's checksums once, then moves each account in turn the same way as one by one (each shows its own plan or steps), goes on with the others when one stops, runs the daemon once at the end, and lists every account's result and the new panel logins.
+
 4. Move it: the same command with `--yes`. It checks the copy, saves this server's panel databases in `/var/sentora/backups/pre-migrate-<date>/`, and moves the account's domains, sub-domains and parked domains, website files, DNS records (those pointing to the old server get this server's IP; `--keep-ip` leaves them), MySQL databases and users with their passwords (so the sites' settings keep working), FTP accounts, cron jobs, protected folders, mailboxes with their mail, aliases, forwarders and distribution lists. A name already taken here is skipped and reported; running it again adds only what is missing. Website files already here are kept (`--overwrite` replaces them). The log is `/var/sentora/logs/migrate-import.log`.
 5. Point the domains' DNS to this server and open each site.
 
