@@ -258,7 +258,9 @@ class module_controller extends ctrl_module
         $n = array(
             'id' => $id, 'from' => $old ? $old['from'] : self::Me(), 'type' => isset($f['inType']) ? (string) $f['inType'] : 'info',
             'title' => isset($f['inTitle']) ? (string) $f['inTitle'] : '', 'body' => isset($f['inBody']) ? (string) $f['inBody'] : '',
-            'scope' => $scope, 'targets' => $targets, 'closable' => !empty($f['inClosable']), 'start' => $start, 'end' => $end,
+            'scope' => $scope, 'targets' => $targets, 'start' => $start, 'end' => $end,
+            // a notice the panel sent to come back at each login keeps doing so when it is edited here
+            'closable' => !empty($f['inClosable']) ? ($old && !empty($old['reshow']) ? 'login' : true) : false,
             'key' => $old ? $old['key'] : null, 'source' => $old ? $old['source'] : 'client_notices',
         );
         if (!$e && ctrl_notices::Send($n) === false) {

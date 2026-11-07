@@ -41,6 +41,7 @@ function notice_help($code)
         . "  --title \"text\"                 (default: the type's name)\n"
         . "  --start \"date\" --end \"date\"    When it shows (any date strtotime() reads; server time)\n"
         . "  --pinned                       Clients can not close it\n"
+        . "  --until-login                  Closing it lasts until the next login only\n"
         . "  --key <key>                    Replace the earlier notice sent with this key\n"
         . "The text is plain: **bold**, [text](https://address), web addresses, and lines starting with \"- \".\n");
     exit($code);
@@ -115,6 +116,9 @@ if ($cmd === 'send') {
                 break;
             case '--pinned':
                 $n['closable'] = false;
+                break;
+            case '--until-login':
+                $n['closable'] = 'login';
                 break;
             default:
                 $text = $a === '-' ? stream_get_contents(STDIN) : $a;

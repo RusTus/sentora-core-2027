@@ -127,7 +127,8 @@ class ctrl_notices
      * @param array<string, mixed> $n 'body' (required), and optionally:
      *        'type' (see TYPES, default 'info'), 'title' (default: none, the type's name is shown),
      *        'scope' (see SCOPES, default 'clients'), 'targets' (IDs for the scope: reseller, package, group or account IDs),
-     *        'from' (sending account ID, 0 = the panel; default 0), 'closable' (default true),
+     *        'from' (sending account ID, 0 = the panel; default 0), 'closable' (true: closed for good, default;
+     *        'login': closed until the account's next login, so it comes back each time; false: can not be closed),
      *        'start' and 'end' (Unix times, null = now / until removed), 'key' (replace the sender's notice with this key),
      *        'source' (who sent it, such as a module name), 'id' (change this notice).
      * @return int|false The notice ID, or false when refused (the reason in $error).
@@ -167,7 +168,7 @@ class ctrl_notices
         }
         $row = array(
             ':acc' => $from, ':scope' => $scope, ':targets' => implode(',', $targets), ':type' => $type, ':title' => $title, ':body' => $body,
-            ':closable' => !isset($n['closable']) || $n['closable'] ? 1 : 0, ':start' => $start, ':end' => $end,
+            ':closable' => !isset($n['closable']) ? 1 : ($n['closable'] === 'login' ? 2 : ($n['closable'] ? 1 : 0)), ':start' => $start, ':end' => $end,
             ':key' => isset($n['key']) && $n['key'] !== '' ? mb_substr((string) $n['key'], 0, 100, 'UTF-8') : null,
             ':source' => mb_substr((string) (isset($n['source']) ? $n['source'] : ''), 0, 50, 'UTF-8'), ':now' => time(),
         );
@@ -178,7 +179,7 @@ class ctrl_notices
             $id = (int) $q->fetchColumn();
         }
         self::$last = array('id' => $id, 'from' => $from, 'scope' => $scope, 'targets' => $targets, 'type' => $type, 'title' => $title, 'body' => $body,
-            'closable' => (bool) $row[':closable'], 'start' => $start, 'end' => $end, 'key' => $row[':key'], 'source' => $row[':source']);
+            'closable' => (bool) $row[':closable'], 'reshow' => $row[':closable'] === 2, 'start' => $start, 'end' => $end, 'key' => $row[':key'], 'source' => $row[':source']);
         if ($id) {
             // the same notice sent again (a daily check, a form saved as it was): left as it is, so it
             // keeps its version and stays closed for those who closed it
@@ -473,7 +474,7 @@ class ctrl_notices
      *
      * @param array<string, mixed> $r The x_notices row.
      * @return array<string, mixed> 'id', 'from', 'scope', 'targets' (int[]), 'type', 'title', 'body', 'closable' (bool),
-     *         'start', 'end' (int|null), 'key', 'source', 'created', 'updated'.
+     *         'reshow' (bool: closing it lasts until the next login only), 'start', 'end' (int|null), 'key', 'source', 'created', 'updated'.
      */
     static function Row($r)
     {
@@ -481,7 +482,8 @@ class ctrl_notices
             'id' => (int) $r['nt_id_pk'], 'from' => (int) $r['nt_acc_fk'], 'scope' => (string) $r['nt_scope_vc'],
             'targets' => $r['nt_targets_vc'] === '' ? array() : array_map('intval', explode(',', $r['nt_targets_vc'])),
             'type' => in_array($r['nt_type_vc'], self::TYPES, true) ? (string) $r['nt_type_vc'] : 'info',
-            'title' => (string) $r['nt_title_vc'], 'body' => (string) $r['nt_body_tx'], 'closable' => (int) $r['nt_closable_in'] === 1,
+            'title' => (string) $r['nt_title_vc'], 'body' => (string) $r['nt_body_tx'], 'closable' => (int) $r['nt_closable_in'] >= 1,
+            'reshow' => (int) $r['nt_closable_in'] === 2,
             'start' => $r['nt_start_ts'] === null ? null : (int) $r['nt_start_ts'], 'end' => $r['nt_end_ts'] === null ? null : (int) $r['nt_end_ts'],
             'key' => $r['nt_key_vc'], 'source' => (string) $r['nt_source_vc'], 'created' => (int) $r['nt_created_ts'], 'updated' => (int) $r['nt_updated_ts'],
         );

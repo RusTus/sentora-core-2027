@@ -25,7 +25,8 @@ class ui_tpl_notice {
     /**
      * The notices the account sees, one box each, most urgent first.
      *
-     * Notices a client may close stay closed (a cookie per notice and version) until the notice changes.
+     * Notices a client may close stay closed (a cookie per notice and version) until the notice changes;
+     * those sent with 'closable' => 'login' only until the next login (the cookie names the login, see LoginKey()).
      *
      * @return string|false The HTML, or false when there are none.
      */
@@ -45,8 +46,21 @@ class ui_tpl_notice {
         return '<div class="sn-notices" id="sn-notices">' . $out . '</div><script>(function(){var w=document.getElementById("sn-notices");if(!w){return;}'
             . 'Array.prototype.forEach.call(w.querySelectorAll(".sn-notice[data-key]"),function(n){var k="sn_notice_"+n.getAttribute("data-key");'
             . 'if(document.cookie.split("; ").indexOf(k+"=1")>=0){n.parentNode.removeChild(n);return;}'
-            . 'var c=n.querySelector(".sn-notice-close");if(c){c.addEventListener("click",function(){document.cookie=k+"=1; path=/; max-age=31536000; SameSite=Lax";n.parentNode.removeChild(n);});}});'
+            . 'var c=n.querySelector(".sn-notice-close");if(c){c.addEventListener("click",function(){document.cookie=k+"=1; path=/; "+(n.hasAttribute("data-login")?"":"max-age=31536000; ")+"SameSite=Lax";n.parentNode.removeChild(n);});}});'
             . 'if(!w.querySelector(".sn-notice")){w.parentNode.removeChild(w);}})();</script>';
+    }
+
+    /**
+     * A short key for this login (made at each login by ctrl_auth::SetUserSession()), so a notice
+     * closed "until the next login" shows again after the next one.
+     *
+     * @return string Letters and digits.
+     */
+    public static function LoginKey() {
+        if (empty($_SESSION['sn_login']) || !preg_match('/^[a-f0-9]{8,32}$/', (string) $_SESSION['sn_login'])) {
+            $_SESSION['sn_login'] = bin2hex(random_bytes(6));
+        }
+        return (string) $_SESSION['sn_login'];
     }
 
     /**
@@ -90,7 +104,8 @@ class ui_tpl_notice {
         $h = function ($s) { return htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8'); };
         $type = in_array($n['type'], ctrl_notices::TYPES, true) ? $n['type'] : 'info';
         $from = $n['scope'] === 'user' ? 'Just for you' : ($n['scope'] === 'everyone' ? 'For everyone' : ((int) $n['from'] === 0 ? 'From the panel' : 'From your host'));
-        return '<div class="sn-notice sn-notice-' . $type . '"' . ($preview ? '' : ' data-key="' . (int) $n['id'] . '-' . (int) $n['updated'] . '"')
+        $login = !$preview && !empty($n['reshow']);
+        return '<div class="sn-notice sn-notice-' . $type . '"' . ($preview ? '' : ' data-key="' . (int) $n['id'] . '-' . (int) $n['updated'] . ($login ? '-' . self::LoginKey() . '" data-login="1' : '') . '"')
             . ' role="' . ($type === 'outage' ? 'alert' : 'status') . '">' . self::Icon($type)
             . '<div class="sn-notice-main"><div class="sn-notice-head"><b>' . $h($n['title'] !== '' ? $n['title'] : self::TypeName($type)) . '</b>'
             . '<small>' . $h(ui_language::translate($from)) . '</small></div>'

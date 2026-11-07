@@ -140,6 +140,8 @@ sentora-update --rollback   # list the backups and restore one
 
 `sentora-update` installs the core zip from the `current` release of [sentora-core-2027](https://github.com/RusTus/sentora-core-2027/releases), and knows a new version by its changed SHA-256. To use another release, set `TAG="<tag>"` in `/etc/sentora/update.conf` (`TAG="latest"` takes the newest release, pre-releases included). It updates the panel only and keeps this server's own settings; changes to the service configuration (Postfix, Dovecot, Apache and so on) are described in the [change log](CHANGELOG.md).
 
+It shows each step with a progress bar, like the installer, and keeps the details in `/var/sentora/logs/sentora-update.log`. Once an hour the panel checks for a newer release (GitHub's API only, nothing is downloaded) and shows administrators an "A panel update is available" notice. Closing the notice hides it until the next login, and it goes away once the panel is updated.
+
 ## Backups and restore
 
 - **Client backups:** each account can back up its own websites, databases and mail from the panel.

@@ -75,6 +75,8 @@ class ctrl_auth
                 session_regenerate_id(true);
             }
             $_SESSION['zpuid'] = $zpuid;
+            // a new login: notices closed "until the next login" show again (ui_tpl_notice::LoginKey())
+            $_SESSION['sn_login'] = bin2hex(random_bytes(6));
             if ($sessionSecuirty) {
                 //Implamentation of session security
                 runtime_sessionsecurity::setCookie();
