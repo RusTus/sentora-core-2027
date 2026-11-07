@@ -108,6 +108,7 @@ foreach (array($OLDU, $NEWU) as $u) {
 
 // the checksums of the copy
 if (is_file($EXP . '/SHA256SUMS')) {
+    echo "Checking the copy against its checksums (a few minutes for several GB) ...\n";
     if (!sh('cd ' . q($EXP) . ' && sha256sum --quiet -c SHA256SUMS', $o)) {
         fwrite(STDERR, "The export does not match its checksums (copied incompletely?):\n$o\n");
         exit(1);
@@ -177,17 +178,20 @@ $panelDump = $EXP . '/db/panel/' . ($M['panel_db'] ?: 'sentora_core') . '.sql.gz
 $mailDump = glob($EXP . '/db/panel/{sentora,zpanel}_postfix.sql.gz', GLOB_BRACE);
 $ftpDump = glob($EXP . '/db/panel/{sentora,zpanel}_proftpd.sql.gz', GLOB_BRACE);
 $zdbh->exec("CREATE DATABASE `$TMPDB`");
+say('  reading the old panel\'s database (' . round(filesize($panelDump) / 1048576, 1) . ' MB packed) ...');
 if (($r = load_dump($panelDump, $TMPDB)) !== true) {
     stop("the old panel's database did not load: " . substr((string) $r, 0, 300));
 }
 $HAVE_MAILDB = false;
 if ($mailDump) {
     $zdbh->exec("CREATE DATABASE `{$TMPDB}_mail`");
+    say('  reading its mail database ...');
     $HAVE_MAILDB = (load_dump($mailDump[0], $TMPDB . '_mail') === true);
 }
 $HAVE_FTPDB = false;
 if ($ftpDump) {
     $zdbh->exec("CREATE DATABASE `{$TMPDB}_ftp`");
+    say('  reading its FTP database ...');
     $HAVE_FTPDB = (load_dump($ftpDump[0], $TMPDB . '_ftp') === true);
 }
 $O = $TMPDB;
