@@ -1078,6 +1078,8 @@ return array(
     'Last login' => 'Último acceso',
     'Last login %s' => 'Último acceso %s',
     'Last output' => 'Última salida',
+    'Last panel update finished successfully' => 'La última actualización del panel finalizó correctamente',
+    'Last panel update finished, with warnings (see above)' => 'La última actualización del panel finalizó, con advertencias (vea arriba)',
     'Last panel update: %s' => 'Última actualización del panel: %s',
     'Last read' => 'Última lectura',
     'Last restore' => 'Última restauración',

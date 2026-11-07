@@ -179,9 +179,10 @@ class panel_update_view
             $newer = !$roll && $a['state'] === 'available' && $a['checked'] > (int) $run['updated'];
             $tone = $newer ? 'info' : $run['result'];
             $out .= '<div class="pu-end ' . $tone . '">' . self::Icon($newer ? 'clock' : ($run['result'] === 'ok' ? 'ok' : 'warn'), 'pu-ico-lg') . '<div><b>'
-                . self::t($roll ? 'Restored' : ($newer ? 'The update finished' : 'The panel is updated'))
-                . ($run['result'] === 'warn' ? ', ' . self::t('with warnings (see above)') : '') . '</b>'
-                . self::LastUpdate($run['release'])
+                . self::t($roll ? 'Restored' : ($newer ? 'The update finished'
+                    : ($run['result'] === 'warn' ? 'Last panel update finished, with warnings (see above)' : 'Last panel update finished successfully')))
+                . ($run['result'] === 'warn' && ($roll || $newer) ? ', ' . self::t('with warnings (see above)') : '') . '</b>'
+                . self::LastUpdate($run['release'], $roll || $newer)
                 . ($newer ? '<span>' . self::t('A newer release has been published since: update again above.') . '</span>' : '') . '</div></div>';
             if (!$roll && $back !== '') {
                 $out .= self::Console($back, 'Something wrong since the update? Go back to the version before from the server\'s console, as root:');
@@ -212,15 +213,18 @@ class panel_update_view
      * "Last panel update: 6 Nov 2026 23:11" (or "Installed: ..." for the installer's), from a release line.
      *
      * @param string $text The release line, as panel_update_state::Installed() gives it.
+     * @param bool $label Optional. With "Last panel update:" in front (false: the date alone, under a title that
+     *        already says it). Default true.
      * @return string The HTML (a span; '' when there is no date in it).
      */
-    static function LastUpdate($text)
+    static function LastUpdate($text, $label = true)
     {
         $i = panel_update_state::ParseInstalled($text);
         if (!$i['when']) {
             return '';
         }
-        return '<span>' . str_replace('%s', self::h(ui_language::Date('j M Y H:i', $i['when'])), self::t($i['installer'] ? 'Installed: %s' : 'Last panel update: %s')) . '</span>';
+        $date = self::h(ui_language::Date('j M Y H:i', $i['when']));
+        return '<span>' . ($label ? str_replace('%s', $date, self::t($i['installer'] ? 'Installed: %s' : 'Last panel update: %s')) : $date) . '</span>';
     }
 
     /**
