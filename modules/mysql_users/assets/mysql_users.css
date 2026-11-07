@@ -117,3 +117,6 @@
 @media (max-width: 900px) { .mu-cols, .mu-grid { grid-template-columns: 1fr; } }
 @media (max-width: 760px) { .mu-tiles, .mu-choices { grid-template-columns: 1fr; } }
 @media (max-width: 640px) { .mu { padding: 12px; } .mu-card { padding: 14px 12px; } .mu-user { flex-wrap: wrap; } .mu-act { width: 100%; padding-left: 46px; } .mu-rules { grid-template-columns: 1fr; } }
+
+/* a user on MySQL's older login method (sys_oldlogins) */
+.mu-acc.mu-old { margin-left: 4px; background: var(--sn-warn-soft, #fff4d6); color: var(--sn-warn, #8f5b00); border-color: var(--sn-warn-line, #f2cf7a); cursor: help; }

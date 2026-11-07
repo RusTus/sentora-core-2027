@@ -355,8 +355,9 @@ class module_controller extends ctrl_module
 			// MySQL 5.7 or OLDER
 			$sql = $zdbh->prepare("SET PASSWORD FOR :username@:access=PASSWORD(:password)");
         } else {
-			// MySQL 5.7 + 
-			$sql = $zdbh->prepare("ALTER USER :username@:access IDENTIFIED BY :password");
+			// MySQL 5.7 + ; an account with sites on PHP 7.1 (which can not use MySQL 8.4's default
+			// method) gets the older one while MySQL still allows it (PHP Versions > Older logins)
+			$sql = $zdbh->prepare("ALTER USER :username@:access IDENTIFIED " . (sys_oldlogins::NewUsersNeedNative($uid) ? 'WITH mysql_native_password ' : '') . "BY :password");
 		}
         $sql->bindParam(':username', $username);
         $sql->bindParam(':access', $access);
@@ -719,8 +720,9 @@ class module_controller extends ctrl_module
 					// MySQL 5.7 or OLDER
 					$sql = $zdbh->prepare("SET PASSWORD FOR :mu_name_vc@:mu_access_vc=PASSWORD(:password)");
 				} else {
-					// MySQL 5.7 + 
-					$sql = $zdbh->prepare("ALTER USER :mu_name_vc@:mu_access_vc IDENTIFIED BY :password");
+					// MySQL 5.7 + ; the user keeps its login method (a site on PHP 7.1 uses the older one)
+					$sql = $zdbh->prepare("ALTER USER :mu_name_vc@:mu_access_vc IDENTIFIED "
+						. (sys_oldlogins::UsesNative((string) $rowuser['mu_name_vc'], (string) $rowuser['mu_access_vc']) ? 'WITH mysql_native_password ' : '') . "BY :password");
 				}
                 $sql->bindParam(':mu_name_vc', $rowuser['mu_name_vc']);
                 $sql->bindParam(':mu_access_vc', $rowuser['mu_access_vc']);
@@ -1267,7 +1269,8 @@ class module_controller extends ctrl_module
             }
             $out .= '<div class="mu-user" data-s="' . self::h(strtolower($u['username'] . ' ' . implode(' ', array_column($dbs ? $dbs : array(), 'mmdbname')))) . '">'
                 . '<span class="mu-avatar" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></span>'
-                . '<div class="mu-main"><div class="mu-name">' . self::NameHtml($u['username']) . '<span class="mu-acc ' . $acc[1] . '">' . self::h($acc[0]) . '</span></div>'
+                . '<div class="mu-main"><div class="mu-name">' . self::NameHtml($u['username']) . '<span class="mu-acc ' . $acc[1] . '">' . self::h($acc[0]) . '</span>'
+                . (sys_oldlogins::UsesNative((string) $u['username'], (string) $u['access']) ? '<span class="mu-acc mu-old" title="' . self::t('It logs in with MySQL\'s older, weaker method, kept for sites on PHP 7.1. Once its sites run on PHP 8, the administrator moves it to the modern one (PHP Versions > Older logins).') . '">' . self::t('Older login (PHP 7.1)') . '</span>' : '') . '</div>'
                 . '<div class="mu-dbs">' . ($pills !== '' ? $pills : '<span class="mu-nodb">' . self::t('No database yet: open Databases and password to add one') . '</span>') . '</div></div>'
                 . '<div class="mu-act">'
                 . '<button class="btn btn-default btn-sm" type="submit" name="inShow_' . $id . '" value="' . $id . '"><svg class="mu-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>' . self::t('Show password') . '</button>'

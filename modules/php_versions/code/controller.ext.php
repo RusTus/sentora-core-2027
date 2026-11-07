@@ -18,6 +18,9 @@ class module_controller extends ctrl_module
     /** @var bool|null True after a save (shown by getResult()). */
     static $ok;
 
+    /** @var array{0:string,1:string}|null A message about older logins: (HTML, class). */
+    static $old;
+
     /**
      * Escape a value for HTML.
      *
@@ -172,12 +175,108 @@ class module_controller extends ctrl_module
     }
 
     /**
+     * The older logins kept for moved websites (<@ OldLogins @>): MySQL users on the older login
+     * method (with a button to move each one to the modern one), whether MySQL still allows that
+     * method (and a button to switch it off once nothing uses it), and mailboxes on MD5.
+     *
+     * @return string The HTML.
+     */
+    static function getOldLogins()
+    {
+        $tok = runtime_csfr::Token();
+        $users = sys_oldlogins::NativeUsers();
+        $active = sys_oldlogins::NativeActive();
+        $md5 = sys_oldlogins::Md5Mailboxes();
+        $state = sys_oldlogins::OffState();
+        $rows = '';
+        foreach ($users as $u) {
+            $old = $u['mu_acc_fk'] ? sys_oldlogins::OldPhpDomains((int) $u['mu_acc_fk']) : array();
+            $btn = $u['mu_id_pk']
+                ? '<form method="post" action="./?module=php_versions&amp;action=ModernizeUser">' . $tok . '<input type="hidden" name="inUser" value="' . (int) $u['mu_id_pk'] . '">'
+                    . '<button class="btn btn-default btn-sm" type="submit"' . ($old ? ' data-confirm="' . str_replace('%s', self::h(implode(', ', $old)), self::t('These domains of its account still run on PHP 7.1, which can not log in with the modern method: %s. Their sites will lose their database until they move to PHP 8. Move this user anyway?')) . '"' : '') . '>' . self::t('Use the modern login') . '</button></form>'
+                : '<span class="pv-sub">' . self::t('not a panel user: change it in MySQL') . '</span>';
+            $rows .= '<div class="pv-old-row"><div><b>' . self::h($u['user']) . '</b> <span class="pv-sub">@' . self::h($u['host']) . ($u['owner'] ? ' · ' . self::h($u['owner']) : '') . '</span>'
+                . ($old ? '<div class="pv-old-why">' . str_replace('%s', self::h(implode(', ', $old)), self::t('Needed while these run on PHP 7.1: %s')) . '</div>' : '<div class="pv-old-why ok">' . self::t('No domain of its account needs it any more') . '</div>')
+                . '</div>' . $btn . '</div>';
+        }
+        $parts = array();
+        // MySQL's older login method
+        if (sys_oldlogins::IsMysql()) {
+            $offBtn = '';
+            if ($active && !$users && $state !== 'requested') {
+                $offBtn = '<form method="post" action="./?module=php_versions&amp;action=NativeOff">' . $tok . '<button class="btn btn-primary btn-sm" type="submit">' . self::t('Switch the older method off') . '</button></form>';
+            }
+            $status = $active
+                ? ($state === 'requested' ? self::t('On: the daemon switches it off within 5 minutes (MySQL restarts once).') : ($users ? str_replace('%d', (string) count($users), self::t('On, for %d MySQL user(s) below. Once none of them needs it, switch it off here.')) : self::t('On, and no MySQL user uses it any more: switch it off.')))
+                : self::t('Off: every MySQL user logs in with the modern method (caching_sha2_password).');
+            if (strpos($state, 'failed') === 0) {
+                $status .= ' <span class="pv-old-fail">' . self::h($state) . '</span>';
+            }
+            $parts[] = '<div class="pv-old-sec"><div class="pv-old-head"><b>' . self::t('MySQL: older login method') . '</b> <code>mysql_native_password</code>'
+                . '<span class="pv-sup ' . ($active ? 'warn' : 'ok') . '">' . self::t($active ? 'On' : 'Off') . '</span></div>'
+                . '<p>' . self::t('PHP 7.1 can not log in with MySQL\'s modern method, so the MySQL users of sites moved to PHP 7.1 use this older, weaker one (SHA-1). MySQL only listens on this server.') . '</p>'
+                . '<p>' . $status . '</p>' . $offBtn . ($rows !== '' ? '<div class="pv-old-rows">' . $rows . '</div>' : '') . '</div>';
+        }
+        // mailboxes on MD5
+        $parts[] = '<div class="pv-old-sec"><div class="pv-old-head"><b>' . self::t('Mailboxes: older password hashes') . '</b> <code>{PLAIN-MD5}</code>'
+            . '<span class="pv-sup ' . ($md5 ? 'warn' : 'ok') . '">' . ($md5 ? str_replace('%d', (string) count($md5), self::t('%d mailbox(es)')) : self::t('None')) . '</span></div>'
+            . '<p>' . ($md5
+                ? self::t('These mailboxes came from an old server and still have an MD5 password hash, which is quick to crack. They move to SHA-512 crypt when their password is next changed (Mailboxes, or the webmail\'s Password setting):') . ' <span class="pv-old-list">' . self::h(implode(', ', $md5)) . '</span>'
+                : self::t('Every mailbox password is a SHA-512 crypt hash.')) . '</p></div>';
+        $clean = !$active && !$users && !$md5;
+        return '<div class="pv-old' . ($clean ? ' is-clean' : '') . '"><h4>' . self::t('Older logins (for moved websites)') . '</h4>'
+            . '<p class="pv-sub">' . self::t($clean ? 'None in use: nothing on this server logs in with an older, weaker method.' : 'Kept so websites moved from an old server keep working. Retire each one once its site runs on PHP 8.') . '</p>'
+            . implode('', $parts) . '</div>';
+    }
+
+    /**
+     * Move one MySQL user to the modern login method (from the Older logins card).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return void
+     */
+    static function doModernizeUser()
+    {
+        global $controller;
+        runtime_csfr::Protect();
+        $id = (int) $controller->GetControllerRequest('FORM', 'inUser');
+        $why = sys_oldlogins::Modernize($id);
+        if ($why === '') {
+            self::$old = array(self::t('The MySQL user logs in with the modern method now, with the same password.'), 'zannounceok');
+        } elseif (strpos($why, 'MySQL refused: ') === 0) {
+            // (MySQL's own message as it is: only the sentence around it is translated)
+            self::$old = array(str_replace('%s', self::h(substr($why, 15)), self::t('MySQL refused: %s')), 'zannounceerror');
+        } else {
+            self::$old = array(self::t($why), 'zannounceerror');
+        }
+    }
+
+    /**
+     * Ask the daemon to switch MySQL's older login method off (only when no user uses it).
+     *
+     * @return void
+     */
+    static function doNativeOff()
+    {
+        runtime_csfr::Protect();
+        if (sys_oldlogins::NativeUsers()) {
+            self::$old = array(self::t('Some MySQL users still use the older method: move them first.'), 'zannounceerror');
+            return;
+        }
+        sys_oldlogins::RequestOff();
+        self::$old = array(self::t('The daemon switches MySQL\'s older login method off within 5 minutes (MySQL restarts once).'), 'zannounceok');
+    }
+
+    /**
      * The message after a save (<@ Result @>).
      *
      * @return string|null
      */
     static function getResult()
     {
+        if (self::$old) {
+            return ui_sysmessage::shout(self::$old[0], self::$old[1]);
+        }
         if (!fs_director::CheckForEmptyValue(self::$ok)) {
             return ui_sysmessage::shout(ui_language::translate('Saved. The daemon starts or stops the PHP services and updates the websites within 5 minutes.'), 'zannounceok');
         }

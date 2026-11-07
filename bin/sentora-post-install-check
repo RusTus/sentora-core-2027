@@ -249,7 +249,15 @@ if [ $DB -eq 1 ]; then
     other=$(q "SELECT COUNT(*) FROM sentora_postfix.mailbox WHERE password NOT LIKE '{PLAIN-MD5}%' AND password NOT LIKE '{SHA512-CRYPT}%'")
     if [ "${other:-0}" != 0 ]; then fail "mailboxes: $other password(s) in an unknown format"; fi
     if [ "${md5:-0}" = 0 ]; then ok "mailboxes: ${sha:-0} on SHA-512 crypt, none on MD5"
-    else warn "mailboxes: $md5 still on MD5 (they move to SHA-512 crypt when their password next changes), ${sha:-0} on SHA-512 crypt"; fi
+    else warn "mailboxes: $md5 still on MD5 (they move to SHA-512 crypt when their password next changes; listed in PHP Versions > Older logins), ${sha:-0} on SHA-512 crypt"; fi
+    # MySQL's older login method (mysql_native_password, SHA-1): kept for moved sites on PHP 7.1 only
+    if ! q "SELECT VERSION()" | grep -qi mariadb; then
+        nat=$(q "SELECT PLUGIN_STATUS FROM information_schema.PLUGINS WHERE PLUGIN_NAME = 'mysql_native_password'")
+        natn=$(q "SELECT COUNT(*) FROM mysql.user WHERE plugin = 'mysql_native_password' AND User NOT LIKE 'mysql.%'")
+        if [ "$nat" != "ACTIVE" ]; then ok "MySQL: the older login method (mysql_native_password) is off"
+        elif [ "${natn:-0}" = 0 ]; then warn "MySQL: the older login method is on, and no user needs it: switch it off (PHP Versions > Older logins)"
+        else warn "MySQL: the older login method is on for $natn user(s) of sites on PHP 7.1 (PHP Versions > Older logins: retire it once they run on PHP 8)"; fi
+    fi
     if q "SHOW CREATE VIEW sentora_postfix.sogo_users" | grep -qi "case"; then ok "SOGo mailbox view reads SHA-512 crypt"
     elif [ -x /usr/sbin/sogod ]; then fail "SOGo mailbox view is the old one (the daemon updates it within 5 minutes)"; fi
 fi
