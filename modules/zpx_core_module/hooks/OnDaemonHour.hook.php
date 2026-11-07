@@ -36,15 +36,13 @@ function SentoraUpdateNotice()
     if ($rc !== 100 || !preg_match('/^available (\S+) (\S+) (\S+)$/', $line, $m)) {
         return 'Could not check for a newer panel (' . ($line !== '' ? $line : 'no answer') . '); the next check is in an hour.';
     }
-    list(, $tag, $date, $repo) = $m;
+    list(, $tag, $date) = $m;
     $when = preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) ? date('j M Y', strtotime($date)) : '';
     $body = 'A newer version of the Sentora panel is published' . ($when !== '' ? ' (' . $when . ', release ' . $tag . ')' : ' (release ' . $tag . ')') . '. '
-        . '[Update from the panel](./?module=panel_update), or run this as root on the server\'s console:' . "\n"
+        // (no links: the notice only says where to go; the change log is linked on the Panel Update page)
+        . 'In the panel: **Admin > Server Admin > Panel Update**, or run this as root on the server\'s console:' . "\n"
         . '- **sentora-update**' . "\n"
         . 'Either way the panel is backed up first. If the panel does not answer afterwards, go back from the server\'s console, as root: **sentora-update --rollback**';
-    if (preg_match('#^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$#', $repo)) {
-        $body .= "\n" . 'What changed: [the change log](https://github.com/' . $repo . '/blob/master2027/CHANGELOG.md)';
-    }
     $id = ctrl_notices::Send(array('scope' => 'groups', 'targets' => array(1), 'type' => 'info', 'title' => 'A panel update is available',
         'body' => $body, 'closable' => 'login', 'key' => 'sentora-update', 'source' => 'sentora-update'));
     return $id ? 'An update is available (release ' . $tag . ($when !== '' ? ', ' . $when : '') . '): the administrators have a notice.'
