@@ -24,10 +24,7 @@ header("Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; 
 header('Cache-Control: no-store');
 // no panel controller here: the account's own language for ui_language::translate()
 if ($user) {
-    $lq = $zdbh->prepare('SELECT ud_language_vc FROM x_profiles WHERE ud_user_fk = :u');
-    $lq->execute(array(':u' => $uid));
-    $lang = (string) $lq->fetchColumn();
-    ui_language::$LangCol = 'tr_' . (in_array($lang, ui_language::Languages(), true) ? $lang : 'en') . '_tx';
+    ui_language::ForAccount($uid);
 }
 if (!$user || (int) $user['usergroupid'] !== 1) {
     http_response_code(403);

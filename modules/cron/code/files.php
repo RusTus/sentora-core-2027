@@ -26,10 +26,7 @@ if (!$user) {
     exit('{"error":"Please log in."}');
 }
 // no panel controller here: the account's own language for ui_language::translate()
-$lq = $zdbh->prepare('SELECT ud_language_vc FROM x_profiles WHERE ud_user_fk = :u');
-$lq->execute(array(':u' => $uid));
-$lang = (string) $lq->fetchColumn();
-ui_language::$LangCol = 'tr_' . (in_array($lang, ui_language::Languages(), true) ? $lang : 'en') . '_tx';
+ui_language::ForAccount($uid);
 $rel = trim((string) (isset($_GET['p']) ? $_GET['p'] : ''), '/');
 $dir = pd_safe::ResolveDir($user['username'], $rel);
 if ($dir === false) {

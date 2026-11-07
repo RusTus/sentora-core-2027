@@ -53,9 +53,9 @@ function DeleteClientDatabases() {
 						WHERE mm_database_fk=:my_id_pk");
                     $delete->bindParam(':my_id_pk', $rowdatabase['my_id_pk']);
                     $delete->execute();
-                    echo "Dropped database " . $rowdatabase['my_name_vc'] . " of deleted client " . $rowclient['ac_user_vc'] . "\n";
+                    if (PHP_SAPI === 'cli') { echo "Dropped database " . $rowdatabase['my_name_vc'] . " of deleted client " . $rowclient['ac_user_vc'] . "\n"; } // the daemon's log; never in a web page (it runs before a redirect)
                 } catch (PDOException $e) {
-                    echo "Could not drop database " . $rowdatabase['my_name_vc'] . " of deleted client " . $rowclient['ac_user_vc'] . ": " . $e->getMessage() . "\n";
+                    if (PHP_SAPI === 'cli') { echo "Could not drop database " . $rowdatabase['my_name_vc'] . " of deleted client " . $rowclient['ac_user_vc'] . ": " . $e->getMessage() . "\n"; }
                 }
             }
             if ($databases) {

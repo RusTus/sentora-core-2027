@@ -76,10 +76,10 @@ class module_controller extends ctrl_module {
 			}
 			$listed[$repo] = true;
 			if (isset($jobs[$repo]) && $jobs[$repo]['state'] === 'queued') {
-				$status = $label('label-warning', 'QUEUED', ui_language::translate('Removal queued (this can take up to 5 minutes).'));
+				$status = $label('label-warning', ui_language::translate('QUEUED'), ui_language::translate('Removal queued (this can take up to 5 minutes).'));
 				$buttons = $queuedButton;
 			} else {
-				$status = '<div class="controls" item_id="R:::' . $h($repo) . '"><span class="rb-wait" aria-label="loading"></span></div>';
+				$status = '<div class="controls" item_id="R:::' . $h($repo) . '"><span class="rb-wait" aria-label="' . $h(ui_language::translate('loading')) . '"></span></div>';
 				$buttons = '<button class="btn btn-default btn-sm retry-repo" type="submit" name="inRetryRepo" value="' . $h($repo) . '" style="display:none">' . ui_language::translate('Retry') . '</button> '
 					. '<button class="btn btn-default btn-sm rb-del" type="submit" name="inDeleteRepo" value="' . $h($repo) . '">' . ui_language::translate('Remove') . '</button>';
 			}
@@ -90,10 +90,10 @@ class module_controller extends ctrl_module {
 				continue;
 			}
 			if ($job['state'] === 'queued') {
-				$status = $label('label-warning', 'QUEUED', ui_language::translate('Waiting to be added (this can take up to 5 minutes).'));
+				$status = $label('label-warning', ui_language::translate('QUEUED'), ui_language::translate('Waiting to be added (this can take up to 5 minutes).'));
 				$buttons = $queuedButton;
 			} else {
-				$status = $label('label-danger', 'FAILED', ui_language::translate('The daemon could not add this repository; see Recent ZPPY commands.'));
+				$status = $label('label-danger', ui_language::translate('FAILED'), ui_language::translate('The daemon could not add this repository; see Recent ZPPY commands.'));
 				$buttons = '<button class="btn btn-default btn-sm" type="submit" name="inRetryRepo" value="' . $h($repo) . '">' . ui_language::translate('Retry') . '</button> '
 					. '<button class="btn btn-default btn-sm rb-del" type="submit" name="inDismissRepo" value="' . $h($repo) . '">' . ui_language::translate('Remove') . '</button>';
 			}
@@ -130,7 +130,7 @@ class module_controller extends ctrl_module {
 							$modinfo = self::InstalledModule($content[0]);
 					        if ($modinfo) {
 								$installed = "installed";
-								$title = $content[0] . " is already installed on this server.";
+								$title = str_replace('%s', $content[0], ui_language::translate("%s is already installed on this server."));
 								$info = ui_module::GetModuleXMLTags($modinfo['mo_folder_vc']);
 								$description = repo_browser_helper::h($modinfo['mo_desc_tx']);
 								$authorurl = $info['authorurl'];
@@ -139,15 +139,15 @@ class module_controller extends ctrl_module {
 								$authorname = $info['authorname'];
 								$buttonaction = "Remove";
 								$buttoncss = "btn btn-default btn-sm rb-del";
-								$installedhtml = "<a href=\"./?module=" . $content[0] . "\" title=\"Open the module\">" . $content[0] . "</a>";						
+								$installedhtml = "<a href=\"./?module=" . $content[0] . "\" title=\"" . repo_browser_helper::h(ui_language::translate("Open the module")) . "\">" . $content[0] . "</a>";						
 							} else {
 								$installed = "notinstalled";
-								$title = "To install this module, click: INSTALL";
-								$description = "No description available.";
+								$title = ui_language::translate("To install this module, click: INSTALL");
+								$description = repo_browser_helper::h(ui_language::translate("No description available."));
 								$authorurl = "";
-								$version = "not available";
-								$authoremail = "not available";
-								$authorname = "not available";
+								$version = ui_language::translate("not available");
+								$authoremail = ui_language::translate("not available");
+								$authorname = ui_language::translate("not available");
 								$buttonaction = "Install";
 								$buttoncss = "btn btn-primary btn-sm";
 								$installedhtml = $content[0];
@@ -159,20 +159,21 @@ class module_controller extends ctrl_module {
 								$buttonaction = "Queued";
 								$buttoncss = "btn btn-default btn-sm";
 								$buttonattr = 'disabled="disabled"';
-								$title = ($pending === 'remove' ? 'Removal' : ($pending === 'upgrade' ? 'Upgrade' : 'Installation')) . " queued: the daemon runs it within 5 minutes.";
+								$title = ui_language::translate($pending === 'remove' ? 'Removal queued: the daemon runs it within 5 minutes.' : ($pending === 'upgrade' ? 'Upgrade queued: the daemon runs it within 5 minutes.' : 'Installation queued: the daemon runs it within 5 minutes.'));
 							}
 	                		array_push($res, array('modulename'  => trim($content[0]),
 										   'buttonattr'      => $buttonattr,
                     				   	   'reponame'        => trim($content[1]),
 										   'description'     => $description,
 										   'buttonaction'    => $buttonaction,
+										   'buttonlabel'     => repo_browser_helper::h(ui_language::translate($buttonaction)),
 										   'buttoncss'		 => $buttoncss,
 										   'authorurl'       => $authorurl,
 										   'version'         => $version,
 										   'authoremail'     => $authoremail,
 										   'authorname'      => $authorname,
 										   'installed'		 => $installed,
-										   'title'           => $title,
+										   'title'           => repo_browser_helper::h($title),
 										   'installedhtml'   => $installedhtml,
 										   'url'			 => $url));
 						}
@@ -971,7 +972,7 @@ class module_controller extends ctrl_module {
 			repo_browser_helper::Enqueue(array('update'));
 		}
 		if ($out == true){
-			self::$zppyout1 = "<strong>" . ui_language::translate("Queued") . ":</strong> zppy " . repo_browser_helper::h(implode(' ', $args))
+			self::$zppyout1 = "<strong>" . ui_language::translate("Queued:") . "</strong> zppy " . repo_browser_helper::h(implode(' ', $args))
 				. "<br>" . ui_language::translate("The daemon (root) makes the change (this can take up to 5 minutes); the result appears under Recent ZPPY commands.") . "<br>";
 		}
 		return true;
@@ -1000,11 +1001,40 @@ class module_controller extends ctrl_module {
 			$cls = $st === 'done' || $st === 'ok' ? 'label-success' : ($st === 'failed' || $st === 'error' ? 'label-danger' : 'label-warning');
 			$output = trim((string) $r['zq_output_tx']);
 			$rows .= '<tr><td class="rb-when">' . date('Y-m-d H:i', (int) $r['zq_created_in']) . '</td><td><code>zppy ' . repo_browser_helper::h(implode(' ', (array) $args)) . '</code></td><td><span class="label ' . $cls . '">'
-				. repo_browser_helper::h($st) . '</span></td><td>' . ($output !== '' ? '<details><summary>' . ui_language::translate('Output') . '</summary><pre class="rb-out">' . repo_browser_helper::h($output) . '</pre></details>' : '<span class="rb-sub">–</span>') . '</td></tr>';
+				. repo_browser_helper::h(ui_language::translate($st)) . '</span></td><td>' . ($output !== '' ? '<details><summary>' . ui_language::translate('Output') . '</summary><pre class="rb-out">' . repo_browser_helper::h($output) . '</pre></details>' : '<span class="rb-sub">–</span>') . '</td></tr>';
 		}
 		return $rows === '' ? '<tr><td colspan="4" class="rb-empty">' . ui_language::translate('No commands yet.') . '</td></tr>' : $rows;
 	}
 
+
+    /**
+     * The question before removing a repository or module (template <@ RemoveConfirm @>), translated and escaped for an attribute.
+     *
+     * @return string
+     */
+    static function getRemoveConfirm() {
+        return repo_browser_helper::h(ui_language::translate('Remove it?'));
+    }
+
+    /**
+     * The repository address formats (template <@ RepoFormatHint @>), translated and escaped.
+     *
+     * @return string
+     */
+    static function getRepoFormatHint() {
+        return strtr(repo_browser_helper::h(ui_language::translate('Where modules come from. A repository is written as %1$s, or %2$s for plain http on your own network.')),
+            array('%1$s' => 'https://host/path', '%2$s' => repo_browser_helper::h('host[:port][/path]')));
+    }
+
+    /**
+     * The developer note on download counts (template <@ RepoStatsHint @>), translated and escaped.
+     *
+     * @return string
+     */
+    static function getRepoStatsHint() {
+        return strtr(repo_browser_helper::h(ui_language::translate('Download counts show when the repository also serves %1$s (lines of: module count) or %2$s.')),
+            array('%1$s' => 'repostatslist', '%2$s' => repo_browser_helper::h('repostats.php?json=true')));
+    }
 
     /**
      * The message box for the last action (template <@ result @>).

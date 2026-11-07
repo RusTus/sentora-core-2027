@@ -84,7 +84,7 @@ class module_controller extends ctrl_module
         $name = trim((string) $u['fullname']) !== '' ? (string) $u['fullname'] : (string) $u['username'];
         $parts = preg_split('/\s+/u', trim($name));
         $initials = mb_strtoupper(mb_substr($parts[0], 0, 1) . (count($parts) > 1 ? mb_substr(end($parts), 0, 1) : mb_substr($parts[0], 1, 1)));
-        $facts = '<span class="ma-pill">' . $h(ui_language::translate((string) $u['usergroup'])) . '</span>';
+        $facts = '<span class="ma-pill">' . $h(ui_language::GroupName((string) $u['usergroup'])) . '</span>';
         if ((string) $u['packagename'] !== '') {
             $facts .= '<span>' . $h(ui_language::translate('Package')) . ' <b>' . $h($u['packagename']) . '</b></span>';
         }

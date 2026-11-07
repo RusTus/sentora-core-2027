@@ -24,14 +24,9 @@ session_start();
 $uid = isset($_SESSION['zpuid']) ? (int) $_SESSION['zpuid'] : 0;
 $user = ($uid > 0) ? ctrl_users::GetUserDetail($uid) : false;
 session_write_close();
-// messages in the account's language (this runs without the panel's request controller,
-// where ui_language::translate() would always give English)
+// messages in the account's language (no request controller here)
 if ($user) {
-    $apstLang = $zdbh->prepare('SELECT ud_language_vc FROM x_profiles WHERE ud_user_fk = :uid');
-    $apstLang->execute(array(':uid' => (int) $user['userid']));
-    $apstLang = (string) $apstLang->fetchColumn();
-    $apstOk = preg_match('/^[a-z]{2}$/', $apstLang) && in_array($apstLang, ui_language::Languages(), true);
-    ui_language::$LangCol = 'tr_' . ($apstOk ? $apstLang : 'en') . '_tx';
+    ui_language::ForAccount($user['userid']);
 }
 
 header('Content-Type: application/json; charset=utf-8');

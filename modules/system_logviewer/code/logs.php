@@ -126,12 +126,7 @@ class system_logviewer_logs
      */
     static function UseLanguageOf($uid)
     {
-        global $zdbh;
-        $sql = $zdbh->prepare('SELECT ud_language_vc FROM x_profiles WHERE ud_user_fk = :uid');
-        $sql->execute(array(':uid' => (int) $uid));
-        $lang = (string) $sql->fetchColumn();
-        $ok = preg_match('/^[a-z]{2}$/', $lang) && in_array($lang, ui_language::Languages(), true);
-        ui_language::$LangCol = 'tr_' . ($ok ? $lang : 'en') . '_tx';
+        ui_language::ForAccount($uid);
     }
 
 }

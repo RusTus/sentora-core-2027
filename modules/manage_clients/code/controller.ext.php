@@ -129,9 +129,9 @@ class module_controller extends ctrl_module
                     // Reset two-factor (lost phone and codes): only when the client has it
                     $tfRow = ctrl_twofactor::Row($currentuser['userid']);
                     $currentuser['tfreset'] = ($tfRow && (int) $tfRow['tf_enabled_in'] === 1)
-                        ? '<button class="btn btn-warning" type="submit" name="inResetTwoFactor_' . (int) $currentuser['userid'] . '" value="1" onclick="return confirm(\''
-                            . htmlspecialchars(ui_language::translate('Reset the two-factor login of this client? Do this only after checking who is asking (for example by phone).'), ENT_QUOTES, 'UTF-8')
-                            . '\');">' . ui_language::translate('Reset two-factor') . '</button>'
+                        ? '<button class="btn btn-warning" type="submit" name="inResetTwoFactor_' . (int) $currentuser['userid'] . '" value="1" onclick="return confirm('
+                            . htmlspecialchars((string) json_encode(ui_language::translate('Reset the two-factor login of this client? Do this only after checking who is asking (for example by phone).')), ENT_QUOTES, 'UTF-8')
+                            . ');">' . htmlspecialchars(ui_language::translate('Reset two-factor'), ENT_QUOTES, 'UTF-8') . '</button>'
                         : '';
                     array_push($res, $currentuser);
                 }
@@ -281,7 +281,7 @@ class module_controller extends ctrl_module
         $res = array();
         foreach ($q->fetchAll(PDO::FETCH_ASSOC) as $rowgroups) {
             $res[] = array('groupid' => $rowgroups['ug_id_pk'],
-                'groupname' => htmlspecialchars(ui_language::translate($rowgroups['ug_name_vc']), ENT_QUOTES, 'UTF-8'),
+                'groupname' => htmlspecialchars(ui_language::GroupName($rowgroups['ug_name_vc']), ENT_QUOTES, 'UTF-8'),
                 'groupselected' => '');
         }
         return $res ? $res : false;
@@ -318,7 +318,7 @@ class module_controller extends ctrl_module
                         $selected = " selected";
                     }
                     array_push($res, array('groupid' => $rowgroups['ug_id_pk'],
-                        'groupname' => htmlspecialchars(ui_language::translate($rowgroups['ug_name_vc']), ENT_QUOTES, 'UTF-8'),
+                        'groupname' => htmlspecialchars(ui_language::GroupName($rowgroups['ug_name_vc']), ENT_QUOTES, 'UTF-8'),
                         'groupselected' => $selected));
                 } else {
                     if (strtoupper($rowgroups['ug_name_vc']) == "USERS") {
@@ -327,7 +327,7 @@ class module_controller extends ctrl_module
                             $selected = " selected";
                         }
                         array_push($res, array('groupid' => $rowgroups['ug_id_pk'],
-                            'groupname' => htmlspecialchars(ui_language::translate($rowgroups['ug_name_vc']), ENT_QUOTES, 'UTF-8'),
+                            'groupname' => htmlspecialchars(ui_language::GroupName($rowgroups['ug_name_vc']), ENT_QUOTES, 'UTF-8'),
                             'groupselected' => $selected));
                     }
                 }
@@ -360,7 +360,7 @@ class module_controller extends ctrl_module
             $sql->execute();
             while ($rowgroups = $sql->fetch()) {
                 array_push($res, array('packageid' => $rowgroups['pk_id_pk'],
-                    'packagename' => ui_language::translate($rowgroups['pk_name_vc'])));
+                    'packagename' => $rowgroups['pk_name_vc']));
             }
             return $res;
         } else {
@@ -396,7 +396,7 @@ class module_controller extends ctrl_module
                     $selected = " selected";
                 }
                 array_push($res, array('packageid' => $rowgroups['pk_id_pk'],
-                    'packagename' => ui_language::translate($rowgroups['pk_name_vc']),
+                    'packagename' => $rowgroups['pk_name_vc'],
                     'packageselected' => $selected));
             }
             return $res;
@@ -1291,7 +1291,7 @@ class module_controller extends ctrl_module
     {
         $pct = $max > 0 ? min(100, round($used / $max * 100)) : 0;
         return '<div class="mc-use' . ($max > 0 && $pct >= 90 ? ' full' : ($max > 0 && $pct >= 75 ? ' high' : '')) . '"><span class="mc-use-l">' . self::t($label) . '</span>'
-            . '<span class="mc-use-v">' . self::Size($used) . ' <small>' . ($max > 0 ? self::t('of') . ' ' . self::Size($max) : self::t('no limit')) . '</small></span>'
+            . '<span class="mc-use-v">' . self::Size($used) . ' <small>' . ($max > 0 ? str_replace('%s', self::Size($max), self::t('of %s')) : self::t('no limit')) . '</small></span>'
             . '<div class="mc-bar"><i style="width:' . ($max > 0 ? $pct : 0) . '%"></i></div></div>';
     }
 
@@ -1334,17 +1334,17 @@ class module_controller extends ctrl_module
                 . '<div class="mc-main"><div class="mc-name"><a href="./?module=manage_clients&amp;show=Edit&amp;other=' . $id . '"><b>' . self::h($r['user']) . '</b></a>'
                 . ($r['name'] !== '' ? '<span class="mc-full">' . self::h($r['name']) . '</span>' : '')
                 . (!$r['enabled'] ? '<span class="mc-badge off">' . self::t('Switched off') . '</span>' : '')
-                . ($r['clients'] ? '<span class="mc-badge">' . $r['clients'] . ' ' . self::t($r['clients'] === 1 ? 'client' : 'clients') . '</span>' : '')
+                . ($r['clients'] ? '<span class="mc-badge">' . ($r['clients'] === 1 ? self::t('1 client') : str_replace('%d', (string) $r['clients'], self::t('%d clients'))) . '</span>' : '')
                 . ($r['twofactor'] ? '<span class="mc-badge ok" title="' . self::t('Two-factor login is on') . '">2FA</span>' : '') . '</div>'
                 . '<div class="mc-sub">' . ($r['email'] !== '' ? '<span>' . self::h($r['email']) . '</span>' : '')
-                . '<span class="mc-chip">' . self::h($r['package'] !== '' ? $r['package'] : '?') . '</span><span>' . self::h(ui_language::translate($r['group'])) . '</span>'
-                . '<span>' . ($r['lastlogon'] ? self::t('Last login') . ' ' . self::h(date('j M Y', $r['lastlogon'])) : self::t('Never logged in')) . '</span></div></div>'
+                . '<span class="mc-chip">' . self::h($r['package'] !== '' ? $r['package'] : '?') . '</span><span>' . self::h(ui_language::GroupName($r['group'])) . '</span>'
+                . '<span>' . ($r['lastlogon'] ? str_replace('%s', self::h(date('j M Y', $r['lastlogon'])), self::t('Last login %s')) : self::t('Never logged in')) . '</span></div></div>'
                 . '<div class="mc-uses">' . self::Bar($r['disk'], $r['diskmax'], 'Disk') . self::Bar($r['bw'], $r['bwmax'], 'Bandwidth') . '</div>'
                 . '<div class="mc-act">'
                 . '<a class="btn btn-default btn-sm" href="./?module=manage_clients&amp;show=Edit&amp;other=' . $id . '">' . self::t('Edit') . '</a>'
-                . ($shadow && $r['enabled'] ? '<button class="btn btn-default btn-sm mc-ib" type="submit" form="mc-act" formaction="./?module=shadowing&amp;action=ShadowUser" name="inShadow_' . $id . '" value="inShadow_' . $id . '" title="' . self::t('Log in as this client (shadow)') . '" aria-label="' . self::t('Shadow') . ' ' . self::h($r['user']) . '">' . self::Icon('shadow') . '</button>' : '')
-                . ($notices ? '<a class="btn btn-default btn-sm mc-ib" href="./?module=client_notices&amp;show=New&amp;user=' . $id . '" title="' . self::t('Send this client a personal notice') . '" aria-label="' . self::t('Send notice') . ' ' . self::h($r['user']) . '">' . self::Icon('notice') . '</a>' : '')
-                . '<a class="btn btn-default btn-sm mc-ib mc-del" href="./?module=manage_clients&amp;show=Delete&amp;other=' . $id . '" title="' . self::t('Delete') . '" aria-label="' . self::t('Delete') . ' ' . self::h($r['user']) . '">' . self::Icon('trash') . '</a>'
+                . ($shadow && $r['enabled'] ? '<button class="btn btn-default btn-sm mc-ib" type="submit" form="mc-act" formaction="./?module=shadowing&amp;action=ShadowUser" name="inShadow_' . $id . '" value="inShadow_' . $id . '" title="' . self::t('Log in as this client (shadow)') . '" aria-label="' . str_replace('%s', self::h($r['user']), self::t('Shadow %s')) . '">' . self::Icon('shadow') . '</button>' : '')
+                . ($notices ? '<a class="btn btn-default btn-sm mc-ib" href="./?module=client_notices&amp;show=New&amp;user=' . $id . '" title="' . self::t('Send this client a personal notice') . '" aria-label="' . str_replace('%s', self::h($r['user']), self::t('Send notice %s')) . '">' . self::Icon('notice') . '</a>' : '')
+                . '<a class="btn btn-default btn-sm mc-ib mc-del" href="./?module=manage_clients&amp;show=Delete&amp;other=' . $id . '" title="' . self::t('Delete') . '" aria-label="' . str_replace('%s', self::h($r['user']), self::t('Delete %s')) . '">' . self::Icon('trash') . '</a>'
                 . '</div></div>';
         }
         return $out;
@@ -1603,7 +1603,7 @@ class module_controller extends ctrl_module
         }
         $d = function ($t) { return $t ? self::h(date('j M Y, H:i', $t)) : self::t('never'); };
         $out = '<div class="mc-sum-head"><span class="mc-avatar lg" aria-hidden="true">' . self::h(strtoupper(substr($r['user'], 0, 1))) . '</span><div><b>' . self::h($r['user']) . '</b>'
-            . '<span>' . self::h($r['package']) . ' &middot; ' . self::h(ui_language::translate($r['group'])) . '</span></div></div>'
+            . '<span>' . self::h($r['package']) . ' &middot; ' . self::h(ui_language::GroupName($r['group'])) . '</span></div></div>'
             . self::Bar($r['disk'], $r['diskmax'], 'Disk') . self::Bar($r['bw'], $r['bwmax'], 'Bandwidth')
             . '<dl class="mc-dl"><dt>' . self::t('Added') . '</dt><dd>' . $d($r['created']) . '</dd><dt>' . self::t('Last login') . '</dt><dd>' . $d($r['lastlogon']) . '</dd>'
             . '<dt>' . self::t('Its own clients') . '</dt><dd>' . $r['clients'] . '</dd><dt>' . self::t('Two-factor login') . '</dt><dd>' . self::t($r['twofactor'] ? 'on' : 'off') . '</dd></dl>'
@@ -1668,16 +1668,16 @@ class module_controller extends ctrl_module
             return (int) $q->fetchColumn();
         };
         $what = array(
-            array($count("SELECT COUNT(*) FROM x_vhosts WHERE vh_acc_fk = :id AND vh_deleted_ts IS NULL"), 'website (domains, sub-domains and parked domains), with their files', 'websites (domains, sub-domains and parked domains), with their files'),
-            array($count("SELECT COUNT(*) FROM x_mailboxes WHERE mb_acc_fk = :id AND mb_deleted_ts IS NULL"), 'mailbox, with its mail', 'mailboxes, with their mail'),
-            array($count("SELECT COUNT(*) FROM x_mysql_databases WHERE my_acc_fk = :id AND my_deleted_ts IS NULL"), 'MySQL database', 'MySQL databases'),
-            array($count("SELECT COUNT(*) FROM x_ftpaccounts WHERE ft_acc_fk = :id AND ft_deleted_ts IS NULL"), 'FTP account', 'FTP accounts'),
-            array($count("SELECT COUNT(*) FROM x_cronjobs WHERE ct_acc_fk = :id AND ct_deleted_ts IS NULL"), 'cron job', 'cron jobs'),
+            array($count("SELECT COUNT(*) FROM x_vhosts WHERE vh_acc_fk = :id AND vh_deleted_ts IS NULL"), '1 website (domains, sub-domains and parked domains), with its files', '%d websites (domains, sub-domains and parked domains), with their files'),
+            array($count("SELECT COUNT(*) FROM x_mailboxes WHERE mb_acc_fk = :id AND mb_deleted_ts IS NULL"), '1 mailbox, with its mail', '%d mailboxes, with their mail'),
+            array($count("SELECT COUNT(*) FROM x_mysql_databases WHERE my_acc_fk = :id AND my_deleted_ts IS NULL"), '1 MySQL database', '%d MySQL databases'),
+            array($count("SELECT COUNT(*) FROM x_ftpaccounts WHERE ft_acc_fk = :id AND ft_deleted_ts IS NULL"), '1 FTP account', '%d FTP accounts'),
+            array($count("SELECT COUNT(*) FROM x_cronjobs WHERE ct_acc_fk = :id AND ct_deleted_ts IS NULL"), '1 cron job', '%d cron jobs'),
         );
         $li = '';
         foreach ($what as $w) {
             if ($w[0] > 0) {
-                $li .= '<li><b>' . $w[0] . '</b> ' . self::t($w[0] === 1 ? $w[1] : $w[2]) . '</li>';
+                $li .= '<li>' . ($w[0] === 1 ? self::t($w[1]) : str_replace('%d', '<b>' . $w[0] . '</b>', self::t($w[2]))) . '</li>';
             }
         }
         $out = '<p>' . self::t('The account can no longer log in, and everything it has is removed from the server within the hour. This can not be undone.') . '</p>'
@@ -1685,15 +1685,15 @@ class module_controller extends ctrl_module
         $owned = $r['clients'] + $count("SELECT COUNT(*) FROM x_packages WHERE pk_reseller_fk = :id AND pk_deleted_ts IS NULL");
         if ($owned > 0) {
             $me = ctrl_users::GetUserDetail();
-            $opts = '<option value="' . (int) $me['userid'] . '">' . self::h($me['username']) . ' (' . self::t('you') . ')</option>';
+            $opts = '<option value="' . (int) $me['userid'] . '">' . str_replace('%s', self::h($me['username']), self::t('%s (you)')) . '</option>';
             foreach ((array) self::ListAllClients($id, $me['userid']) as $m) {
                 if ((int) $m['moveclientid'] === (int) $me['userid']) {
                     continue;
                 }
                 $opts .= '<option value="' . (int) $m['moveclientid'] . '">' . self::h($m['moveclientname']) . '</option>';
             }
-            $out .= '<div class="mc-move"><label for="inMoveClient">' . self::t('It has') . ' ' . $r['clients'] . ' ' . self::t($r['clients'] === 1 ? 'client' : 'clients')
-                . ' ' . self::t('and its own packages. Give them to:') . '</label><select class="form-control" name="inMoveClient" id="inMoveClient">' . $opts . '</select></div>';
+            $out .= '<div class="mc-move"><label for="inMoveClient">' . ($r['clients'] === 1 ? self::t('It has 1 client and its own packages. Give them to:')
+                : str_replace('%d', (string) $r['clients'], self::t('It has %d clients and its own packages. Give them to:'))) . '</label><select class="form-control" name="inMoveClient" id="inMoveClient">' . $opts . '</select></div>';
         }
         return $out;
     }
@@ -1917,26 +1917,26 @@ class module_controller extends ctrl_module
             return $err('That is not a valid email address.');
         }
         if (!fs_director::CheckForEmptyValue(self::$badpasswordlength)) {
-            return ui_sysmessage::shout(ui_language::translate('The password is too short: it needs at least') . ' ' . (int) self::getMinPassLength() . ' ' . ui_language::translate('characters.'), 'zannounceerror');
+            return ui_sysmessage::shout(sprintf(ui_language::translate('The password is too short: it needs at least %d characters.'), (int) self::getMinPassLength()), 'zannounceerror');
         }
         if (!fs_director::CheckForEmptyValue(self::$alreadyexists)) {
             return $err('An account with that user name already exists on this server.');
         }
         if (self::$tfreset !== null) {
-            return ui_sysmessage::shout(ui_language::translate('The two-factor login of') . ' <strong>' . htmlspecialchars(self::$tfreset, ENT_QUOTES, 'UTF-8') . '</strong> '
-                . ui_language::translate(ctrl_twofactor::Forced() ? 'has been reset: they set it up again at their next login.' : 'has been reset: they log in with their password only, and can turn it on again in My Account.'), 'zannounceok');
+            return ui_sysmessage::shout(str_replace('%s', '<strong>' . htmlspecialchars(self::$tfreset, ENT_QUOTES, 'UTF-8') . '</strong>',
+                self::t(ctrl_twofactor::Forced() ? 'The two-factor login of %s has been reset: they set it up again at their next login.' : 'The two-factor login of %s has been reset: they log in with their password only, and can turn it on again in My Account.')), 'zannounceok');
         }
         if (!fs_director::CheckForEmptyValue(self::$not_unique_email)) {
             $owner = self::$email_owner;
             $msg = ($owner !== null && $owner !== '')
-                ? ui_language::translate("This email address is already used by the account") . ' <strong>' . htmlspecialchars($owner, ENT_QUOTES, 'UTF-8') . '</strong>.'
+                ? str_replace('%s', '<strong>' . htmlspecialchars($owner, ENT_QUOTES, 'UTF-8') . '</strong>', self::t("This email address is already used by the account %s."))
                 : ui_language::translate("This email address is already used by an account that is not one of yours.");
             return ui_sysmessage::shout($msg . ' ' . ui_language::translate("Each account needs its own email address."), "zannounceerror");
         }
-        foreach (array('created' => 'is created. Its folders are ready within 5 minutes.', 'saved' => 'is saved.', 'deleted' => 'is deleted. Its websites, mail and databases are removed within the hour.') as $k => $m) {
+        foreach (array('created' => 'The client %s is created. Its folders are ready within 5 minutes.', 'saved' => 'The client %s is saved.', 'deleted' => 'The client %s is deleted. Its websites, mail and databases are removed within the hour.') as $k => $m) {
             $who = $controller->GetControllerRequest('URL', $k);
             if ($who) {
-                return ui_sysmessage::shout(ui_language::translate('The client') . ' <strong>' . self::h($who) . '</strong> ' . ui_language::translate($m), 'zannounceok');
+                return ui_sysmessage::shout(str_replace('%s', '<strong>' . self::h($who) . '</strong>', self::t($m)), 'zannounceok');
             }
         }
         return;

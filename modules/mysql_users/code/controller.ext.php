@@ -1215,7 +1215,7 @@ class module_controller extends ctrl_module
         if (strtolower($access) === 'localhost') {
             return array(ui_language::translate('This server only'), 'local');
         }
-        return array(ui_language::translate('Only from') . ' ' . $access, 'ip');
+        return array(str_replace('%s', $access, ui_language::translate('Only from %s')), 'ip');
     }
 
     /**
@@ -1272,7 +1272,7 @@ class module_controller extends ctrl_module
                 . '<div class="mu-act">'
                 . '<button class="btn btn-default btn-sm" type="submit" name="inShow_' . $id . '" value="' . $id . '"><svg class="mu-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>' . self::t('Show password') . '</button>'
                 . '<button class="btn btn-primary btn-sm" type="submit" name="inEdit_' . $id . '" value="' . $id . '"><svg class="mu-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>' . self::t('Databases and password') . '</button>'
-                . '<button class="btn btn-default btn-sm mu-del" type="submit" name="inDelete_' . $id . '" value="' . $id . '" title="' . self::t('Delete') . '" aria-label="' . self::t('Delete') . ' ' . self::h($u['username']) . '"><svg class="mu-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg></button>'
+                . '<button class="btn btn-default btn-sm mu-del" type="submit" name="inDelete_' . $id . '" value="' . $id . '" title="' . self::t('Delete') . '" aria-label="' . str_replace('%s', self::h($u['username']), self::t('Delete %s')) . '"><svg class="mu-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg></button>'
                 . '</div></div>';
         }
         return $out;
@@ -1290,14 +1290,14 @@ class module_controller extends ctrl_module
         if (self::$askpw !== null) {
             return '<form class="mu-card mu-secret ask" method="post" action="' . self::h(self::$askpw[0]) . '">'
                 . '<h4><svg class="mu-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>'
-                . self::t('Show the password of') . ' <code>' . self::h(self::$askpw[2]) . '</code></h4>'
+                . str_replace('%s', '<code>' . self::h(self::$askpw[2]) . '</code>', self::t('Show the password of %s')) . '</h4>'
                 . '<p class="mu-sub">' . self::t('Enter your own panel password first. Each password shown is written to the panel\'s log.') . '</p>'
                 . '<div class="mu-inline"><input class="form-control" type="password" name="inConfirmPw" autocomplete="current-password" required autofocus aria-label="' . self::t('Your panel password') . '" placeholder="' . self::t('Your panel password') . '">'
                 . '<input type="hidden" name="' . self::h(self::$askpw[1]) . '" value="1">' . runtime_csfr::Token()
                 . '<button class="btn btn-primary" type="submit">' . self::t('Show password') . '</button><a class="btn btn-default" href="./?module=mysql_users">' . self::t('Cancel') . '</a></div></form>';
         }
         if (self::$shownuser !== null && self::$shownpass !== '') {
-            return '<div class="mu-card mu-secret"><h4>' . self::t('Password of') . ' <code>' . self::h(self::$shownuser) . '</code></h4>'
+            return '<div class="mu-card mu-secret"><h4>' . str_replace('%s', '<code>' . self::h(self::$shownuser) . '</code>', self::t('Password of %s')) . '</h4>'
                 . '<div class="mu-kv"><code class="mu-pw">' . self::h(self::$shownpass) . '</code>' . $copy . '</div></div>';
         }
         if (!fs_director::CheckForEmptyValue(self::$newpass)) {
@@ -1408,7 +1408,7 @@ class module_controller extends ctrl_module
         $list = self::ListUserDatabases($controller->GetControllerRequest('URL', 'other'));
         $names = array_column($list ? $list : array(), 'mmdbname');
         return '<ul class="mu-lose"><li>' . self::t('The user is removed from MySQL: applications that log in with it stop working.') . '</li>'
-            . ($names ? '<li>' . self::t('It loses access to:') . ' <b>' . self::h(implode(', ', $names)) . '</b> ' . self::t('(the databases and their data stay).') . '</li>' : '') . '</ul>';
+            . ($names ? '<li>' . str_replace('%s', '<b>' . self::h(implode(', ', $names)) . '</b>', self::t('It loses access to: %s (the databases and their data stay).')) . '</li>' : '') . '</ul>';
     }
 
     /**
@@ -1463,7 +1463,7 @@ class module_controller extends ctrl_module
             return ui_sysmessage::shout(ui_language::translate("The password needs a lower case letter, a capital and a digit."), "zannounceerror");
         }
 		if (!fs_director::CheckForEmptyValue(self::$badpasswordlength)) {
-            return ui_sysmessage::shout(ui_language::translate("The password is too short. Characters needed") . ": " . self::getMinPassLength(), "zannounceerror");
+            return ui_sysmessage::shout(sprintf(ui_language::translate("The password is too short. Characters needed: %d"), (int) self::getMinPassLength()), "zannounceerror");
         }
 		if (!fs_director::CheckForEmptyValue(self::$blankpassword)) {
             return ui_sysmessage::shout(ui_language::translate("You entered blank a password. Please retry and enter a valid password."), "zannounceerror");
@@ -1478,8 +1478,7 @@ class module_controller extends ctrl_module
             return ui_sysmessage::shout(ui_language::translate("That is not your panel password: the password was not shown."), "zannounceerror");
         }
         if (self::$shownuser !== null && self::$shownpass === '') {
-            return ui_sysmessage::shout(ui_language::translate("The password of") . ' <strong>' . self::h(self::$shownuser) . '</strong> '
-                . ui_language::translate("is not stored (it was set before passwords were kept). Set a new one in Databases and password; it can be shown after that."), "zannounceerror");
+            return ui_sysmessage::shout(str_replace('%s', '<strong>' . self::h(self::$shownuser) . '</strong>', self::t("The password of %s is not stored (it was set before passwords were kept). Set a new one in Databases and password; it can be shown after that.")), "zannounceerror");
         }
         if (self::$shownuser !== null || self::$askpw !== null || !fs_director::CheckForEmptyValue(self::$newpass)) {
             return; // shown by getSecretCard()

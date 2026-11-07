@@ -577,7 +577,7 @@ class module_controller extends ctrl_module
                 . '</div></div>'
                 . '<div class="my-act">'
                 . ($pma ? '<a class="btn btn-default btn-sm" href="./?module=phpmyadmin"><svg class="my-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6"/><path d="M20 4 10 14"/><path d="M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/></svg>phpMyAdmin</a>' : '')
-                . '<button class="btn btn-default btn-sm my-del" type="submit" name="inDelete_' . $id . '" value="' . $id . '" title="' . $t('Delete') . '" aria-label="' . $t('Delete') . ' ' . $h($name) . '">'
+                . '<button class="btn btn-default btn-sm my-del" type="submit" name="inDelete_' . $id . '" value="' . $id . '" title="' . $t('Delete') . '" aria-label="' . str_replace('%s', $h($name), $t('Delete %s')) . '">'
                 . '<svg class="my-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg></button>'
                 . '</div></div>';
         }
@@ -602,7 +602,7 @@ class module_controller extends ctrl_module
         $users = self::UsersByDatabase($me['userid']);
         $own = isset($users[$id]) ? $users[$id] : array();
         $t = function ($s) { return htmlspecialchars(ui_language::translate($s), ENT_QUOTES, 'UTF-8'); };
-        return '<ul class="my-lose"><li>' . $t('All its tables and data are deleted') . ' (' . htmlspecialchars($cur[0]['mysqlfriendlysize'], ENT_QUOTES, 'UTF-8') . '). ' . $t('This can not be undone: make a backup first if you may need it.') . '</li>'
+        return '<ul class="my-lose"><li>' . str_replace('%s', htmlspecialchars($cur[0]['mysqlfriendlysize'], ENT_QUOTES, 'UTF-8'), $t('All its tables and data are deleted (%s).')) . ' ' . $t('This can not be undone: make a backup first if you may need it.') . '</li>'
             . ($own ? '<li>' . $t('These users lose access to it (the users themselves stay):') . ' <b>' . htmlspecialchars(implode(', ', $own), ENT_QUOTES, 'UTF-8') . '</b></li>' : '') . '</ul>';
     }
 
@@ -619,6 +619,16 @@ class module_controller extends ctrl_module
     }
 
     /**
+     * The question before deleting a database (<@ ConfirmText @>), translated and escaped for an attribute.
+     *
+     * @return string
+     */
+    static function getConfirmText()
+    {
+        return htmlspecialchars(ui_language::translate('Delete this database and everything in it?'), ENT_QUOTES, 'UTF-8');
+    }
+
+    /**
      * Returns the message for the last action (<@ Result @>): the first error flag set, else success.
      *
      * @return string|null The alert HTML, or null when there is nothing to show.
@@ -629,7 +639,7 @@ class module_controller extends ctrl_module
             return ui_sysmessage::shout(ui_language::translate("You need to specify a database name to create your database."), "zannounceerror");
         }
         if (!fs_director::CheckForEmptyValue(self::$badname)) {
-            return ui_sysmessage::shout(ui_language::translate("That database name can not be used: letters, digits and dashes only (not at the start or end), and at most") . " " . (int) self::getMaxCharAllowed() . " " . ui_language::translate("characters."), "zannounceerror");
+            return ui_sysmessage::shout(sprintf(ui_language::translate("That database name can not be used: letters, digits and dashes only (not at the start or end), and at most %d characters."), (int) self::getMaxCharAllowed()), "zannounceerror");
         }
         if (!fs_director::CheckForEmptyValue(self::$alreadyexists)) {
             return ui_sysmessage::shout(ui_language::translate("A database with that name already exists."), "zannounceerror");

@@ -37,13 +37,7 @@ if (isset($_GET['id'])) {
 
 session_start();
 // no panel controller here: the logged-in account's own language for ui_language::translate()
-$lang = '';
-if (!empty($_SESSION['zpuid'])) {
-	$lq = $zdbh->prepare('SELECT ud_language_vc FROM x_profiles WHERE ud_user_fk = :u');
-	$lq->execute(array(':u' => (int) $_SESSION['zpuid']));
-	$lang = (string) $lq->fetchColumn();
-}
-ui_language::$LangCol = 'tr_' . (in_array($lang, ui_language::Languages(), true) ? $lang : 'en') . '_tx';
+ui_language::ForAccount(isset($_SESSION['zpuid']) ? (int) $_SESSION['zpuid'] : 0);
 // Strict: a missing session id must never match (loose == let null equal null)
 if (!empty($_SESSION['zpuid']) && ctype_digit((string) $userid) && (int) $_SESSION['zpuid'] === (int) $userid) {
 	$currentuser = ctrl_users::GetUserDetail($userid);

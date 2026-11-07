@@ -38,13 +38,8 @@ class panel_update_state
         $uid = isset($_SESSION['zpuid']) ? (int) $_SESSION['zpuid'] : 0;
         $user = ($uid > 0) ? ctrl_users::GetUserDetail($uid) : false;
         $asked = isset($_SESSION['pu_asked']) ? (int) $_SESSION['pu_asked'] : 0;
-        // the panel's texts are translated to the account's language, which ui_language finds
-        // through the request controller (this endpoint has no other use for one)
-        $GLOBALS['controller'] = new class (array('zpuid' => $uid)) {
-            private $user;
-            function __construct($user) { $this->user = $user; }
-            function GetControllerRequest($type, $name) { return ($type === 'USER' && isset($this->user[$name])) ? $this->user[$name] : false; }
-        };
+        // the panel's texts in the account's language (no request controller here)
+        ui_language::ForAccount($uid);
         session_write_close();
         if (!$user || (int) $user['usergroupid'] !== 1) {
             http_response_code(403);

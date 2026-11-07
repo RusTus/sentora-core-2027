@@ -238,20 +238,20 @@ class module_controller extends ctrl_module
             $scope = 'clients';
         }
         $tz = new DateTimeZone(date_default_timezone_get());
-        $when = function ($v, $name) use (&$e, $tz) {
+        $when = function ($v, $bad) use (&$e, $tz) {
             $v = trim((string) $v);
             if ($v === '') {
                 return null;
             }
             $d = DateTime::createFromFormat('Y-m-d\TH:i', $v, $tz);
             if (!$d) {
-                $e[] = 'The ' . $name . ' time is not a date and time.';
+                $e[] = $bad;
                 return null;
             }
             return $d->getTimestamp();
         };
-        $start = $when(isset($f['inStart']) ? $f['inStart'] : '', 'start');
-        $end = $when(isset($f['inEnd']) ? $f['inEnd'] : '', 'end');
+        $start = $when(isset($f['inStart']) ? $f['inStart'] : '', 'The start time is not a date and time.');
+        $end = $when(isset($f['inEnd']) ? $f['inEnd'] : '', 'The end time is not a date and time.');
         if ($end !== null && $end <= time()) {
             $e[] = 'The end time has already passed.';
         }
@@ -394,7 +394,7 @@ class module_controller extends ctrl_module
                 $what = self::t('Packages:') . ' ' . self::h($names(self::Packages(), $n['targets']));
                 break;
             case 'groups':
-                $what = self::t('Groups:') . ' ' . self::h($names(self::Groups(), $n['targets']));
+                $what = self::t('Groups:') . ' ' . self::h($names(array_map(function ($g) { return array('name' => ui_language::translate($g['name'])) + $g; }, self::Groups()), $n['targets']));
                 break;
             case 'user':
                 $who = '#' . (int) $n['targets'][0];
@@ -407,7 +407,7 @@ class module_controller extends ctrl_module
             default:
                 $what = $n['from'] === 0 && $n['targets'] ? self::t('Clients of a reseller') : self::t('All your clients');
         }
-        return '<span class="cn-aud"><b>' . $what . '</b> &middot; ' . $reach . ' ' . self::t($reach === 1 ? 'account' : 'accounts') . '</span>';
+        return '<span class="cn-aud"><b>' . $what . '</b> &middot; ' . ($reach === 1 ? self::t('1 account') : str_replace('%d', (string) (int) $reach, self::t('%d accounts'))) . '</span>';
     }
 
     /**
@@ -423,9 +423,9 @@ class module_controller extends ctrl_module
             case 'ended':
                 return '<span class="cn-state ended">' . self::t('Ended') . '</span> ' . $d($n['end']);
             case 'scheduled':
-                return '<span class="cn-state sched">' . self::t('Starts') . '</span> ' . $d($n['start']) . ($n['end'] !== null ? ' &middot; ' . self::t('until') . ' ' . $d($n['end']) : '');
+                return '<span class="cn-state sched">' . self::t('Starts') . '</span> ' . $d($n['start']) . ($n['end'] !== null ? ' &middot; ' . str_replace('%s', $d($n['end']), self::t('until %s')) : '');
         }
-        return '<span class="cn-state live">' . self::t('Showing') . '</span> ' . ($n['end'] !== null ? self::t('until') . ' ' . $d($n['end']) : self::t('until you remove it'));
+        return '<span class="cn-state live">' . self::t('Showing') . '</span> ' . ($n['end'] !== null ? str_replace('%s', $d($n['end']), self::t('until %s')) : self::t('until you remove it'));
     }
 
     /**
@@ -603,7 +603,7 @@ class module_controller extends ctrl_module
             $out = '';
             foreach ($rows as $r) {
                 $out .= '<label class="cn-check"><input type="checkbox" name="' . $name . '[]" value="' . $r['id'] . '" data-count="' . $r['count'] . '"'
-                    . (in_array($r['id'], $v['targets'], true) ? ' checked' : '') . '><span>' . self::h($r['name']) . '</span><small>' . $r['count'] . '</small></label>';
+                    . (in_array($r['id'], $v['targets'], true) ? ' checked' : '') . '><span>' . self::h($name === 'inGroups' ? ui_language::translate($r['name']) : $r['name']) . '</span><small>' . $r['count'] . '</small></label>';
             }
             return '<div class="cn-checks">' . $out . '</div>';
         };
@@ -626,6 +626,16 @@ class module_controller extends ctrl_module
                 . '<select class="form-control cn-pick" name="inUser" size="7" aria-label="' . self::t('Client') . '">' . $opts . '</select><p class="cn-nomatch" hidden>' . self::t('No client matches.') . '</p>'
                 : '<p class="cn-none">' . self::t('You have no clients yet.') . '</p>') . '</div>'
             . '<p class="cn-reach" id="cn-reach" data-one="' . self::t('Reaches 1 account') . '" data-many="' . self::t('Reaches %d accounts') . '"></p>';
+    }
+
+    /**
+     * The formatting hint beside the buttons (<@ FormatHint @>), translated and escaped.
+     *
+     * @return string
+     */
+    static function getFormatHint()
+    {
+        return self::t('or type **bold**, [text](https://…) and lines starting with -');
     }
 
     /**
@@ -665,7 +675,7 @@ class module_controller extends ctrl_module
      */
     static function getServerTime()
     {
-        return self::h(date_default_timezone_get() . ', ' . ui_language::translate('now') . ' ' . date('j M Y, H:i'));
+        return self::h(date_default_timezone_get()) . ', ' . str_replace('%s', self::h(date('j M Y, H:i')), self::t('now %s'));
     }
 
     /**

@@ -126,7 +126,7 @@ class module_controller extends ctrl_module
                     'created' => date(ctrl_options::GetSystemOption('sentora_df'), $rowpackages['pk_created_ts']),
                     // fetchColumn() returns the count itself, [0] on it always gave null
                     'clients' => $Column,
-                    'packagename' => ui_language::translate($rowpackages['pk_name_vc']),
+                    'packagename' => $rowpackages['pk_name_vc'],
 					// get package quotas - tgates
 					$pkg_quotas = self::ListCurrentPackage($rowpackages['pk_id_pk']),
 					'pkg_quota' => self::GetQuotas($pkg_quotas)
@@ -768,13 +768,13 @@ class module_controller extends ctrl_module
             }
             $n = count($p['clients']);
             $out .= '<div class="pk-card"><div class="pk-card-head"><div class="pk-card-title"><b>' . self::h($p['name']) . '</b>'
-                . '<span>' . $n . ' ' . self::t($n === 1 ? 'client' : 'clients') . ($p['created'] ? ' &middot; ' . self::t('made') . ' ' . self::h(date('j M Y', $p['created'])) : '') . '</span></div>'
+                . '<span>' . ($n === 1 ? self::t('1 client') : str_replace('%d', (string) $n, self::t('%d clients'))) . ($p['created'] ? ' &middot; ' . str_replace('%s', self::h(date('j M Y', $p['created'])), self::t('made %s')) : '') . '</span></div>'
                 . '<span class="pk-php' . ($p['php'] ? ' on' : '') . '">' . self::t($p['php'] ? 'PHP on' : 'PHP off') . '</span></div>'
                 . '<ul class="pk-limits">' . $lim . '</ul>'
                 . ($n ? '<div class="pk-clients">' . implode('', array_map(function ($u) { return '<span>' . self::h($u) . '</span>'; }, array_slice(array_values($p['clients']), 0, 8))) . ($n > 8 ? '<em>+' . ($n - 8) . '</em>' : '') . '</div>' : '')
                 . '<div class="pk-act"><a class="btn btn-default btn-sm" href="./?module=packages&amp;show=Edit&amp;other=' . $p['id'] . '">' . self::t('Edit') . '</a>'
                 . '<a class="btn btn-default btn-sm" href="./?module=packages&amp;show=New&amp;copy=' . $p['id'] . '" title="' . self::t('A new package with these limits') . '">' . self::t('Copy') . '</a>'
-                . '<a class="btn btn-default btn-sm pk-del" href="./?module=packages&amp;show=Delete&amp;other=' . $p['id'] . '" title="' . self::t('Delete') . '" aria-label="' . self::t('Delete') . ' ' . self::h($p['name']) . '">'
+                . '<a class="btn btn-default btn-sm pk-del" href="./?module=packages&amp;show=Delete&amp;other=' . $p['id'] . '" title="' . self::t('Delete') . '" aria-label="' . str_replace('%s', self::h($p['name']), self::t('Delete %s')) . '">'
                 . self::Svg('<path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/>') . '</a></div></div>';
         }
         return $out;
@@ -953,7 +953,7 @@ class module_controller extends ctrl_module
         if (!$p || !$p['clients']) {
             return '<p class="pk-sub">' . self::t('No client is on this package yet.') . '</p>';
         }
-        return '<p class="pk-sub">' . count($p['clients']) . ' ' . self::t(count($p['clients']) === 1 ? 'client. A change applies to it straight away.' : 'clients. A change applies to them straight away.') . '</p><div class="pk-clients">'
+        return '<p class="pk-sub">' . (count($p['clients']) === 1 ? self::t('1 client. A change applies to it straight away.') : str_replace('%d', (string) count($p['clients']), self::t('%d clients. A change applies to them straight away.'))) . '</p><div class="pk-clients">'
             . implode('', array_map(function ($u) { return '<span>' . self::h($u) . '</span>'; }, array_values($p['clients']))) . '</div>';
     }
 
@@ -1143,10 +1143,10 @@ class module_controller extends ctrl_module
             }
         }
         if ($opts === '') {
-            return '<p class="pk-block">' . $n . ' ' . self::t($n === 1 ? 'client is on it, and you have no other package to move it to. Make another package first.' : 'clients are on it, and you have no other package to move them to. Make another package first.') . '</p>';
+            return '<p class="pk-block">' . ($n === 1 ? self::t('1 client is on it, and you have no other package to move it to. Make another package first.') : str_replace('%d', (string) $n, self::t('%d clients are on it, and you have no other package to move them to. Make another package first.'))) . '</p>';
         }
         return '<p>' . self::t('Its clients keep everything they have; from now on the limits of the package you choose apply to them.') . '</p>'
-            . '<div class="pk-move"><label for="inMovePackage">' . self::t('Move its') . ' ' . $n . ' ' . self::t($n === 1 ? 'client to:' : 'clients to:') . '</label>'
+            . '<div class="pk-move"><label for="inMovePackage">' . ($n === 1 ? self::t('Move its 1 client to:') : str_replace('%d', (string) $n, self::t('Move its %d clients to:'))) . '</label>'
             . '<select class="form-control" name="inMovePackage" id="inMovePackage" required>' . $opts . '</select></div>';
     }
 
@@ -1191,10 +1191,10 @@ class module_controller extends ctrl_module
         if (!fs_director::CheckForEmptyValue(self::$samepackage)) {
             return $err('Its clients need another package to move to.');
         }
-        foreach (array('saved' => 'is saved.', 'deleted' => 'is deleted.') as $k => $m) {
+        foreach (array('saved' => 'The package %s is saved.', 'deleted' => 'The package %s is deleted.') as $k => $m) {
             $who = $controller->GetControllerRequest('URL', $k);
             if ($who) {
-                return ui_sysmessage::shout(ui_language::translate('The package') . ' <strong>' . self::h($who) . '</strong> ' . ui_language::translate($m), 'zannounceok');
+                return ui_sysmessage::shout(str_replace('%s', '<strong>' . self::h($who) . '</strong>', self::t($m)), 'zannounceok');
             }
         }
         return;

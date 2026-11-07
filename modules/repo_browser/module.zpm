@@ -7,7 +7,7 @@
     <@ result @>
     <link rel="stylesheet" href="modules/repo_browser/assets/repo.css">
 
-    <div class="rb" id="rb" data-queued="<: Queued :>" data-installed="<: Installed :>" data-not="<: Not installed :>" data-remove="<: Remove it? :>" data-update="<: Update available :>">
+    <div class="rb" id="rb" data-queued="<: Queued :>" data-installed="<: Installed :>" data-not="<: Not installed :>" data-remove="<@ RemoveConfirm @>" data-update="<: Update available :>">
     <@ ZppyOut @>
 
     <% if isConfirmDeleteRepo %>
@@ -103,7 +103,7 @@
                     <span class="rb-repo" title="<: Repository :>: <& reponame &>"><& reponame &></span>
                     <a class="rb-dl" href="<& url &>" title="<: Download the package :>">.zpp &darr;</a>
                 </div>
-                <div class="rb-row-act"><button class="<& buttoncss &>" type="submit" <& buttonattr &> title="<& title &>" name="in<& buttonaction &>Module" value="<& reponame &>:::<& modulename &>"><& buttonaction &></button></div>
+                <div class="rb-row-act"><button class="<& buttoncss &>" type="submit" <& buttonattr &> title="<& title &>" name="in<& buttonaction &>Module" value="<& reponame &>:::<& modulename &>"><& buttonlabel &></button></div>
             </div>
             <% endloop %>
             </div>
@@ -123,7 +123,7 @@
     <!-- Repositories -->
     <div class="rb-card">
         <div class="rb-head"><div><h4><: Repositories :></h4>
-            <p class="rb-sub"><: Where modules come from. A repository is written as https://host/path, or host[:port][/path] for plain http on your own network. :></p></div></div>
+            <p class="rb-sub"><@ RepoFormatHint @></p></div></div>
         <% if RepoList %>
         <form action="./?module=repo_browser&amp;action=DeleteRepo" method="post">
             <div class="rb-repos">
@@ -179,7 +179,7 @@
         <ul>
             <li><: A module with the same folder name as one of the panel's own modules is not listed, and can not be installed over, updated or removed from here. This is by design. :></li>
             <li><: A repository is a web folder holding packages.txt (one module folder name per line), for each module name.zpp (a zip of the module folder) and optionally name.xml, and SHA256SUMS: when it is there, every download is checked against it and a module that does not match is not installed. The Sentora-2027 add-ons are at https://raw.githubusercontent.com/RusTus/sentora-installers-2027/master2027/sentora-repo. :></li>
-            <li><: Download counts show when the repository also serves repostatslist (lines of: module count) or repostats.php?json=true. :></li>
+            <li><@ RepoStatsHint @></li>
             <li><: A module that is not installed yet is described from name.xml in the repository, with the same tags as module.xml: :></li>
         </ul>
 <pre class="rb-out">&lt;updateserver&gt;

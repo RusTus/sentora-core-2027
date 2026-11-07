@@ -80,6 +80,19 @@ class ui_language {
     }
 
     /**
+     * A group's name to show: the panel's own groups (Administrators, Resellers, Users) are interface
+     * words and are translated; a group an administrator or reseller made is data and is shown as named.
+     *
+     * @param string $name The group's name as stored.
+     * @return string The name to show (not HTML-escaped).
+     */
+    static function GroupName($name)
+    {
+        $name = (string) $name;
+        return in_array($name, array('Administrators', 'Resellers', 'Users'), true) ? self::translate($name) : $name;
+    }
+
+    /**
      * Used to translate a text string into the language preference of the user.
      * @author Pascal Peyremorte (ppeyremorte@sentora.org)
      * @global db_driver $zdbh The ZPX database handle.

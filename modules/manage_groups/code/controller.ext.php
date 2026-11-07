@@ -603,7 +603,7 @@ class module_controller extends ctrl_module
         foreach (array_slice($names, 0, $max) as $n) {
             $out .= '<span class="mg-chip">' . self::t($n) . '</span>';
         }
-        return $out . (count($names) > $max ? '<span class="mg-more">+' . (count($names) - $max) . ' ' . self::t('more') . '</span>' : '');
+        return $out . (count($names) > $max ? '<span class="mg-more">' . str_replace('%d', (string) (count($names) - $max), self::t('+%d more')) . '</span>' : '');
     }
 
     /**
@@ -616,11 +616,11 @@ class module_controller extends ctrl_module
     static function Card($g, $own)
     {
         return '<div class="mg-card' . ($own ? '' : ' is-builtin') . '"><div class="mg-card-head"><span class="mg-ico-wrap">' . self::Icon($own ? 'group' : 'lock') . '</span>'
-            . '<div class="mg-card-title"><b>' . self::h(ui_language::translate($g['groupname'])) . '</b><span>' . (int) $g['usersingroup'] . ' ' . self::t($g['usersingroup'] === 1 ? 'member' : 'members')
+            . '<div class="mg-card-title"><b>' . self::h($own ? $g['groupname'] : ui_language::translate($g['groupname'])) . '</b><span>' . ($g['usersingroup'] === 1 ? self::t('1 member') : str_replace('%d', (string) (int) $g['usersingroup'], self::t('%d members')))
             . (!$own ? ' &middot; ' . self::t('built-in') : '') . '</span></div>'
             . ($own ? '<div class="mg-card-act"><a class="btn btn-default btn-sm" href="./?module=manage_groups&amp;show=Edit&amp;other=' . (int) $g['groupid'] . '">' . self::t('Edit') . '</a>'
-                . '<a class="btn btn-default btn-sm mg-del" href="./?module=manage_groups&amp;show=Delete&amp;other=' . (int) $g['groupid'] . '" title="' . self::t('Delete') . '" aria-label="' . self::t('Delete') . ' ' . self::h($g['groupname']) . '">' . self::Icon('trash') . '</a></div>' : '')
-            . '</div>' . ($g['groupdesc'] !== '' ? '<p class="mg-desc">' . self::h(ui_language::translate($g['groupdesc'])) . '</p>' : '')
+                . '<a class="btn btn-default btn-sm mg-del" href="./?module=manage_groups&amp;show=Delete&amp;other=' . (int) $g['groupid'] . '" title="' . self::t('Delete') . '" aria-label="' . str_replace('%s', self::h($g['groupname']), self::t('Delete %s')) . '">' . self::Icon('trash') . '</a></div>' : '')
+            . '</div>' . ($g['groupdesc'] !== '' ? '<p class="mg-desc">' . self::h($own ? $g['groupdesc'] : ui_language::translate($g['groupdesc'])) . '</p>' : '')
             . '<div class="mg-chips">' . self::ModuleChips($g['groupid']) . '</div></div>';
     }
 
@@ -632,7 +632,7 @@ class module_controller extends ctrl_module
     static function getOwnGroups()
     {
         $out = '';
-        foreach ((array) self::ListGroups(self::Me()['userid']) as $g) {
+        foreach (self::ListGroups(self::Me()['userid']) ?: array() as $g) {
             $out .= self::Card($g, true);
         }
         return $out;
@@ -666,7 +666,7 @@ class module_controller extends ctrl_module
     static function getBuiltinGroups()
     {
         $out = '';
-        foreach ((array) self::ListDefaultGroups(self::Me()['userid']) as $g) {
+        foreach (self::ListDefaultGroups(self::Me()['userid']) ?: array() as $g) { // (array) false was [false]: a card for nothing
             if ($g['groupname'] === 'Administrators' && !self::IsAdmin()) {
                 continue;
             }
@@ -790,7 +790,7 @@ class module_controller extends ctrl_module
         foreach ($m as $u) {
             $out .= '<span class="mg-member">' . self::h($u) . '</span>';
         }
-        return '<p class="mg-sub">' . count($m) . ' ' . self::t(count($m) === 1 ? 'member' : 'members') . '</p><div class="mg-members">' . $out . '</div>';
+        return '<p class="mg-sub">' . (count($m) === 1 ? self::t('1 member') : str_replace('%d', (string) count($m), self::t('%d members'))) . '</p><div class="mg-members">' . $out . '</div>';
     }
 
     /**
@@ -834,10 +834,10 @@ class module_controller extends ctrl_module
         }
         $opts = '';
         foreach ((array) self::GroupMoveTo(self::Me()['userid'], $gid) as $g) {
-            $opts .= '<option value="' . (int) $g['groupid'] . '">' . self::h(ui_language::translate($g['groupname'])) . '</option>';
+            $opts .= '<option value="' . (int) $g['groupid'] . '">' . self::h(in_array($g['groupname'], self::BUILTIN, true) ? ui_language::translate($g['groupname']) : $g['groupname']) . '</option>';
         }
         return '<p>' . self::t('Its members keep their accounts and everything in them; they only get the modules of the group you move them to.') . '</p>'
-            . '<div class="mg-move"><label for="inMoveGroup">' . self::t('Move its') . ' ' . $n . ' ' . self::t($n === 1 ? 'member to:' : 'members to:') . '</label>'
+            . '<div class="mg-move"><label for="inMoveGroup">' . ($n === 1 ? self::t('Move its 1 member to:') : str_replace('%d', (string) $n, self::t('Move its %d members to:'))) . '</label>'
             . '<select class="form-control" name="inMoveGroup" id="inMoveGroup">' . $opts . '</select></div>';
     }
 
@@ -853,10 +853,10 @@ class module_controller extends ctrl_module
         if (self::$error !== '') {
             return ui_sysmessage::shout(ui_language::translate(self::$error), 'zannounceerror');
         }
-        foreach (array('saved' => 'is saved.', 'deleted' => 'is deleted.') as $k => $m) {
+        foreach (array('saved' => 'The group %s is saved.', 'deleted' => 'The group %s is deleted.') as $k => $m) {
             $who = $controller->GetControllerRequest('URL', $k);
             if ($who) {
-                return ui_sysmessage::shout(ui_language::translate('The group') . ' <strong>' . self::h($who) . '</strong> ' . ui_language::translate($m), 'zannounceok');
+                return ui_sysmessage::shout(str_replace('%s', '<strong>' . self::h($who) . '</strong>', self::t($m)), 'zannounceok');
             }
         }
         return '';

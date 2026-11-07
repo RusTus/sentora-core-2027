@@ -63,7 +63,7 @@
     each(form.querySelectorAll('.cn-tools [data-do]'), function (b) {
         b.addEventListener('click', function () {
             var what = b.getAttribute('data-do');
-            if (what === 'bold') { wrap('**', '**', 'text'); }
+            if (what === 'bold') { wrap('**', '**', b.getAttribute('data-sample') || 'text'); }
             if (what === 'link') { range = [body.selectionStart, body.selectionEnd]; linkrow.hidden = false; linkurl.value = ''; linkurl.focus(); }
             if (what === 'list') {
                 var s = body.value.lastIndexOf('\n', body.selectionStart - 1) + 1, e = body.value.indexOf('\n', body.selectionEnd);

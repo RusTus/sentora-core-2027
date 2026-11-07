@@ -35,10 +35,10 @@
                     <input class="form-control" type="text" name="inTitle" id="inTitle" maxlength="<@ MaxTitle @>" value="<@ FormTitleValue @>">
                     <label class="cn-label" for="inBody"><: Text :></label>
                     <div class="cn-tools" role="toolbar" aria-label="<: Formatting :>">
-                        <button type="button" class="btn btn-default btn-sm" data-do="bold" title="<: Bold :>" aria-label="<: Bold :>"><b>B</b></button>
+                        <button type="button" class="btn btn-default btn-sm" data-do="bold" data-sample="<: text :>" title="<: Bold :>" aria-label="<: Bold :>"><b>B</b></button>
                         <button type="button" class="btn btn-default btn-sm" data-do="link" title="<: Link :>" aria-label="<: Link :>"><svg class="cn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg></button>
                         <button type="button" class="btn btn-default btn-sm" data-do="list" title="<: List :>" aria-label="<: List :>"><svg class="cn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11"/><path d="M4 6h.01M4 12h.01M4 18h.01"/></svg></button>
-                        <span class="cn-tools-hint"><: or type **bold**, [text](https://…) and lines starting with - :></span>
+                        <span class="cn-tools-hint"><@ FormatHint @></span>
                     </div>
                     <div class="cn-linkrow" id="cn-linkrow" hidden>
                         <input class="form-control input-sm" type="url" id="cn-linkurl" placeholder="https://" aria-label="<: Web address :>">

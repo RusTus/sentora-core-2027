@@ -26,6 +26,8 @@ if (!$user || (int) $user['usergroupid'] !== 1) {
     exit;
 }
 session_write_close();
+// no panel controller here: the account's own language for ui_language::translate()
+ui_language::ForAccount($uid);
 
 if (isset($_GET['request'])) {
     AjaxReturnStatus((string) $_GET['request']);
@@ -41,14 +43,14 @@ if (isset($_GET['request'])) {
  * An OK / failed label with a tooltip.
  *
  * @param bool $ok True for a green OK label.
- * @param string $title The tooltip text.
- * @param string $bad Optional. The text of the red label. Default 'NO'.
+ * @param string $title The tooltip text (translated here).
+ * @param string $bad Optional. The text of the red label (translated here). Default 'NO'.
  * @return string The HTML.
  */
 function Label($ok, $title, $bad = 'NO')
 {
     $class = $ok ? 'label-success' : 'label-danger';
-    return '<a href="javascript:void(0)" title="' . repo_browser_helper::h($title) . '"><span class="label ' . $class . '">' . ($ok ? 'OK' : $bad) . '</span></a>';
+    return '<a href="javascript:void(0)" title="' . repo_browser_helper::h(ui_language::translate($title)) . '"><span class="label ' . $class . '">' . repo_browser_helper::h(ui_language::translate($ok ? 'OK' : $bad)) . '</span></a>';
 }
 
 /**
@@ -119,19 +121,19 @@ function AjaxReturnModInfo($full)
     $modinfo = InstalledModule($module);
     if ($modinfo) {
         $info = (array) ModuleXMLTags('modules/' . $module . '/module.xml');
-        echo '<p class="rb-desc">' . $h($modinfo['mo_desc_tx']) . '</p><p class="rb-meta">Version ' . $h($modinfo['mo_version_in']) . ' · By ' . MailLink($info)
+        echo '<p class="rb-desc">' . $h($modinfo['mo_desc_tx']) . '</p><p class="rb-meta">' . str_replace('%s', $h($modinfo['mo_version_in']), $h(ui_language::translate('Version %s'))) . ' · ' . str_replace('%s', MailLink($info), $h(ui_language::translate('By %s')))
             . (SiteLink($info) !== '' ? ' · ' . SiteLink($info) : '') . '</p>';
         return;
     }
     $info = ModuleXMLTags(null, repo_browser_helper::Fetch(repo_browser_helper::Base($repo) . '/' . $module . '.xml'));
     if (!$info) {
-        echo '<p class="rb-desc rb-sub">No description in the repository.</p>';
+        echo '<p class="rb-desc rb-sub">' . $h(ui_language::translate('No description in the repository.')) . '</p>';
         return;
     }
     $ostype = '';
     switch (strtoupper(isset($info['ostype']) ? $info['ostype'] : '')) {
         case 'WIN':
-            $ostype = '<p class="rb-os bad">For Windows servers only: it will not work here.</p>';
+            $ostype = '<p class="rb-os bad">' . $h(ui_language::translate('For Windows servers only: it will not work here.')) . '</p>';
             break;
         case 'LIN':
             $ostype = '';
@@ -142,15 +144,15 @@ function AjaxReturnModInfo($full)
     }
     $meta = array();
     if (isset($info['latestversion'])) {
-        $meta[] = 'Version ' . $h($info['latestversion']);
+        $meta[] = str_replace('%s', $h($info['latestversion']), $h(ui_language::translate('Version %s')));
     }
     if (isset($info['authorname'])) {
-        $meta[] = 'By ' . MailLink($info);
+        $meta[] = str_replace('%s', MailLink($info), $h(ui_language::translate('By %s')));
     }
     if (SiteLink($info) !== '') {
         $meta[] = SiteLink($info);
     }
-    echo (isset($info['desc']) ? '<p class="rb-desc">' . $h($info['desc']) . '</p>' : '<p class="rb-desc rb-sub">No description in the repository.</p>')
+    echo (isset($info['desc']) ? '<p class="rb-desc">' . $h($info['desc']) . '</p>' : '<p class="rb-desc rb-sub">' . $h(ui_language::translate('No description in the repository.')) . '</p>')
         . ($meta ? '<p class="rb-meta">' . implode(' · ', $meta) . '</p>' : '') . $ostype;
 }
 
@@ -186,14 +188,14 @@ function AjaxReturnUpdate($full)
     $line = '';
     $local = (array) ModuleXMLTags('modules/' . $module . '/module.xml');
     if (isset($local['version']) && (string) $local['version'] === $latest) {
-        $line .= '<div class="rb-notice"><b>Version number out of step</b>'
-            . '<p>Sentora thinks that ' . $h($module) . ' is version <b>' . $h($installed) . '</b>, but the installed module file says it is version <b>' . $h($local['version']) . '</b>.</p>'
-            . '<p>This usually means the module developer did not update the version number in the database when the module was updated. If you just upgraded this module, Repo Browser can correct the number.</p>'
-            . '<p><button class="btn btn-default btn-sm" type="submit" name="inUpdateVersionDB" value="' . $h($local['version'] . ':::' . $module . ':::' . $installed) . '">Fix the version number</button></p></div>';
+        $line .= '<div class="rb-notice"><b>' . $h(ui_language::translate('Version number out of step')) . '</b>'
+            . '<p>' . strtr($h(ui_language::translate('Sentora thinks that %1$s is version %2$s, but the installed module file says it is version %3$s.')), array('%1$s' => $h($module), '%2$s' => '<b>' . $h($installed) . '</b>', '%3$s' => '<b>' . $h($local['version']) . '</b>')) . '</p>'
+            . '<p>' . $h(ui_language::translate('This usually means the module developer did not update the version number in the database when the module was updated. If you just upgraded this module, Repo Browser can correct the number.')) . '</p>'
+            . '<p><button class="btn btn-default btn-sm" type="submit" name="inUpdateVersionDB" value="' . $h($local['version'] . ':::' . $module . ':::' . $installed) . '">' . $h(ui_language::translate('Fix the version number')) . '</button></p></div>';
     }
-    $line .= '<div class="rb-notice"><b>Version ' . $h($latest) . ' is available</b>'
+    $line .= '<div class="rb-notice"><b>' . str_replace('%s', $h($latest), $h(ui_language::translate('Version %s is available'))) . '</b>'
         . (isset($info['updatedesc']) ? '<p>' . $h($info['updatedesc']) . '</p>' : '')
-        . '<button class="btn btn-primary btn-sm" type="submit" name="inUpdateModule" value="' . $h($repo . ':::' . $module) . '">Update</button></div>';
+        . '<button class="btn btn-primary btn-sm" type="submit" name="inUpdateModule" value="' . $h($repo . ':::' . $module) . '">' . $h(ui_language::translate('Update')) . '</button></div>';
     echo $line;
 }
 
@@ -215,7 +217,7 @@ function AjaxReturnDownloads($full)
         foreach (preg_split('/\r\n|\r|\n/', $list) as $row) {
             $cols = preg_split('/\s+/', trim($row));
             if ($cols[0] === $module && isset($cols[1]) && ctype_digit($cols[1])) {
-                echo number_format((int) $cols[1]) . ' downloads';
+                echo (int) $cols[1] === 1 ? repo_browser_helper::h(ui_language::translate('1 download')) : str_replace('%s', number_format((int) $cols[1]), repo_browser_helper::h(ui_language::translate('%s downloads')));
                 return;
             }
         }
@@ -225,7 +227,7 @@ function AjaxReturnDownloads($full)
     if (is_array($json)) {
         foreach ($json as $stat) {
             if (is_array($stat) && isset($stat['package'], $stat['downloads']) && $stat['package'] === $module) {
-                echo number_format((int) $stat['downloads']) . ' downloads';
+                echo (int) $stat['downloads'] === 1 ? repo_browser_helper::h(ui_language::translate('1 download')) : str_replace('%s', number_format((int) $stat['downloads']), repo_browser_helper::h(ui_language::translate('%s downloads')));
                 return;
             }
         }
@@ -259,7 +261,7 @@ function SiteLink($info)
 {
     $url = isset($info['authorurl']) ? (string) $info['authorurl'] : '';
     if (preg_match('#^https?://#i', $url) && filter_var($url, FILTER_VALIDATE_URL)) {
-        return '<a href="' . repo_browser_helper::h($url) . '" target="_blank" rel="noopener noreferrer">Visit Author Site</a>';
+        return '<a href="' . repo_browser_helper::h($url) . '" target="_blank" rel="noopener noreferrer">' . repo_browser_helper::h(ui_language::translate('Visit Author Site')) . '</a>';
     }
     return '';
 }

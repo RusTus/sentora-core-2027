@@ -152,7 +152,7 @@ class module_controller extends ctrl_module
         ksort($sections);
         $head = '<tr><th>' . self::t('Module') . '</th><th class="mo-c">' . self::t('On') . '</th><th>' . self::t('Menu category') . '</th>';
         foreach ($groups as $g) {
-            $head .= '<th class="mo-c">' . self::h(ui_language::translate((string) $g['ug_name_vc'])) . '</th>';
+            $head .= '<th class="mo-c">' . self::h(ui_language::GroupName((string) $g['ug_name_vc'])) . '</th>';
         }
         $head .= '</tr>';
         $cols = 3 + count($groups);
@@ -193,7 +193,7 @@ class module_controller extends ctrl_module
                     $checked = ctrl_groups::CheckGroupModulePermissions($gid, $id) ? ' checked' : '';
                     $locked = $system || ($self && $g['ug_name_vc'] === 'Administrators');
                     $rows .= '<td class="mo-c">' . ($self && $g['ug_name_vc'] === 'Administrators' ? '<input type="hidden" value="1" name="inEnable_' . $gid . '_' . $id . '">' : '')
-                        . '<input type="checkbox" value="1" name="inEnable_' . $gid . '_' . $id . '"' . $checked . ($locked ? ' disabled' : '') . ' aria-label="' . self::h(ui_language::translate((string) $g['ug_name_vc'])) . '"></td>';
+                        . '<input type="checkbox" value="1" name="inEnable_' . $gid . '_' . $id . '"' . $checked . ($locked ? ' disabled' : '') . ' aria-label="' . self::h(ui_language::GroupName((string) $g['ug_name_vc'])) . '"></td>';
                 }
                 $rows .= '</tr>';
             }

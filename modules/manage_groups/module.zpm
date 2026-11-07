@@ -38,7 +38,7 @@
                     </div>
                 </div>
                 <div class="mg-box">
-                    <div class="mg-head"><h4><: Modules its members can use :></h4><span class="mg-count" id="mg-count" data-of="<: of :>" data-ticked="<: ticked :>"></span></div>
+                    <div class="mg-head"><h4><: Modules its members can use :></h4><span class="mg-count" id="mg-count" data-tally="<: %1$d of %2$d ticked :>"></span></div>
                     <p class="mg-sub"><: You can give the modules your own account has. A new group starts with the modules of the built-in Users group. :></p>
                     <div class="mg-cats"><@ ModuleChoices @></div>
                 </div>
@@ -71,7 +71,7 @@
     var boxes = form.querySelectorAll('input[name="inModules[]"]'), count = document.getElementById('mg-count');
     var tally = function () {
         var n = 0; Array.prototype.forEach.call(boxes, function (b) { if (b.checked) { n++; } });
-        count.textContent = n + ' ' + count.getAttribute('data-of') + ' ' + boxes.length + ' ' + count.getAttribute('data-ticked');
+        count.textContent = (count.getAttribute('data-tally') || '%1$d of %2$d ticked').replace('%1$d', n).replace('%2$d', boxes.length);
     };
     Array.prototype.forEach.call(form.querySelectorAll('.mg-all'), function (b) {
         b.addEventListener('click', function () {
