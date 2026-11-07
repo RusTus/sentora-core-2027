@@ -19,7 +19,8 @@ if ($has > 0) {
  * records, so its mail stayed on disk, and a new mailbox with the same address later read
  * it. The mail folders belong to vmail, so root removes them here: the maildir
  * (<vmail>/<domain>/<name>/), its home (<vmail>/<domain>/.home/<name>, filters and
- * settings) and the mailbox's SpamAV settings. Only mailboxes deleted from this version
+ * settings), the mailbox's SpamAV settings and, when SOGo is installed, its SOGo data
+ * (calendars, contacts and preferences, with sogo-tool remove). Only mailboxes deleted from this version
  * on (those deleted before are marked done the first time, so an update removes nothing
  * old), never while the same address is a mailbox again, and only exact folders inside
  * the mail folder, never through a link.
@@ -64,6 +65,16 @@ function MailboxesPurgeDeleted()
             }
             if (class_exists('sys_spamav')) {
                 $zdbh->prepare("DELETE FROM x_spamav_prefs WHERE sp_mailbox_vc = :m")->execute(array(':m' => $addr));
+            }
+            // SOGo keeps the user's calendars, contacts and preferences in its own database, by
+            // address: a new mailbox with this address would open them. Its own tool removes them.
+            $sogoTool = trim((string) shell_exec('command -v sogo-tool 2>/dev/null'));
+            if ($sogoTool !== '' && function_exists('posix_getpwnam') && posix_getpwnam('sogo') !== false) {
+                exec('runuser -u sogo -- ' . escapeshellarg($sogoTool) . ' remove ' . escapeshellarg($addr) . ' 2>&1', $sogoOut, $sogoRc);
+                if ($sogoRc !== 0) {
+                    echo fs_filehandler::NewLine() . "Mailboxes: SOGo could not remove the data of " . $addr . ": " . substr(implode(' ', (array) $sogoOut), 0, 300) . fs_filehandler::NewLine();
+                }
+                $sogoOut = array();
             }
         }
         $done->execute(array(':id' => (int) $row['mb_id_pk']));

@@ -907,7 +907,7 @@ class module_controller extends ctrl_module
         }
         $links = self::Links();
         $l = isset($links[strtolower($cur[0]['address'])]) ? $links[strtolower($cur[0]['address'])] : array('aliases' => array(), 'forwards' => array(), 'lists' => array());
-        $out = '<ul class="mb-lose"><li>' . self::t('It stops receiving mail and can no longer be logged in to. The mail stored in it, its mail filters and its spam settings are removed from the server within 5 minutes: this can not be undone.') . '</li>';
+        $out = '<ul class="mb-lose"><li>' . self::t('It stops receiving mail and can no longer be logged in to. The mail stored in it, its mail filters, its spam settings and its SOGo calendars and contacts are removed from the server within 5 minutes: this can not be undone.') . '</li>';
         if ($l['forwards']) {
             $out .= '<li>' . self::t('Its forwarders go with it:') . ' <b>' . self::h(implode(', ', $l['forwards'])) . '</b></li>';
         }
