@@ -59,13 +59,94 @@ if [ -e "$OUT" ] && [ -n "$(ls -A "$OUT" 2> /dev/null)" ]; then echo "$OUT is no
 mkdir -p "$OUT/db/panel" "$OUT/db/sites" "$OUT/files" "$OUT/mail" || exit 1
 chmod 700 "$OUT"
 LOGF="$OUT/export.log"; : > "$LOGF"
-say() { echo "$*"; echo "$(date '+%H:%M:%S') $*" >> "$LOGF"; }
-warn() { echo "  WARNING: $*"; echo "$(date '+%H:%M:%S') WARNING: $*" >> "$LOGF"; WARNS=$((WARNS + 1)); }
 WARNS=0
 
-mysql --defaults-extra-file="$MYCNF" -e "SELECT 1" > /dev/null 2>> "$LOGF" || { echo "Could not log in to MySQL with the panel's settings ($PANEL/cnf/db.php)."; exit 1; }
-VERSION=$(sql "SELECT so_value_tx FROM $DBNAME.x_settings WHERE so_name_vc = 'dbversion'")
-say "Sentora $VERSION on $HOST: exporting to $OUT"
+# --- the screen: the installer's look ----------------------------------------------------------
+# A title bar, one line per finished step ([ OK ], [ !! ] or [FAIL], with its time) and a progress
+# bar below while a step runs (a small background ticker keeps it moving); plain lines when the
+# output is not a terminal. The details go to export.log.
+UI_TTY=0
+[ -t 1 ] && [ "${TERM:-dumb}" != "dumb" ] && UI_TTY=1
+if [ $UI_TTY -eq 1 ]; then
+    C_RESET=$'\e[0m'; C_BOLD=$'\e[1m'; C_DIM=$'\e[2m'
+    C_GREEN=$'\e[32m'; C_YELLOW=$'\e[33m'; C_RED=$'\e[31m'; C_CYAN=$'\e[36m'; C_WHITE=$'\e[97m'
+    BG_TITLE=$'\e[44m'; BG_OK=$'\e[42m'; BG_WARN=$'\e[43m'; BG_FAIL=$'\e[41m'
+else
+    C_RESET=''; C_BOLD=''; C_DIM=''; C_GREEN=''; C_YELLOW=''; C_RED=''; C_CYAN=''; C_WHITE=''
+    BG_TITLE=''; BG_OK=''; BG_WARN=''; BG_FAIL=''
+fi
+case "${LC_ALL:-${LC_CTYPE:-${LANG:-}}}" in *[Uu][Tt][Ff]-8*|*[Uu][Tt][Ff]8*) UI_FULL=$'\xe2\x96\x88'; UI_EMPTY=$'\xe2\x96\x91' ;; *) UI_FULL='#'; UI_EMPTY='.' ;; esac
+UI_SPIN=('|' '/' '-' '\')
+ui_cols() { local c; c=$(tput cols 2> /dev/null); [ "${c:-0}" -ge 40 ] 2> /dev/null && echo "$c" || echo 80; }
+ui_bar() { local pad; pad=$(( $(ui_cols) - ${#2} )); [ $pad -lt 0 ] && pad=0; printf '%s%s%s%*s%s\n' "$1" "$C_BOLD$C_WHITE" "$2" "$pad" '' "$C_RESET"; }
+ui_repeat() { local i out=''; for ((i = 0; i < $2; i++)); do out+="$1"; done; printf '%s' "$out"; }
+UI_STEP=0; UI_TOTAL=6; UI_TITLE=""; UI_ITEM=""; UI_STEP_START=0; UI_START=$(date +%s); UI_TICKER=""; UI_STEP_WARN=0
+UI_NOTES=()   # the running step's details: shown under its line when it ends
+ui_draw() { # spinner-frame
+    local cols width pct filled elapsed room title times
+    cols=$(ui_cols); width=$(( cols / 4 )); [ $width -lt 10 ] && width=10; [ $width -gt 30 ] && width=30
+    pct=$(( (UI_STEP - 1) * 100 / UI_TOTAL )); [ $pct -gt 99 ] && pct=99
+    filled=$(( pct * width / 100 ))
+    elapsed=$(( $(date +%s) - UI_STEP_START )); times=$(printf '%d:%02d' $(( elapsed / 60 )) $(( elapsed % 60 )))
+    room=$(( cols - width - 16 - ${#UI_STEP} - ${#UI_TOTAL} - ${#times} - 4 ))
+    title="$UI_TITLE${UI_ITEM:+: $UI_ITEM}"; [ ${#title} -gt $room ] && title="${title:0:$(( room - 3 ))}..."
+    printf '\r\e[K %s%s%s%s%s %3d%%  %d/%d  %s%s%s %-*s %s%s%s' "$C_GREEN" "$(ui_repeat "$UI_FULL" "$filled")" "$C_DIM" "$(ui_repeat "$UI_EMPTY" $(( width - filled )))" "$C_RESET" \
+        "$pct" "$UI_STEP" "$UI_TOTAL" "$C_CYAN" "$1" "$C_RESET" "$room" "$title" "$C_DIM" "$times" "$C_RESET"
+}
+ui_ticker_stop() {
+    if [ -n "$UI_TICKER" ]; then
+        kill "$UI_TICKER" 2> /dev/null
+        local _; for _ in 1 2 3 4 5 6 7 8 9 10; do kill -0 "$UI_TICKER" 2> /dev/null || break; sleep 0.05; done
+        UI_TICKER=""
+        printf '\r\e[K'
+    fi
+}
+ui_ticker_start() {
+    if [ $UI_TTY -eq 1 ] && [ -n "$UI_TITLE" ]; then
+        ( trap - EXIT; trap 'exit 0' TERM; i=0; while true; do ui_draw "${UI_SPIN[$(( i % 4 ))]}"; i=$(( i + 1 )); sleep 0.25; done ) &
+        UI_TICKER=$!
+        disown "$UI_TICKER" 2> /dev/null
+    fi
+}
+ui_line() { ui_ticker_stop; printf '%s\n' "$1"; ui_ticker_start; }
+ui_item() { ui_ticker_stop; UI_ITEM="$1"; ui_ticker_start; }   # what the running step works on now
+ui_end_step() { # [fail]
+    ui_ticker_stop
+    [ -z "$UI_TITLE" ] && return
+    local took=$(( $(date +%s) - UI_STEP_START )) mark='[ OK ]' color="$C_GREEN"
+    [ $UI_STEP_WARN -eq 1 ] && { mark='[ !! ]'; color="$C_YELLOW"; }
+    [ -n "${1:-}" ] && { mark='[FAIL]'; color="$C_RED$C_BOLD"; }
+    printf '  %s%s%s %s %s(%d:%02d)%s\n' "$color" "$mark" "$C_RESET" "$UI_TITLE" "$C_DIM" $(( took / 60 )) $(( took % 60 )) "$C_RESET"
+    local n; for n in "${UI_NOTES[@]}"; do printf '%s\n' "$n"; done
+    UI_TITLE=""; UI_ITEM=""; UI_NOTES=()
+}
+ui_step() { # title
+    ui_end_step
+    UI_STEP=$(( UI_STEP + 1 )); [ $UI_STEP -gt $UI_TOTAL ] && UI_TOTAL=$UI_STEP
+    UI_TITLE="$1"; UI_ITEM=""; UI_STEP_START=$(date +%s); UI_STEP_WARN=0
+    echo "$(date '+%H:%M:%S') -- $1" >> "$LOGF"
+    if [ $UI_TTY -eq 1 ]; then ui_ticker_start; else printf -- '-- [%d/%d] %s\n' "$UI_STEP" "$UI_TOTAL" "$1"; fi
+}
+ui_done() {
+    ui_end_step
+    if [ $UI_TTY -eq 1 ]; then
+        local width total; width=$(( $(ui_cols) / 4 )); [ $width -lt 10 ] && width=10; [ $width -gt 30 ] && width=30
+        total=$(( $(date +%s) - UI_START ))
+        printf ' %s%s%s 100%%  %sall %d steps done in %d:%02d%s\n' "$C_GREEN" "$(ui_repeat "$UI_FULL" "$width")" "$C_RESET" "$C_BOLD" "$UI_STEP" $(( total / 60 )) $(( total % 60 )) "$C_RESET"
+    fi
+}
+trap 'ui_ticker_stop; rm -f "$MYCNF"' EXIT
+say() { echo "$(date '+%H:%M:%S') $*" >> "$LOGF"; if [ -n "$UI_TITLE" ]; then UI_NOTES+=("         $C_DIM$*$C_RESET"); else printf '         %s\n' "$*"; fi; }
+warn() { echo "$(date '+%H:%M:%S') WARNING: $*" >> "$LOGF"; WARNS=$((WARNS + 1)); UI_STEP_WARN=1
+    if [ -n "$UI_TITLE" ]; then UI_NOTES+=("         $C_YELLOW$*$C_RESET"); else printf '         %s\n' "$*"; fi; }
+stop() { echo "$(date '+%H:%M:%S') STOPPED: $*" >> "$LOGF"; ui_end_step fail; echo; ui_bar "$BG_FAIL" "  Stopped: $*"; echo; exit 1; }
+
+VERSION=$(sql "SELECT so_value_tx FROM $DBNAME.x_settings WHERE so_name_vc = 'dbversion'" 2> /dev/null)
+echo
+ui_bar "$BG_TITLE" "  Sentora ${VERSION:-?} on $HOST  -  Export for Sentora-2027"
+printf '%s  Into %s (nothing on this server is changed)%s\n\n' "$C_DIM" "$OUT" "$C_RESET"
+ui_step "Checking the server"
+mysql --defaults-extra-file="$MYCNF" -e "SELECT 1" > /dev/null 2>> "$LOGF" || stop "could not log in to MySQL with the panel's settings ($PANEL/cnf/db.php)"
 
 # room for it: the folders, compressed, rarely take more than they do now
 NEED=$(du -sk "$HOSTED" 2> /dev/null | cut -f1); NEED=${NEED:-0}
@@ -73,6 +154,8 @@ NEED=$(du -sk "$HOSTED" 2> /dev/null | cut -f1); NEED=${NEED:-0}
 FREE=$(df -Pk "$OUT" | awk 'NR == 2 {print $4}')
 if [ "${FREE:-0}" -lt "$NEED" ]; then
     warn "$OUT has $((FREE / 1024)) MB free and the folders take $((NEED / 1024)) MB: it may not fit (use --to on a larger disk)"
+else
+    say "$((NEED / 1024)) MB of folders, $((FREE / 1024)) MB free"
 fi
 
 # --- databases ---------------------------------------------------------------------------------
@@ -81,24 +164,23 @@ fi
 DUMPOPT=(--single-transaction --routines --triggers --no-create-db --default-character-set=utf8mb4)
 mysqldump --help 2> /dev/null | grep -q -- '--set-gtid-purged' && DUMPOPT+=(--set-gtid-purged=OFF)
 dump() { # database file
-    # the name first: a large database takes minutes, and the screen should say which one
-    printf '   %s ... ' "$1"
+    # the progress line says which one: a large database takes minutes
+    ui_item "$1"
     if mysqldump --defaults-extra-file="$MYCNF" "${DUMPOPT[@]}" "$1" 2>> "$LOGF" | gzip -6 > "$2"; then
-        [ "${PIPESTATUS[0]}" = 0 ] && { echo "$(du -h "$2" | cut -f1)"; echo "$(date '+%H:%M:%S')    $1 $(du -h "$2" | cut -f1)" >> "$LOGF"; return 0; }
+        [ "${PIPESTATUS[0]}" = 0 ] && { say "$(printf '%-28s %s' "$1" "$(du -h "$2" | cut -f1)")"; return 0; }
     fi
-    echo "failed"
     warn "the database $1 could not be exported (see export.log)"
     rm -f "$2"
     return 1
 }
-say "-- The panel's databases"
+ui_step "The panel's databases"
 for db in "$DBNAME" sentora_postfix sentora_proftpd zpanel_postfix zpanel_proftpd; do
     [ -n "$(sql "SHOW DATABASES LIKE '$db'")" ] || continue
     dump "$db" "$OUT/db/panel/$db.sql.gz"
 done
-[ -f "$OUT/db/panel/$DBNAME.sql.gz" ] || { echo "The panel's own database ($DBNAME) could not be exported: stopping."; exit 1; }
+[ -f "$OUT/db/panel/$DBNAME.sql.gz" ] || stop "the panel's own database ($DBNAME) could not be exported"
 
-say "-- The accounts' databases"
+ui_step "The accounts' databases"
 NDB=0
 while IFS= read -r db; do
     [ -n "$db" ] || continue
@@ -116,7 +198,7 @@ while IFS=$'\t' read -r u h; do
 done <<< "$(sql "SELECT mu_name_vc, mu_access_vc FROM $DBNAME.x_mysql_users WHERE mu_deleted_ts IS NULL")" > "$OUT/db/mysql-grants.txt"
 
 # --- the accounts' folders and the mail ----------------------------------------------------------
-say "-- The accounts' folders"
+ui_step "The accounts' folders (websites)"
 NACC=0
 while IFS= read -r u; do
     [ -n "$u" ] || continue
@@ -124,29 +206,30 @@ while IFS= read -r u; do
         warn "the account $u has no folder in $HOSTED"
         continue
     fi
-    printf '   %s (%s, this can take a while) ... ' "$u" "$(du -sh "$HOSTED/$u" 2> /dev/null | cut -f1)"
+    ui_item "$u ($(du -sh "$HOSTED/$u" 2> /dev/null | cut -f1), this can take a while)"
     if tar -C "$HOSTED" --numeric-owner -czf "$OUT/files/$u.tar.gz" "$u" 2>> "$LOGF"; then
-        echo "$(du -sh "$OUT/files/$u.tar.gz" | cut -f1) packed"
-        echo "$(date '+%H:%M:%S')    $u packed" >> "$LOGF"
+        say "$(printf '%-28s %s packed' "$u" "$(du -sh "$OUT/files/$u.tar.gz" | cut -f1)")"
         NACC=$((NACC + 1))
     else
-        echo "failed"
         warn "the folder of $u was not packed completely (see export.log)"
     fi
 done <<< "$(sql "SELECT ac_user_vc FROM $DBNAME.x_accounts WHERE ac_deleted_ts IS NULL")"
 
 NMAIL=0
+ui_step "The mailboxes"
 if [ "$MAIL" = yes ] && [ -d "$VMAIL" ]; then
-    say "-- The mailboxes"
     for d in "$VMAIL"/*/; do
         [ -d "$d" ] || continue
         dom=$(basename "$d")
+        ui_item "$dom"
         tar -C "$VMAIL" --numeric-owner -czf "$OUT/mail/$dom.tar.gz" "$dom" 2>> "$LOGF" \
-            && { say "   $dom"; NMAIL=$((NMAIL + 1)); } || warn "the mail of $dom was not packed completely (see export.log)"
+            && { say "$dom"; NMAIL=$((NMAIL + 1)); } || warn "the mail of $dom was not packed completely (see export.log)"
     done
 fi
+[ "$NMAIL" -gt 0 ] || say "$( [ "$MAIL" = yes ] && echo 'no mailboxes' || echo 'left out (--no-mail)')"
 
 # --- what is in it --------------------------------------------------------------------------------
+ui_step "The manifest and checksums"
 {
     echo "format=sentora-migrate-1"
     echo "made=$(date '+%Y-%m-%d %H:%M:%S %Z')"
@@ -165,14 +248,22 @@ fi
     done
 } > "$OUT/manifest.txt"
 
-say "-- Checksums"
 (cd "$OUT" && find . -type f ! -name SHA256SUMS ! -name export.log -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS)
 chmod -R go-rwx "$OUT"
 
+ui_done
 echo
-say "Done: $OUT ($(du -sh "$OUT" | cut -f1)): $NACC account folder(s), $NDB database(s), $NMAIL mail domain(s), $WARNS warning(s)."
-echo "It holds every website, database and mailbox of this server: keep it as private as the server."
-echo "Copy it to the new server, for example (as root on the new one):"
-echo "    rsync -a root@$(hostname -I 2> /dev/null | awk '{print $1}'):$OUT /root/"
-echo "then there: sentora-migrate-import $(basename "$OUT")"
+SIZE=$(du -sh "$OUT" | cut -f1)
+if [ "$WARNS" -eq 0 ]; then ui_bar "$BG_OK" "  Exported: $NACC account folder(s), $NDB database(s), $NMAIL mail domain(s), $SIZE"
+else ui_bar "$BG_WARN" "  Exported with $WARNS warning(s) (above, and in export.log): $NACC folder(s), $NDB database(s), $SIZE"; fi
+echo "$(date '+%H:%M:%S') Done: $NACC folder(s), $NDB database(s), $NMAIL mail domain(s), $WARNS warning(s)" >> "$LOGF"
+echo
+printf '  %-14s %s\n' "Folder" "$OUT"
+printf '  %s%s%s\n\n' "$C_YELLOW" "It holds every website, database and mailbox of this server: keep it as private as the server." "$C_RESET"
+printf '  %sNext%s\n' "$C_BOLD" "$C_RESET"
+echo "     1. Copy it to the new server (from here, as root):"
+echo "          scp -F /dev/null -r $OUT root@<new server>:/root/"
+echo "     2. There, see what moving an account would do (nothing changes):"
+echo "          sentora-migrate-import /root/$(basename "$OUT") <account>"
+echo
 [ "$WARNS" -eq 0 ]

@@ -62,11 +62,133 @@ $LOG = '/var/sentora/logs/migrate-import.log';
 @touch($LOG);
 @chmod($LOG, 0640);
 $WARN = 0;
-function say($s) { global $LOG; echo $s, "\n"; @file_put_contents($LOG, date('Y-m-d H:i:s') . '  ' . $s . "\n", FILE_APPEND); }
-function warn($s) { global $WARN; $WARN++; say('  WARNING: ' . $s); }
-function stop($s) { say('STOPPED: ' . $s); cleanup(); exit(1); }
-function sh($cmd, &$out = null) { exec($cmd . ' 2>&1', $o, $rc); $out = implode("\n", $o); return $rc === 0; }
+
+// --- the screen: the installer's look --------------------------------------------------------------
+// A title bar, then one line per finished step ([ OK ], [ !! ] or [FAIL], with its time) and a
+// progress bar below while a step runs (it keeps moving while a long command works). The details
+// go to the log; plain lines when the output is not a terminal.
+$UI = array('tty' => function_exists('posix_isatty') && posix_isatty(STDOUT) && getenv('TERM') && getenv('TERM') !== 'dumb',
+    'step' => 0, 'total' => 1, 'title' => '', 'start' => time(), 'stepstart' => 0, 'stepwarn' => false, 'drawn' => false, 'spin' => 0,
+    'notes' => array());   // the running step's details: shown under its line when it ends
+$UI['utf8'] = (bool) preg_match('/utf-?8/i', (string) (getenv('LC_ALL') ?: getenv('LC_CTYPE') ?: getenv('LANG')));
+function c($name)
+{
+    global $UI;
+    static $codes = array('reset' => "\e[0m", 'bold' => "\e[1m", 'dim' => "\e[2m", 'green' => "\e[32m", 'yellow' => "\e[33m", 'red' => "\e[31m",
+        'cyan' => "\e[36m", 'white' => "\e[97m", 'bg_title' => "\e[44m", 'bg_ok' => "\e[42m", 'bg_warn' => "\e[43m", 'bg_fail' => "\e[41m");
+    return $UI['tty'] ? $codes[$name] : '';
+}
+function ui_cols() { $c = (int) @exec('tput cols 2> /dev/null'); return $c >= 40 ? $c : 80; }
+function ui_logline($s) { global $LOG; @file_put_contents($LOG, date('Y-m-d H:i:s') . '  ' . $s . "\n", FILE_APPEND); }
+function ui_clear() { global $UI; if ($UI['tty'] && $UI['drawn']) { echo "\r\e[K"; $UI['drawn'] = false; } }
+function ui_bar($bg, $text) { echo c($bg) . c('bold') . c('white') . str_pad($text, ui_cols()) . c('reset') . "\n"; }
+function ui_banner($sub)
+{
+    $ver = trim((string) @file_get_contents(dirname(__DIR__) . '/VERSION'));
+    echo "\n";
+    ui_bar('bg_title', '  Sentora-' . ($ver !== '' ? preg_replace('/[^A-Za-z0-9._-]/', '', $ver) : '2027') . ' for Ubuntu 26.04  -  Moving accounts from an old server');
+    if ($sub !== '') { echo c('dim') . '  ' . $sub . c('reset') . "\n"; }
+    echo "\n";
+}
+function ui_draw()
+{
+    global $UI;
+    if (!$UI['tty'] || $UI['title'] === '') { return; }
+    $cols = ui_cols();
+    $width = max(10, min(30, intdiv($cols, 4)));
+    $pct = min(99, intdiv(($UI['step'] - 1) * 100, max(1, $UI['total'])));
+    $filled = intdiv($pct * $width, 100);
+    $el = time() - $UI['stepstart'];
+    $times = sprintf('%d:%02d', intdiv($el, 60), $el % 60);
+    $room = $cols - $width - 16 - strlen((string) $UI['step']) - strlen((string) $UI['total']) - strlen($times) - 4;
+    $title = strlen($UI['title']) > $room ? substr($UI['title'], 0, max(0, $room - 3)) . '...' : $UI['title'];
+    $spin = array('|', '/', '-', '\\');
+    $full = $UI['utf8'] ? "\u{2588}" : '#';
+    $empty = $UI['utf8'] ? "\u{2591}" : '.';
+    echo "\r\e[K " . c('green') . str_repeat($full, $filled) . c('dim') . str_repeat($empty, $width - $filled) . c('reset')
+        . sprintf(' %3d%%  %d/%d  ', $pct, $UI['step'], $UI['total']) . c('cyan') . $spin[$UI['spin']++ % 4] . c('reset') . ' '
+        . str_pad($title, max(0, $room)) . ' ' . c('dim') . $times . c('reset');
+    $UI['drawn'] = true;
+}
+// a line under the running step (the progress bar is drawn again below it)
+function ui_line($s) { ui_clear(); echo $s, "\n"; ui_draw(); }
+function ui_note($line) { global $UI; if ($UI['title'] !== '') { $UI['notes'][] = $line; } else { ui_line($line); } }
+function ui_info($s) { ui_logline($s); ui_note('         ' . c('dim') . $s . c('reset')); }
+function ui_end_step($fail = false)
+{
+    global $UI;
+    ui_clear();
+    if ($UI['title'] === '') { return; }
+    $took = time() - $UI['stepstart'];
+    list($mark, $color) = $fail ? array('[FAIL]', c('red') . c('bold')) : ($UI['stepwarn'] ? array('[ !! ]', c('yellow')) : array('[ OK ]', c('green')));
+    printf("  %s%s%s %s %s(%d:%02d)%s\n", $color, $mark, c('reset'), $UI['title'], c('dim'), intdiv($took, 60), $took % 60, c('reset'));
+    foreach ($UI['notes'] as $n) { echo $n, "\n"; }
+    $UI['notes'] = array();
+    ui_logline(($fail ? 'FAILED: ' : 'done: ') . $UI['title']);
+    $UI['title'] = '';
+}
+function ui_step($title)
+{
+    global $UI;
+    ui_end_step();
+    $UI['step']++;
+    $UI['total'] = max($UI['total'], $UI['step']);
+    $UI['title'] = $title;
+    $UI['stepstart'] = time();
+    $UI['stepwarn'] = false;
+    ui_logline('-- ' . $title);
+    if ($UI['tty']) { ui_draw(); } else { printf("-- [%d/%d] %s\n", $UI['step'], $UI['total'], $title); }
+}
+function ui_done()
+{
+    global $UI;
+    ui_end_step();
+    if ($UI['tty']) {
+        $width = max(10, min(30, intdiv(ui_cols(), 4)));
+        $t = time() - $UI['start'];
+        printf(" %s%s%s 100%%  %sall %d steps done in %d:%02d%s\n", c('green'), str_repeat($UI['utf8'] ? "\u{2588}" : '#', $width), c('reset'), c('bold'), $UI['step'], intdiv($t, 60), $t % 60, c('reset'));
+    }
+}
+// say: the log, and a line under the running step
+function say($s) { ui_logline($s); ui_note($s === '' ? '' : '         ' . $s); }
+function warn($s) { global $WARN, $UI; $WARN++; $UI['stepwarn'] = true; ui_logline('WARNING: ' . $s); ui_note('         ' . c('yellow') . $s . c('reset')); }
+function stop($s)
+{
+    global $LOG;
+    ui_logline('STOPPED: ' . $s);
+    ui_end_step(true);
+    echo "\n";
+    ui_bar('bg_fail', '  Stopped: nothing more was changed');
+    echo "\n  " . $s . "\n  " . c('dim') . 'Log: ' . $LOG . c('reset') . "\n\n";
+    cleanup();
+    exit(1);
+}
+// a command: its output to the log; the progress bar keeps moving while it runs
+function sh($cmd, &$out = null)
+{
+    $p = proc_open(array('/bin/sh', '-c', $cmd . ' 2>&1'), array(1 => array('pipe', 'w')), $pipes);
+    if (!is_resource($p)) { $out = 'could not start: ' . $cmd; return false; }
+    stream_set_blocking($pipes[1], false);
+    $buf = '';
+    $last = microtime(true);
+    while (true) {
+        $chunk = fread($pipes[1], 65536);
+        if ($chunk !== false && $chunk !== '') { $buf .= $chunk; if (strlen($buf) > 1048576) { $buf = substr($buf, -524288); } }
+        $st = proc_get_status($p);
+        if (!$st['running']) { break; }
+        if (microtime(true) - $last >= 0.25) { ui_draw(); $last = microtime(true); }
+        usleep(50000);
+    }
+    $buf .= (string) stream_get_contents($pipes[1]);
+    fclose($pipes[1]);
+    $rc = $st['exitcode'];
+    proc_close($p);
+    $out = rtrim($buf);
+    if ($out !== '') { ui_logline('   ' . str_replace("\n", "\n   ", substr($out, 0, 4000))); }
+    return $rc === 0;
+}
 function q($s) { return escapeshellarg((string) $s); }
+function hsize($bytes) { $u = array('B', 'KB', 'MB', 'GB', 'TB'); $i = 0; $b = (float) $bytes; while ($b >= 1024 && $i < 4) { $b /= 1024; $i++; } return ($i ? round($b, $b < 10 ? 1 : 0) : (int) $b) . ' ' . $u[$i]; }
 
 // --- the export folder ------------------------------------------------------------------------------
 $EXP = rtrim(realpath($args[0]) ?: '', '/');
@@ -88,12 +210,19 @@ if (($M['format'] ?? '') !== 'sentora-migrate-1') {
     exit(1);
 }
 if (count($args) < 2) {
-    echo "Export of " . $M['server'] . " (Sentora " . $M['sentora'] . "), made " . $M['made'] . "\n";
-    echo "Panel address there: " . $M['panel_domain'] . ", IP " . $M['server_ip'] . ", PHP " . $M['php'] . ", MySQL " . $M['mysql'] . "\n\nAccounts:\n";
+    ui_banner('The export of ' . $M['server'] . ', made ' . $M['made']);
+    printf("  %-16s %s\n", 'Sentora', $M['sentora']);
+    printf("  %-16s %s, IP %s\n", 'Panel there', $M['panel_domain'], $M['server_ip']);
+    printf("  %-16s PHP %s, MySQL %s\n\n", 'Software', $M['php'], $M['mysql']);
+    echo '  ' . c('bold') . 'Accounts' . c('reset') . "\n";
     foreach ($M['accounts'] as $a) {
-        echo "  $a\n";
+        if (preg_match('/^(\S+) domains=(\d+): ?(.*)$/', $a, $m)) {
+            printf("  %s%-16s%s %s domain(s)  %s%s%s\n", c('bold'), $m[1], c('reset'), $m[2], c('dim'), $m[3], c('reset'));
+        } else {
+            echo "  $a\n";
+        }
     }
-    echo "\nTo see what moving one would do (nothing changes):\n    sentora-migrate-import $args[0] <old account>\n";
+    echo "\n  What moving one would do (nothing changes):\n    " . c('bold') . "sentora-migrate-import $args[0] <account>" . c('reset') . "\n\n";
     exit(0);
 }
 $OLDU = $args[1];
@@ -106,13 +235,18 @@ foreach (array($OLDU, $NEWU) as $u) {
     }
 }
 
+ui_banner(($APPLY ? 'Moving ' : 'What moving would do (nothing changes until --yes): ') . "$OLDU from " . $M['server'] . ' (Sentora ' . $M['sentora'] . ")"
+    . ($NEWU !== $OLDU ? " into $NEWU" : ''));
+$UI['total'] = $APPLY ? 12 : 2;
+ui_logline('===== ' . ($APPLY ? 'moving ' : 'dry run ') . "$OLDU into $NEWU from $EXP");
 // the checksums of the copy
+ui_step('Checking the copy against its checksums');
 if (is_file($EXP . '/SHA256SUMS')) {
-    echo "Checking the copy against its checksums (a few minutes for several GB) ...\n";
     if (!sh('cd ' . q($EXP) . ' && sha256sum --quiet -c SHA256SUMS', $o)) {
-        fwrite(STDERR, "The export does not match its checksums (copied incompletely?):\n$o\n");
-        exit(1);
+        stop("the export does not match its checksums (copied incompletely?): " . substr($o, 0, 300));
     }
+} else {
+    warn('the export has no checksums (SHA256SUMS): not checked');
 }
 
 // --- this server -------------------------------------------------------------------------------------
@@ -121,8 +255,7 @@ $q = $zdbh->prepare("SELECT ac_id_pk FROM x_accounts WHERE ac_user_vc = :u AND a
 $q->execute(array(':u' => $NEWU));
 $NEWID = (int) $q->fetchColumn();
 if (!$NEWID) {
-    fwrite(STDERR, "The account $NEWU does not exist on this server: make it first (Admin > Manage Clients), then run this again.\n");
-    exit(1);
+    stop("the account $NEWU does not exist on this server: make it first (Admin > Manage Clients), then run this again.");
 }
 $HOSTED = rtrim((string) ctrl_options::GetSystemOption('hosted_dir'), '/') . '/';
 $NEWHOME = $HOSTED . $NEWU;
@@ -134,8 +267,7 @@ $FTPDB = (string) ctrl_options::GetSystemOption('ftp_db') ?: 'sentora_proftpd';
 // Old sites ran on PHP 5 or 7: they get PHP 7.1 (made for moving them) unless told otherwise
 $PHPV = ($opt['php'] === 'default' || $opt['php'] === sys_phpversions::DefaultVersion()) ? '' : $opt['php'];
 if ($PHPV !== '' && !is_dir('/opt/sentora-php/' . $PHPV)) {
-    fwrite(STDERR, "PHP $PHPV is not installed here: add it with   sentora-php-install $PHPV   (or use --php default for this server's own PHP).\n");
-    exit(1);
+    stop("PHP $PHPV is not installed here: add it with   sentora-php-install $PHPV   (or use --php default for this server's own PHP).");
 }
 
 // MySQL as the panel's root user, from an option file
@@ -171,27 +303,27 @@ function load_dump($file, $db)
     return sh('gunzip -c ' . q($file) . ' | mysql --defaults-extra-file=' . q($MYCNF) . ' --init-command="SET SESSION sql_mode=\'\', foreign_key_checks=0" ' . q($db), $o) ? true : $o;
 }
 
-say(($APPLY ? 'Moving' : 'What moving would do (nothing changes until --yes):') . " $OLDU from " . $M['server'] . " (Sentora " . $M['sentora'] . ") into $NEWU here");
 
 // --- the old panel's databases, loaded beside this one to read from --------------------------------
 $panelDump = $EXP . '/db/panel/' . ($M['panel_db'] ?: 'sentora_core') . '.sql.gz';
 $mailDump = glob($EXP . '/db/panel/{sentora,zpanel}_postfix.sql.gz', GLOB_BRACE);
 $ftpDump = glob($EXP . '/db/panel/{sentora,zpanel}_proftpd.sql.gz', GLOB_BRACE);
+ui_step('Reading the old panel\'s databases');
 $zdbh->exec("CREATE DATABASE `$TMPDB`");
-say('  reading the old panel\'s database (' . round(filesize($panelDump) / 1048576, 1) . ' MB packed) ...');
+ui_info('the panel\'s database (' . hsize(filesize($panelDump)) . ' packed)');
 if (($r = load_dump($panelDump, $TMPDB)) !== true) {
     stop("the old panel's database did not load: " . substr((string) $r, 0, 300));
 }
 $HAVE_MAILDB = false;
 if ($mailDump) {
     $zdbh->exec("CREATE DATABASE `{$TMPDB}_mail`");
-    say('  reading its mail database ...');
+    ui_info('its mail database');
     $HAVE_MAILDB = (load_dump($mailDump[0], $TMPDB . '_mail') === true);
 }
 $HAVE_FTPDB = false;
 if ($ftpDump) {
     $zdbh->exec("CREATE DATABASE `{$TMPDB}_ftp`");
-    say('  reading its FTP database ...');
+    ui_info('its FTP database');
     $HAVE_FTPDB = (load_dump($ftpDump[0], $TMPDB . '_ftp') === true);
 }
 $O = $TMPDB;
@@ -265,39 +397,53 @@ foreach (array('x_cronjobs' => 'ct', 'x_aliases' => 'al', 'x_forwarders' => 'fw'
 $dnsCount = count($old("SELECT 1 FROM `$O`.x_dns WHERE dn_acc_fk = :a AND dn_deleted_ts IS NULL", array(':a' => $OLDID)));
 $filesTar = $EXP . '/files/' . $OLDU . '.tar.gz';
 
-say('');
-say('Domains (' . count($plan['domains']) . '): ' . implode(', ', array_map(function ($v) { return $v['vh_name_vc'] . ' -> public_html' . $v['vh_directory_vc']; }, $plan['domains'])));
-if ($plan['skipdomains']) { warn('skipped, already on this server (or the panel\'s own address): ' . implode(', ', $plan['skipdomains'])); }
-say('Website files: ' . (is_file($filesTar) ? 'public_html of ' . $OLDU . ' (' . round(filesize($filesTar) / 1048576) . ' MB packed), ' . ($opt['overwrite'] ? 'replacing' : 'keeping') . ' files already there' : 'NOT IN THE EXPORT'));
-say('MySQL databases (' . count($plan['dbs']) . '): ' . implode(', ', array_column($plan['dbs'], 'my_name_vc')));
-if ($plan['skipdbs']) { warn('databases skipped: ' . implode(', ', $plan['skipdbs'])); }
-say('MySQL users (' . count($plan['users']) . '): ' . implode(', ', array_column($plan['users'], 'mu_name_vc')));
-if ($plan['skipusers']) { warn('MySQL users skipped: ' . implode(', ', $plan['skipusers'])); }
-say('FTP accounts (' . count($plan['ftp']) . '): ' . implode(', ', array_column($plan['ftp'], 'ft_user_vc')));
-if ($plan['skipftp']) { warn('FTP accounts skipped: ' . implode(', ', $plan['skipftp'])); }
-say('Mailboxes (' . count($plan['mail']) . ')' . ($plan['mail'] ? ': ' . implode(', ', array_column($plan['mail'], 'mb_address_vc')) : ''));
-if ($plan['skipmail']) { warn('mailboxes skipped: ' . implode(', ', $plan['skipmail'])); }
-say('Also: ' . $dnsCount . ' DNS record(s)' . ($OLDIP !== '' && !$opt['keep-ip'] ? " (those pointing to $OLDIP get $NEWIP)" : '') . ', ' . $counts['x_cronjobs'] . ' cron job(s), '
-    . $counts['x_htaccess'] . ' protected folder(s), ' . $counts['x_aliases'] . ' alias(es), ' . $counts['x_forwarders'] . ' forwarder(s), ' . $counts['x_distlists'] . ' distribution list(s)');
-say('Not moved (never): the old panel\'s modules (custom ones included) and add-ons, settings, themes and translations');
-say('PHP for these domains: ' . ($PHPV !== '' ? $PHPV : 'the server\'s own (' . sys_phpversions::DefaultVersion() . ')') . '; old server: PHP ' . $M['php']);
+ui_end_step();
+// --- the plan ----------------------------------------------------------------------------------------
+function plan_head($label, $n) { echo "\n  " . c('bold') . $label . c('reset') . ($n !== null ? c('dim') . " ($n)" . c('reset') : '') . "\n"; }
+function plan_item($a, $b = '') { printf("     %-34s %s%s%s\n", $a, c('dim'), $b, c('reset')); }
+function plan_warn($s) { global $WARN; $WARN++; ui_logline('WARNING: ' . $s); echo '  ' . c('yellow') . '[ !! ] ' . $s . c('reset') . "\n"; }
+function plan_line($label, $value) { printf("  %s%-18s%s %s\n", c('bold'), $label, c('reset'), $value); }
+plan_head('Domains', count($plan['domains']));
+foreach ($plan['domains'] as $v) {
+    plan_item($v['vh_name_vc'], 'public_html' . $v['vh_directory_vc']);
+}
+if ($plan['skipdomains']) { plan_warn('skipped, already on this server (or the panel\'s own address): ' . implode(', ', $plan['skipdomains'])); }
+plan_head('MySQL', null);
+plan_item('databases (' . count($plan['dbs']) . ')', implode(', ', array_column($plan['dbs'], 'my_name_vc')));
+plan_item('users (' . count($plan['users']) . ')', implode(', ', array_column($plan['users'], 'mu_name_vc')) . ($plan['users'] ? ', with their passwords' : ''));
+if ($plan['skipdbs']) { plan_warn('databases skipped: ' . implode(', ', $plan['skipdbs'])); }
+if ($plan['skipusers']) { plan_warn('MySQL users skipped: ' . implode(', ', $plan['skipusers'])); }
+plan_head('Also', null);
+plan_item('website files', is_file($filesTar) ? hsize(filesize($filesTar)) . ' packed, ' . ($opt['overwrite'] ? 'replacing' : 'keeping') . ' files already there' : 'NOT IN THE EXPORT');
+plan_item('FTP accounts (' . count($plan['ftp']) . ')', implode(', ', array_column($plan['ftp'], 'ft_user_vc')));
+plan_item('mailboxes (' . count($plan['mail']) . ')', implode(', ', array_column($plan['mail'], 'mb_address_vc')));
+plan_item('DNS records (' . $dnsCount . ')', $dnsCount && $OLDIP !== '' && !$opt['keep-ip'] ? "those pointing to $OLDIP get $NEWIP" : '');
+plan_item('cron jobs (' . $counts['x_cronjobs'] . '), protected folders (' . $counts['x_htaccess'] . ')', '');
+plan_item('aliases (' . $counts['x_aliases'] . '), forwarders (' . $counts['x_forwarders'] . '), lists (' . $counts['x_distlists'] . ')', '');
+if ($plan['skipftp']) { plan_warn('FTP accounts skipped: ' . implode(', ', $plan['skipftp'])); }
+if ($plan['skipmail']) { plan_warn('mailboxes skipped: ' . implode(', ', $plan['skipmail'])); }
+echo "\n";
+plan_line('PHP', ($PHPV !== '' ? $PHPV : 'this server\'s own (' . sys_phpversions::DefaultVersion() . ')') . c('dim') . '   (the old server ran ' . preg_replace('/-.*/', '', (string) $M['php']) . ')' . c('reset'));
 if ($PHPV !== '' && !sys_phpversions::IsEnabled($PHPV)) {
-    say("  (PHP $PHPV is switched off in PHP Versions: it is switched on for these domains)");
+    plan_line('', "PHP $PHPV is switched off in PHP Versions: it is switched on for these domains");
 }
 if ($PHPV !== '' && sys_phpversions::IsMigrationOnly($PHPV)) {
-    say("  PHP $PHPV gets no security fixes: move each site to PHP 8 (the domain's PHP choice) as soon as it runs.");
+    plan_line('', c('yellow') . "PHP $PHPV gets no security fixes: move each site to PHP 8 as soon as it runs" . c('reset'));
 }
 if ($M['php'] !== '' && version_compare($M['php'], '8.0', '<') && $PHPV === '') {
-    warn('the sites ran on PHP ' . $M['php'] . ' and get PHP 8 here: if one does not work, choose PHP 7.1 for its domain');
+    plan_warn('the sites ran on PHP ' . $M['php'] . ' and get PHP 8 here: if one does not work, choose PHP 7.1 for its domain');
 }
+plan_line('Never moved', c('dim') . 'the old panel\'s modules (custom ones included) and add-ons, settings, themes, translations' . c('reset'));
+echo "\n";
 if (!$APPLY) {
-    say('');
-    say('Nothing was changed. To do it: add --yes');
+    ui_bar('bg_title', '  Nothing was changed. To move it, run the same command with --yes');
+    echo "\n";
     cleanup();
     exit(0);
 }
 
 // --- a copy of this server's panel databases first ------------------------------------------------
+ui_step('Saving this server\'s panel databases first');
 $PRE = '/var/sentora/backups/pre-migrate-' . $STAMP;
 @mkdir($PRE, 0700, true);
 foreach (array('sentora_core', 'sentora_postfix', $FTPDB) as $db) {
@@ -305,15 +451,15 @@ foreach (array('sentora_core', 'sentora_postfix', $FTPDB) as $db) {
         stop("could not save $db first: $o");
     }
 }
-say('');
-say("This server's panel databases are saved in $PRE");
+ui_info("in $PRE");
 
 // --- the PHP version the domains get: switched on if it is off --------------------------------------
+ui_step('Adding the domains');
 if ($PHPV !== '' && !sys_phpversions::IsEnabled($PHPV)) {
     $on = array_filter(array_map('trim', explode(',', (string) ctrl_options::GetSystemOption('php_versions_enabled'))));
     $on[] = $PHPV;
     $zdbh->prepare("UPDATE x_settings SET so_value_tx = :v WHERE so_name_vc = 'php_versions_enabled'")->execute(array(':v' => implode(',', array_unique($on))));
-    say("PHP $PHPV: switched on in PHP Versions (the daemon starts it)");
+    ui_info("PHP $PHPV switched on in PHP Versions (the daemon starts it)");
 }
 
 // --- domains ----------------------------------------------------------------------------------------
@@ -335,9 +481,10 @@ foreach ($plan['domains'] as $v) {
         warn($v['vh_name_vc'] . ': its SSL settings were not copied (the old certificate files are not here): request a certificate in Sencrypt');
     }
 }
-say('Domains: ' . count($VHMAP) . ' added');
+ui_info(count($VHMAP) . ' added, PHP ' . ($PHPV !== '' ? $PHPV : sys_phpversions::DefaultVersion()));
 
 // --- website files ------------------------------------------------------------------------------------
+ui_step('Copying the website files (' . (is_file($filesTar) ? hsize(filesize($filesTar)) . ' packed' : 'none') . ')');
 if (is_file($filesTar)) {
     @mkdir($STAGE, 0700, true);
     if (!sh('tar -xzf ' . q($filesTar) . ' -C ' . q($STAGE) . ' --no-same-owner', $o)) {
@@ -360,15 +507,16 @@ if (is_file($filesTar)) {
                     }
                 }
             }
-            if ($n) { say("  $n .htaccess/.htpasswd file(s): $OLDHOME changed to $NEWHOME"); }
+            if ($n) { ui_info("$n .htaccess/.htpasswd file(s): $OLDHOME changed to $NEWHOME"); }
         }
-        say('Website files: copied to ' . $NEWHOME . '/public_html');
+        ui_info('into ' . $NEWHOME . '/public_html');
     } else {
         warn('the export has no public_html for ' . $OLDU);
     }
 }
 
 // --- DNS ----------------------------------------------------------------------------------------------
+ui_step('DNS records');
 $n = 0;
 $touched = array();
 foreach ($old("SELECT * FROM `$O`.x_dns WHERE dn_acc_fk = :a AND dn_deleted_ts IS NULL", array(':a' => $OLDID)) as $d) {
@@ -386,9 +534,10 @@ if ($touched) {
     $list = array_unique(array_merge($list, array_map('strval', array_keys($touched))));
     $zdbh->prepare("UPDATE x_settings SET so_value_tx = :v WHERE so_name_vc = 'dns_hasupdates'")->execute(array(':v' => implode(',', $list)));
 }
-say("DNS records: $n added");
+ui_info("$n added");
 
 // --- MySQL databases and users ---------------------------------------------------------------------
+ui_step('Loading the MySQL databases (' . count($plan['dbs']) . ')');
 $DBMAP = array();
 foreach ($plan['dbs'] as $d) {
     $name = $d['my_name_vc'];
@@ -398,8 +547,9 @@ foreach ($plan['dbs'] as $d) {
     }
     $zdbh->prepare("INSERT INTO x_mysql_databases (my_acc_fk, my_name_vc, my_usedspace_bi, my_created_ts) VALUES (?,?,0,?)")->execute(array($NEWID, $name, $d['my_created_ts'] ?: time()));
     $DBMAP[(int) $d['my_id_pk']] = (int) $zdbh->lastInsertId();
-    say("MySQL database: $name");
+    ui_info($name);
 }
+ui_step('MySQL users and their permissions');
 $MUMAP = array();
 $newpass = array();
 foreach ($plan['users'] as $u) {
@@ -432,9 +582,10 @@ foreach ($old("SELECT * FROM `$O`.x_mysql_dbmap WHERE mm_acc_fk = :a", array(':a
     $g++;
 }
 $zdbh->exec("FLUSH PRIVILEGES");
-say('MySQL users: ' . count($MUMAP) . " added, $g database permission(s)");
+ui_info(count($MUMAP) . " added, $g database permission(s)");
 
 // --- FTP ------------------------------------------------------------------------------------------------
+ui_step('FTP accounts');
 $owner = posix_getpwnam('web' . $NEWID);
 $n = 0;
 foreach ($plan['ftp'] as $f) {
@@ -454,9 +605,10 @@ foreach ($plan['ftp'] as $f) {
         ->execute(array($f['ft_user_vc'], $hash, $owner ? $owner['uid'] : 33, $owner ? $owner['gid'] : 33, $HOSTED . $NEWU . $dir));
     $n++;
 }
-say("FTP accounts: $n added");
+ui_info("$n added");
 
 // --- cron jobs and protected folders -----------------------------------------------------------------
+ui_step('Cron jobs and protected folders');
 $n = 0;
 foreach ($old("SELECT * FROM `$O`.x_cronjobs WHERE ct_acc_fk = :a AND ct_deleted_ts IS NULL", array(':a' => $OLDID)) as $c) {
     if ($taken("SELECT COUNT(*) FROM x_cronjobs WHERE ct_acc_fk = :a AND ct_fullpath_vc = :p AND ct_timing_vc = :t AND ct_deleted_ts IS NULL",
@@ -465,7 +617,7 @@ foreach ($old("SELECT * FROM `$O`.x_cronjobs WHERE ct_acc_fk = :a AND ct_deleted
         ->execute(array($NEWID, $c['ct_script_vc'], $c['ct_timing_vc'], $PATHFIX($c['ct_fullpath_vc']), $c['ct_description_tx'], $c['ct_created_ts'] ?: time()));
     $n++;
 }
-say("Cron jobs: $n added");
+ui_info("$n cron job(s)");
 $n = 0;
 foreach ($old("SELECT * FROM `$O`.x_htaccess WHERE ht_acc_fk = :a AND ht_deleted_ts IS NULL", array(':a' => $OLDID)) as $h) {
     if ($taken("SELECT COUNT(*) FROM x_htaccess WHERE ht_acc_fk = :a AND ht_dir_vc = :d AND ht_deleted_ts IS NULL", array(':a' => $NEWID, ':d' => $PATHFIX($h['ht_dir_vc'])))) { continue; }
@@ -493,9 +645,10 @@ foreach ($old("SELECT * FROM `$O`.x_htpasswd_mapper") as $m) {
         $zdbh->prepare("INSERT INTO x_htpasswd_mapper (x_htpasswd_file_id, x_htpasswd_user_id) VALUES (?,?)")->execute(array($HTF[(int) $m['x_htpasswd_file_id']], $HTU[(int) $m['x_htpasswd_user_id']]));
     }
 }
-say("Protected folders: $n added");
+ui_info("$n protected folder(s)");
 
 // --- mail -----------------------------------------------------------------------------------------------
+ui_step('Mailboxes, aliases, forwarders and lists');
 $domains = array_map(function ($v) { return strtolower($v['vh_name_vc']); }, $plan['domains']);
 $nm = 0;
 if ($plan['mail'] || $counts['x_aliases'] || $counts['x_forwarders'] || $counts['x_distlists']) {
@@ -542,12 +695,11 @@ if ($plan['mail'] || $counts['x_aliases'] || $counts['x_forwarders'] || $counts[
         }
     }
 }
-say("Mailboxes: $nm added" . ($nm ? ' (with their mail and passwords)' : ''));
+ui_info("$nm mailbox(es)" . ($nm ? ' with their mail and passwords' : ''));
 
 // --- let the daemon build it all ------------------------------------------------------------------
 $zdbh->exec("UPDATE x_settings SET so_value_tx = 'true' WHERE so_name_vc = 'apache_changed'");
-say('');
-say('Running the Sentora daemon: Linux user, folder permissions, websites, PHP pool, DNS, FTP, cron');
+ui_step('Running the Sentora daemon (websites, PHP pool, DNS, FTP, cron, permissions)');
 getenv('SENTORA_MIGRATE_NO_DAEMON') || sh('php -q ' . q($rootPath . 'bin/daemon.php') . ' > /var/sentora/logs/daemon-last-run.log', $o) || warn('the daemon run reported problems (see /var/sentora/logs/daemon-last-run.log)');
 if (posix_getpwnam('web' . $NEWID) && is_dir($NEWHOME)) {
     sys_accountphp::SetPermissions('web' . $NEWID, rtrim($NEWHOME, '/'));
@@ -555,11 +707,19 @@ if (posix_getpwnam('web' . $NEWID) && is_dir($NEWHOME)) {
 cleanup();
 
 // --- what to check ------------------------------------------------------------------------------------
-say('');
-say("Done: $OLDU is in $NEWU, with $WARN warning(s). Log: $LOG");
+ui_done();
+echo "\n";
+if ($WARN) {
+    ui_bar('bg_warn', "  $OLDU is moved into $NEWU, with $WARN warning(s) (above, and in the log)");
+} else {
+    ui_bar('bg_ok', "  $OLDU is moved into $NEWU");
+}
+ui_logline("Done: $OLDU is in $NEWU, with $WARN warning(s)");
+echo "\n";
 if ($newpass) {
-    say('These had no password that could be used again, and got a new one (change the sites\' settings to match):');
-    foreach ($newpass as $p) { say("  $p"); }
+    echo '  ' . c('bold') . c('yellow') . 'New passwords' . c('reset') . c('dim') . "  (these had none that could be used again: change the sites' settings to match)" . c('reset') . "\n";
+    foreach ($newpass as $p) { echo "     $p\n"; ui_logline('new password: ' . preg_replace('/:.*/', ': (shown on screen)', $p)); }
+    echo "\n";
 }
 $fsl = array();
 sh('grep -rliE --include=.htaccess "^[[:space:]]*Options[[:space:]].*FollowSymLinks" ' . q($NEWHOME . '/public_html'), $o);
@@ -567,8 +727,14 @@ foreach (array_filter(explode("\n", $o)) as $f) {
     if (strpos($f, $NEWHOME) === 0) { $fsl[] = substr($f, strlen($HOSTED)); }
 }
 if ($fsl) {
-    say('These .htaccess files use FollowSymLinks, which gives error 500 here (see Apache Admin > the domain: "A moved site gives error 500?"):');
-    foreach ($fsl as $f) { say("  $f"); }
+    echo '  ' . c('bold') . c('yellow') . 'Error 500 ahead' . c('reset') . c('dim') . '  these .htaccess files use FollowSymLinks (Apache Admin > the domain: "A moved site gives error 500?")' . c('reset') . "\n";
+    foreach ($fsl as $f) { echo "     $f\n"; ui_logline('FollowSymLinks: ' . $f); }
+    echo "\n";
 }
-say('Next: point the domains\' DNS to this server (' . $NEWIP . '), then open each site.');
+echo '  ' . c('bold') . 'Next' . c('reset') . "\n";
+echo "     1. Point the domains' DNS to this server ($NEWIP), then open each site.\n";
+if ($PHPV !== '' && sys_phpversions::IsMigrationOnly($PHPV)) {
+    echo "     2. Move each site to PHP 8 once it runs (the domain's PHP choice): PHP $PHPV gets no security fixes.\n";
+}
+echo '     ' . c('dim') . "This server's panel databases from before: $PRE    Log: $LOG" . c('reset') . "\n\n";
 exit($WARN ? 3 : 0);
