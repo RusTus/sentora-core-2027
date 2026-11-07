@@ -1,60 +1,98 @@
 <div class="zmodule_content panel" id="zmodule_header_<@ ModuleName @>">
     <div class="panel-heading">
         <img src="<@ ModuleIcon @>" width="35" height="35" border="0" alt="<@ ModuleName @>">
-
-        <div class="zmodule_title">
-            <@ ModuleName @>
-        </div>
-
+        <div class="zmodule_title"><@ ModuleName @></div>
         <div class="zmodule_desc" id="zmodule_desc_<@ ModuleName @>"><@ ModuleDesc @></div>
-
     </div>
-
     <@ Result @>
+    <link rel="stylesheet" href="modules/sentoraconfig/assets/config.css">
 
-    <div class="zgrid_wrapper">
-        <h2><: Configure your Sentora Settings :></h2>
-        <form action="./?module=sentoraconfig&action=UpdateConfig" method="post">
-            <table class="table table-striped">
-                <% loop Config %>
-                <tr valign="top">
-                    <th nowrap="nowrap"><& cleanname &></th>
-                    <td><& fieldhtml &><br><& description &><br><br></td>
-                </tr>
-                <% endloop %>
-                <tr>
-                    <th colspan="3">
-                        <@ CSFR_Tag @><button class="button-loader btn btn-primary" type="submit" id="button" name="inSaveSystem"><: Save Changes :></button>
-                    </th>
-                </tr>
-            </table>
-        </form>
+    <div class="sc" id="sc" data-unsaved="<: You have changes that are not saved. :>" data-reset="<: Queue a full daemon run? Every daily, weekly and monthly job runs again within 5 minutes. :>">
+        <div class="sc-tiles"><@ Summary @></div>
+
+        <div class="sc-card">
+            <nav class="sc-tabs" role="tablist" aria-label="<: Settings :>"></nav>
+
+            <form class="sc-form" action="./?module=sentoraconfig&amp;action=UpdateConfig" method="post" autocomplete="off">
+                <@ SettingsPanes @>
+                <div class="sc-foot">
+                    <span class="sc-dirty" hidden><svg class="sc-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg><: Unsaved changes :></span>
+                    <span class="sc-hint"><: Changes on every tab are saved together. :></span>
+                    <@ CSFR_Tag @><button class="btn btn-primary" type="submit" name="inSaveSystem"><: Save changes :></button>
+                </div>
+            </form>
+
+            <section class="sc-pane" id="sc-daemon" data-title="<: Daemon :>" role="tabpanel">
+                <p class="sc-intro"><: The daemon does the panel's background work as root: it writes the web, mail and DNS settings and runs the daily, weekly and monthly jobs. Cron starts it every 5 minutes. :></p>
+                <div class="sc-runs"><@ DaemonRows @></div>
+                <form class="sc-reset" action="./?module=sentoraconfig&amp;action=ForceDaemon" method="post">
+                    <div><b><: Full daemon run :></b><small><: Resets the run times above so the next run also does every daily, weekly and monthly job, such as backups and statistics. :></small></div>
+                    <@ CSFR_Tag @><button class="btn btn-default" type="submit" name="inForceFull"><: Queue a full run :></button>
+                </form>
+            </section>
+        </div>
     </div>
-
-    <div class="zgrid_wrapper">
-        <h2><: Sentora Daemon :></h2>
-        <form action="./?module=sentoraconfig&action=ForceDaemon" method="post">
-            <table class="table table-striped">
-                <tr valign="top">
-                    <th nowrap="nowrap" width="300px"><: Next Daemon Run :>:</th><td><@ NextRunTime @></td>
-                </tr>
-                <tr valign="top">
-                    <th nowrap="nowrap"><: Last Daemon Run :>:</th><td><% if LastRunTime %><@ LastRunTime @><% else %><: Never :><% endif %></td>
-                </tr>
-                <tr valign="top">
-                    <th nowrap="nowrap"><: Last Day Daemon Run :>:</th><td><% if LastDayRunTime %><@ LastDayRunTime @><% else %><: Never :><% endif %></td>
-                </tr>
-                <tr valign="top">
-                    <th nowrap="nowrap"><: Last Week Daemon Run :>:</th><td><% if LastWeekRunTime %><@ LastWeekRunTime @><% else %><: Never :><% endif %></td>
-                </tr>
-                <tr valign="top">
-                    <th nowrap="nowrap"><: Last Month Daemon Run :>:</th><td><% if LastMonthRunTime %><@ LastMonthRunTime @><% else %><: Never :><% endif %></td>
-                </tr>
-                <tr>
-                    <th><: Queue a full daemon run (reset) :>:</th><td><@ CSFR_Tag @><button class="btn btn-primary" type="submit" id="button" name="inForceFull"><: Go :></button></td>
-                </tr>
-            </table>
-        </form>
-    </div>
-
 </div>
+<script>
+(function () {
+    'use strict';
+    var sc = document.getElementById('sc'); if (!sc) { return; }
+    var tabs = sc.querySelector('.sc-tabs'), panes = sc.querySelectorAll('.sc-pane'), foot = sc.querySelector('.sc-foot');
+    var form = sc.querySelector('.sc-form');
+    var show = function (id) {
+        Array.prototype.forEach.call(panes, function (p) { p.hidden = p.id !== id; });
+        Array.prototype.forEach.call(tabs.children, function (b) {
+            var on = b.getAttribute('data-pane') === id;
+            b.classList.toggle('active', on); b.setAttribute('aria-selected', on ? 'true' : 'false');
+        });
+        foot.hidden = id === 'sc-daemon';
+        try { sessionStorage.setItem('sc-tab', id); } catch (e) {}
+    };
+    Array.prototype.forEach.call(panes, function (p) {
+        var b = document.createElement('button');
+        b.type = 'button'; b.className = 'sc-tab'; b.setAttribute('role', 'tab'); b.setAttribute('data-pane', p.id);
+        b.textContent = p.getAttribute('data-title');
+        b.addEventListener('click', function () { show(p.id); });
+        tabs.appendChild(b);
+    });
+    var saved = null;
+    try { saved = sessionStorage.getItem('sc-tab'); } catch (e) {}
+    show(saved && document.getElementById(saved) ? saved : panes[0].id);
+
+    // a field the server did not accept: open its tab
+    form.addEventListener('invalid', function (e) {
+        var pane = e.target.closest('.sc-pane'); if (pane && pane.hidden) { show(pane.id); }
+    }, true);
+
+    // SMTP fields only matter when SMTP is used, the login ones only with AUTH
+    var smtpOn = function () {
+        var use = sc.querySelector('input[type=checkbox][name=email_smtp]'), how = sc.querySelector('select[name=mailer_type]');
+        return (use && use.checked) || (how && how.value === 'smtp');
+    };
+    var sync = function () {
+        var on = smtpOn(), auth = sc.querySelector('input[type=checkbox][name=smtp_auth]');
+        Array.prototype.forEach.call(sc.querySelectorAll('.sc-smtp'), function (el) { el.classList.toggle('sc-off', !on); });
+        Array.prototype.forEach.call(sc.querySelectorAll('.sc-auth'), function (el) { el.classList.toggle('sc-off', !on || !(auth && auth.checked)); });
+        var log = sc.querySelector('select[name=logmode]'), file = sc.querySelector('[name=logfile]');
+        if (log && file) { file.closest('.sc-field').classList.toggle('sc-off', log.value !== 'file'); }
+    };
+    sync();
+
+    // mark unsaved changes, and ask before leaving with them
+    var start = new FormData(form), dirty = false;
+    var same = function () {
+        var now = new FormData(form), a = [], b = [];
+        start.forEach(function (v, k) { if (k !== 'csfr_token') { a.push(k + '=' + v); } });
+        now.forEach(function (v, k) { if (k !== 'csfr_token') { b.push(k + '=' + v); } });
+        return a.join('&') === b.join('&');
+    };
+    var check = function () { sync(); dirty = !same(); sc.querySelector('.sc-dirty').hidden = !dirty; };
+    form.addEventListener('input', check); form.addEventListener('change', check);
+    form.addEventListener('submit', function () { dirty = false; if (window.Sentora && Sentora.loader) { Sentora.loader.showLoader(); } });
+    window.addEventListener('beforeunload', function (e) { if (dirty) { e.preventDefault(); e.returnValue = sc.getAttribute('data-unsaved'); } });
+
+    sc.querySelector('.sc-reset').addEventListener('submit', function (e) {
+        if (!window.confirm(sc.getAttribute('data-reset'))) { e.preventDefault(); }
+    });
+})();
+</script>

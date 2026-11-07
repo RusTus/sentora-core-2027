@@ -1,0 +1,68 @@
+/* Sentora Config in the panel's style. Colours come from the theme's shared --sn-* variables
+   (etc/styles/THEMES.md), with these as the fallback, so it follows Light, Dark and Auto. */
+.sc { --sc-ink: var(--sn-ink, #1f2933); --sc-muted: var(--sn-muted, #6b7785); --sc-line: var(--sn-line, #e6e9ee);
+      --sc-card: var(--sn-card, #ffffff); --sc-bg: var(--sn-soft, #f4f6f9); --sc-field-line: var(--sn-line-strong, #cfd6de);
+      --sc-accent: var(--sn-accent, #447fb3);
+      color: var(--sc-ink); background: var(--sc-bg); border-radius: 8px; padding: 18px; margin-top: 10px; }
+.sc * { box-sizing: border-box; }
+.sc [hidden] { display: none !important; }
+.sc-ico { width: 16px; height: 16px; flex: none; }
+
+/* the figures at the top */
+.sc-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 14px; }
+.sc-tile { background: var(--sc-card); border-radius: 6px; box-shadow: 0 1px 3px rgba(20,30,40,0.08); padding: 12px 14px; border-left: 4px solid var(--sc-field-line); min-width: 0; }
+.sc-tile.ok { border-left-color: var(--sn-ok, #2db87d); }
+.sc-tile.warn { border-left-color: #f5a623; }
+.sc-tile span { display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: var(--sc-muted); }
+.sc-tile b { display: block; font-size: 15px; margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* the card with its tabs */
+.sc-card { background: var(--sc-card); border-radius: 6px; box-shadow: 0 1px 3px rgba(20,30,40,0.08); padding: 4px 18px 16px; }
+.sc-tabs { display: flex; flex-wrap: wrap; gap: 2px; border-bottom: 1px solid var(--sc-line); margin: 0 -18px 0; padding: 0 12px; }
+.sc-tab { background: none; border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px; padding: 12px 14px 10px; font-size: 14px; font-weight: 600; color: var(--sc-muted); cursor: pointer; }
+.sc-tab:hover { color: var(--sc-ink); }
+.sc-tab.active { color: var(--sc-accent); border-bottom-color: var(--sc-accent); }
+.sc-tab:focus-visible { outline: 2px solid var(--sc-accent); outline-offset: -2px; border-radius: 4px 4px 0 0; }
+.sc-intro { color: var(--sc-muted); font-size: 13px; margin: 14px 0 14px; }
+
+/* fields */
+.sc-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 22px; }
+.sc-field { min-width: 0; transition: opacity .15s; }
+.sc-field > label:not(.sc-switch), .sc-switchrow label[for] { display: block; font-size: 13px; font-weight: 600; margin: 0 0 5px; }
+.sc-field small { display: block; color: var(--sc-muted); font-size: 12px; line-height: 1.4; margin-top: 5px; }
+.sc-field textarea { resize: vertical; }
+.sc-code { font-family: SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+.sc-wide { grid-column: 1 / -1; }
+.sc-now b { color: var(--sc-ink); font-weight: 600; }
+.sc-off { opacity: 0.45; }
+.sc-switchrow { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; padding: 10px 12px; border: 1px solid var(--sc-line); border-radius: 6px; align-self: start; }
+.sc-switchrow label[for] { margin: 0; }
+.sc-switch { display: inline-flex; position: relative; margin: 2px 0 0; cursor: pointer; flex: none; }
+.sc-switch input[type=checkbox] { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.sc-toggle { position: relative; width: 36px; height: 20px; border-radius: 10px; background: var(--sc-field-line); transition: background .15s; }
+.sc-toggle::after { content: ""; position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: transform .15s; box-shadow: 0 1px 2px rgba(0,0,0,0.2); }
+.sc-switch input:checked + .sc-toggle { background: var(--sn-ok, #2db87d); }
+.sc-switch input:checked + .sc-toggle::after { transform: translateX(16px); }
+.sc-switch input:focus-visible + .sc-toggle { outline: 2px solid var(--sc-accent); outline-offset: 2px; }
+
+/* save bar */
+.sc-foot { display: flex; align-items: center; justify-content: flex-end; gap: 12px; flex-wrap: wrap; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--sc-line); }
+.sc-hint { color: var(--sc-muted); font-size: 12px; margin-right: auto; }
+.sc-dirty { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--sn-warn, #8f5b00); }
+
+/* daemon */
+.sc-runs { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-bottom: 16px; }
+.sc-run { border: 1px solid var(--sc-line); border-radius: 6px; padding: 10px 12px; min-width: 0; }
+.sc-run span { display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: var(--sc-muted); }
+.sc-run b { display: block; font-size: 13px; margin-top: 4px; }
+.sc-run small { display: block; font-size: 12px; color: var(--sc-muted); }
+.sc-run .sc-never { color: var(--sc-muted); font-weight: 600; }
+.sc-run.sc-next { border-color: var(--sn-info-line, #b3d5e8); background: var(--sn-info-soft, #e4f1f8); }
+.sc-run.sc-next span, .sc-run.sc-next small { color: var(--sn-info, #2a5f80); }
+.sc-reset { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px 14px; border: 1px solid var(--sc-line); border-radius: 6px; margin: 0; }
+.sc-reset b { display: block; font-size: 14px; }
+.sc-reset small { display: block; color: var(--sc-muted); font-size: 12px; margin-top: 2px; }
+
+@media (max-width: 980px) { .sc-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } .sc-runs { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 640px) { .sc { padding: 12px; } .sc-card { padding: 4px 12px 12px; } .sc-tabs { margin: 0 -12px; padding: 0 4px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; } .sc-tab { flex: none; } .sc-tile b { white-space: normal; font-size: 14px; } .sc-tab { padding: 10px 9px 8px; font-size: 13px; }
+    .sc-fields { grid-template-columns: 1fr; } .sc-reset { flex-direction: column; align-items: stretch; } }

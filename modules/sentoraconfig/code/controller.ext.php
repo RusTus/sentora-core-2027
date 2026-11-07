@@ -30,135 +30,310 @@
 class module_controller extends ctrl_module
 {
 
-    /** @var bool|null True after the settings were saved or a daemon run was forced (shown by getResult()). */
-    static $ok;
+    /** @var string|null What the last action did: 'saved', 'nochange', 'daemon' (shown by getResult()). */
+    static $done;
+
+    /** @var array<int, string> Settings that were not saved, with the reason (shown by getResult()). */
+    static $errors = array();
 
     /**
-     * List the module's user-editable settings for the settings form (template <% loop Config %>).
+     * The sections of the page and the settings in each, in order. A setting in the database that is
+     * not listed here is shown under "Other", so a new one never goes missing.
      *
-     * The SMTP password gets a password field.
+     * @return array<string, array{0: string, 1: string, 2: array<int, string>}> Key => [title, intro, setting names].
+     */
+    static function Sections()
+    {
+        return array(
+            'panel' => array('Panel', 'How the panel is reached and shown.',
+                array('sentora_port', 'server_ip', 'panel_ip_access', 'Sentora_df', 'root_drive', 'servicechk_to', 'panel_ssl_tx')),
+            'security' => array('Security', 'Logins and passwords.',
+                array('twofactor_enabled', 'password_minlength', 'login_csfr')),
+            'email' => array('Email', 'How the panel sends email: notices, password resets and the welcome message.',
+                array('mailer_type', 'email_from_name', 'email_from_address', 'email_smtp', 'smtp_server', 'smtp_port', 'smtp_secure', 'smtp_auth', 'smtp_username', 'smtp_password', 'welcome_message')),
+            'logging' => array('Logging', 'Where errors go, and whether PHP shows them.',
+                array('debug_mode', 'logmode', 'logfile')),
+        );
+    }
+
+    /**
+     * How each setting is shown: a label, help text, the field type and names for its choices.
+     * Anything not listed falls back to the database's own name and description.
+     *
+     * @return array<string, array<string, mixed>> Setting name => 'label', 'help', 'type' (text, number, email, area, code, switch, select, password), 'min', 'max', 'choices', 'clear' (may be emptied), 'apache' (changing it rewrites the vhosts).
+     */
+    static function Fields()
+    {
+        return array(
+            'sentora_port' => array('label' => 'Panel port', 'help' => 'The port Apache serves the panel on (80, or 443 with SSL). Takes effect on the next daemon run.', 'type' => 'number', 'min' => 1, 'max' => 65535, 'apache' => true),
+            'server_ip' => array('label' => 'Server IP address', 'help' => "This server's public address, used in DNS records and the panel's links. Empty: found automatically.", 'type' => 'text', 'clear' => true, 'ip' => true, 'apache' => true),
+            'panel_ip_access' => array('label' => 'Serve the panel on the server IP', 'help' => "Also show the panel at the server's own IP address (https://ip), not only at its host name.", 'type' => 'switch', 'apache' => true),
+            'Sentora_df' => array('label' => 'Date format', 'help' => 'How dates are shown in the panel, as a PHP date() format.', 'type' => 'text', 'date' => true),
+            'root_drive' => array('label' => 'Root drive', 'help' => 'The drive Sentora is installed on, for the disk figures.', 'type' => 'text'),
+            'servicechk_to' => array('label' => 'Service check timeout', 'help' => 'Seconds to wait for a service before it is shown as down.', 'type' => 'number', 'min' => 1, 'max' => 120),
+            'panel_ssl_tx' => array('label' => 'Panel SSL settings', 'help' => "Apache SSL lines for the panel's own site. Sencrypt fills this in when you secure the panel; empty: the panel is served without SSL.", 'type' => 'code', 'clear' => true, 'apache' => true),
+            'twofactor_enabled' => array('label' => 'Two-factor login', 'help' => 'A 6-digit code from an authenticator app as well as the password.', 'type' => 'select',
+                'choices' => array('disabled' => 'Off', 'enabled' => 'Each account can turn it on', 'enabled-forced' => 'Required for every account')),
+            'password_minlength' => array('label' => 'Shortest password', 'help' => 'The fewest characters a new password may have.', 'type' => 'number', 'min' => 6, 'max' => 128),
+            'login_csfr' => array('label' => 'Allow remote login forms', 'help' => "Accept logins posted from other sites' forms. This turns off the login form's protection against forged requests: leave it off unless you need it.", 'type' => 'switch'),
+            'mailer_type' => array('label' => 'Send email with', 'help' => "PHP's mail() uses this server's mail system; SMTP sends through the server below.", 'type' => 'select',
+                'choices' => array('mail' => 'PHP mail()', 'smtp' => 'SMTP', 'sendmail' => 'Sendmail')),
+            'email_from_name' => array('label' => 'From name', 'help' => 'The sender name on the email the panel sends.', 'type' => 'text'),
+            'email_from_address' => array('label' => 'From address', 'help' => 'The sender address on the email the panel sends.', 'type' => 'email'),
+            'email_smtp' => array('label' => 'Use an SMTP server', 'help' => 'Send through the SMTP server below.', 'type' => 'switch'),
+            'smtp_server' => array('label' => 'SMTP server', 'help' => 'Host name or address.', 'type' => 'text', 'clear' => true, 'smtp' => true),
+            'smtp_port' => array('label' => 'SMTP port', 'help' => '25, 465 (SSL) or 587 (TLS).', 'type' => 'number', 'min' => 1, 'max' => 65535, 'smtp' => true),
+            'smtp_secure' => array('label' => 'Encryption', 'help' => 'How the connection to the SMTP server is secured.', 'type' => 'select',
+                'choices' => array('false' => 'None', 'ssl' => 'SSL', 'tls' => 'TLS (STARTTLS)'), 'smtp' => true),
+            'smtp_auth' => array('label' => 'Log in to the SMTP server', 'help' => 'The server needs a user name and password.', 'type' => 'switch', 'smtp' => true),
+            'smtp_username' => array('label' => 'SMTP user', 'help' => '', 'type' => 'text', 'clear' => true, 'smtp' => true, 'auth' => true),
+            'smtp_password' => array('label' => 'SMTP password', 'help' => 'Leave empty to keep the saved one.', 'type' => 'password', 'smtp' => true, 'auth' => true),
+            'welcome_message' => array('label' => 'Welcome email', 'help' => 'Sent to new clients when their account is made. {{fullname}}, {{username}}, {{password}} and {{controlpanelurl}} are filled in.', 'type' => 'area', 'wide' => true),
+            'debug_mode' => array('label' => 'PHP errors', 'help' => 'Development shows PHP errors, warnings and notices on the page; keep it on Production for a live server.', 'type' => 'select',
+                'choices' => array('prod' => 'Production: hide them', 'dev' => 'Development: show them')),
+            'logmode' => array('label' => 'Log errors to', 'help' => '', 'type' => 'select',
+                'choices' => array('db' => 'The database', 'file' => 'A file (below)', 'email' => 'Email')),
+            'logfile' => array('label' => 'Log file', 'help' => 'Used when errors are logged to a file.', 'type' => 'text'),
+        );
+    }
+
+    /**
+     * The module's user-editable settings from x_settings, keyed by name.
      *
      * @global db_driver $zdbh The panel's database connection.
-     * @return array<int, array<string, string>>|false One row per setting: 'cleanname', 'name', 'description', 'value', 'fieldhtml'; false when there are none.
+     * @return array<string, array<string, mixed>> Setting name => its x_settings row.
      */
-    static function getConfig()
+    static function Settings()
     {
         global $zdbh;
-        $currentuser = ctrl_users::GetUserDetail();
-        $sql = "SELECT * FROM x_settings WHERE so_module_vc=:module AND so_usereditable_en = 'true' ORDER BY so_cleanname_vc";
+        $sql = $zdbh->prepare("SELECT * FROM x_settings WHERE so_module_vc = :module AND so_usereditable_en = 'true' ORDER BY so_cleanname_vc");
         $module = ui_module::GetModuleName();
-        $numrows = $zdbh->prepare($sql);
-        $numrows->bindParam(':module', $module);
-        $numrows->execute();
-        if ($numrows->fetchColumn() <> 0) {
-            $sql = $zdbh->prepare($sql);
-            $sql->bindParam(':module', $module);
-            $res = array();
-            $sql->execute();
-            while ($rowsettings = $sql->fetch()) {
-                if (ctrl_options::CheckForPredefinedOptions($rowsettings['so_defvalues_tx'])) {
-                    $fieldhtml = ctrl_options::OuputSettingMenuField($rowsettings['so_name_vc'], $rowsettings['so_defvalues_tx'], $rowsettings['so_value_tx']);
-                } else {
-                    $fieldhtml = ctrl_options::OutputSettingTextArea($rowsettings['so_name_vc'], $rowsettings['so_value_tx']);
-                }
-                if (strpos(ctrl_options::OutputSettingTextArea($rowsettings['so_name_vc']),'smtp_password') !== false) {
-                    // The stored password is never sent to the browser: an empty box keeps it
-                    // (doUpdateConfig skips empty fields), typing a new one replaces it
-                    $fieldhtml = '<input type="password" name="smtp_password" value="" autocomplete="new-password" placeholder="'
-                        . htmlspecialchars(ui_language::translate((string) $rowsettings['so_value_tx'] !== '' ? 'Saved (leave empty to keep it)' : 'Not set'), ENT_QUOTES, 'UTF-8') . '">';
-                }
-                array_push($res, array('cleanname' => ui_language::translate($rowsettings['so_cleanname_vc']),
-                    'name' => $rowsettings['so_name_vc'],
-                    'description' => ui_language::translate($rowsettings['so_desc_tx']),
-                    'value' => $rowsettings['so_value_tx'],
-                    'fieldhtml' => $fieldhtml));
+        $sql->bindParam(':module', $module);
+        $sql->execute();
+        $res = array();
+        while ($row = $sql->fetch()) {
+            $res[$row['so_name_vc']] = $row;
+        }
+        return $res;
+    }
+
+    /**
+     * Whether a list of choices is just true and false (shown as a switch).
+     *
+     * @param string|null $defvalues The so_defvalues_tx value ("a|b|c").
+     * @return bool True for "true|false" in either order.
+     */
+    static function IsBoolean($defvalues)
+    {
+        $v = explode('|', strtolower((string) $defvalues));
+        sort($v);
+        return $v === array('false', 'true');
+    }
+
+    /**
+     * The settings form: one pane per section, each a grid of fields (template <@ SettingsPanes @>).
+     *
+     * @return string The HTML.
+     */
+    static function getSettingsPanes()
+    {
+        $h = function ($s) { return htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8'); };
+        $t = function ($s) { return ui_language::translate($s); };
+        $settings = self::Settings();
+        $fields = self::Fields();
+        $sections = self::Sections();
+        $listed = array();
+        foreach ($sections as $sec) {
+            $listed = array_merge($listed, array_map('strtolower', $sec[2]));
+        }
+        $other = array();
+        foreach ($settings as $name => $row) {
+            if (!in_array(strtolower($name), $listed, true)) {
+                $other[] = $name;
             }
-            return $res;
-        } else {
+        }
+        if ($other) {
+            $sections['other'] = array('Other', 'Settings this page has no section for.', $other);
+        }
+        // the settings by lower-case name: Sentora_df is stored with a capital
+        $byname = array();
+        foreach ($settings as $name => $row) {
+            $byname[strtolower($name)] = $row;
+        }
+        $out = '';
+        foreach ($sections as $key => $sec) {
+            $rows = '';
+            foreach ($sec[2] as $name) {
+                if (!isset($byname[strtolower($name)])) {
+                    continue;
+                }
+                $row = $byname[strtolower($name)];
+                $name = $row['so_name_vc'];
+                $f = isset($fields[$name]) ? $fields[$name] : array();
+                $label = isset($f['label']) ? $f['label'] : $row['so_cleanname_vc'];
+                $help = isset($f['help']) ? $f['help'] : $row['so_desc_tx'];
+                $value = (string) $row['so_value_tx'];
+                $type = isset($f['type']) ? $f['type'] : (self::IsBoolean($row['so_defvalues_tx']) ? 'switch' : (ctrl_options::CheckForPredefinedOptions($row['so_defvalues_tx']) ? 'select' : 'text'));
+                $id = 'sc_' . preg_replace('/[^A-Za-z0-9_]/', '', $name);
+                $attr = ' name="' . $h($name) . '" id="' . $id . '"';
+                $cls = 'sc-field' . (!empty($f['wide']) || $type === 'code' ? ' sc-wide' : '') . (!empty($f['smtp']) ? ' sc-smtp' : '') . (!empty($f['auth']) ? ' sc-auth' : '');
+                $extra = '';
+                switch ($type) {
+                    case 'switch':
+                        $on = strtolower($value) === 'true';
+                        $rows .= '<div class="' . $cls . ' sc-switchrow"><div><label for="' . $id . '">' . $h($t($label)) . '</label>'
+                            . ($help !== '' ? '<small>' . $h($t($help)) . '</small>' : '') . '</div>'
+                            . '<label class="sc-switch"><input type="hidden" name="' . $h($name) . '" value="false"><input type="checkbox"' . $attr . ' value="true"' . ($on ? ' checked' : '') . '><span class="sc-toggle"></span></label></div>';
+                        continue 2;
+                    case 'select':
+                        $choices = isset($f['choices']) ? $f['choices'] : array();
+                        $field = '<select class="form-control"' . $attr . '>';
+                        foreach (explode('|', (string) $row['so_defvalues_tx']) as $opt) {
+                            $field .= '<option value="' . $h($opt) . '"' . ($opt === $value ? ' selected' : '') . '>' . $h(isset($choices[$opt]) ? $t($choices[$opt]) : $opt) . '</option>';
+                        }
+                        $field .= '</select>';
+                        break;
+                    case 'number':
+                        $field = '<input class="form-control" type="number"' . $attr . ' value="' . $h($value) . '"'
+                            . (isset($f['min']) ? ' min="' . (int) $f['min'] . '"' : '') . (isset($f['max']) ? ' max="' . (int) $f['max'] . '"' : '') . ' required>';
+                        break;
+                    case 'email':
+                        $field = '<input class="form-control" type="text" inputmode="email"' . $attr . ' value="' . $h($value) . '" autocomplete="off" required>';
+                        break;
+                    case 'password':
+                        // the stored password is never sent to the browser: empty keeps it
+                        $field = '<input class="form-control" type="password"' . $attr . ' value="" autocomplete="new-password" placeholder="'
+                            . $h($t($value !== '' ? 'Saved (leave empty to keep it)' : 'Not set')) . '">';
+                        break;
+                    case 'area':
+                        $field = '<textarea class="form-control" rows="8"' . $attr . '>' . $h($value) . '</textarea>';
+                        break;
+                    case 'code':
+                        $field = '<textarea class="form-control sc-code" rows="5" spellcheck="false"' . $attr . '>' . $h($value) . '</textarea>';
+                        break;
+                    default:
+                        $field = '<input class="form-control" type="text"' . $attr . ' value="' . $h($value) . '" autocomplete="off"' . (empty($f['clear']) ? ' required' : '') . '>';
+                }
+                if (!empty($f['date'])) {
+                    $extra = '<small class="sc-now">' . $h($t('Now:')) . ' <b>' . $h(@date($value)) . '</b></small>';
+                }
+                $rows .= '<div class="' . $cls . '"><label for="' . $id . '">' . $h($t($label)) . '</label>' . $field
+                    . ($help !== '' ? '<small>' . $h($t($help)) . '</small>' : '') . $extra . '</div>';
+            }
+            if ($rows === '') {
+                continue;
+            }
+            $out .= '<section class="sc-pane" id="sc-' . $key . '" data-title="' . $h($t($sec[0])) . '" role="tabpanel">'
+                . '<p class="sc-intro">' . $h($t($sec[1])) . '</p><div class="sc-fields">' . $rows . '</div></section>';
+        }
+        return $out;
+    }
+
+    /**
+     * A date in the panel's format (sentora_df), with how long ago or from now as a tooltip-free note.
+     *
+     * @param int|string $time A Unix time; 0 or empty means never.
+     * @return string|false The formatted date, or false for never.
+     */
+    static function When($time)
+    {
+        if ((int) $time <= 0) {
             return false;
         }
+        return date(ctrl_options::GetSystemOption('sentora_df'), (int) $time);
     }
 
     /**
-     * When the daemon last ran, formatted with the sentora_df setting (template <@ LastRunTime @>).
+     * How far a time is from now, in words ("in 4 min", "2 h ago").
      *
-     * @return string|false The date, or false when it has not run (or a full run was forced).
+     * @param int $time A Unix time.
+     * @return string The words.
      */
-    static function getLastRunTime()
+    static function Ago($time)
     {
-        $time = ctrl_options::GetSystemOption('daemon_lastrun');
-        if ($time != '0') {
-            return date(ctrl_options::GetSystemOption('sentora_df'), $time);
-        } else {
-            return false;
+        $d = (int) $time - time();
+        $a = abs($d);
+        if ($a < 60) {
+            $w = ui_language::translate($d >= 0 ? 'under a minute' : 'just now');
+            return $d >= 0 ? ui_language::translate('in') . ' ' . $w : $w;
         }
+        if ($a < 3600) {
+            $w = floor($a / 60) . ' min';
+        } elseif ($a < 172800) {
+            $w = floor($a / 3600) . ' h';
+        } else {
+            $w = floor($a / 86400) . ' ' . ui_language::translate('days');
+        }
+        return $d >= 0 ? ui_language::translate('in') . ' ' . $w : $w . ' ' . ui_language::translate('ago');
     }
 
     /**
-     * When the daemon runs next: the last run plus daemon_run_interval, else the next 5-minute mark (template <@ NextRunTime @>).
+     * The daemon's run times as rows: next run, last run, and the last daily, weekly and monthly jobs (template <@ DaemonRows @>).
      *
-     * @return string The formatted date.
+     * @return string The HTML.
      */
-    static function getNextRunTime()
+    static function getDaemonRows()
     {
-        if (ctrl_options::GetSystemOption('daemon_lastrun') > 0) {
-            $new_time = ctrl_options::GetSystemOption('daemon_lastrun') + ctrl_options::GetSystemOption('daemon_run_interval');
-            return date(ctrl_options::GetSystemOption('sentora_df'), $new_time);
-        } else {
-            // The default cron is set to run every 5 minutes on the 5 minute mark!
-            return date(ctrl_options::GetSystemOption('sentora_df'), ceil(time() / 300) * 300);
+        $h = function ($s) { return htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8'); };
+        $last = (int) ctrl_options::GetSystemOption('daemon_lastrun');
+        $next = $last > 0 ? $last + (int) ctrl_options::GetSystemOption('daemon_run_interval') : (int) (ceil(time() / 300) * 300);
+        if ($next < time()) {
+            // overdue: cron runs it on the next 5-minute mark
+            $next = (int) (ceil(time() / 300) * 300);
         }
+        $rows = array(
+            array('Next run', $next, 'sc-next'),
+            array('Last run', $last, ''),
+            array('Daily jobs', ctrl_options::GetSystemOption('daemon_dayrun'), ''),
+            array('Weekly jobs', ctrl_options::GetSystemOption('daemon_weekrun'), ''),
+            array('Monthly jobs', ctrl_options::GetSystemOption('daemon_monthrun'), ''),
+        );
+        $out = '';
+        foreach ($rows as $r) {
+            $when = self::When($r[1]);
+            $out .= '<div class="sc-run ' . $r[2] . '"><span>' . $h(ui_language::translate($r[0])) . '</span>'
+                . ($when === false ? '<b class="sc-never">' . $h(ui_language::translate('Not since the last reset')) . '</b>'
+                    : '<b>' . $h($when) . '</b><small>' . $h(self::Ago($r[1])) . '</small>') . '</div>';
+        }
+        return $out;
     }
 
     /**
-     * When the daily daemon jobs last ran (template <@ LastDayRunTime @>).
+     * The figures at the top of the page: panel port, mail method, two-factor and debug mode (template <@ Summary @>).
      *
-     * @return string|false The formatted date, or false when they have not run.
+     * @return string The HTML.
      */
-    static function getLastDayRunTime()
+    static function getSummary()
     {
-        $time = ctrl_options::GetSystemOption('daemon_dayrun');
-        if ($time != '0') {
-            return date(ctrl_options::GetSystemOption('sentora_df'), $time);
-        } else {
-            return false;
+        $h = function ($s) { return htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8'); };
+        $t = function ($s) { return ui_language::translate($s); };
+        $f = self::Fields();
+        $pick = function ($name) use ($f, $t) {
+            $v = (string) ctrl_options::GetSystemOption($name);
+            return isset($f[$name]['choices'][$v]) ? $t($f[$name]['choices'][$v]) : $v;
+        };
+        $port = (string) ctrl_options::GetSystemOption('sentora_port');
+        $ssl = (string) ctrl_options::GetSystemOption('panel_ssl_tx') !== '';
+        $mail = ctrl_options::GetSystemOption('email_smtp') === 'true' ? 'SMTP ' . ctrl_options::GetSystemOption('smtp_server') : $pick('mailer_type');
+        $debug = ctrl_options::GetSystemOption('debug_mode') === 'dev';
+        $tiles = array(
+            array('Panel', ($ssl ? 'HTTPS' : 'HTTP') . ' · ' . $t('port') . ' ' . $port, $ssl ? 'ok' : 'warn'),
+            array('Email', $mail, ''),
+            array('Two-factor login', $pick('twofactor_enabled'), ctrl_options::GetSystemOption('twofactor_enabled') === 'disabled' ? 'warn' : 'ok'),
+            array('PHP errors', $debug ? $t('Shown (development)') : $t('Hidden'), $debug ? 'warn' : 'ok'),
+        );
+        $out = '';
+        foreach ($tiles as $x) {
+            $out .= '<div class="sc-tile ' . $x[2] . '"><span>' . $h($t($x[0])) . '</span><b>' . $h($x[1]) . '</b></div>';
         }
+        return $out;
     }
 
     /**
-     * When the weekly daemon jobs last ran (template <@ LastWeekRunTime @>).
+     * Save the posted settings that changed, after checking them; the vhosts are rewritten only when a setting
+     * that shapes them changed. Empty values are skipped, except for settings that may be cleared.
      *
-     * @return string|false The formatted date, or false when they have not run.
-     */
-    static function getLastWeekRunTime()
-    {
-        $time = ctrl_options::GetSystemOption('daemon_weekrun');
-        if ($time != '0') {
-            return date(ctrl_options::GetSystemOption('sentora_df'), $time);
-        } else {
-            return false;
-        }
-    }
-
-    /**
-     * When the monthly daemon jobs last ran (template <@ LastMonthRunTime @>).
-     *
-     * @return string|false The formatted date, or false when they have not run.
-     */
-    static function getLastMonthRunTime()
-    {
-        $time = ctrl_options::GetSystemOption('daemon_monthrun');
-        if ($time != '0') {
-            return date(ctrl_options::GetSystemOption('sentora_df'), $time);
-        } else {
-            return false;
-        }
-    }
-
-    /**
-     * Save the posted values of the module's settings (empty values are skipped) and have the vhosts rewritten.
-     *
-     * Checks the CSRF token and sets self::$ok.
+     * Checks the CSRF token; sets self::$done and self::$errors.
      *
      * @global db_driver $zdbh The panel's database connection.
      * @global runtime_controller $controller The request controller.
@@ -169,27 +344,73 @@ class module_controller extends ctrl_module
         global $zdbh;
         global $controller;
         runtime_csfr::Protect();
-        $sql = "SELECT * FROM x_settings WHERE so_module_vc=:module AND so_usereditable_en = 'true'";
-        $module = ui_module::GetModuleName();
-        $numrows = $zdbh->prepare($sql);
-        $numrows->bindParam(':module', $module);
-        $numrows->execute();
-        if ($numrows->fetchColumn() <> 0) {
-            $sql = $zdbh->prepare($sql);
-            $sql->bindParam(':module', $module);
-            $sql->execute();
-            while ($row = $sql->fetch()) {
-                if (!fs_director::CheckForEmptyValue($controller->GetControllerRequest('FORM', $row['so_name_vc']))) {
-                    $updatesql = $zdbh->prepare("UPDATE x_settings SET so_value_tx = :value WHERE so_name_vc = :so_name_vc");
-                    $value = $controller->GetControllerRequest('FORM', $row['so_name_vc']);
-                    $updatesql->bindParam(':value', $value);
-                    $updatesql->bindParam(':so_name_vc', $row['so_name_vc']);
-                    $updatesql->execute();
-                }
+        $fields = self::Fields();
+        $changed = 0;
+        $apache = false;
+        foreach (self::Settings() as $name => $row) {
+            $value = $controller->GetControllerRequest('FORM', $name);
+            if ($value === false || $value === null || is_array($value)) {
+                continue;
             }
-            self::SetWriteApacheConfigTrue(); //sentora apache port changed require rewrite of vhosts
+            $f = isset($fields[$name]) ? $fields[$name] : array();
+            $label = ui_language::translate(isset($f['label']) ? $f['label'] : $row['so_cleanname_vc']);
+            $value = (isset($f['type']) && in_array($f['type'], array('area', 'code'), true)) ? str_replace("\r\n", "\n", (string) $value) : trim((string) $value);
+            if ($value === '' && empty($f['clear'])) {
+                continue; // an empty box keeps the saved value (and the SMTP password)
+            }
+            $err = self::Check($row, $f, $value);
+            if ($err !== '') {
+                self::$errors[] = $label . ': ' . ui_language::translate($err);
+                continue;
+            }
+            if ($value === (string) $row['so_value_tx']) {
+                continue;
+            }
+            $update = $zdbh->prepare("UPDATE x_settings SET so_value_tx = :value WHERE so_name_vc = :name");
+            $update->bindParam(':value', $value);
+            $update->bindParam(':name', $row['so_name_vc']);
+            $update->execute();
+            $changed++;
+            if (!empty($f['apache'])) {
+                $apache = true;
+            }
         }
-        self::$ok = true;
+        if ($apache) {
+            self::SetWriteApacheConfigTrue();
+        }
+        self::$done = $changed ? 'saved' : 'nochange';
+    }
+
+    /**
+     * Check a posted value of a setting.
+     *
+     * @param array<string, mixed> $row The setting's x_settings row.
+     * @param array<string, mixed> $f The setting's entry in Fields().
+     * @param string $value The posted value.
+     * @return string Empty when it is fine, else why not (untranslated).
+     */
+    static function Check($row, $f, $value)
+    {
+        if (ctrl_options::CheckForPredefinedOptions($row['so_defvalues_tx']) && !in_array($value, explode('|', (string) $row['so_defvalues_tx']), true)) {
+            return 'not one of the choices.';
+        }
+        $type = isset($f['type']) ? $f['type'] : '';
+        if ($type === 'number' && (!ctype_digit($value) || (isset($f['min']) && (int) $value < $f['min']) || (isset($f['max']) && (int) $value > $f['max']))) {
+            return 'must be a whole number from ' . (int) $f['min'] . ' to ' . (int) $f['max'] . '.';
+        }
+        if ($type === 'email' && !preg_match('/^[^@\s<>"]+@[^@\s<>"]+$/', $value)) {
+            return 'not an email address.';
+        }
+        if (!empty($f['ip']) && $value !== '' && filter_var($value, FILTER_VALIDATE_IP) === false) {
+            return 'not an IP address.';
+        }
+        if (in_array($type, array('text', 'email', 'number', 'password'), true) && preg_match('/[\r\n]/', $value)) {
+            return 'must be on one line.';
+        }
+        if (!empty($f['date']) && trim($value) === '') {
+            return 'can not be empty.';
+        }
+        return '';
     }
 
     /**
@@ -208,7 +429,7 @@ class module_controller extends ctrl_module
     /**
      * Handle "force full daemon run": reset the last run times so every daily, weekly and monthly job runs next time.
      *
-     * Checks the CSRF token and sets self::$ok.
+     * Checks the CSRF token and sets self::$done.
      *
      * @global db_driver $zdbh The panel's database connection.
      * @global runtime_controller $controller The request controller.
@@ -221,16 +442,10 @@ class module_controller extends ctrl_module
         runtime_csfr::Protect();
         $formvars = $controller->GetAllControllerRequests('FORM');
         if (isset($formvars['inForceFull'])) {
-            $sql = $zdbh->prepare("UPDATE x_settings set so_value_tx = '0' WHERE so_name_vc = 'daemon_lastrun'");
+            $sql = $zdbh->prepare("UPDATE x_settings SET so_value_tx = '0' WHERE so_name_vc IN ('daemon_lastrun', 'daemon_dayrun', 'daemon_weekrun', 'daemon_monthrun')");
             $sql->execute();
-            $sql = $zdbh->prepare("UPDATE x_settings set so_value_tx = '0' WHERE so_name_vc = 'daemon_dayrun'");
-            $sql->execute();
-            $sql = $zdbh->prepare("UPDATE x_settings set so_value_tx = '0' WHERE so_name_vc = 'daemon_weekrun'");
-            $sql->execute();
-            $sql = $zdbh->prepare("UPDATE x_settings set so_value_tx = '0' WHERE so_name_vc = 'daemon_monthrun'");
-            $sql->execute();
+            self::$done = 'daemon';
         }
-        self::$ok = true;
     }
 
     /**
@@ -240,10 +455,22 @@ class module_controller extends ctrl_module
      */
     static function getResult()
     {
-        if (!fs_director::CheckForEmptyValue(self::$ok)) {
-            return ui_sysmessage::shout(ui_language::translate("Changes to your settings have been saved successfully!"));
+        $out = '';
+        if (self::$errors) {
+            $list = '';
+            foreach (self::$errors as $e) {
+                $list .= '<br>&bull; ' . htmlspecialchars($e, ENT_QUOTES, 'UTF-8');
+            }
+            $out .= ui_sysmessage::shout(ui_language::translate('These settings were not saved:') . $list, 'zannounceerror');
         }
-        return;
+        if (self::$done === 'saved') {
+            $out .= ui_sysmessage::shout(ui_language::translate(self::$errors ? 'The other changes have been saved.' : 'Your settings have been saved.'), 'zannounceok');
+        } elseif (self::$done === 'nochange' && !self::$errors) {
+            $out .= ui_sysmessage::shout(ui_language::translate('Nothing had changed.'), 'zannounceinfo');
+        } elseif (self::$done === 'daemon') {
+            $out .= ui_sysmessage::shout(ui_language::translate('A full daemon run is queued: every daily, weekly and monthly job runs within 5 minutes.'), 'zannounceok');
+        }
+        return $out === '' ? null : $out;
     }
 
 }

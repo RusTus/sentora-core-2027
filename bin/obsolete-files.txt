@@ -137,3 +137,6 @@ modules/repo_browser/assets/lin.png
 modules/repo_browser/assets/notinstalled.png
 modules/repo_browser/assets/update.png
 modules/repo_browser/assets/win.png
+# Sentora Config: the old form script and loader bar, no longer used
+modules/sentoraconfig/assets/ajaxsbmt.js
+modules/sentoraconfig/assets/bar.gif
