@@ -1,0 +1,35 @@
+# Builds sentora-core-2027.zip from master2027 and replaces the file of the
+# same name on the release tagged "current" (no new release or tag).
+# Run it from Actions > Release > Run workflow.
+name: Release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out master2027
+        uses: actions/checkout@v4
+        with:
+          ref: master2027
+          fetch-depth: 0
+
+      - name: Build sentora-core-2027.zip
+        run: git archive --prefix=sentora-core-2027/ -o sentora-core-2027.zip master2027
+
+      - name: SHA-256
+        run: sha256sum sentora-core-2027.zip
+
+      - name: Replace the file on the current release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload current sentora-core-2027.zip --clobber --repo "$GITHUB_REPOSITORY"

@@ -124,19 +124,25 @@ It changes the name everywhere the installer put it (the panel and its Apache si
 
 ## Making a release
 
-1. Build the zips from a clone of each repository (each zip holds one top folder named like the zip):
+Both repositories have one release with the tag **`current`**, and each has a **Release** workflow that rebuilds its files from `master2027` and replaces them on that release (same names, no new release or tag):
 
-   ```bash
-   git archive --prefix=sentora-core-2027/ -o sentora-core-2027.zip master2027
-   git archive --prefix=sentora-installers-2027/ -o sentora-installers-2027.zip master2027
-   ```
+1. Push the changes to `master2027` in each repository that changed.
+2. In that repository, open **Actions > Release > Run workflow** and run it:
+   - core: builds and replaces `sentora-core-2027.zip`
+   - installers: builds and replaces `sentora-installers-2027.zip` and `sentora2027-ub26.04`
+3. The job log prints each file's SHA-256; it should match the one GitHub lists on the release page.
 
-2. Both repositories have one release with the tag **`current`**. In each, open that release, click **Edit**, delete the old files and attach the new ones:
-   - core: `sentora-core-2027.zip`
-   - installers: `sentora2027-ub26.04`, `sentora-installers-2027.zip` and the PHP bundles
-3. Save the release (leave it published, not as a draft).
+The workflows build the files the same way as by hand:
 
-New installs and `sentora-update` take the files from the `current` release, so they get the new version as soon as it's saved. GitHub lists each file's SHA-256 on the release page; the installer and `sentora-update` check every download against it.
+```bash
+git archive --prefix=sentora-core-2027/ -o sentora-core-2027.zip master2027
+git archive --prefix=sentora-installers-2027/ -o sentora-installers-2027.zip master2027
+git show master2027:sentora2027-ub26.04 > sentora2027-ub26.04
+```
+
+The PHP bundles are not built by a workflow: replace them by hand on the installers release (**Edit**, delete the old file, attach the new one, save it published).
+
+New installs and `sentora-update` take the files from the `current` release, so they get the new version as soon as the workflow finishes. GitHub lists each file's SHA-256 on the release page; the installer and `sentora-update` check every download against it.
 
 ## Updating
 
