@@ -550,6 +550,10 @@ class module_controller extends ctrl_module
      */
     static function getResult()
     {
+        // set by CheckCreateForErrors() but never shown before: the page just came back empty
+        if (!fs_director::CheckForEmptyValue(self::$nosub)) {
+            return ui_sysmessage::shout(ui_language::translate("That name is under a domain another account has, so it can not be parked here. A sub-domain of your own domain goes in Sub Domains. For a dynamic DNS name (such as name.no-ip.org), the administrator lists the provider in Shared Domains in Sentora Config."), "zannounceerror");
+        }
         if (!fs_director::CheckForEmptyValue(self::$blank)) {
             return ui_sysmessage::shout(ui_language::translate("Your Domain can not be empty. Please enter a valid Domain Name and try again."), "zannounceerror");
         }

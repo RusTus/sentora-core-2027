@@ -730,7 +730,7 @@ class module_controller extends ctrl_module
             return ui_sysmessage::shout(ui_language::translate("The domain already appears to exist on this server."), "zannounceerror");
         }
         if (!fs_director::CheckForEmptyValue(self::$nosub)) {
-            return ui_sysmessage::shout(ui_language::translate("You cannot add a Sub-Domain here. Please use the Subdomain manager to add Sub-Domains."), "zannounceerror");
+            return ui_sysmessage::shout(ui_language::translate("That name is under a domain another account has, so it can not be added here. A sub-domain of your own domain goes in Sub Domains. For a dynamic DNS name (such as name.no-ip.org), the administrator lists the provider in Shared Domains in Sentora Config."), "zannounceerror");
         }
         if (!fs_director::CheckForEmptyValue(self::$error)) {
             return ui_sysmessage::shout(ui_language::translate("Please remove 'www'. The 'www' will automatically work with all Domains / Subdomains."), "zannounceerror");
