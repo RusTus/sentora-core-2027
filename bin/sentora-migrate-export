@@ -81,9 +81,12 @@ fi
 DUMPOPT=(--single-transaction --routines --triggers --no-create-db --default-character-set=utf8mb4)
 mysqldump --help 2> /dev/null | grep -q -- '--set-gtid-purged' && DUMPOPT+=(--set-gtid-purged=OFF)
 dump() { # database file
+    # the name first: a large database takes minutes, and the screen should say which one
+    printf '   %s ... ' "$1"
     if mysqldump --defaults-extra-file="$MYCNF" "${DUMPOPT[@]}" "$1" 2>> "$LOGF" | gzip -6 > "$2"; then
-        [ "${PIPESTATUS[0]}" = 0 ] && return 0
+        [ "${PIPESTATUS[0]}" = 0 ] && { echo "$(du -h "$2" | cut -f1)"; echo "$(date '+%H:%M:%S')    $1 $(du -h "$2" | cut -f1)" >> "$LOGF"; return 0; }
     fi
+    echo "failed"
     warn "the database $1 could not be exported (see export.log)"
     rm -f "$2"
     return 1
@@ -91,7 +94,7 @@ dump() { # database file
 say "-- The panel's databases"
 for db in "$DBNAME" sentora_postfix sentora_proftpd zpanel_postfix zpanel_proftpd; do
     [ -n "$(sql "SHOW DATABASES LIKE '$db'")" ] || continue
-    dump "$db" "$OUT/db/panel/$db.sql.gz" && say "   $db"
+    dump "$db" "$OUT/db/panel/$db.sql.gz"
 done
 [ -f "$OUT/db/panel/$DBNAME.sql.gz" ] || { echo "The panel's own database ($DBNAME) could not be exported: stopping."; exit 1; }
 
@@ -103,7 +106,7 @@ while IFS= read -r db; do
         warn "the panel lists the database $db, but MySQL does not have it"
         continue
     fi
-    dump "$db" "$OUT/db/sites/$db.sql.gz" && { say "   $db"; NDB=$((NDB + 1)); }
+    dump "$db" "$OUT/db/sites/$db.sql.gz" && NDB=$((NDB + 1))
 done <<< "$(sql "SELECT my_name_vc FROM $DBNAME.x_mysql_databases WHERE my_deleted_ts IS NULL")"
 # each MySQL user's grants, for reference (the import makes the users again from the panel's records)
 while IFS=$'\t' read -r u h; do
@@ -121,10 +124,13 @@ while IFS= read -r u; do
         warn "the account $u has no folder in $HOSTED"
         continue
     fi
+    printf '   %s (%s, this can take a while) ... ' "$u" "$(du -sh "$HOSTED/$u" 2> /dev/null | cut -f1)"
     if tar -C "$HOSTED" --numeric-owner -czf "$OUT/files/$u.tar.gz" "$u" 2>> "$LOGF"; then
-        say "   $u ($(du -sh "$OUT/files/$u.tar.gz" | cut -f1))"
+        echo "$(du -sh "$OUT/files/$u.tar.gz" | cut -f1) packed"
+        echo "$(date '+%H:%M:%S')    $u packed" >> "$LOGF"
         NACC=$((NACC + 1))
     else
+        echo "failed"
         warn "the folder of $u was not packed completely (see export.log)"
     fi
 done <<< "$(sql "SELECT ac_user_vc FROM $DBNAME.x_accounts WHERE ac_deleted_ts IS NULL")"
