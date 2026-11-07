@@ -50,7 +50,7 @@ class ui_tpl_modulelist2column {
                     $line .= '        <ul>';
 
                     foreach ($mods as $mod) {
-                        $translatename = $mod['mo_name_vc'];
+                        $translatename = ui_language::translate($mod['mo_name_vc']);
                         $cleanname = str_replace(" ", "ZP(br)", $translatename);
 
                         // Check is User Style Module Icon Exist

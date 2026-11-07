@@ -24,8 +24,8 @@ class ctrl_module
      */
     public static function getModuleName()
     {
-        $module_name = ui_module::GetModuleName();
-        return $module_name;
+        // shown in the page's heading (and its alt text): in the account's language
+        return ui_language::translate((string) ui_module::GetModuleName());
     }
 
     /**

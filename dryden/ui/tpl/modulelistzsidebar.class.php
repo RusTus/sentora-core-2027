@@ -32,7 +32,7 @@ class ui_tpl_modulelistzsidebar {
 
             if ($mods) {
                 $line .= '<li>';
-                $line .= '<div class="heading">' .$modcat['mc_name_vc']. ' <span class="open">+</span></div>';
+                $line .= '<div class="heading">' . htmlspecialchars(ui_language::translate($modcat['mc_name_vc']), ENT_QUOTES, 'UTF-8') . ' <span class="open">+</span></div>';
                 $line .= '<ul>';
                 
                 foreach ($mods as $mod) {

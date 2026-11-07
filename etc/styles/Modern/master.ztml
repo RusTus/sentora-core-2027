@@ -52,10 +52,10 @@
                     <span class="icon-bar"></span>
                     <span class="icon-bar"></span>
                 </a>
-                <a class="navbar-brand" href="."><img class="logo-ink" src="<# ui_tpl_assetfolderpath #>img/logos/sentora_logo_header_ink.png" width="96" height="36" alt="Home"><img class="logo-white" src="<# ui_tpl_assetfolderpath #>img/logos/sentora_logo_header.png" width="96" height="36" alt="Home"></a>
+                <a class="navbar-brand" href="."><img class="logo-ink" src="<# ui_tpl_assetfolderpath #>img/logos/sentora_logo_header_ink.png" width="96" height="36" alt="<: Home :>"><img class="logo-white" src="<# ui_tpl_assetfolderpath #>img/logos/sentora_logo_header.png" width="96" height="36" alt="<: Home :>"></a>
                 <div class="nav-collapse collapse navbar-responsive-collapse">
                     <ul class="nav navbar-nav">
-                        <li><a href="#" class="nav-stat-button" title="View Account Info" data-toggle="collapse" data-target="#stats-data"><i class="icon-chart-bar-2"></i></a></li>
+                        <li><a href="#" class="nav-stat-button" title="<: View Account Info :>" data-toggle="collapse" data-target="#stats-data"><i class="icon-chart-bar-2"></i></a></li>
                         <# ui_tpl_modulelistznavbar #>
                     </ul>
                 </div><!--/.nav-collapse -->
@@ -66,7 +66,7 @@
         <!-- BEGIN CONTAINER -->
         <div class="wrap container">
             <div id="module-search-wrap" class="visible-lg visible-desktop">
-                <input type="text" id="module-search" data-provide="typeahead" placeholder="Search" autocomplete="off">
+                <input type="text" id="module-search" data-provide="typeahead" placeholder="<: Search :>" autocomplete="off">
             </div>
             <div class="inner-wrap">
                 <!-- BEGIN LEFT SIDEBAR -->

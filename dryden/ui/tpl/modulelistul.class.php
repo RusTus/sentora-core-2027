@@ -36,7 +36,7 @@ class ui_tpl_modulelistul {
             }
             $line .= "<div id=\"id=\"zcat_" . str_replace(" ", "_", strtolower($modcat['mc_name_vc'])) . "_list\" class=\"" . $class . "\">";
             $line .= "<ul>";
-            $line .= "<lh>" . $modcat['mc_name_vc'] . "</lh>";
+            $line .= "<lh>" . htmlspecialchars(ui_language::translate($modcat['mc_name_vc']), ENT_QUOTES, 'UTF-8') . "</lh>";
             foreach ($mods as $mod) {
                 $line .= "<li><a href=\"?module=" . $mod['mo_folder_vc'] . "\"><: " . $mod['mo_name_vc'] . " :></a></li>";
             }

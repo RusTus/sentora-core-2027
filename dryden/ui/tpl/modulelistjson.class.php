@@ -39,7 +39,7 @@ class ui_tpl_modulelistjson {
             $result = array();
             while ($row = $dbh->fetch()) {
                 $result[] = array(
-                    'name' => htmlentities($row['mo_name_vc'], ENT_QUOTES),
+                    'name' => htmlentities(ui_language::translate($row['mo_name_vc']), ENT_QUOTES),
                     'url' => $row['mo_folder_vc']
                 );
             }
