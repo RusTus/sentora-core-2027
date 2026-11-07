@@ -4,22 +4,98 @@
         <div class="zmodule_title"><@ ModuleName @></div>
         <div class="zmodule_desc" id="zmodule_desc_<@ ModuleName @>"><@ ModuleDesc @></div>
     </div>
-    <div class="zgrid_wrapper">
+    <link rel="stylesheet" href="modules/goaccess_stats/assets/goaccess.css">
+
+    <div class="ga" id="ga">
         <% if IsNotInstalled %>
-        <div class="alert alert-warning"><: GoAccess is not installed on this server (it is built by the Sentora installer into /opt/sentora-goaccess). :></div>
+        <div class="ga-card ga-state">
+            <svg class="ga-ico-lg warn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
+            <b><: GoAccess is not installed on this server :></b>
+            <span><: The Sentora installer builds it into /opt/sentora-goaccess. :></span>
+        </div>
         <% endif %>
         <% if IsInstalled %>
         <% if HasNoReports %>
-        <div class="alert alert-info"><: You have no websites yet. Reports appear here once you add a domain and it has had visitors. :></div>
+        <div class="ga-card ga-state">
+            <svg class="ga-ico-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg>
+            <b><: You have no websites yet :></b>
+            <span><: Reports appear here once you add a domain and it has had visitors. :></span>
+        </div>
         <% endif %>
         <% if HasReports %>
-        <p><: Reports are made every hour from the web server logs, and keep up to a year of history. :></p>
-        <@ ReportPicker @>
-        <@ Frame @>
+        <div class="ga-card ga-bar">
+            <@ ReportPicker @>
+            <@ ReportInfo @>
+        </div>
+        <% if NotMadeYet %>
+        <div class="ga-card ga-state">
+            <svg class="ga-ico-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+            <b><: This report has not been made yet :></b>
+            <span><: Reports are made every hour from the web server logs, once a site has had visitors. :></span>
+        </div>
+        <% endif %>
+        <div class="ga-frame-wrap"><@ Frame @></div>
+        <p class="ga-note"><: Reports are made every hour from the web server logs and keep up to a year of history. The report is GoAccess's own page: its menu (top left) changes the layout and colours, and hides or shows panels. :></p>
         <% endif %>
         <% if IsAdmin %>
-        <p class="text-muted"><: GoAccess also has a live terminal view; over SSH, as root: :> <code>/opt/sentora-goaccess/bin/goaccess /var/sentora/logs/domains/&lt;user&gt;/&lt;domain&gt;-access.log --log-format=COMBINED</code></p>
+        <details class="ga-card ga-term">
+            <summary><svg class="ga-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 17 6-6-6-6"/><path d="M12 19h8"/></svg><: Live view in a terminal :></summary>
+            <p><: GoAccess also has a live terminal view. Over SSH, as root: :></p>
+            <pre>/opt/sentora-goaccess/bin/goaccess /var/sentora/logs/domains/&lt;user&gt;/&lt;domain&gt;-access.log --log-format=COMBINED</pre>
+        </details>
         <% endif %>
         <% endif %>
     </div>
 </div>
+<script>
+(function () {
+    'use strict';
+    var ga = document.getElementById('ga'); if (!ga) { return; }
+    // the report starts in the panel's Light or Dark
+    var dark = (getComputedStyle(document.documentElement).colorScheme || '').indexOf('dark') >= 0;
+    var withTheme = function (url) { return url + '&theme=' + (dark ? 'dark' : 'light'); };
+    var frame = ga.querySelector('.ga-frame[data-src]');
+    if (frame) { frame.src = withTheme(frame.getAttribute('data-src')); }
+    var win = ga.querySelector('.ga-newwin');
+    if (win) { win.href = withTheme(win.getAttribute('data-src')); }
+    var reload = ga.querySelector('.ga-reload');
+    if (reload && frame) { reload.addEventListener('click', function () { frame.src = withTheme(frame.getAttribute('data-src')) + '&t=' + Date.now(); }); }
+
+    // the report picker: a searchable list in place of the plain drop-down
+    var pick = ga.querySelector('.ga-pick'); if (!pick) { return; }
+    var btn = pick.querySelector('.ga-pick-btn'), pop = pick.querySelector('.ga-pop'), find = pick.querySelector('.ga-find');
+    var items = pick.querySelectorAll('.ga-item'), groups = pick.querySelectorAll('.ga-grp');
+    pick.querySelector('.ga-plain').hidden = true; btn.hidden = false;
+    var open = function (on) {
+        pop.hidden = !on; btn.setAttribute('aria-expanded', on ? 'true' : 'false');
+        if (on) { find.value = ''; filter(); find.focus(); var c = pop.querySelector('.is-current'); if (c) { c.scrollIntoView({ block: 'nearest' }); } }
+    };
+    var filter = function () {
+        var q = find.value.trim().toLowerCase(), shown = 0;
+        Array.prototype.forEach.call(items, function (a) { var on = q === '' || a.getAttribute('data-s').indexOf(q) >= 0; a.parentNode.hidden = !on; if (on) { shown++; } });
+        // a group heading only while one of its reports shows
+        Array.prototype.forEach.call(groups, function (g) {
+            var n = g.nextElementSibling, any = false;
+            while (n && !n.classList.contains('ga-grp')) { if (!n.hidden) { any = true; } n = n.nextElementSibling; }
+            g.hidden = !any;
+        });
+        pick.querySelector('.ga-none').hidden = shown > 0;
+    };
+    btn.addEventListener('click', function () { open(pop.hidden); });
+    find.addEventListener('input', filter);
+    find.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { var first = Array.prototype.filter.call(items, function (a) { return !a.parentNode.hidden && !a.classList.contains('is-empty'); })[0]; if (first) { window.location = first.href; } e.preventDefault(); }
+        if (e.key === 'ArrowDown') { var f = Array.prototype.filter.call(items, function (a) { return !a.parentNode.hidden; })[0]; if (f) { f.focus(); } e.preventDefault(); }
+    });
+    pop.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') { open(false); btn.focus(); }
+        if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && e.target.classList.contains('ga-item')) {
+            var vis = Array.prototype.filter.call(items, function (a) { return !a.parentNode.hidden; }), i = vis.indexOf(e.target);
+            var n = vis[i + (e.key === 'ArrowDown' ? 1 : -1)]; if (n) { n.focus(); } else if (e.key === 'ArrowUp') { find.focus(); }
+            e.preventDefault();
+        }
+    });
+    Array.prototype.forEach.call(items, function (a) { if (a.classList.contains('is-empty')) { a.addEventListener('click', function (e) { e.preventDefault(); }); a.setAttribute('aria-disabled', 'true'); } });
+    document.addEventListener('click', function (e) { if (!pick.contains(e.target)) { open(false); } });
+})();
+</script>

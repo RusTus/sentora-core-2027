@@ -1,9 +1,11 @@
 <?php
 
 /**
- * GoAccess report viewer: administrators only. The report is GoAccess's own
- * page (charts and tables drawn by its scripts); it is shown sandboxed: its
- * scripts run, but it can not reach the panel, the network or any other site.
+ * GoAccess report viewer: the reports of the account's own domains (administrators:
+ * all of them). The report is GoAccess's own page (charts and tables drawn by its
+ * scripts); it is shown sandboxed: its scripts run, but it can not reach the panel,
+ * the network or any other site. ?theme=dark or light starts it in the colours that
+ * match the panel.
  */
 chdir(dirname(__FILE__) . '/../../../');
 require_once 'dryden/loader.inc.php';
@@ -43,11 +45,15 @@ if (!is_file($file)) {
 }
 // The report keeps its display settings in browser storage, which a sandboxed page
 // (no origin of its own, so it can not reach the panel) is not given: it gets an
-// in-memory stand-in instead, defined before the report's own scripts run
-$shim = '<script>(function(){function M(){var d={};return{getItem:function(k){return Object.prototype.hasOwnProperty.call(d,k)?d[k]:null;},'
+// in-memory stand-in instead, defined before the report's own scripts run. When the
+// panel asks for dark or light, the stand-in starts with GoAccess's theme preference
+// set to match (GoAccess reads 'AppPrefs' from it; its own theme menu still works)
+$theme = isset($_GET['theme']) ? (string) $_GET['theme'] : '';
+$seed = $theme === 'dark' ? '{"theme":"darkBlue"}' : ($theme === 'light' ? '{"theme":"bright"}' : '');
+$shim = '<script>(function(){function M(s){var d=s?{AppPrefs:s}:{};return{getItem:function(k){return Object.prototype.hasOwnProperty.call(d,k)?d[k]:null;},'
     . 'setItem:function(k,v){d[k]=String(v);},removeItem:function(k){delete d[k];},clear:function(){d={};},key:function(i){return Object.keys(d)[i]||null;},'
     . 'get length(){return Object.keys(d).length;}};}["localStorage","sessionStorage"].forEach(function(n){var ok=false;try{ok=!!window[n];}catch(e){}'
-    . 'if(!ok){try{Object.defineProperty(window,n,{value:M(),configurable:true});}catch(e){}}});})();</script>'
+    . 'if(!ok){try{Object.defineProperty(window,n,{value:M(n==="localStorage"?' . json_encode($seed) . ':""),configurable:true});}catch(e){}}});})();</script>'
     // its height, for the panel to size the frame (etc/lib/sentora/frame-height.js); only a number is sent
     . '<script>(function(){var last=0;function send(){var b=document.body,e=document.documentElement;if(!b||!e||window.parent===window)return;'
     . 'var h=Math.max(b.scrollHeight,e.scrollHeight);if(Math.abs(h-last)<3)return;last=h;window.parent.postMessage({snFrameHeight:h},"*");}'
