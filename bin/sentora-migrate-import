@@ -457,12 +457,9 @@ function htaccess_scan($root, array $symDirs = array())
 function htaccess_show(array $found, $base)
 {
     foreach ($found as $p => $r) {
-        echo '     ' . c('bold') . substr($p, strlen($base)) . c('reset') . "
-";
+        echo '     ' . c('bold') . substr($p, strlen($base)) . c('reset') . "\n";
         foreach ($r['changes'] as $ch) {
-            printf("        %s%-4s%s %s
-%s             -> %s%s  %s(%s)%s
-", c('dim'), $ch['line'], c('reset'), $ch['from'], '', c('green'), $ch['to'], c('dim'), $ch['why'], c('reset'));
+            printf("        %s%-4s%s %s\n%s             -> %s%s  %s(%s)%s\n", c('dim'), $ch['line'], c('reset'), $ch['from'], '', c('green'), $ch['to'], c('dim'), $ch['why'], c('reset'));
         }
     }
 }
@@ -541,7 +538,7 @@ plan_line('FollowSymLinks', $opt['allow-symlinks']
     : 'off for every moved domain (the .htaccess files that use it are listed at the end; --allow-symlinks switches it on for those domains)');
 if ($HTFOUND) {
     $n = 0; foreach ($HTFOUND as $r) { $n += count($r['changes']); }
-    plan_warn(count($HTFOUND) . " .htaccess file(s) have $n line(s) this server refuses with error 500: the move shows them, and asks to fix them (--fix-htaccess: without asking)");
+    plan_warn(count($HTFOUND) . " .htaccess file(s) have $n line(s) this server refuses: those sites will not work (error 500) until they are changed. The move can change them for you (it asks first; --fix-htaccess: without asking); if you say no, you have to change them by hand.");
     htaccess_show($HTFOUND, $HTBASE);
     sh('rm -rf ' . q($htStage));
 } elseif (!$APPLY && is_file($filesTar)) {
@@ -667,25 +664,18 @@ if (!$HTFOUND) {
     $fix = $opt['fix-htaccess'];
     if ($fix === null && function_exists('posix_isatty') && posix_isatty(STDIN)) {
         ui_end_step();
-        echo "
-  " . c('bold') . c('yellow') . count($HTFOUND) . " .htaccess file(s) have $n line(s) this server refuses (error 500)" . c('reset') . "
-";
-        echo '  ' . c('dim') . 'The change keeps each site working the same: links within the site and its URL rewriting still work, and' . c('reset') . "
-";
-        echo '  ' . c('dim') . 'PHP settings move to a .user.ini beside the file. Each original line stays as a comment, and each file is' . c('reset') . "
-";
-        echo '  ' . c('dim') . 'kept as .htaccess.before-migrate.' . c('reset') . "
-
-";
+        echo "\n  " . c('bold') . c('yellow') . count($HTFOUND) . " .htaccess file(s) have $n line(s) this server refuses" . c('reset') . "\n";
+        echo '  ' . c('yellow') . 'Those sites will not work (error 500) until these lines are changed. This can change them for you now;' . c('reset') . "\n";
+        echo '  ' . c('yellow') . 'if you say no, you have to change them by hand (the list is shown again at the end).' . c('reset') . "\n\n";
+        echo '  ' . c('dim') . 'The change keeps each site working the same: links within the site and its URL rewriting still work, and' . c('reset') . "\n";
+        echo '  ' . c('dim') . 'PHP settings move to a .user.ini beside the file. Each original line stays as a comment, and each file is' . c('reset') . "\n";
+        echo '  ' . c('dim') . 'kept as .htaccess.before-migrate.' . c('reset') . "\n\n";
         htaccess_show($HTFOUND, $HOSTED);
-        echo "
-  " . c('bold') . c('cyan') . 'Fix these .htaccess files now?' . c('reset') . "
-";
+        echo "\n  " . c('bold') . c('cyan') . 'Fix these .htaccess files now?' . c('reset') . "\n";
         echo '  (y) fix them, (n) leave them as they are > ';
         $a = strtolower(trim((string) fgets(STDIN)));
         $fix = ($a !== '' && $a[0] === 'y');
-        echo "
-";
+        echo "\n";
         ui_step($fix ? 'Fixing the websites\' .htaccess files' : 'The websites\' .htaccess files, left as they are');
         $UI['total']++;
     }
@@ -699,7 +689,7 @@ if (!$HTFOUND) {
         ui_info("$HTFIXED .htaccess file(s) fixed ($n line(s)); each kept as .htaccess.before-migrate");
         $HTFOUND = array();
     } else {
-        warn(count($HTFOUND) . " .htaccess file(s) left as they are: they give error 500 here (listed at the end)");
+        warn(count($HTFOUND) . " .htaccess file(s) left as they are: those sites will not work (error 500) until the lines are changed by hand, or by running the move again with --fix-htaccess (listed at the end)");
     }
 }
 
@@ -941,7 +931,8 @@ if ($newpass) {
 }
 // (still there: they were not fixed above)
 if ($HTFOUND) {
-    echo '  ' . c('bold') . c('yellow') . 'Error 500 ahead' . c('reset') . c('dim') . '  these .htaccess files have lines this server refuses (run the move again with --fix-htaccess, or change them by hand):' . c('reset') . "\n";
+    echo '  ' . c('bold') . c('yellow') . 'Error 500 ahead' . c('reset') . c('dim') . '  these sites will not work until their .htaccess lines are changed. Run the move again with' . c('reset') . "\n";
+    echo '     ' . c('dim') . '--fix-htaccess to change them for you, or change them by hand (Apache Admin > the domain: "A moved site gives error 500?"):' . c('reset') . "\n";
     foreach (array_keys($HTFOUND) as $p) { echo '     ' . substr($p, strlen($HOSTED)) . "\n"; ui_logline('.htaccess left: ' . $p); }
     echo "\n";
 }
