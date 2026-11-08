@@ -456,13 +456,17 @@ basicConstraints = CA:FALSE
 subjectAltName = ' . $san . '
 keyUsage = nonRepudiation, digitalSignature, keyEncipherment');
 
+        // (country and region only when known: an empty or wrong one makes openssl refuse the request)
+        $dn = array("CN" => $domain);
+        if (trim((string) $this->state) !== '') {
+            $dn["ST"] = (string) $this->state;
+        }
+        if (preg_match('/^[A-Z]{2}$/', (string) $this->countryCode)) {
+            $dn["C"] = (string) $this->countryCode;
+        }
+        $dn["O"] = "Unknown";
         $csr = openssl_csr_new(
-            array(
-                "CN" => $domain,
-                "ST" => $this->state,
-                "C" => $this->countryCode,
-                "O" => "Unknown",
-            ),
+            $dn,
             $privateKey,
             array(
                 "config" => $tmpConfPath,

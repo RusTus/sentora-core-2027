@@ -1101,6 +1101,13 @@ class module_controller extends ctrl_module
                 $NewId = 'new_' . $id;
                 if (isset($type[$NewId])) {
                     if ($delete[$NewId] == "false" && !fs_director::CheckForEmptyValue($type[$NewId])) {
+                        // a new row without a target was dropped without a word (the grey text in
+                        // the field is only an example): say so instead
+                        if ((!isset($target[$NewId]) || trim((string) $target[$NewId]) === '') && $type[$NewId] != 'A'
+                            && isset($hostName[$NewId]) && trim((string) $hostName[$NewId]) !== '') {
+                            self::SetError('The new ' . $type[$NewId] . ' record "' . trim((string) $hostName[$NewId]) . '" has no target: type one (the grey text in the field is only an example).');
+                            return FALSE;
+                        }
                         //HOSTNAME
                         if (isset($hostName[$NewId]) && !fs_director::CheckForEmptyValue($hostName[$NewId]) && $hostName[$NewId] != "@") {
                             // A host name with a CNAME can have no other record, and a record can

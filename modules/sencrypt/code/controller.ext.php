@@ -43,6 +43,8 @@ class module_controller extends ctrl_module {
 	static $error;
 	/** @var bool|null True when the domain's DNS does not point to this server. */
 	static $dnsInvalid;
+	/** @var string|null What Let's Encrypt said when the certificate was not made. */
+	static $certFailedWhy;
 	/** @var bool|null True when PHP lacks OpenSSL or curl (set by getCheckModReq()). */
 	static $modReqsError;
 	/** @var bool|null True when port 443 is not open (set by getCheckPortReq()). */
@@ -1560,16 +1562,10 @@ class module_controller extends ctrl_module {
 		date_default_timezone_set("UTC");
 		
 		// Set country/state- tg & Jettaman	
-		$user_ip = ctrl_options::GetSystemOption('server_ip');
-		$ip_response = file_get_contents('http://ip-api.com/json/'.$user_ip);
-		$ip_array = json_decode($ip_response);
-		$countryCode = $ip_array->countryCode; 
-		$state = $ip_array->regionName;
-		$ipStatus = $ip_array->status;
-		$querydata = $ip_array->query;
+		list($countryCode, $state) = self::ServerLocation();
 	
 		// Check DNS before continuing
-		if (self::checkDNSIsLive($domain, $ipStatus, $querydata, $user_ip) == false) {
+		if (!self::checkDNSIsLive($domain)) {
 			self::$dnsInvalid = true;
 			return false;
 		}
@@ -1623,6 +1619,7 @@ class module_controller extends ctrl_module {
 	
 		catch (\Exception $e) {
 			$errorCatahed = $e->getMessage();
+			self::$certFailedWhy = $errorCatahed;
 			$logger->error($e->getTraceAsString());
 			$logger->error($e->getMessage());
 			// Throw error and log to file
@@ -1714,16 +1711,10 @@ class module_controller extends ctrl_module {
 		
 		
 		// Set country/state - tg & Jettaman
-		$user_ip = ctrl_options::GetSystemOption('server_ip');
-		$ip_response = file_get_contents('http://ip-api.com/json/'.$user_ip);
-		$ip_array = json_decode($ip_response);
-		$countryCode = $ip_array->countryCode; 
-		$state = $ip_array->regionName;
-		$ipStatus = $ip_array->status;
-		$querydata = $ip_array->query;
+		list($countryCode, $state) = self::ServerLocation();
 		
 		// Check DNS before continuing
-		if (self::checkDNSIsLive($domain, $ipStatus, $querydata, $user_ip) == false) {
+		if (!self::checkDNSIsLive($domain)) {
 			self::$dnsInvalid = true;
 			return false;
 		}
@@ -1794,6 +1785,7 @@ class module_controller extends ctrl_module {
 		}
 		catch (\Exception $e) {
 			$errorCatahed = $e->getMessage();
+			self::$certFailedWhy = $errorCatahed;
 			$logger->error($e->getTraceAsString());
 			$logger->error($e->getMessage());
 			// Throw error and log to file
@@ -2162,18 +2154,47 @@ class module_controller extends ctrl_module {
     //}
 	
 	/**
-	 * Check that a domain has an A record and that ip-api.com saw this server's IP.
+	 * Does the domain have an address at all (an A record, also through a CNAME)? Whether it reaches
+	 * this server is for Let's Encrypt to find out: its own check says what is wrong. (This compared
+	 * the panel's IP with what ip-api.com said about it, which is never true for a server behind a
+	 * router with a local panel IP, so every request stopped here without trying.)
 	 *
 	 * @param string $domain The domain name.
-	 * @param string $ipStatus The ip-api.com 'status' value.
-	 * @param string $querydata The ip-api.com 'query' value (the IP it looked up).
-	 * @param string $server_ip The server's IP (server_ip option).
-	 * @return bool True when the domain has an A record and it points to this server.
+	 * @return bool
 	 */
-	static function checkDNSIsLive ($domain, $ipStatus, $querydata, $server_ip) { 
-		// the domain must have an A record, and the public lookup must have found this server's IP
-		// (it returned nothing at all when the record pointed elsewhere)
-		return checkdnsrr($domain, "A") && $ipStatus == "success" && $querydata == $server_ip;
+	static function checkDNSIsLive($domain) {
+		return checkdnsrr($domain, "A") || checkdnsrr($domain, "CNAME");
+	}
+
+	/**
+	 * The country and region for the certificate request, from the server's public address:
+	 * the panel's IP when it is a public one, else the address ip-api.com sees this server come from.
+	 *
+	 * @return array{0: string, 1: string} Two-letter country code (or '') and region (or '').
+	 */
+	static function ServerLocation() {
+		$ip = trim((string) ctrl_options::GetSystemOption('server_ip'));
+		$public = filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) ? $ip : '';
+		$ctx = stream_context_create(array('http' => array('timeout' => 8)));
+		$a = json_decode((string) @file_get_contents('http://ip-api.com/json/' . $public, false, $ctx));
+		if (!$a || !isset($a->status) || $a->status !== 'success') {
+			return array('', '');
+		}
+		return array(preg_match('/^[A-Z]{2}$/', (string) $a->countryCode) ? (string) $a->countryCode : '', (string) $a->regionName);
+	}
+
+	/**
+	 * Let's Encrypt's answer, short enough to show: its "detail" when there is one.
+	 *
+	 * @param string $message The exception message.
+	 * @return string
+	 */
+	static function LeReason($message) {
+		$m = (string) $message;
+		if (preg_match('/"detail"\s*:\s*"((?:[^"\\\\]|\\\\.)*)"/', $m, $d)) {
+			$m = stripcslashes($d[1]);
+		}
+		return "Let's Encrypt said: " . substr(trim(preg_replace('/\s+/', ' ', $m)), 0, 400);
 	}
 	
 
@@ -2213,7 +2234,7 @@ class module_controller extends ctrl_module {
 		}
 		if (self::$dnsInvalid)
 		{
-			return ui_sysmessage::shout(ui_language::translate("Your DNS for this domain is not LIVE or POINTING to this server yet. Please check your DNS and retry again later."), "zannounceerror");
+			return ui_sysmessage::shout(ui_language::translate("This domain has no address in DNS yet (no A record): add one that points to this server's public address, then try again."), "zannounceerror");
 		}
 		if (self::$revokecert) {
             return ui_sysmessage::shout(ui_language::translate("The Requested Certificate has been revoked"), "zannounceok");
@@ -2228,7 +2249,7 @@ class module_controller extends ctrl_module {
             return ui_sysmessage::shout(ui_language::translate("That certificate does not belong to the private key. Nothing was installed: use the certificate issued for this domain's request."), "zannounceerror");
         }
 		if (self::$certFailed) {
-            return ui_sysmessage::shout(ui_language::translate("Oops! Something went wrong. Your Let's Encrypt certificate was not created. Check if your website is LIVE."), "zannounceerror");
+            return ui_sysmessage::shout(ui_language::translate("The Let's Encrypt certificate was not made.") . ' ' . (self::$certFailedWhy ? htmlspecialchars(self::LeReason(self::$certFailedWhy), ENT_QUOTES, 'UTF-8') : ui_language::translate("Check that the domain opens from the internet over http (port 80).")), "zannounceerror");
         }
 		if (self::$revokeFailed) {
             return ui_sysmessage::shout(ui_language::translate("Let's Encrypt did not revoke the certificate. It is still in place; try again later, or delete it instead."), "zannounceerror");
