@@ -124,6 +124,9 @@ If you wish to proceed with the password reset on your account, please use the l
         $phpmailer->SendEmail();
         runtime_hook::Execute('OnRequestForgotPassword');
     }
+    // the login page says a link is on its way, whether the address is an account's or not (so it
+    // does not tell who has an account)
+    $GLOBALS['sentoraForgotSent'] = true;
 }
 
 if (isset($_POST['inConfEmail'])) {
@@ -159,10 +162,12 @@ if (isset($_POST['inConfEmail'])) {
         $sql->bindParam(':uid', $result['ac_id_pk']);
         $sql->execute();
         runtime_hook::Execute('OnSuccessfulPasswordReset');
-    } else {
-        runtime_hook::Execute('OnFailedPasswordReset');
+        header("location: ./?passwordreset");
+        exit();
     }
-    header("location: ./?passwordreset");
+    // (it said "Your password has been reset" when it was not)
+    runtime_hook::Execute('OnFailedPasswordReset');
+    header("location: ./?resetfailed");
     exit();
 }
 
@@ -265,24 +270,30 @@ if (isset($_SESSION['zp2fa']) && empty($_SESSION['zpuid'])) {
     }
     $tfWrong = isset($_GET['wrong']);
     header('Content-Type: text/html; charset=utf-8');
-    ?><!DOCTYPE html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Control Panel - Login code</title>
-<link href="etc/styles/_shared/global-css/bootstrap.min.css" rel="stylesheet" type="text/css">
-<style>body{background:#f4f6f9;color:#1f2933} .box{max-width:380px;margin:12vh auto;background:#fff;border:0;border-top:4px solid #447fb3;border-radius:6px;box-shadow:0 1px 3px rgba(20,30,40,.1),0 8px 24px rgba(20,30,40,.06);padding:24px 28px} .btn-primary{background:#447fb3;border-color:#3a6d9a} a{color:#447fb3}
-.code{font-size:28px;letter-spacing:6px;text-align:center;font-family:monospace}</style></head>
-<body><div class="box">
-<h3>Login code</h3>
-<p>Enter the 6-digit code from the authenticator app for <strong><?php echo htmlspecialchars($pending['user'], ENT_QUOTES, 'UTF-8'); ?></strong>.</p>
-<?php if ($tfWrong) { ?><div class="alert alert-danger">That code is not right, or it was already used. Try the next one.</div><?php } ?>
+    ui_loginpage::Open('Login code');
+    ?>
+<div class="ml-body">
+<h1>Login code</h1>
+<p class="ml-sub">Enter the 6-digit code from the authenticator app for <strong><?php echo htmlspecialchars($pending['user'], ENT_QUOTES, 'UTF-8'); ?></strong>.</p>
+<?php if ($tfWrong) { echo ui_loginpage::Message('error', 'That code is not right, or it was already used. Try the next one.'); } ?>
 <form method="post" action="./?twofactor" autocomplete="off">
-<input class="form-control code" name="inTwoFactorCode" inputmode="numeric" pattern="[0-9 ]{6,7}|[A-Za-z0-9]{5}-?[A-Za-z0-9]{5}" maxlength="11" autocapitalize="characters" spellcheck="false" required autofocus id="tfCode">
-<p class="text-muted" style="font-size:13px;margin-top:8px">Lost your phone? <a href="#" onclick="var c=document.getElementById('tfCode');c.setAttribute('inputmode','text');c.placeholder='XXXXX-XXXXX';c.value='';c.focus();this.parentNode.textContent='Enter one of your recovery codes (each works once).';return false;">Use a recovery code</a> instead. No codes left? Ask your administrator.</p>
+<label class="ml-field"><span id="tfLabel">Code</span>
+<input class="ml-input ml-code" name="inTwoFactorCode" inputmode="numeric" pattern="[0-9 ]{6,7}|[A-Za-z0-9]{5}-?[A-Za-z0-9]{5}" maxlength="11" autocapitalize="characters" spellcheck="false" required autofocus id="tfCode">
+<small id="tfHelp">Lost your phone? <a href="#" id="tfRecovery">Use a recovery code</a> instead. No codes left? Ask your administrator.</small></label>
 <?php echo runtime_csfr::Token(); ?>
-<p style="margin-top:16px"><button class="btn btn-primary btn-block" type="submit">Log in</button></p>
-<p class="text-muted" style="margin:0"><a href="<?php echo htmlspecialchars(ctrl_auth::LogoutUrl(), ENT_QUOTES, 'UTF-8'); ?>">Cancel</a></p>
-</form></div></body></html>
+<div class="ml-foot"><a href="<?php echo htmlspecialchars(ctrl_auth::LogoutUrl(), ENT_QUOTES, 'UTF-8'); ?>">Cancel</a><button class="btn btn-primary" type="submit">Log in</button></div>
+</form></div>
+<script>
+document.getElementById('tfRecovery').addEventListener('click', function (e) {
+    e.preventDefault();
+    var c = document.getElementById('tfCode');
+    c.setAttribute('inputmode', 'text'); c.placeholder = 'XXXXX-XXXXX'; c.value = ''; c.focus();
+    document.getElementById('tfLabel').textContent = 'Recovery code';
+    document.getElementById('tfHelp').textContent = 'Enter one of your recovery codes (each works once).';
+});
+</script>
 <?php
+    ui_loginpage::Close();
     exit();
 }
 
@@ -344,25 +355,21 @@ if (isset($_SESSION['zp2fa_setup']) && empty($_SESSION['zpuid'])) {
     $tfWrong = isset($_GET['wrong']);
     $tfUri = ctrl_twofactor::OtpauthUri($setupRow['tf_secret_vc'], $setup['user']);
     header('Content-Type: text/html; charset=utf-8');
-    ?><!DOCTYPE html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Control Panel - Set up two-factor login</title>
-<link href="etc/styles/_shared/global-css/bootstrap.min.css" rel="stylesheet" type="text/css">
-<style>body{background:#f4f6f9;color:#1f2933} .box{max-width:460px;margin:7vh auto;background:#fff;border:0;border-top:4px solid #447fb3;border-radius:6px;box-shadow:0 1px 3px rgba(20,30,40,.1),0 8px 24px rgba(20,30,40,.06);padding:24px 28px} .btn-primary{background:#447fb3;border-color:#3a6d9a} a{color:#447fb3}
-.code{font-size:28px;letter-spacing:6px;text-align:center;font-family:monospace} .qr{display:inline-block;padding:8px;border:1px solid #ddd;border-radius:4px;background:#fff}</style></head>
-<body><div class="box">
-<h3>Set up two-factor login</h3>
-<p>This server requires a code from an authenticator app at every login. Scan this QR code with your app (Google Authenticator, Microsoft Authenticator, Authy, 1Password and the like) for <strong><?php echo htmlspecialchars($setup['user'], ENT_QUOTES, 'UTF-8'); ?></strong>:</p>
-<p style="text-align:center"><span class="qr"><?php echo ctrl_twofactor::QrSvg($tfUri, 200); ?></span></p>
-<p class="text-muted" style="font-size:13px">If you cannot scan it, add an account in the app with this key (time based): <code><?php echo htmlspecialchars(trim(chunk_split($setupRow['tf_secret_vc'], 4, ' ')), ENT_QUOTES, 'UTF-8'); ?></code> &nbsp; <a href="<?php echo htmlspecialchars($tfUri, ENT_QUOTES, 'UTF-8'); ?>">Open in app</a></p>
-<?php if ($tfWrong) { ?><div class="alert alert-danger">That code is not right. Check the time on your phone, and try the next one.</div><?php } ?>
+    ui_loginpage::Open('Set up two-factor login', true);
+    ?>
+<div class="ml-body">
+<h1>Set up two-factor login</h1>
+<p class="ml-sub">This server asks for a code from an authenticator app at every login. Scan this QR code with your app (Google Authenticator, Microsoft Authenticator, Aegis, 1Password and others) for <strong><?php echo htmlspecialchars($setup['user'], ENT_QUOTES, 'UTF-8'); ?></strong>:</p>
+<div class="ml-qr"><span><?php echo ctrl_twofactor::QrSvg($tfUri, 200); ?></span></div>
+<p class="ml-sub">Can't scan it? Add an account in the app with this key (time based): <code class="ml-key"><?php echo htmlspecialchars(trim(chunk_split($setupRow['tf_secret_vc'], 4, ' ')), ENT_QUOTES, 'UTF-8'); ?></code> or <a href="<?php echo htmlspecialchars($tfUri, ENT_QUOTES, 'UTF-8'); ?>">open it in the app</a> on this phone.</p>
+<?php if ($tfWrong) { echo ui_loginpage::Message('error', 'That code is not right. Check the time on your phone, and try the next one.'); } ?>
 <form method="post" action="./?twofactor-setup" autocomplete="off">
-<label>Then enter the 6-digit code it shows:</label>
-<input class="form-control code" name="inTwoFactorCode" inputmode="numeric" pattern="[0-9 ]{6,7}" maxlength="7" required autofocus>
+<label class="ml-field"><span>Then enter the 6-digit code it shows</span>
+<input class="ml-input ml-code" name="inTwoFactorCode" inputmode="numeric" pattern="[0-9 ]{6,7}" maxlength="7" required autofocus></label>
 <?php echo runtime_csfr::Token(); ?>
-<p style="margin-top:16px"><button class="btn btn-primary btn-block" type="submit">Turn on and log in</button></p>
-<p class="text-muted" style="margin:0"><a href="<?php echo htmlspecialchars(ctrl_auth::LogoutUrl(), ENT_QUOTES, 'UTF-8'); ?>">Cancel</a></p>
-</form></div></body></html>
+<div class="ml-foot"><a href="<?php echo htmlspecialchars(ctrl_auth::LogoutUrl(), ENT_QUOTES, 'UTF-8'); ?>">Cancel</a><button class="btn btn-primary" type="submit">Turn on and log in</button></div>
+</form></div>
+<?php ui_loginpage::Close(); ?>
 <?php
     exit();
 }

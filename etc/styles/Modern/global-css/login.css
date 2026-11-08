@@ -1,180 +1,90 @@
-/* Login Page Stylesheet */
+/* Modern: every page before login (the login form, password reset, the two-factor code and setup),
+   in the look of the panel's modules: the theme's Light and Dark colours (css/_vars-light.css and
+   _vars-dark.css), labels above full-width fields, the same buttons and messages. The class on <html>
+   (ml-light, ml-dark, ml-auto) is the administrator's choice; see dryden/ui/loginpage.class.php. */
 
-html, body {
-    background-color: #FFF;
-    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+html.ml-light, html.ml-auto {
+    color-scheme: light;
+    --ml-bg: #f4f6f9; --ml-card: #ffffff; --ml-ink: #1f2933; --ml-muted: #6b7785; --ml-line: #e6e9ee;
+    --ml-input: #ffffff; --ml-input-line: #cfd6de; --ml-blue: #447fb3; --ml-blue-dark: #3a6d9a;
+    --ml-link: #447fb3; --ml-link-hover: #3a6d9a; --ml-foot: #f8f9fb; --ml-tint: 13%;
+    --ml-ok: #1e8a4c; --ml-ok-bg: #e5f5ec; --ml-bad: #c62f2b; --ml-bad-bg: #fdecea; --ml-info: #2f6f9f; --ml-info-bg: #e6f1f8;
+    --ml-shadow: 0 1px 3px rgba(20, 30, 40, 0.10), 0 8px 24px rgba(20, 30, 40, 0.06);
 }
-a:link, a:visited {
-    color: #4C4C81;
-    text-decoration:none;
+html.ml-dark {
+    color-scheme: dark;
+    --ml-bg: #12171d; --ml-card: #1b222b; --ml-ink: #e6e9ee; --ml-muted: #9aa5b1; --ml-line: #2c3540;
+    --ml-input: #12171d; --ml-input-line: #3a4552; --ml-blue: #5b97cc; --ml-blue-dark: #447fb3;
+    --ml-link: #79aedb; --ml-link-hover: #a3c8e8; --ml-foot: #171d24; --ml-tint: 18%;
+    --ml-ok: #3cc98d; --ml-ok-bg: #18302a; --ml-bad: #ff8a7a; --ml-bad-bg: #3a2124; --ml-info: #79aedb; --ml-info-bg: #1b2d3d;
+    --ml-shadow: 0 1px 3px rgba(0, 0, 0, 0.35), 0 8px 24px rgba(0, 0, 0, 0.25);
 }
-a:hover, a:active {
-    color: #4C4C81;
-    text-decoration: underline;
-}
-
-.loginwrapper {
-    background-color: #FFF;
-    height: 370px;
-    width: 400px;
-    padding: 5px;
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    margin: auto;
-}
-
-.loginform {
-    margin: 29px 0 0;
-}
-
-.loginwrapper .form-horizontal .control-label {
-    float: left;
-    width: 140px;
-    padding: 5px 5px 0 0;
-    text-align: right;
-}
-.loginwrapper .form-horizontal .controls {
-    display: inline-block;
-    padding-left: 20px;
-    margin-left: 130px;
-    margin-left: 0;
-    text-align: left;
-}
-
-.logcheckbox {
-    position: relative;
-    bottom: 10px;
-    right: 10px;
-}
-
-.vbox {
-    text-align: center;
-    padding-top: 10px;
-}
-
-.loginbtm {
-    background: rgb(239,239,239); /* Old browsers */
-    padding: 20px 0;
-    -webkit-border-radius: 0px 0px 5px 5px;
-    -moz-border-radius: 0px 0px 5px 5px;
-    border-radius: 0px 0px 5px 5px;
-    border-top:1px solid #CCC;
-}
-.loginbtm > div {
-    display: inline-block;
-    width: 44%;
-    text-align: right;
-}
-.login-head img {
-    width: 226px;
-    float: none;
-}
-.login-head {
-    margin: 0;
-}
-.login-panel {
-    padding: 0;
-}
-.alert {
-    width: 90%;
-    margin: 20px;
-}
-
-/* PrettyCheckable Stylesheet */
-.clearfix:before, .clearfix:after {
-    content: "";
-    display: table;
-}
-
-.clearfix:after {clear: both;}
-
-.clearfix {*zoom: 1;}
-
-.prettycheckbox,
-.prettyradio {
-    display: inline-block;
-    padding: 0;
-    margin: 0;
-}
-
-.prettycheckbox a,
-.prettyradio a {
-    width: 30px;
-    height: 30px;
-    background: url(../../_shared/img/misc/prettyCheckable-blue.png) top left no-repeat;
-    display: block;
-    float: left;
-    cursor: pointer;
-    margin: 0;
-}
-
-.prettycheckbox.green a,
-.prettyradio.green a {background-image: url(../../_shared/img/misc/prettyCheckable-purple.png);}
-
-.prettyradio a {background-position: 0 -120px;}
-
-.prettycheckbox a:focus,
-.prettyradio a:focus {outline: 0 none;}
-
-.prettycheckbox a:focus {background-position: 0 -30px;}
-.prettyradio a:focus {background-position: 0 -150px;}
-
-.prettycheckbox a.checked { background-position: 0 -60px; }
-.prettyradio a.checked { background-position: 0 -180px; }
-
-.prettycheckbox a.checked:focus { background-position: 0 -90px; }
-.prettyradio a.checked:focus { background-position: 0 -210px; }
-
-.prettycheckbox label,
-.prettyradio label {
-    display: block;
-    float: left;
-    margin: 6px 5px;
-    cursor: pointer;
-}
-
-.prettycheckbox.disabled a,
-.prettyradio.disabled a,
-.prettycheckbox.disabled label,
-.prettyradio.disabled label {
-    cursor:not-allowed;
-}
-
-.prettycheckbox.disabled a {
-    background-position: 0 -240px;
-}
-
-.prettyradio.disabled a {
-    background-position: 0 -270px;
-}
-
-/* ---- Modern template: Server Monitor palette, light and dark (class on <html>) ---- */
-html.ml-light { --ml-bg: #f4f6f9; --ml-card: #ffffff; --ml-ink: #1f2933; --ml-muted: #6b7785; --ml-line: #e6e9ee;
-    --ml-input: #ffffff; --ml-input-line: #cfd6de; --ml-blue: #447fb3; --ml-blue-dark: #3a6d9a; --ml-link: #447fb3; --ml-foot: #f8f9fb; }
-html.ml-dark { color-scheme: dark; --ml-bg: #12171d; --ml-card: #1b222b; --ml-ink: #e6e9ee; --ml-muted: #9aa5b1; --ml-line: #2c3540;
-    --ml-input: #12171d; --ml-input-line: #3a4552; --ml-blue: #5b97cc; --ml-blue-dark: #447fb3; --ml-link: #79aedb; --ml-foot: #171d24; }
-/* Auto: the light colours, or the dark ones when the computer is set to dark */
-html.ml-auto { --ml-bg: #f4f6f9; --ml-card: #ffffff; --ml-ink: #1f2933; --ml-muted: #6b7785; --ml-line: #e6e9ee;
-    --ml-input: #ffffff; --ml-input-line: #cfd6de; --ml-blue: #447fb3; --ml-blue-dark: #3a6d9a; --ml-link: #447fb3; --ml-foot: #f8f9fb; }
 @media (prefers-color-scheme: dark) {
-    html.ml-auto { color-scheme: dark; --ml-bg: #12171d; --ml-card: #1b222b; --ml-ink: #e6e9ee; --ml-muted: #9aa5b1; --ml-line: #2c3540;
-        --ml-input: #12171d; --ml-input-line: #3a4552; --ml-blue: #5b97cc; --ml-blue-dark: #447fb3; --ml-link: #79aedb; --ml-foot: #171d24; }
+    html.ml-auto {
+        color-scheme: dark;
+        --ml-bg: #12171d; --ml-card: #1b222b; --ml-ink: #e6e9ee; --ml-muted: #9aa5b1; --ml-line: #2c3540;
+        --ml-input: #12171d; --ml-input-line: #3a4552; --ml-blue: #5b97cc; --ml-blue-dark: #447fb3;
+        --ml-link: #79aedb; --ml-link-hover: #a3c8e8; --ml-foot: #171d24; --ml-tint: 18%;
+        --ml-ok: #3cc98d; --ml-ok-bg: #18302a; --ml-bad: #ff8a7a; --ml-bad-bg: #3a2124; --ml-info: #79aedb; --ml-info-bg: #1b2d3d;
+        --ml-shadow: 0 1px 3px rgba(0, 0, 0, 0.35), 0 8px 24px rgba(0, 0, 0, 0.25);
+    }
 }
-html, body { background-color: var(--ml-bg); color: var(--ml-ink); }
-a:link, a:visited, a:hover, a:active { color: var(--ml-link); }
-.loginwrapper { background: transparent; }
-.login-panel { background: var(--ml-card); border: 0; border-top: 4px solid var(--ml-blue); border-radius: 6px;
-    box-shadow: 0 1px 3px rgba(20, 30, 40, 0.10), 0 8px 24px rgba(20, 30, 40, 0.06); overflow: hidden; }
-.login-head { background: var(--ml-card); border-bottom: 1px solid var(--ml-line); padding: 18px 0 14px; text-align: center; }
-.loginwrapper .form-horizontal .control-label { color: var(--ml-muted); font-weight: 600; }
-.loginwrapper input[type="text"], .loginwrapper input[type="password"] { background: var(--ml-input); color: var(--ml-ink);
-    border: 1px solid var(--ml-input-line); border-radius: 4px; padding: 5px 8px; }
-.loginwrapper input:focus { border-color: var(--ml-blue); outline: 0; box-shadow: 0 0 0 3px rgba(68, 127, 179, 0.22); }
-.prettycheckbox label { color: var(--ml-muted); }
-.loginbtm { background: var(--ml-foot); border-top: 1px solid var(--ml-line); border-radius: 0 0 6px 6px; }
-.btn-primary { background-color: var(--ml-blue); border-color: var(--ml-blue-dark); }
-.btn-primary:hover, .btn-primary:focus { background-color: var(--ml-blue-dark); border-color: var(--ml-blue-dark); }
-.vbox { color: var(--ml-muted); }
+
+html, body { min-height: 100%; background: var(--ml-bg); color: var(--ml-ink); }
+body { margin: 0; font-size: 14px; }
+a, a:link, a:visited { color: var(--ml-link); text-decoration: none; }
+a:hover, a:focus, a:active { color: var(--ml-link-hover); text-decoration: underline; }
+
+/* the card, in the middle of the page */
+.ml-wrap { box-sizing: border-box; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 32px 16px; }
+.ml-card { box-sizing: border-box; width: 100%; max-width: 400px; background: var(--ml-card); border: 1px solid var(--ml-line);
+    border-top: 4px solid var(--ml-blue); border-radius: 8px; box-shadow: var(--ml-shadow); overflow: hidden; }
+.ml-wide .ml-card { max-width: 480px; }
+.ml-head { padding: 22px 24px 18px; text-align: center; border-bottom: 1px solid var(--ml-line); }
+.ml-head img { width: 226px; max-width: 100%; height: auto; }
+.ml-body { padding: 22px 24px 6px; }
+.ml-body h1 { margin: 0 0 6px; font-size: 18px; font-weight: 600; color: var(--ml-ink); }
+.ml-body p { color: var(--ml-ink); line-height: 1.5; }
+.ml-sub { color: var(--ml-muted); font-size: 13px; }
+.ml-powered { margin: 18px 0 0; color: var(--ml-muted); font-size: 13px; text-align: center; }
+
+/* fields: a small label above a full-width field, as in the modules */
+.ml-field { display: block; margin: 0 0 16px; font-weight: normal; }
+.ml-field > span { display: block; margin-bottom: 5px; color: var(--ml-muted); font-size: 12px; font-weight: 600; }
+.ml-field small { display: block; margin-top: 5px; color: var(--ml-muted); font-size: 12px; }
+.ml-input, .ml-field input[type="text"], .ml-field input[type="password"], .ml-field input[type="email"] {
+    box-sizing: border-box; display: block; width: 100%; height: 38px; padding: 7px 10px; font-size: 14px;
+    background: var(--ml-input); color: var(--ml-ink); border: 1px solid var(--ml-input-line); border-radius: 4px; box-shadow: none; }
+.ml-input:focus, .ml-field input:focus { border-color: var(--ml-blue); outline: 0; box-shadow: 0 0 0 3px color-mix(in srgb, var(--ml-blue) 22%, transparent); }
+.ml-field input::placeholder { color: var(--ml-muted); opacity: 1; }
+/* (Bootstrap marks a focused, still empty required field red, as if it were wrong) */
+.ml-field input:focus:invalid, .ml-input:focus:invalid { border-color: var(--ml-blue); color: var(--ml-ink); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ml-blue) 22%, transparent); }
+.ml-code { height: 48px !important; font-family: SFMono-Regular, Menlo, Consolas, monospace; font-size: 24px !important; letter-spacing: 6px; text-align: center; }
+
+/* tick boxes, each with its explanation */
+.ml-check { display: flex; gap: 9px; align-items: flex-start; margin: 0 0 12px; font-weight: normal; cursor: pointer; }
+.ml-check input { margin: 2px 0 0; width: 16px; height: 16px; flex: none; accent-color: var(--ml-blue); }
+.ml-check b { display: block; font-weight: 600; color: var(--ml-ink); }
+.ml-check small { display: block; color: var(--ml-muted); font-size: 12px; line-height: 1.4; }
+
+/* the bottom row: a link on the left, the button on the right */
+.ml-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+    margin-top: 16px; padding: 14px 24px; background: var(--ml-foot); border-top: 1px solid var(--ml-line); }
+.ml-foot .btn { min-width: 96px; }
+.ml-body .ml-foot { margin: 16px -24px 0; }
+.btn-primary { background-color: var(--ml-blue); border-color: var(--ml-blue-dark); color: #fff; }
+.btn-primary:hover, .btn-primary:focus, .btn-primary:active { background-color: var(--ml-blue-dark); border-color: var(--ml-blue-dark); color: #fff; }
+
+/* messages, as the panel's notices */
+.ml-msg { margin: 0 0 16px; padding: 10px 12px; border-left: 4px solid; border-radius: 4px; font-size: 13px; line-height: 1.45; }
+.ml-msg-error { color: var(--ml-bad); background: var(--ml-bad-bg); border-color: var(--ml-bad); }
+.ml-msg-ok { color: var(--ml-ok); background: var(--ml-ok-bg); border-color: var(--ml-ok); }
+.ml-msg-info { color: var(--ml-info); background: var(--ml-info-bg); border-color: var(--ml-info); }
+
+/* two-factor setup: the QR code on white (phones read it best that way) and the key */
+.ml-qr { text-align: center; margin: 4px 0 12px; }
+.ml-qr span { display: inline-block; padding: 8px; background: #fff; border: 1px solid var(--ml-line); border-radius: 6px; }
+.ml-key { display: inline-block; padding: 1px 6px; background: var(--ml-bg); color: var(--ml-ink); border: 1px solid var(--ml-line); border-radius: 4px; font-size: 12px; }
+
+[hidden] { display: none !important; }
+@media (max-width: 420px) { .ml-body { padding: 18px 16px 4px; } .ml-foot { padding: 12px 16px; } .ml-body .ml-foot { margin: 16px -16px 0; } .ml-foot .btn { width: 100%; } }
