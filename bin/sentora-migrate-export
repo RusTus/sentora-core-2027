@@ -7,6 +7,11 @@
 #   bash sentora-migrate-export                    everything, into /root/sentora-export-<server>-<date>
 #   bash sentora-migrate-export --to /backup/x     into another folder
 #   bash sentora-migrate-export --no-mail          without the mailboxes' mail
+#   bash sentora-migrate-export --to-server <new server>
+#                                                  straight onto the new server over SSH (its root password
+#                                                  is asked once): nothing is written on this server, for
+#                                                  one without room for the export; --to <folder> is then a
+#                                                  folder there, --port <n> its SSH port
 #
 # What it writes (one folder; copy it to the new server, for example with rsync or scp):
 #   manifest.txt                 the server, the Sentora version and every account with its domains
@@ -25,10 +30,14 @@ set -u
 
 OUT=""
 MAIL=yes
+REMOTE=""
+RPORT=22
 while [ $# -gt 0 ]; do
     case "$1" in
         --to) OUT="${2:-}"; shift ;;
         --no-mail) MAIL=no ;;
+        --to-server) REMOTE="${2:-}"; shift ;;
+        --port) RPORT="${2:-}"; shift ;;
         --yes|-y) ;;   # (the import's option: this only reads, so there is nothing to confirm)
         -h|--help) sed -n '2,/^set -u/p' "$0" | grep '^#' | sed 's/^# \{0,1\}//'; exit 0 ;;
         *) echo "Unknown option: $1 (see --help)"; exit 2 ;;
@@ -52,16 +61,53 @@ DBHOST=$(val host); DBUSER=$(val user); DBPASS=$(val pass); DBNAME=$(val dbname)
 [ -n "$DBNAME" ] || DBNAME=sentora_core
 MYCNF=$(mktemp); chmod 600 "$MYCNF"
 printf '[client]\nuser=%s\npassword="%s"\nhost=%s\n' "$DBUSER" "$DBPASS" "${DBHOST:-localhost}" > "$MYCNF"
-trap 'rm -f "$MYCNF"' EXIT
+# (the shared SSH connection to the new server, when there is one, is closed too)
+trap 'rm -f "$MYCNF"; [ -n "${SSHCTL:-}" ] && ssh "${SSHOPT[@]}" -O exit "$REMOTE" > /dev/null 2>&1' EXIT
 sql() { mysql --defaults-extra-file="$MYCNF" -N -B -e "$1" 2>> "$LOGF"; }
 
 HOST=$(hostname -f 2> /dev/null || hostname)
 STAMP=$(date +%Y%m%d-%H%M)
 [ -n "$OUT" ] || OUT="/root/sentora-export-$(hostname -s 2> /dev/null || echo server)-$STAMP"
-if [ -e "$OUT" ] && [ -n "$(ls -A "$OUT" 2> /dev/null)" ]; then echo "$OUT is not empty: choose another folder with --to."; exit 1; fi
-mkdir -p "$OUT/db/panel" "$OUT/db/sites" "$OUT/files" "$OUT/mail" || exit 1
-chmod 700 "$OUT"
+RDIR=""; SSHCTL=""
+if [ -n "$REMOTE" ]; then
+    # Straight onto the new server: every file goes through one SSH connection (the password is asked
+    # once), into $RDIR there; here only the log, in /tmp, sent along at the end
+    case "$REMOTE" in *@*) ;; *) REMOTE="root@$REMOTE" ;; esac
+    RDIR="$OUT"
+    case "$RDIR" in /*) ;; *) echo "--to must be a full path on the new server (/root/...)."; exit 2 ;; esac
+    if ! printf '%s' "$RDIR$REMOTE$RPORT" | grep -qE '^[A-Za-z0-9_.@:/-]+$'; then echo "The server, folder or port has characters that are not allowed."; exit 2; fi
+    mkdir -p /root/.ssh && chmod 700 /root/.ssh
+    SSHCTL="/tmp/sentora-export-ssh-$$"
+    SSHOPT=(-F /dev/null -p "$RPORT" -o ControlPath="$SSHCTL" -o ServerAliveInterval=30 -o ServerAliveCountMax=10)
+    echo "Connecting to $REMOTE (port $RPORT): the new server's password is asked once."
+    if ! ssh "${SSHOPT[@]}" -o ControlMaster=yes -o ControlPersist=yes -fN "$REMOTE"; then
+        SSHCTL=""
+        echo "Could not connect to $REMOTE: check the address, the port and the password. Nothing was exported."; exit 1
+    fi
+    # (-n: a command run there must not read this script's input, or it ends the loop it is in)
+    rsh() { ssh -n "${SSHOPT[@]}" "$REMOTE" "$@"; }
+    rput() { ssh "${SSHOPT[@]}" "$REMOTE" "$@"; }
+    rsh "test -d /etc/sentora/panel" || echo "  (no /etc/sentora/panel there: is it the Sentora-2027 server? going on)"
+    rsh "if [ -e '$RDIR' ] && [ -n \"\$(ls -A '$RDIR' 2> /dev/null)\" ]; then exit 3; fi; mkdir -p '$RDIR/db/panel' '$RDIR/db/sites' '$RDIR/files' '$RDIR/mail' && chmod 700 '$RDIR'"
+    case $? in
+        0) ;;
+        3) echo "$RDIR on $REMOTE is not empty: choose another folder with --to."; exit 1 ;;
+        *) echo "Could not make $RDIR on $REMOTE."; exit 1 ;;
+    esac
+    OUT=$(mktemp -d /tmp/sentora-export-log.XXXXXX) || { echo "No room even for the log in /tmp."; exit 1; }
+else
+    if [ -e "$OUT" ] && [ -n "$(ls -A "$OUT" 2> /dev/null)" ]; then echo "$OUT is not empty: choose another folder with --to."; exit 1; fi
+    mkdir -p "$OUT/db/panel" "$OUT/db/sites" "$OUT/files" "$OUT/mail" || exit 1
+    chmod 700 "$OUT"
+fi
 LOGF="$OUT/export.log"; : > "$LOGF"
+# put <file>: what comes in on stdin becomes <file> in the export (here, or on the new server)
+put() {
+    if [ -n "$REMOTE" ]; then rput "cat > '$RDIR/$1'"; else cat > "$OUT/$1"; fi
+}
+fsize() { if [ -n "$REMOTE" ]; then rsh "du -sh '$RDIR/$1' | cut -f1"; else du -sh "$OUT/$1" | cut -f1; fi; }
+fexists() { if [ -n "$REMOTE" ]; then rsh "test -s '$RDIR/$1'"; else [ -s "$OUT/$1" ]; fi; }
+WHERE="$OUT"; [ -n "$REMOTE" ] && WHERE="$REMOTE:$RDIR"
 WARNS=0
 
 # --- the screen: the installer's look ----------------------------------------------------------
@@ -139,7 +185,7 @@ ui_done() {
         printf ' %s%s%s 100%%  %sall %d steps done in %d:%02d%s\n' "$C_GREEN" "$(ui_repeat "$UI_FULL" "$width")" "$C_RESET" "$C_BOLD" "$UI_STEP" $(( total / 60 )) $(( total % 60 )) "$C_RESET"
     fi
 }
-trap 'ui_ticker_stop; rm -f "$MYCNF"' EXIT
+trap 'ui_ticker_stop; rm -f "$MYCNF"; [ -n "${SSHCTL:-}" ] && ssh "${SSHOPT[@]}" -O exit "$REMOTE" > /dev/null 2>&1' EXIT
 say() { echo "$(date '+%H:%M:%S') $*" >> "$LOGF"; if [ -n "$UI_TITLE" ]; then UI_NOTES+=("         $C_DIM$*$C_RESET"); else printf '         %s\n' "$*"; fi; }
 warn() { echo "$(date '+%H:%M:%S') WARNING: $*" >> "$LOGF"; WARNS=$((WARNS + 1)); UI_STEP_WARN=1
     if [ -n "$UI_TITLE" ]; then UI_NOTES+=("         $C_YELLOW$*$C_RESET"); else printf '         %s\n' "$*"; fi; }
@@ -150,16 +196,16 @@ VERSION=$(sql "SELECT so_value_tx FROM $DBNAME.x_settings WHERE so_name_vc = 'db
 [ $UI_TTY -eq 1 ] && printf '\e[H\e[2J\e[3J'
 echo
 ui_bar "$BG_TITLE" "  Sentora ${VERSION:-?} on $HOST  -  Export for Sentora-2027"
-printf '%s  Into %s (nothing on this server is changed)%s\n\n' "$C_DIM" "$OUT" "$C_RESET"
+printf '%s  Into %s (nothing on this server is changed)%s\n\n' "$C_DIM" "$WHERE" "$C_RESET"
 ui_step "Checking the server"
 mysql --defaults-extra-file="$MYCNF" -e "SELECT 1" > /dev/null 2>> "$LOGF" || stop "could not log in to MySQL with the panel's settings ($PANEL/cnf/db.php)"
 
 # room for it: the folders, compressed, rarely take more than they do now
 NEED=$(du -sk "$HOSTED" 2> /dev/null | cut -f1); NEED=${NEED:-0}
 [ "$MAIL" = yes ] && NEED=$((NEED + $(du -sk "$VMAIL" 2> /dev/null | cut -f1 || echo 0)))
-FREE=$(df -Pk "$OUT" | awk 'NR == 2 {print $4}')
+if [ -n "$REMOTE" ]; then FREE=$(rsh "df -Pk '$RDIR' | awk 'NR == 2 {print \$4}'"); else FREE=$(df -Pk "$OUT" | awk 'NR == 2 {print $4}'); fi
 if [ "${FREE:-0}" -lt "$NEED" ]; then
-    warn "$OUT has $((FREE / 1024)) MB free and the folders take $((NEED / 1024)) MB: it may not fit (use --to on a larger disk)"
+    warn "$WHERE has $((FREE / 1024)) MB free and the folders take $((NEED / 1024)) MB: it may not fit (use --to on a larger disk)"
 else
     say "$((NEED / 1024)) MB of folders, $((FREE / 1024)) MB free"
 fi
@@ -169,22 +215,24 @@ fi
 # server can load each one under the name it chooses
 DUMPOPT=(--single-transaction --routines --triggers --no-create-db --default-character-set=utf8mb4)
 mysqldump --help 2> /dev/null | grep -q -- '--set-gtid-purged' && DUMPOPT+=(--set-gtid-purged=OFF)
-dump() { # database file
+dump() { # database file (in the export)
     # the progress line says which one: a large database takes minutes
     ui_item "$1"
-    if mysqldump --defaults-extra-file="$MYCNF" "${DUMPOPT[@]}" "$1" 2>> "$LOGF" | gzip -6 > "$2"; then
-        [ "${PIPESTATUS[0]}" = 0 ] && { say "$(printf '%-28s %s' "$1" "$(du -h "$2" | cut -f1)")"; return 0; }
+    mysqldump --defaults-extra-file="$MYCNF" "${DUMPOPT[@]}" "$1" 2>> "$LOGF" | gzip -6 | put "$2"
+    local st=("${PIPESTATUS[@]}")
+    if [ "${st[0]}" = 0 ] && [ "${st[1]}" = 0 ] && [ "${st[2]}" = 0 ]; then
+        say "$(printf '%-28s %s' "$1" "$(fsize "$2")")"; return 0
     fi
     warn "the database $1 could not be exported (see export.log)"
-    rm -f "$2"
+    if [ -n "$REMOTE" ]; then rsh "rm -f '$RDIR/$2'"; else rm -f "$OUT/$2"; fi
     return 1
 }
 ui_step "The panel's databases"
 for db in "$DBNAME" sentora_postfix sentora_proftpd zpanel_postfix zpanel_proftpd; do
     [ -n "$(sql "SHOW DATABASES LIKE '$db'")" ] || continue
-    dump "$db" "$OUT/db/panel/$db.sql.gz"
+    dump "$db" "db/panel/$db.sql.gz"
 done
-[ -f "$OUT/db/panel/$DBNAME.sql.gz" ] || stop "the panel's own database ($DBNAME) could not be exported"
+fexists "db/panel/$DBNAME.sql.gz" || stop "the panel's own database ($DBNAME) could not be exported"
 # Roundcube's database (webmail address books, identities and signatures, settings): its name from
 # Roundcube's own settings, else the usual names
 RCDB=""
@@ -195,7 +243,7 @@ for f in "$PANEL/etc/apps/webmail/config/config.inc.php" "$PANEL/etc/apps/webmai
 done
 for db in "$RCDB" sentora_roundcube roundcube; do
     if [ -n "$db" ] && [ -n "$(sql "SHOW DATABASES LIKE '$db'")" ]; then
-        dump "$db" "$OUT/db/panel/roundcube.sql.gz" && RCDB=$db
+        dump "$db" "db/panel/roundcube.sql.gz" && RCDB=$db
         break
     fi
     RCDB=""
@@ -210,14 +258,14 @@ while IFS= read -r db; do
         warn "the panel lists the database $db, but MySQL does not have it"
         continue
     fi
-    dump "$db" "$OUT/db/sites/$db.sql.gz" && NDB=$((NDB + 1))
+    dump "$db" "db/sites/$db.sql.gz" && NDB=$((NDB + 1))
 done <<< "$(sql "SELECT my_name_vc FROM $DBNAME.x_mysql_databases WHERE my_deleted_ts IS NULL")"
 # each MySQL user's grants, for reference (the import makes the users again from the panel's records)
 while IFS=$'\t' read -r u h; do
     [ -n "$u" ] || continue
     echo "-- $u@$h"
     mysql --defaults-extra-file="$MYCNF" -N -B -e "SHOW GRANTS FOR '$u'@'$h'" 2> /dev/null | sed 's/$/;/'
-done <<< "$(sql "SELECT mu_name_vc, mu_access_vc FROM $DBNAME.x_mysql_users WHERE mu_deleted_ts IS NULL")" > "$OUT/db/mysql-grants.txt"
+done <<< "$(sql "SELECT mu_name_vc, mu_access_vc FROM $DBNAME.x_mysql_users WHERE mu_deleted_ts IS NULL")" | put db/mysql-grants.txt
 
 # --- the accounts' folders and the mail ----------------------------------------------------------
 ui_step "The accounts' folders (websites)"
@@ -229,8 +277,10 @@ while IFS= read -r u; do
         continue
     fi
     ui_item "$u ($(du -sh "$HOSTED/$u" 2> /dev/null | cut -f1), this can take a while)"
-    if tar -C "$HOSTED" --numeric-owner -czf "$OUT/files/$u.tar.gz" "$u" 2>> "$LOGF"; then
-        say "$(printf '%-28s %s packed' "$u" "$(du -sh "$OUT/files/$u.tar.gz" | cut -f1)")"
+    tar -C "$HOSTED" --numeric-owner -czf - "$u" 2>> "$LOGF" | put "files/$u.tar.gz"
+    st=("${PIPESTATUS[@]}")
+    if [ "${st[0]}" = 0 ] && [ "${st[1]}" = 0 ]; then
+        say "$(printf '%-28s %s packed' "$u" "$(fsize "files/$u.tar.gz")")"
         NACC=$((NACC + 1))
     else
         warn "the folder of $u was not packed completely (see export.log)"
@@ -244,8 +294,9 @@ if [ "$MAIL" = yes ] && [ -d "$VMAIL" ]; then
         [ -d "$d" ] || continue
         dom=$(basename "$d")
         ui_item "$dom"
-        tar -C "$VMAIL" --numeric-owner -czf "$OUT/mail/$dom.tar.gz" "$dom" 2>> "$LOGF" \
-            && { say "$dom"; NMAIL=$((NMAIL + 1)); } || warn "the mail of $dom was not packed completely (see export.log)"
+        tar -C "$VMAIL" --numeric-owner -czf - "$dom" 2>> "$LOGF" | put "mail/$dom.tar.gz"
+        st=("${PIPESTATUS[@]}")
+        if [ "${st[0]}" = 0 ] && [ "${st[1]}" = 0 ]; then say "$dom"; NMAIL=$((NMAIL + 1)); else warn "the mail of $dom was not packed completely (see export.log)"; fi
     done
 fi
 [ "$NMAIL" -gt 0 ] || say "$( [ "$MAIL" = yes ] && echo 'no mailboxes' || echo 'left out (--no-mail)')"
@@ -265,7 +316,9 @@ if [ "$MAIL" = yes ]; then
     [ -n "$SBASE" ] || { [ -d "$DATA/sieve" ] && SBASE="$DATA/sieve"; }
     case "$SBASE" in "$VMAIL"|"$VMAIL"/*) SBASE="" ;; esac
     if [ -n "$SBASE" ] && [ -d "$SBASE" ]; then
-        if tar -C "$(dirname "$SBASE")" --numeric-owner -czf "$OUT/mail/sieve.tar.gz" "$(basename "$SBASE")" 2>> "$LOGF"; then
+        tar -C "$(dirname "$SBASE")" --numeric-owner -czf - "$(basename "$SBASE")" 2>> "$LOGF" | put mail/sieve.tar.gz
+        st=("${PIPESTATUS[@]}")
+        if [ "${st[0]}" = 0 ] && [ "${st[1]}" = 0 ]; then
             say "mail filters (Sieve): $SBASE"
         else
             warn "the mail filters in $SBASE were not packed completely (see export.log)"
@@ -295,26 +348,38 @@ ui_step "The manifest and checksums"
     echo "sieve_base=$SBASE"
     sql "SELECT a.ac_user_vc, (SELECT COUNT(*) FROM $DBNAME.x_vhosts v WHERE v.vh_acc_fk = a.ac_id_pk AND v.vh_deleted_ts IS NULL)
          FROM $DBNAME.x_accounts a WHERE a.ac_deleted_ts IS NULL ORDER BY a.ac_user_vc" | while IFS=$'\t' read -r u n; do
-        echo "account=$u domains=$n: $(sql "SELECT GROUP_CONCAT(vh_name_vc ORDER BY vh_name_vc SEPARATOR ' ') FROM $DBNAME.x_vhosts v JOIN $DBNAME.x_accounts a ON a.ac_id_pk = v.vh_acc_fk WHERE a.ac_user_vc = '$u' AND v.vh_deleted_ts IS NULL")"
+        echo "account=$u domains=$n: $(sql "SELECT IFNULL(GROUP_CONCAT(vh_name_vc ORDER BY vh_name_vc SEPARATOR ' '), '') FROM $DBNAME.x_vhosts v JOIN $DBNAME.x_accounts a ON a.ac_id_pk = v.vh_acc_fk WHERE a.ac_user_vc = '$u' AND v.vh_deleted_ts IS NULL")"
     done
-} > "$OUT/manifest.txt"
+} | put manifest.txt
 
-(cd "$OUT" && find . -type f ! -name SHA256SUMS ! -name export.log -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS)
-chmod -R go-rwx "$OUT"
+if [ -n "$REMOTE" ]; then
+    rsh "cd '$RDIR' && find . -type f ! -name SHA256SUMS ! -name export.log -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS && chmod -R go-rwx '$RDIR'" \
+        || warn "the checksums could not be made on $REMOTE"
+else
+    (cd "$OUT" && find . -type f ! -name SHA256SUMS ! -name export.log -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS)
+    chmod -R go-rwx "$OUT"
+fi
 
 ui_done
 echo
-SIZE=$(du -sh "$OUT" | cut -f1)
+if [ -n "$REMOTE" ]; then SIZE=$(rsh "du -sh '$RDIR' | cut -f1"); else SIZE=$(du -sh "$OUT" | cut -f1); fi
 if [ "$WARNS" -eq 0 ]; then ui_bar "$BG_OK" "  Exported: $NACC account folder(s), $NDB database(s), $NMAIL mail domain(s), $SIZE"
 else ui_bar "$BG_WARN" "  Exported with $WARNS warning(s) (above, and in export.log): $NACC folder(s), $NDB database(s), $SIZE"; fi
 echo "$(date '+%H:%M:%S') Done: $NACC folder(s), $NDB database(s), $NMAIL mail domain(s), $WARNS warning(s)" >> "$LOGF"
 echo
-printf '  %-14s %s\n' "Folder" "$OUT"
+printf '  %-14s %s\n' "Folder" "$WHERE"
 printf '  %s%s%s\n\n' "$C_YELLOW" "It holds every website, database and mailbox of this server: keep it as private as the server." "$C_RESET"
 printf '  %sNext%s\n' "$C_BOLD" "$C_RESET"
-echo "     1. Copy it to the new server (from here, as root):"
-echo "          scp -F /dev/null -r $OUT root@<new server>:/root/"
-echo "     2. There, see what moving an account would do (nothing changes):"
-echo "          sentora-migrate-import /root/$(basename "$OUT") <account>"
+if [ -n "$REMOTE" ]; then
+    put export.log < "$LOGF"
+    rm -rf "$OUT"
+    echo "     On the new server ($REMOTE), see what moving the accounts would do (nothing changes):"
+    echo "          sentora-migrate-import $RDIR --all"
+else
+    echo "     1. Copy it to the new server (from here, as root):"
+    echo "          scp -F /dev/null -r $OUT root@<new server>:/root/"
+    echo "     2. There, see what moving the accounts would do (nothing changes):"
+    echo "          sentora-migrate-import /root/$(basename "$OUT") --all"
+fi
 echo
 [ "$WARNS" -eq 0 ]

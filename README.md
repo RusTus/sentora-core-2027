@@ -503,6 +503,14 @@ Accounts move from an old Sentora server (1.0.x or 2.0.x, on Debian, Ubuntu or C
    bash sentora-migrate-export
    ```
 
+   If the old server has no room for the export, send it **straight to the new server** instead: nothing is written on the old server, and the new server's root password is asked once:
+
+   ```bash
+   bash sentora-migrate-export --to-server <new server's address>
+   ```
+
+   It goes into `/root/sentora-export-<server>-<date>/` there (`--to <folder>` for another folder there, `--port <n>` for another SSH port), and the end of the output gives the import command to run on the new server. Then skip the copying below.
+
    (On a very old server whose `wget` rejects GitHub's certificate, add `--no-check-certificate` and compare `sha256sum sentora-migrate-export` with the SHA-256 on the release page.) It writes `/root/sentora-export-<server>-<date>/`: the panel's databases, every account's databases, folders and mail, with checksums. Copy that folder here:
 
    ```bash
