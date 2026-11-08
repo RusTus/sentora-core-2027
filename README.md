@@ -615,6 +615,7 @@ Start with `sentora-post-install-check`: most problems show up there as a FAIL l
 | A repository shows FAILED in Repo Browser | It can't be reached, or has no `packages.txt` | Check the address in a browser, then Retry |
 | The daemon log stops part way with an SQL error | A database error ends the run | Fix it, then run `php /etc/sentora/panel/bin/daemon.php` |
 | The panel says *Not Found* on the server's IP after the IP changed | The panel's IP is still the old one | Wait 5 minutes (the daemon follows it); with several local addresses: `setso --set server_ip <address> && setso --set apache_changed true && php /etc/sentora/panel/bin/daemon.php` |
+| A site's Active Directory (LDAP) sign-in fails, or names ending in `.local` don't resolve on the server (osTicket: error 500, `bind() on null`) | Ubuntu's DNS helper (`systemd-resolved`, 127.0.0.53) treats `.local` as local-network names and never asks your DNS servers | Send your domain to your DNS servers, as root (your domain and DNS servers): `mkdir -p /etc/systemd/resolved.conf.d && printf '[Resolve]\nDNS=172.16.0.10 172.16.16.10\nDomains=example.local\nMulticastDNS=no\n' > /etc/systemd/resolved.conf.d/ad.conf && systemctl restart systemd-resolved`. Check with `dig +short _ldap._tcp.example.local SRV`. PHP 7.1 writes the typed password into the error log when that sign-in crashes: empty the site's `-error.log` afterwards |
 | An update went wrong | | `sentora-update --rollback` |
 | Locked out by two-factor (administrator) | Lost phone and codes | `setso --set twofactor_enabled disabled` as root |
 
