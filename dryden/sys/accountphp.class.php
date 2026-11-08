@@ -112,16 +112,17 @@ class sys_accountphp
      * @param int|string $accountId The account ID.
      * @param string $username The account's panel user name.
      * @param string $version PHP version the domain runs, e.g. '8.3'.
-     * @param string $openBasedir The open_basedir value, or '' for none.
+     * @param string $openBasedir The domain's open_basedir, or '' for the account's folder.
      * @return string Apache configuration lines, each ending in a new line.
      */
     static function ApacheHandler($accountId, $username, $version, $openBasedir)
     {
         $tmp = self::HomeDir($username) . 'tmp/';
-        $admin = array();
-        if ($openBasedir !== '') {
-            $admin[] = 'open_basedir=' . $openBasedir;
-        }
+        // Always sent, also when the domain has no limit of its own (then the account's folder, as
+        // the pool): PHP-FPM keeps a value sent with a request in that worker, so a domain that sent
+        // none ran with the folder limit of whichever of the account's domains the worker served
+        // before, and could not read its own files
+        $admin = array('open_basedir=' . ($openBasedir !== '' ? $openBasedir : self::HomeDir($username)));
         $admin[] = 'upload_tmp_dir=' . $tmp;
         $admin[] = 'session.save_path=' . $tmp;
         $admin[] = 'sys_temp_dir=' . $tmp;

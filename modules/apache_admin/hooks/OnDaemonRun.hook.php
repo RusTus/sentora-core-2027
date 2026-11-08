@@ -33,6 +33,12 @@ if (ui_module::CheckModuleEnabled('Apache Config')) {
     if ($guardMissing) {
         echo "Apache Config: adding the request guard for hosted sites..." . fs_filehandler::NewLine();
     }
+    // ... or a domain still sends its PHP settings without a folder limit (written before 2027.19:
+    // it then ran with the limit of another of the account's domains)
+    if (!$guardMissing && strpos((string) @file_get_contents($vhostFile), 'PHP_ADMIN_VALUE "upload_tmp_dir=') !== false) {
+        echo "Apache Config: every domain gets its own PHP folder limit..." . fs_filehandler::NewLine();
+        $guardMissing = true;
+    }
     if ($guardMissing || ctrl_options::GetSystemOption('apache_changed') == strtolower("true")) {
         echo "Apache Config has changed..." . fs_filehandler::NewLine();
 		
