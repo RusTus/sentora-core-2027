@@ -45,6 +45,8 @@ class module_controller extends ctrl_module {
 	static $dnsInvalid;
 	/** @var string|null What Let's Encrypt said when the certificate was not made. */
 	static $certFailedWhy;
+	/** @var string|null Why www. was left out of the certificate. */
+	static $wwwNote;
 	/** @var bool|null True when PHP lacks OpenSSL or curl (set by getCheckModReq()). */
 	static $modReqsError;
 	/** @var bool|null True when port 443 is not open (set by getCheckPortReq()). */
@@ -1612,7 +1614,8 @@ class module_controller extends ctrl_module {
 				} else {
 
 					// Create a SSL for domain and with www. because its a root domain
-					$le->signDomains(array($domain, 'www.'. $domain));
+					// www. too, unless public DNS has no address for it (it would fail the whole request)
+					$le->signDomains(\Analogic\ACME\Lescript::namesFor($domain, false, self::$wwwNote));
 				}
 			}			
 		}
@@ -2184,17 +2187,14 @@ class module_controller extends ctrl_module {
 	}
 
 	/**
-	 * Let's Encrypt's answer, short enough to show: its "detail" when there is one.
+	 * Let's Encrypt's answer in plain words, with what to do (Lescript::explain()).
 	 *
 	 * @param string $message The exception message.
 	 * @return string
 	 */
 	static function LeReason($message) {
-		$m = (string) $message;
-		if (preg_match('/"detail"\s*:\s*"((?:[^"\\\\]|\\\\.)*)"/', $m, $d)) {
-			$m = stripcslashes($d[1]);
-		}
-		return "Let's Encrypt said: " . substr(trim(preg_replace('/\s+/', ' ', $m)), 0, 400);
+		require_once 'modules/sencrypt/code/Lescript.php';
+		return \Analogic\ACME\Lescript::explain($message);
 	}
 	
 
@@ -2214,7 +2214,7 @@ class module_controller extends ctrl_module {
 		}
 		if (self::$okletsencrypt)
 		{
-			return ui_sysmessage::shout(ui_language::translate("Your FREE Let's Encrypt SSL Certificate has been Created. It will be active in about 5 minutes."), "zannounceok");
+			return ui_sysmessage::shout(ui_language::translate("Your FREE Let's Encrypt SSL Certificate has been Created. It will be active in about 5 minutes.") . (self::$wwwNote ? ' ' . htmlspecialchars(self::$wwwNote, ENT_QUOTES, 'UTF-8') : ''), "zannounceok");
 		}
 		if (self::$okselfsigned)
 		{

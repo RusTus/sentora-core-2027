@@ -286,6 +286,9 @@ class Lescript
                 throw new RuntimeException("Invalid response code: " . $this->client->getLastCode() . ", " . json_encode($OrderStatusResponse));
             }
 
+            if (isset($OrderStatusResponse['status']) && $OrderStatusResponse['status'] === "invalid") {
+                throw new RuntimeException("The order failed: " . (isset($OrderStatusResponse['error']['detail']) ? $OrderStatusResponse['error']['detail'] : json_encode($OrderStatusResponse)));
+            }
             if (($OrderStatusResponse['status'] == "valid" && !empty($OrderStatusResponse['certificate']))) {
                 $this->log("Order Status: " . $OrderStatusResponse['status']);
                 $location = $OrderStatusResponse['certificate'];
@@ -305,7 +308,10 @@ class Lescript
 
         // waiting loop
         $certificates = array();
-        while (1) {
+        for ($download = 1; ; $download++) {
+            if ($download > 15) {
+                throw new RuntimeException("The certificate was not ready to download in time: try again in a few minutes");
+            }
             $this->client->getLastLinks();
 
             $result = $this->signedRequest($location, "");
@@ -571,7 +577,16 @@ keyUsage = nonRepudiation, digitalSignature, keyEncipherment');
 
         $this->log("Sending signed request to $uri");
 
-        return $this->client->post($uri, json_encode($data));
+        try {
+            return $this->client->post($uri, json_encode($data));
+        } catch (RuntimeException $e) {
+            // Let's Encrypt sometimes refuses a nonce; its answer carries a fresh one to try once more with
+            if ($nonce === null && strpos($e->getMessage(), 'badNonce') !== false) {
+                $this->log("Nonce refused, trying once more with a fresh one");
+                return $this->signedRequest($uri, $payload, $this->client->getLastNonce());
+            }
+            throw $e;
+        }
     }
 
     /**
@@ -683,6 +698,145 @@ keyUsage = nonRepudiation, digitalSignature, keyEncipherment');
 	 * @param string $certData The certificate in base64url DER form.
 	 * @return array<string, mixed>|string The ACME response.
 	 */
+
+    // --- Sentora: helpers shared by the panel (controller) and the daily renewal (OnDaemonDay) --------
+
+    /**
+     * Does the name have an address at all (A record, also through a CNAME)? Whether it reaches this
+     * server is Let's Encrypt's to find out, and it says so when not (see explain()).
+     *
+     * @param string $name
+     * @return bool
+     */
+    public static function hasAddress($name)
+    {
+        return checkdnsrr($name, 'A') || checkdnsrr($name, 'CNAME');
+    }
+
+    /**
+     * Does the name have an address in public DNS? Asked of a public resolver over HTTPS, because this
+     * server may use an internal DNS that answers differently (split DNS).
+     *
+     * @param string $name
+     * @return bool|null True or false, null when the public resolver could not be asked.
+     */
+    public static function hasPublicAddress($name)
+    {
+        if (!function_exists('curl_init')) {
+            return null;
+        }
+        $h = curl_init('https://cloudflare-dns.com/dns-query?name=' . rawurlencode($name) . '&type=A');
+        curl_setopt_array($h, array(CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 8, CURLOPT_HTTPHEADER => array('Accept: application/dns-json')));
+        $j = json_decode((string) curl_exec($h), true);
+        curl_close($h);
+        if (!is_array($j) || !isset($j['Status'])) {
+            return null;
+        }
+        // Status 0 = NOERROR; an A answer (type 1), also at the end of a CNAME chain
+        foreach (isset($j['Answer']) ? $j['Answer'] : array() as $a) {
+            if (isset($a['type']) && (int) $a['type'] === 1) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * The names a certificate for the domain covers: a subdomain only itself; a main domain also its
+     * www. name, unless public DNS has no address for www. (one name Let's Encrypt can not check
+     * fails the whole request).
+     *
+     * @param string $domain
+     * @param bool $isSubdomain
+     * @param string|null $note Set to a sentence when www. was left out.
+     * @return string[]
+     */
+    public static function namesFor($domain, $isSubdomain, &$note = null)
+    {
+        $note = null;
+        if ($isSubdomain) {
+            return array($domain);
+        }
+        if (self::hasPublicAddress('www.' . $domain) === false) {
+            $note = "www.$domain is not in public DNS, so the certificate covers $domain only (add a DNS record for www and request it again to include it).";
+            return array($domain);
+        }
+        return array($domain, 'www.' . $domain);
+    }
+
+    /**
+     * The country and region for the certificate request, from the server's public address: the
+     * panel's IP when it is a public one, else the address ip-api.com sees this server come from
+     * (a local panel IP is refused there). Let's Encrypt does not put them in the certificate.
+     *
+     * @return array{0: string, 1: string} Two-letter country code (or '') and region (or '').
+     */
+    public static function serverLocation()
+    {
+        $ip = trim((string) \ctrl_options::GetSystemOption('server_ip'));
+        $public = filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) ? $ip : '';
+        $ctx = stream_context_create(array('http' => array('timeout' => 8)));
+        $a = json_decode((string) @file_get_contents('http://ip-api.com/json/' . $public, false, $ctx));
+        if (!$a || !isset($a->status) || $a->status !== 'success') {
+            return array('', '');
+        }
+        return array(preg_match('/^[A-Z]{2}$/', (string) $a->countryCode) ? (string) $a->countryCode : '', (string) $a->regionName);
+    }
+
+    /**
+     * Is the certificate due for renewal? When a third of its own lifetime is left, as Let's
+     * Encrypt advises: 30 days for today's 90-day certificates, and still right for the 64-day
+     * (February 2027) and 45-day (February 2028) ones. A missing or unreadable one is due.
+     *
+     * @param string $certFile cert.pem
+     * @return bool
+     */
+    public static function renewalDue($certFile)
+    {
+        $c = is_file($certFile) ? openssl_x509_parse((string) file_get_contents($certFile)) : false;
+        if (!$c || empty($c['validTo_time_t']) || empty($c['validFrom_time_t'])) {
+            return true;
+        }
+        $life = max(86400, (int) $c['validTo_time_t'] - (int) $c['validFrom_time_t']);
+        return time() > (int) $c['validTo_time_t'] - (int) ($life / 3);
+    }
+
+    /**
+     * What went wrong, in plain words with what to do, followed by Let's Encrypt's own message.
+     *
+     * @param string $message The exception message (Let's Encrypt's problem document, its detail, or ours).
+     * @return string
+     */
+    public static function explain($message)
+    {
+        $m = (string) $message;
+        $type = preg_match('/urn:ietf:params:acme:error:([A-Za-z]+)/', $m, $t) ? $t[1] : '';
+        $detail = preg_match('/"detail"\s*:\s*"((?:[^"\\\\]|\\\\.)*)"/', $m, $d) ? stripcslashes($d[1]) : $m;
+        $detail = trim(preg_replace('/\s+/', ' ', preg_replace('/^\d{3}\s/', '', $detail)));
+        // the name it is about: "... for www.example.com", else the URL it fetched, else our "example.com:" prefix
+        $name = preg_match('/\bfor "?([a-z0-9.-]+\.[a-z]{2,})/i', $detail, $n) || preg_match('/https?:\/\/([a-z0-9.-]+\.[a-z]{2,})/i', $detail, $n)
+            || preg_match('/^([a-z0-9.-]+\.[a-z]{2,}):/i', $detail, $n) ? $n[1] : 'the domain';
+        $rules = array(
+            // [pattern on type or detail, what it means, what to do]
+            array('/rateLimited|too many (certificates|failed|new orders|requests)/i', "Let's Encrypt's limit for this domain or account is reached (too many certificates or failed attempts recently).", 'Wait until the time it names, then try once. Meanwhile, fix the cause of earlier failures; every failed try counts.'),
+            array('/caa|CAA record/i', "The domain's DNS has a CAA record that does not allow Let's Encrypt.", 'At your DNS host, add a CAA record: 0 issue "letsencrypt.org" (or remove the CAA records), then try again.'),
+            array('/rejectedIdentifier|Policy forbids|not a valid public|invalid domain|Domain name does not end with a valid public suffix|\.local\b/i', "Let's Encrypt does not issue certificates for this name (an internal name such as .local, or not a public domain).", 'Only names in public DNS can get one. For an internal name, use a self-signed certificate.'),
+            array('/NXDOMAIN|no valid A records|no valid AAAA records|DNS problem|SERVFAIL|looking up (A|AAAA|CAA)/i', "$name has no working address in public DNS.", "At your DNS host, add an A record for $name pointing to this server's public address (behind a router: the router's public IP), wait for it to take effect, then try again."),
+            array('/Timeout during connect|Connection refused|connection reset|Timeout after connect|network is unreachable|firewall/i', "Let's Encrypt could not reach this server on port 80 (http) at $name.", 'Open port 80 to this server: forward it on the router (behind one) and allow it in any firewall. It must stay open: renewals use it too.'),
+            array('/Invalid response from.*(404|403|401|500)|unauthorized|Incorrect validation|The key authorization file/i', "Let's Encrypt reached a web server at $name, but not this site's check file.", 'Check that the DNS points to this server and not to an old one, and that the site does not block /.well-known/acme-challenge/ (an .htaccess rule, a redirect to another host).'),
+            array('/redirect/i', "A redirect at $name sent Let's Encrypt somewhere it can not follow.", 'Redirects may only go to http or https on ports 80 or 443. Fix or remove the redirect for /.well-known/acme-challenge/.'),
+            array('/did not finish in time|timed out|not ready to download/i', "Let's Encrypt took longer than usual.", 'Try again in a few minutes.'),
+            array('/badNonce|serverInternal|503|502|500 Internal|Service (Temporarily )?Unavailable/i', "Let's Encrypt had a temporary problem.", 'Try again later.'),
+            array('/Curl:|Could not resolve host|Failed to connect to acme|SSL certificate problem/i', "This server could not reach Let's Encrypt.", 'Check that the server can reach https://acme-v02.api.letsencrypt.org (internet access, DNS, outgoing firewall).'),
+        );
+        foreach ($rules as $r) {
+            if (preg_match($r[0], $type . ' ' . $detail)) {
+                return $r[1] . ' What to do: ' . $r[2] . " (Let's Encrypt said: " . substr($detail, 0, 300) . ')';
+            }
+        }
+        return "Let's Encrypt said: " . substr($detail, 0, 400);
+    }
+
 	function postRevoke($certData) {
 		
 		$reason = "1";
@@ -941,7 +1095,7 @@ class Client implements ClientInterface
      */
     public function getLastLocation()
     {
-        if (preg_match('~Location: (.+)~i', $this->lastHeader, $matches)) {
+        if (preg_match('~^Location: (.+)$~im', $this->lastHeader, $matches)) {
             return trim($matches[1]);
         }
         return null;

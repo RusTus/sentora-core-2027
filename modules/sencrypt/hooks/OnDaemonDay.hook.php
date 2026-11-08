@@ -74,9 +74,9 @@ echo "END Sencrypt Manager SSL Renewal Hook." . fs_filehandler::NewLine();
 
 // Start functions here
 /**
- * Renew the Let's Encrypt certificates of all SSL vhosts that expire within 30 days.
+ * Renew the Let's Encrypt certificates of all SSL vhosts with a third of their lifetime left (Lescript::renewalDue()).
  *
- * Skips domains whose DNS does not point to this server. A failed renewal is logged
+ * Skips domains with no address in DNS. A failed renewal is logged
  * (modules/sencrypt/sencrypt.log, with the domain) and the next domain is renewed; the
  * failures are listed at the end.
  *
@@ -122,14 +122,8 @@ function renewCertificates() {
 			// Do we need to create or upgrade our cert? Assume no to start with.
 			$needsgen = false;
 			
-			// Set country/state - tg & Jettaman	
-			$user_ip = ctrl_options::GetSystemOption('server_ip');
-			$ip_response = file_get_contents('http://ip-api.com/json/'.$user_ip);
-			$ip_array = json_decode($ip_response);
-			$countryCode = $ip_array->countryCode; 
-			$state = $ip_array->regionName;
-			$ipStatus = $ip_array->status;
-			$querydata = $ip_array->query;
+			// country and region for the request, from the server's public address
+			list($countryCode, $state) = \Analogic\ACME\Lescript::serverLocation();
 			
 			// Default if API failed
 			//$countryCode = "US";
@@ -138,10 +132,12 @@ function renewCertificates() {
 			
 			// Check if Domain is LIVE and Pointing to this server
 			// Check DNS before continuing
-			if (checkDNSIsLive($domain, $ipStatus, $querydata, $user_ip) == false) {
+			// (the old check compared the panel's IP with ip-api.com's view of it: never true behind a router,
+			// so every renewal was skipped there; Let's Encrypt itself says when the name does not reach here)
+			if (!\Analogic\ACME\Lescript::hasAddress($domain)) {
 				//$dnsInvalid = true;
 				//return false;
-				echo "   DNS is not LIVE or POINTING to server. SKIPPING." . fs_filehandler::NewLine();
+				echo "   " . $domain . " has no address in DNS. SKIPPING." . fs_filehandler::NewLine();
 				
 			} else {
 				// Do we HAVE a certificate for all our domains?
@@ -154,12 +150,10 @@ function renewCertificates() {
 						// We DO have a certificate.
 						$certdata = openssl_x509_parse(file_get_contents($certfile));
 						echo "   Checking certificate for renewal: " . $d . "..." . fs_filehandler::NewLine();
-						// If it expires in less than a month, we want to renew it.
-						$renewafter = $certdata['validTo_time_t']-(86400*30);
-						
-						if (time() > $renewafter) {
+						// renewed when a third of its lifetime is left (30 days of 90; right for 64 and 45 too)
+						if (\Analogic\ACME\Lescript::renewalDue($certfile)) {
 							// Less than a month left, we need to renew.
-							echo "   --- Renewing certificate : " . $d . " for ... 90 Days" . fs_filehandler::NewLine();
+							echo "   --- Renewing certificate : " . $d . "" . fs_filehandler::NewLine();
 							$needsgen = true;
 						}					
 					}
@@ -191,7 +185,11 @@ function renewCertificates() {
 						$le->signDomains(array($domain));
 					} else {
 						// Create a SSL with www. because its a root domain
-						$le->signDomains(array($domain, 'www.'.$domain));
+						// www. too, unless public DNS has no address for it (it would fail the whole renewal)
+						$le->signDomains(\Analogic\ACME\Lescript::namesFor($domain, false, $wwwNote));
+						if ($wwwNote) {
+							echo "   " . $wwwNote . fs_filehandler::NewLine();
+						}
 					}
 
 				}
@@ -201,7 +199,7 @@ function renewCertificates() {
 					// whole daemon run, so every site after it went unrenewed and its
 					// certificate expired. Log it with the domain and carry on; Server Monitor
 					// alerts when a certificate gets within 14 days of expiring.
-					echo "   ERROR renewing " . $domain . ": " . $e->getMessage() . fs_filehandler::NewLine();
+					echo "   ERROR renewing " . $domain . ": " . \Analogic\ACME\Lescript::explain($e->getMessage()) . fs_filehandler::NewLine();
 					$logger->error($e->getMessage());
 					$logger->error($e->getTraceAsString());
 					$errorCatahed = $e->getMessage();
@@ -220,7 +218,7 @@ function renewCertificates() {
 }
 
 /**
- * Renew the panel domain's Let's Encrypt certificate when it expires within 30 days.
+ * Renew the panel domain's Let's Encrypt certificate with a third of its lifetime left (Lescript::renewalDue()).
  *
  * Only when the panel has SSL settings and runs on port 443. A failed renewal is logged
  * (modules/sencrypt/sencrypt.log) and the daemon run carries on.
@@ -265,14 +263,8 @@ function renewPanelCertificates() {
 			// Do we need to create or upgrade our cert? Assume no to start with.
 			$needsgen = false;
 			
-			// Set country/state - tg & Jettaman	
-			$user_ip = ctrl_options::GetSystemOption('server_ip');
-			$ip_response = file_get_contents('http://ip-api.com/json/'.$user_ip);
-			$ip_array = json_decode($ip_response);
-			$countryCode = $ip_array->countryCode; 
-			$state = $ip_array->regionName;
-			$ipStatus = $ip_array->status;
-			$querydata = $ip_array->query;
+			// country and region for the request, from the server's public address
+			list($countryCode, $state) = \Analogic\ACME\Lescript::serverLocation();
 			
 			// Default if API failed
 			//$countryCode = "US";
@@ -281,10 +273,12 @@ function renewPanelCertificates() {
 			
 			// Check if Domain is LIVE and Pointing to this server
 			// Check DNS before continuing
-			if (checkDNSIsLive($domain, $ipStatus, $querydata, $user_ip) == false) {
+			// (the old check compared the panel's IP with ip-api.com's view of it: never true behind a router,
+			// so every renewal was skipped there; Let's Encrypt itself says when the name does not reach here)
+			if (!\Analogic\ACME\Lescript::hasAddress($domain)) {
 				//$dnsInvalid = true;
 				//return false;
-				echo "   DNS is not LIVE or POINTING to server. SKIPPING." . fs_filehandler::NewLine();
+				echo "   " . $domain . " has no address in DNS. SKIPPING." . fs_filehandler::NewLine();
 				
 			} else {
 				// Do we HAVE a certificate for all our domains?
@@ -296,12 +290,10 @@ function renewPanelCertificates() {
 					// We DO have a certificate.
 					$certdata = openssl_x509_parse(file_get_contents($certfile));
 					echo "   Checking certificate for renewal: " . $domain . "..." . fs_filehandler::NewLine();
-					// If it expires in less than a month, we want to renew it.
-					$renewafter = $certdata['validTo_time_t']-(86400*30);
-					
-					if (time() > $renewafter) {
+					// renewed when a third of its lifetime is left (30 days of 90; right for 64 and 45 too)
+					if (\Analogic\ACME\Lescript::renewalDue($certfile)) {
 						// Less than a month left, we need to renew.
-						echo "   --- Renewing certificate : " . $domain . " for ... 90 Days" . fs_filehandler::NewLine();
+						echo "   --- Renewing certificate : " . $domain . "" . fs_filehandler::NewLine();
 						$needsgen = true;
 					} 				
 				}
@@ -369,7 +361,7 @@ function renewPanelCertificates() {
 				catch (\Throwable $e) {
 					// Logged, and the daemon run carries on (this used to exit(1) and end it,
 					// skipping every client renewal); Server Monitor alerts near expiry
-					echo "   ERROR renewing the panel certificate (" . $domain . "): " . $e->getMessage() . fs_filehandler::NewLine();
+					echo "   ERROR renewing the panel certificate (" . $domain . "): " . \Analogic\ACME\Lescript::explain($e->getMessage()) . fs_filehandler::NewLine();
 					$logger->error($e->getMessage());
 					$logger->error($e->getTraceAsString());
 					$errorCatahed = $e->getMessage();
@@ -413,29 +405,5 @@ function RestartHttpdServicesForSSL() {
 
 }
 
-/**
- * Check that a domain has an A record and that ip-api.com saw this server's IP.
- *
- * @param string $domain The domain name.
- * @param string $ipStatus The ip-api.com 'status' value.
- * @param string $querydata The ip-api.com 'query' value (the IP it looked up).
- * @param string $server_ip The server's IP (server_ip option).
- * @return bool|null True when live, false without an A record, null when the IP check fails.
- */
-function checkDNSIsLive ($domain, $ipStatus, $querydata, $server_ip) {
-	 
-	// Check DNS for domain is live and public before continuing
-	// Pull IP from Sentora DB
-	ctrl_options::GetSystemOption('server_ip');
-	
-	// Check Ip's match
-	if(checkdnsrr($domain,"A")) {
-		if (($ipStatus == "success") && ($querydata == $server_ip)) {
-			return true;		
-		}
-	} else {
-		return false;
-	}
-}
 
 ?>
