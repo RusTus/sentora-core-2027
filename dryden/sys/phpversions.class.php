@@ -369,10 +369,19 @@ class sys_phpversions
         if (!is_dir($dir)) {
             return;
         }
-        $tmp = self::LIVE_FILE . '.new';
-        if (@file_put_contents($tmp, json_encode(array('domains' => $map, 'time' => time()))) !== false) {
-            @chmod($tmp, 0644);
-            @rename($tmp, self::LIVE_FILE);
+        // The daemon is root and the folder belongs to the panel's user: a fixed temporary name there
+        // could be a link the panel's user planted (to /etc/shadow, say), and root would write through
+        // it. tempnam() makes a new file with a random name (O_EXCL: it never follows a link), and
+        // rename() replaces the name LIVE_FILE itself, also when that is a link, not what it points to.
+        $tmp = @tempnam($dir, 'php-live.');
+        if ($tmp === false || dirname($tmp) !== $dir) {
+            if ($tmp !== false) {
+                @unlink($tmp);
+            }
+            return;
+        }
+        if (@file_put_contents($tmp, json_encode(array('domains' => $map, 'time' => time()))) === false || !@chmod($tmp, 0644) || !@rename($tmp, self::LIVE_FILE)) {
+            @unlink($tmp);
         }
     }
 
