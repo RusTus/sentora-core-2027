@@ -307,7 +307,7 @@ if ($opt['all']) {
         '  ' . ($APPLY ? 'Moved' : 'Dry run') . ': ' . count($result) . ' account(s), ' . ($bad ? "$bad stopped, " : '') . ($warned ? "$warned with warnings" : 'no warnings'));
     echo "\n";
     foreach ($result as $u => $rc) {
-        printf("     %-20s %s\n", $u, $rc === 0 ? c('green') . 'OK' . c('reset') : ($rc === 3 ? c('yellow') . 'done, with warnings (above)' . c('reset') : c('red') . 'stopped (above): nothing of it changed after that point' . c('reset')));
+        printf("     %-20s %s\n", $u, $rc === 0 ? c('green') . 'OK' . c('reset') : ($rc === 3 ? c('yellow') . ($APPLY ? 'done, with warnings (above)' : 'OK, with warnings (above)') . c('reset') : c('red') . 'stopped (above): nothing of it changed after that point' . c('reset')));
     }
     if ($APPLY) {
         $pw = array();
@@ -1093,7 +1093,8 @@ if (!$APPLY) {
         echo "\n";
     }
     cleanup();
-    exit(0);
+    // (3: the plan has warnings, so --all's summary says so instead of "no warnings")
+    exit($WARN ? 3 : 0);
 }
 
 // --- a copy of this server's panel databases first ------------------------------------------------
