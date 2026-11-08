@@ -5,6 +5,8 @@
  * ProFTPD checks logins against (SQLAuthTypes Crypt). Every run: widen the two
  * password columns if needed, and hash any password still stored as plain text
  * (accounts made before this change), in the panel's table and ProFTPD's.
+ *
+ * Written by RusTus, 2026-11-07
  */
 echo fs_filehandler::NewLine() . "START FTP password hashes" . fs_filehandler::NewLine();
 FtpHashStoredPasswords();

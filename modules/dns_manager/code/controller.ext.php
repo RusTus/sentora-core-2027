@@ -25,6 +25,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
+ * Updated by RusTus, 2026-11-08
  */
 /**
  * DNS Manager module: lets an account view and edit the DNS records of its own domains.

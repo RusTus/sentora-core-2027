@@ -26,6 +26,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
  * @change P.Peyremorte added unlimited, factorization in functions
+ *
+ * Updated by RusTus, 2026-11-06
  */
 /**
  * Usage Viewer: the account's use of its package (disk, bandwidth, domains, mail ...),

@@ -3,6 +3,8 @@
 /**
  * Tiny File Manager settings for Sentora. Loaded by tinyfilemanager.inc.php;
  * the root folder comes from bootstrap.inc.php (the logged-in user's folder).
+ *
+ * Written by RusTus, 2026-11-07
  */
 if (!defined('SENTORA_FILE_MANAGER')) {
     http_response_code(403);

@@ -4,6 +4,8 @@
  * Dashboard: every group (administrators, resellers, users) may open it. A server
  * updated from an earlier version gets the module registered for administrators only
  * (sentora-update), so the other groups are added here, once.
+ *
+ * Written by RusTus, 2026-11-05
  */
 global $zdbh; // hooks are included inside a function
 if (ctrl_options::GetSystemOption('dashboard_groups_done') === false) {

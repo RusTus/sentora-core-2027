@@ -7,6 +7,8 @@
  *
  * Every value is checked (yes/no, a number in range, one of a list, a real
  * time zone) before it is written, and a bad value falls back to the default.
+ *
+ * Written by RusTus, 2026-11-06
  */
 echo fs_filehandler::NewLine() . "START SOGo settings." . fs_filehandler::NewLine();
 SentoraApplySOGoSettings();

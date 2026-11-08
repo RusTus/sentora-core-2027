@@ -16,6 +16,8 @@
  * place of .htaccess or a password file is replaced, never written through; the
  * message and the usernames are limited to plain characters, so nothing else can be
  * added to either file.
+ *
+ * Updated by RusTus, 2026-11-07
  */
 require_once dirname(__FILE__) . '/pdsafe.php';
 

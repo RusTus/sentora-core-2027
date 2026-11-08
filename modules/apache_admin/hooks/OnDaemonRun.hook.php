@@ -9,6 +9,8 @@
  *
  * @package Sentora
  * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
+ *
+ * Updated by RusTus, 2026-11-08
  */
 defined('SENTORA_PANEL_FPM_SOCKET') || define('SENTORA_PANEL_FPM_SOCKET', '/run/php/sentora-panel.sock');
 

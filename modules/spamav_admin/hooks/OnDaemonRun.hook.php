@@ -4,6 +4,8 @@
  * SpamAV (root, every daemon run): applies Admin > SpamAV Admin and Mail > SpamAV to
  * SpamAssassin, ClamAV, Postfix and Dovecot, and reads the mail log into the activity
  * that users see. See dryden/sys/spamav.class.php for how mail flows.
+ *
+ * Written by RusTus, 2026-11-07
  */
 global $zdbh; // hooks are included inside a function
 if (!is_file('/usr/sbin/spamd') && !is_file('/usr/sbin/clamd')) {

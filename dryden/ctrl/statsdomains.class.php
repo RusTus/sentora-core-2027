@@ -5,6 +5,8 @@
  * Matomo): the panel is not a hosted domain, so it has no row in x_vhosts, but
  * its traffic (/var/sentora/logs/sentora-access.log) is reported under the main
  * administrator account created at install (account 1, zadmin).
+ *
+ * Written by RusTus, 2026-11-06
  */
 class ctrl_statsdomains
 {

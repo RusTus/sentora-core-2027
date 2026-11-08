@@ -11,6 +11,8 @@
  * @copyright ZPanel Project (http://www.zpanelcp.com/)
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
+ *
+ * Updated by RusTus, 2026-11-05
  */
 $rawPath = str_replace("\\", "/", dirname(__FILE__));
 $rootPath = str_replace("/bin", "/", $rawPath);

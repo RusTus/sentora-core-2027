@@ -8,6 +8,8 @@
  * for exactly its own domains (the panel opens Matomo with that user's token).
  * Visits come from the web server logs (imported every hour) or, per domain,
  * from the tracking code the site owner adds to their pages.
+ *
+ * Written by RusTus, 2026-11-06
  */
 class matomo_helper
 {

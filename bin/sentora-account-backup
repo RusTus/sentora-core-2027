@@ -4,6 +4,8 @@
  * Backup page (Advanced > Backup > Back up now) so the page can show its progress
  * instead of waiting. One at a time per account, at most one every 2 minutes.
  * Progress: /var/lib/sentora/tmp/backup-<account id>.json (read by code/status.php).
+ *
+ * Written by RusTus, 2026-11-05
  */
 if (PHP_SAPI !== 'cli') {
     exit(1);

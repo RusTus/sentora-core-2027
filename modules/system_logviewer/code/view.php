@@ -3,6 +3,8 @@
 /**
  * System Log Viewer: follows one log live (the page script asks read.php for
  * new lines every two seconds and adds them as plain text).
+ *
+ * Written by RusTus, 2026-11-07
  */
 chdir(dirname(__FILE__) . '/../../../');
 require_once 'dryden/loader.inc.php';

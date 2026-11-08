@@ -9,6 +9,8 @@
  *
  * @package Sentora
  * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
+ *
+ * Updated by RusTus, 2026-11-07
  */
 /*
  * Mailbox passwords are stored as {SHA512-CRYPT} hashes (salted SHA-512 crypt,

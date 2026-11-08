@@ -12,6 +12,8 @@
  * @copyright ZPanel Project (http://www.zpanelcp.com/)
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
+ *
+ * Updated by RusTus, 2026-11-07
  */
 /**
  * Template tag <# ui_tpl_modulelistul #>: the module categories as nested lists.

@@ -29,6 +29,8 @@
  * - cleaned WriteCronFile() (removed duplicate parts).
  * - reformated header inserted in crontab file (heading spaces and wrong EOL encoding)
  * - removed daemon task that is handled by independant crontab /etc/cron.d/zdaemon (linux)
+ *
+ * Updated by RusTus, 2026-11-07
  */
 require_once dirname(__FILE__) . '/cronsafe.php';
 

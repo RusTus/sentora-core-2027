@@ -4,6 +4,8 @@
  * SpamAV (Mail): what spam and virus filtering caught for this account's mailboxes,
  * and each mailbox's spam settings (when the administrator allows it). Only the
  * account's own mailboxes and the mail sent to them (or by them) are shown.
+ *
+ * Written by RusTus, 2026-11-07
  */
 /**
  * SpamAV module: spam/virus totals, per-mailbox spam settings and the activity log.

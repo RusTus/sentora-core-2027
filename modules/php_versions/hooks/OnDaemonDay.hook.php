@@ -9,6 +9,8 @@
  * when there is a newer version it can choose instead (Domains, Sub-domains): one
  * notice per client (key php-support-<id>), updated when its list changes and taken
  * away when no domain needs it any more.
+ *
+ * Written by RusTus, 2026-11-07
  */
 global $zdbh; // hooks are included inside a function
 echo fs_filehandler::NewLine() . "START PHP version support" . fs_filehandler::NewLine();

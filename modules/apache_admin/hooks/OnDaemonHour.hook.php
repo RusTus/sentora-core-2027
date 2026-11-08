@@ -4,6 +4,8 @@
  * Every hour, for each hosting account: everything inside its folder belongs to
  * the account's own Linux user (sys_accountphp::FixOwnership), and its folder
  * stays closed to other accounts whatever a site changed (sys_accountphp::Safeguard).
+ *
+ * Written by RusTus, 2026-11-05
  */
 echo fs_filehandler::NewLine() . "START Account file ownership." . fs_filehandler::NewLine();
 $checked = 0;

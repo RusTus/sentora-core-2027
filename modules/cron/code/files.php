@@ -6,6 +6,8 @@
  * Paths are relative to public_html (the server's own paths are never sent). Hidden
  * entries and symbolic links are left out; the folder is checked by
  * pd_safe::ResolveDir (inside the account's public_html, no links).
+ *
+ * Written by RusTus, 2026-11-07
  */
 chdir(dirname(__FILE__) . '/../../../');
 require_once 'dryden/loader.inc.php';

@@ -7,6 +7,8 @@
  * There was no limit at all on wrong passwords, and "Remember me" stored the
  * username and the bcrypt password hash in two cookies that logged in forever
  * (anyone who copied the cookies had the account until the password changed).
+ *
+ * Written by RusTus, 2026-11-07
  */
 class ctrl_loginguard
 {

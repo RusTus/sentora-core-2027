@@ -5,6 +5,8 @@
  * (add from the list, remove, move up or down, back to the defaults); the layout is
  * kept in x_dashboard. "Continue to your panel administration" goes to the panel's
  * usual home page.
+ *
+ * Written by RusTus, 2026-11-06
  */
 require_once dirname(__FILE__) . '/widgets.php';
 

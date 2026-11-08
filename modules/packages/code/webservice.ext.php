@@ -25,6 +25,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
+ * Updated by RusTus, 2026-11-06
  */
 /**
  * Package Manager web service (XMWS API): package lists and IDs for other systems.

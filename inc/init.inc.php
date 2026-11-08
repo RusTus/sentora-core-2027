@@ -11,6 +11,8 @@
  * @copyright ZPanel Project (http://www.zpanelcp.com/)
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
+ *
+ * Updated by RusTus, 2026-11-08
  */
 global $controller, $zdbh, $zlo;
 $controller = new runtime_controller();

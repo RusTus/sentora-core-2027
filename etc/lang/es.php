@@ -11,6 +11,8 @@
  *
  * @package Sentora
  * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
+ *
+ * Written by RusTus, 2026-11-07
  */
 return array(
     '	Path to named-compilezone bind utility.' => '	Ruta a la utilidad named-compilezone de BIND.',

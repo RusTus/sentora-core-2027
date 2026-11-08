@@ -6,6 +6,8 @@
  * The list is built from fixed folders on every request; nothing is linked or
  * copied into the web root, and a file can only be opened by the id of an
  * entry in this list (never by a path from the browser).
+ *
+ * Written by RusTus, 2026-11-07
  */
 class system_logviewer_logs
 {

@@ -25,6 +25,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
+ * Updated by RusTus, 2026-11-07
  */
 /**
  * Shadowing module: lets an administrator or reseller log in as one of their client accounts, to

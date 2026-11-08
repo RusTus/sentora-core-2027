@@ -6,6 +6,8 @@
  * folder was handed to the web server user (it then owned every user's crontab,
  * root's too). Put back Ubuntu's own permissions and remove that crontab. The jobs
  * are now /etc/cron.d/sentora-accounts, one user per account (sys_accountphp::SyncCron).
+ *
+ * Written by RusTus, 2026-11-05
  */
 $crDir = '/var/spool/cron/crontabs';
 if (is_dir($crDir) && !is_link($crDir) && function_exists('posix_getgrnam') && posix_getgrnam('crontab') !== false) {

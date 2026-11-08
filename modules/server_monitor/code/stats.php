@@ -6,6 +6,8 @@
  * this stays a quick read with no state on the server.
  *
  * Process names only (never command lines: those can hold passwords).
+ *
+ * Written by RusTus, 2026-11-07
  */
 chdir(dirname(__FILE__) . '/../../../');
 require_once 'dryden/loader.inc.php';

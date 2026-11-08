@@ -9,6 +9,8 @@
  * @copyright 2014-2023 Sentora Project (http://www.sentora.org/) 
  * Sentora is a GPL fork of the ZPanel Project whose original header follows:
  * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
+ *
+ * Updated by RusTus, 2026-11-06
  */
 
 DeleteAliasForDeletedClient();

@@ -2,6 +2,8 @@
 
 /**
  * Sentora File Manager (built on Tiny File Manager, see tinyfilemanager.inc.php).
+ *
+ * Written by RusTus, 2026-11-05
  */
 define('SENTORA_FILE_MANAGER', true);
 define('APP_TITLE', 'File Manager');

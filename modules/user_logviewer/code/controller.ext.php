@@ -8,6 +8,8 @@
  * @package user_logviewer
  * @version 100
  * @author Simon Mora - samt2497
+ *
+ * Updated by RusTus, 2026-11-07
  */
 
 /**

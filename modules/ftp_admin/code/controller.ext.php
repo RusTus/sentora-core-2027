@@ -25,6 +25,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
+ * Updated by RusTus, 2026-11-07
  */
 /**
  * FTP Admin module (administrators): how the FTP server is doing, every FTP account on the

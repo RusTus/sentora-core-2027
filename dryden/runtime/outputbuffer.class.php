@@ -11,6 +11,8 @@
  * @copyright 2014-2019 Sentora Project (http://www.sentora.org/) 
  * @link http://www.sentora.org
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
+ *
+ * Updated by RusTus, 2026-11-06
  */
 /**
  * Output buffering helper: captures what a piece of code prints.

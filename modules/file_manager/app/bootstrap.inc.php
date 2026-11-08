@@ -9,6 +9,8 @@
  *    files, its database passwords or other accounts.
  * 3. Drops the panel's database connection and credentials before any file
  *    manager code runs.
+ *
+ * Written by RusTus, 2026-11-07
  */
 if (!defined('SENTORA_FILE_MANAGER')) {
     http_response_code(403);

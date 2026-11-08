@@ -8,6 +8,8 @@
  * (root) reads only the lines added since the last run and passes them to
  * GoAccess, which adds them to the report's stored history (--persist/--restore).
  * A rotated log's last lines are read from <log>.1 before the new log starts.
+ *
+ * Written by RusTus, 2026-11-06
  */
 require_once dirname(__FILE__) . '/../code/goaccess.php';
 

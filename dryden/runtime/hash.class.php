@@ -12,6 +12,8 @@
  * @copyright ZPanel Project (http://www.zpanelcp.com/)
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
+ *
+ * Updated by RusTus, 2026-11-06
  */
 /**
  * Bcrypt (Blowfish) password hashing with the server's crypto key mixed into the salt.

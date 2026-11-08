@@ -14,6 +14,8 @@ $CONFIG = '{"lang":"en","error_reporting":false,"show_hidden":false,"hide_Cols":
  * @author CCP Programmers
  * @github https://github.com/prasathmani/tinyfilemanager
  * @link https://tinyfilemanager.github.io
+ *
+ * Written by RusTus, 2026-11-05
  */
 
 //TFM version

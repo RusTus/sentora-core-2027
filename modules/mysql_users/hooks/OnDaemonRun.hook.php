@@ -4,6 +4,8 @@
  * MySQL Users: the panel keeps only an encrypted copy of each MySQL user's password
  * (ctrl_secret), which the owner can see again with Show password. Copies stored
  * as plain text by older versions are encrypted here.
+ *
+ * Written by RusTus, 2026-11-05
  */
 global $zdbh; // hooks are included inside a function
 echo fs_filehandler::NewLine() . "START MySQL user passwords" . fs_filehandler::NewLine();

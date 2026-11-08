@@ -13,6 +13,8 @@
  *
  * @package Sentora
  * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
+ *
+ * Written by RusTus, 2026-11-07
  */
 chdir(dirname(__FILE__) . '/../../../');
 require_once 'dryden/loader.inc.php';

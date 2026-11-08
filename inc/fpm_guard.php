@@ -9,6 +9,8 @@
  *
  * @package Sentora
  * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
+ *
+ * Written by RusTus, 2026-11-06
  */
 $sentoraPanelRoot = dirname(__DIR__) . '/';
 $sentoraScript = isset($_SERVER['SCRIPT_FILENAME']) ? realpath((string) $_SERVER['SCRIPT_FILENAME']) : false;

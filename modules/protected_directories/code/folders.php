@@ -5,6 +5,8 @@
  * account's public_html, as JSON, loaded when a folder is opened in the tree.
  * Read-only. Hidden folders (.name) and symbolic links are left out; the path is
  * checked by pd_safe::ResolveDir (inside the account's public_html, no links).
+ *
+ * Written by RusTus, 2026-11-07
  */
 chdir(dirname(__FILE__) . '/../../../');
 require_once 'dryden/loader.inc.php';

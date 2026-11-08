@@ -4,6 +4,8 @@
  * Mailboxes: mailbox passwords belong to whoever uses the mailbox. The account owner
  * can set a new one (Edit) but never read it, so the panel keeps no copy: copies an
  * earlier version kept for "Show password" are removed here.
+ *
+ * Written by RusTus, 2026-11-07
  */
 global $zdbh; // hooks are included inside a function
 $has = (int) $zdbh->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'x_mailboxes' AND COLUMN_NAME = 'mb_passenc_tx'")->fetchColumn();

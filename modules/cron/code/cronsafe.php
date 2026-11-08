@@ -5,6 +5,8 @@
  * file browser (files.php). A script is a real .php file (not a symbolic link) in a
  * real folder inside the account's public_html (pd_safe::ResolveDir: no links, no
  * hidden folders, no ".."), whose path the cron line can carry as it is.
+ *
+ * Written by RusTus, 2026-11-07
  */
 require_once dirname(__FILE__) . '/../../protected_directories/code/pdsafe.php';
 

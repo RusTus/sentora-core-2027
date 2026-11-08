@@ -2,6 +2,8 @@
 /**
  * The progress of the logged-in account's backup, as JSON, for the Backup page
  * (assets/progress.js asks every few seconds while one is running). Read-only.
+ *
+ * Written by RusTus, 2026-11-07
  */
 chdir(dirname(__FILE__) . '/../../../');
 require_once 'dryden/loader.inc.php';

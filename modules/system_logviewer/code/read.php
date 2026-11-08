@@ -3,6 +3,8 @@
 /**
  * System Log Viewer: returns new lines of one log as JSON.
  * GET id=<log id>&offset=<bytes already shown, or -1 for the last 64 KB>
+ *
+ * Written by RusTus, 2026-11-07
  */
 chdir(dirname(__FILE__) . '/../../../');
 require_once 'dryden/loader.inc.php';

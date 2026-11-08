@@ -6,6 +6,8 @@
  * "admin", and with the old hashing (the same password gave the same hash) adding a
  * user failed exactly when someone else already used that password. Both unique
  * indexes are dropped here; the module keeps names unique per folder itself.
+ *
+ * Written by RusTus, 2026-11-05
  */
 global $zdbh; // hooks are included inside a function
 foreach (array('x_htpasswd_user_username', 'x_htpasswd_user_password') as $index) {

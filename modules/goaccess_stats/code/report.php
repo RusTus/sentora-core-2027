@@ -6,6 +6,8 @@
  * scripts); it is shown sandboxed: its scripts run, but it can not reach the panel,
  * the network or any other site. ?theme=dark or light starts it in the colours that
  * match the panel.
+ *
+ * Written by RusTus, 2026-11-07
  */
 chdir(dirname(__FILE__) . '/../../../');
 require_once 'dryden/loader.inc.php';

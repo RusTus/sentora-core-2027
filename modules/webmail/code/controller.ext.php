@@ -4,6 +4,8 @@
  * @copyright 2014-2023 Sentora Project (http://www.sentora.org/)
  * Sentora is a GPL fork of the ZPanel Project.
  * @license http://opensource.org/licenses/gpl-3.0.html GNU Public License v3
+ *
+ * Updated by RusTus, 2026-11-07
  */
 /**
  * Webmail module: the page that opens Roundcube (etc/apps/webmail) and, when it is

@@ -28,6 +28,8 @@
  * @changes P.Peyremorte
  * - added display of ports checked (80 may be not used!)
  * - refactored (replacement of duplicate string constructions by a fucntion)
+ *
+ * Updated by RusTus, 2026-11-07
  */
 /**
  * Services module: controller.

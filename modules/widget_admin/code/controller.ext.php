@@ -5,6 +5,8 @@
  * dashboards and in what order, which groups may use them; upload and remove widgets.
  * Uploads and removals are queued for the daemon (root), which checks and installs
  * them into etc/dashboard-widgets/ (the panel can not write its own code).
+ *
+ * Written by RusTus, 2026-11-07
  */
 require_once dirname(__FILE__) . '/../../dashboard/code/widgets.php';
 

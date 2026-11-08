@@ -15,6 +15,8 @@
   GNU General Public License for more details.
 
   For support, please visit http://www.criticaldevelopment.net/xml/
+ *
+ * Updated by RusTus, 2026-11-06
  */
 
 /**

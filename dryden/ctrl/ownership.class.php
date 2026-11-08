@@ -7,6 +7,8 @@
  * inUser...) and acted on it without checking whose it was, so any account
  * could delete or change another account's domains, databases, mailboxes and
  * so on by sending a different id. Every such action now asks this first.
+ *
+ * Written by RusTus, 2026-11-06
  */
 class ctrl_ownership
 {

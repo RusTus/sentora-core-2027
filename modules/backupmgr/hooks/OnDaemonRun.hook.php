@@ -4,6 +4,8 @@
  * Clients' FTP backups (Advanced > Backup): every daemon run (root) starts the uploads
  * due this hour and the ones asked for from the page (Test connection, Upload now),
  * each in the background (bin/sentora-client-ftp-backup).
+ *
+ * Written by RusTus, 2026-11-05
  */
 global $zdbh; // hooks are included inside a function
 sys_clientftp::Ensure();

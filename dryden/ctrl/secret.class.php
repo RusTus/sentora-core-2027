@@ -8,6 +8,8 @@
  * on its own (a backup, a dump) holds only ciphertext.
  *
  * Stored form: "enc1:" + base64(nonce + ciphertext).
+ *
+ * Written by RusTus, 2026-11-06
  */
 class ctrl_secret
 {

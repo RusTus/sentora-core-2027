@@ -15,6 +15,8 @@
  * Changes P.Peyremorte
  * - added timestamp of begin and end of dameon run for logfile
  * - corrected OnDaemonHour that occured on each cron run (5 min,)
+ *
+ * Updated by RusTus, 2026-11-07
  */
 set_time_limit(0);
 

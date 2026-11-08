@@ -8,6 +8,8 @@
  *
  * To switch it off again if an administrator loses their phone, run on the
  * server:  setso --set twofactor_enabled disabled
+ *
+ * Written by RusTus, 2026-11-07
  */
 class ctrl_twofactor
 {

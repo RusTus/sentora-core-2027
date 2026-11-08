@@ -5,6 +5,8 @@
  * "direct link". Images are shown inline; everything else is a download. A
  * sandbox policy stops any HTML, SVG or script in a file from running with
  * the panel's privileges.
+ *
+ * Written by RusTus, 2026-11-05
  */
 define('SENTORA_FILE_MANAGER', true);
 require __DIR__ . '/bootstrap.inc.php';
