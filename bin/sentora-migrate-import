@@ -823,6 +823,79 @@ function laravel_caches($root)
     return $out;
 }
 
+// --- Magento and OpenCart: the cache files made on the old server --------------------------------------
+/**
+ * Empty a cache folder: what is in it goes (not the folder; symbolic links are removed, never followed).
+ *
+ * @param string $dir The folder.
+ * @param string $only Optional. A glob of the names to remove (default: everything).
+ * @param string[] $keep Optional. Names to keep (such as index.html).
+ * @return int How many entries were removed.
+ */
+function empty_cache_dir($dir, $only = '*', array $keep = array())
+{
+    if (!is_dir($dir) || is_link($dir)) {
+        return 0;
+    }
+    $n = 0;
+    foreach (glob(rtrim($dir, '/') . '/' . $only, GLOB_NOSORT) ?: array() as $e) {
+        if (in_array(basename($e), $keep, true) || in_array(basename($e), array('.', '..'), true)) {
+            continue;
+        }
+        if (sh('rm -rf -- ' . q($e))) {
+            $n++;
+        }
+    }
+    return $n;
+}
+
+/**
+ * Clear the caches of the Magento (1 and 2) and OpenCart shops under a folder, made on the old server: they
+ * hold its state and are rebuilt by the shop on its next page. Only cache files: never Magento 2's generated/
+ * or pub/static (in production mode the shop can not rebuild them by itself), and nothing of the shop is run.
+ * vendor/ and node_modules/ are skipped.
+ *
+ * @param string $root The folder (an account's public_html).
+ * @return string[] One line per shop, for the output.
+ */
+function shop_caches($root)
+{
+    $out = array();
+    sh('find ' . q($root) . ' -maxdepth 6 \( -name vendor -o -name node_modules \) -prune -o -type f \( -path "*/bin/magento" -o -path "*/app/Mage.php" -o -path "*/system/startup.php" \) -print', $o);
+    foreach (array_filter(explode("\n", (string) $o)) as $marker) {
+        $rel = function ($app) use ($root) { $r = ltrim(substr($app, strlen($root)), '/'); return $r === '' ? 'public_html' : $r; };
+        if (substr($marker, -strlen('/bin/magento')) === '/bin/magento') {
+            $app = dirname(dirname($marker));
+            if (!is_file($app . '/app/etc/env.php') || is_link($app . '/var')) {
+                continue;
+            }
+            $n = empty_cache_dir($app . '/var/cache') + empty_cache_dir($app . '/var/page_cache');
+            $env = (string) @file_get_contents($app . '/app/etc/env.php');
+            $redis = stripos($env, 'redis') !== false ? '; it also keeps cache in Redis, which is not cleared here (bin/magento cache:flush there)' : '';
+            $out[] = 'Magento 2 shop ' . $rel($app) . ': ' . ($n ? "cleared its cache ($n entr" . ($n === 1 ? 'y' : 'ies') . '), rebuilt on its next page' : 'no old cache files') . $redis;
+        } elseif (substr($marker, -strlen('/app/Mage.php')) === '/app/Mage.php') {
+            $app = dirname(dirname($marker));
+            if (is_link($app . '/var')) {
+                continue;
+            }
+            $n = empty_cache_dir($app . '/var/cache') + empty_cache_dir($app . '/var/full_page_cache');
+            $out[] = 'Magento 1 shop ' . $rel($app) . ': ' . ($n ? "cleared its cache ($n entr" . ($n === 1 ? 'y' : 'ies') . '), rebuilt on its next page' : 'no old cache files');
+        } else {
+            $app = dirname(dirname($marker));
+            if (!is_file($app . '/config.php') || !is_dir($app . '/catalog')) {
+                continue;
+            }
+            // its cache folder: system/storage/cache (OpenCart 2.2 and later) or system/cache
+            $n = 0;
+            foreach (array('system/storage/cache', 'system/cache') as $c) {
+                $n += empty_cache_dir($app . '/' . $c, 'cache.*', array('index.html'));
+            }
+            $out[] = 'OpenCart shop ' . $rel($app) . ': ' . ($n ? "cleared $n cache file(s), rebuilt on its next page" : 'no old cache files');
+        }
+    }
+    return $out;
+}
+
 // --- the websites' .htaccess files: the lines this server refuses with error 500 ---------------------
 /**
  * Each .htaccess under a folder that has lines this server refuses (sys_htaccessfix).
@@ -1120,7 +1193,7 @@ if (is_file($filesTar)) {
             if ($n) { ui_info("$n .htaccess/.htpasswd file(s): $OLDHOME changed to $NEWHOME"); }
         }
         ui_info('into ' . $NEWHOME . '/public_html');
-        foreach (laravel_caches($NEWHOME . '/public_html') as $line) {
+        foreach (array_merge(laravel_caches($NEWHOME . '/public_html'), shop_caches($NEWHOME . '/public_html')) as $line) {
             ui_info($line);
         }
         if ($opt['allow-symlinks']) {
