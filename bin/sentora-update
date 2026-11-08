@@ -110,7 +110,9 @@ ui_ticker_stop() {
 }
 ui_ticker_start() {
     if [ $UI_TTY -eq 1 ] && [ -n "$UI_TITLE" ]; then
-        # (its own traps: the script's EXIT trap removes the download folder, and must not run here)
+        # (its own traps: the script's EXIT trap removes the download folder, and must not run here; and
+        # when stopped before those take effect, the EXIT trap itself removes nothing outside the main
+        # script ($BASHPID differs): a restart at the wrong moment deleted the download folder)
         ( trap - EXIT; trap 'exit 0' TERM; i=0; while true; do ui_draw "${UI_SPIN[$(( i % ${#UI_SPIN[@]} ))]}"; i=$(( i + 1 )); sleep 0.25; done ) 9>&- &
         UI_TICKER=$!
         disown "$UI_TICKER" 2> /dev/null
@@ -328,7 +330,7 @@ if [ "$MODE" = rollback ]; then
     UI_TOTAL=4
     ui_step "Unpacking the backup"
     need rsync rsync
-    TMP=$(mktemp -d); trap 'ui_ticker_stop; rm -rf "$TMP"' EXIT
+    TMP=$(mktemp -d); trap 'ui_ticker_stop; [ "$BASHPID" = "$$" ] && rm -rf "$TMP"' EXIT
     tar -xzf "$RESTORE" -C "$TMP" || die "could not unpack $RESTORE"
     [ -f "$TMP/panel/index.php" ] || die "$RESTORE is not a panel backup"
     ui_step "Restoring the panel files"
@@ -445,7 +447,7 @@ if [ "$MODE" = check ]; then
         exit 0
     fi
     ui_info "GitHub lists no checksum: downloading the core to compare"
-    TMP=$(mktemp -d); trap 'ui_ticker_stop; rm -rf "$TMP"' EXIT
+    TMP=$(mktemp -d); trap 'ui_ticker_stop; [ "$BASHPID" = "$$" ] && rm -rf "$TMP"' EXIT
     fetch "$DL" "$TMP/$ZIP" || die "could not download $DL: $FETCH_ERR"
     if [ "$(sha256sum "$TMP/$ZIP" | cut -d' ' -f1)" = "$LAST" ]; then
         ui_ok "Up to date: installed ${INSTALLED:-?}"; echo >&3; exit 0
@@ -460,7 +462,7 @@ ui_banner "Updating the panel in $PANEL from ${URL:-$REPO, release $TAG}"
 ui_log_start "$MODE" "$FROM"
 st_init update
 UI_TOTAL=9
-TMP=$(mktemp -d); trap 'ui_ticker_stop; rm -rf "$TMP"' EXIT
+TMP=$(mktemp -d); trap 'ui_ticker_stop; [ "$BASHPID" = "$$" ] && rm -rf "$TMP"' EXIT
 
 ui_step "Checking the release"
 need rsync rsync; need unzip unzip
