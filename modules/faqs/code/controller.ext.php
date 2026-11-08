@@ -41,6 +41,18 @@ class module_controller extends ctrl_module
     static $ok;
 
     /**
+     * A FAQ text as HTML. Sentora's own and older entries were saved already escaped (&quot;, &#39;, &gt;),
+     * newer ones as plain text: both are shown once escaped, never as &amp;gt;.
+     *
+     * @param string|null $text
+     * @return string
+     */
+    static function Html($text)
+    {
+        return htmlspecialchars(html_entity_decode((string) $text, ENT_QUOTES | ENT_HTML5, 'UTF-8'), ENT_QUOTES, 'UTF-8');
+    }
+
+    /**
      * List all FAQ items that are not deleted, HTML-escaped.
      *
      * @global db_driver $zdbh The panel's database connection.
@@ -57,8 +69,8 @@ class module_controller extends ctrl_module
             $sql->execute();
             while ($rowfaqs = $sql->fetch()) {
                 array_push($res, array(
-                    'question' => htmlspecialchars((string) $rowfaqs['fq_question_tx'], ENT_QUOTES, 'UTF-8'),
-                    'answer' => nl2br(htmlspecialchars((string) $rowfaqs['fq_answer_tx'], ENT_QUOTES, 'UTF-8')),
+                    'question' => self::Html($rowfaqs['fq_question_tx']),
+                    'answer' => nl2br(self::Html($rowfaqs['fq_answer_tx'])),
                     'reseller' => $rowfaqs['fq_acc_fk'],
                     'global' => $rowfaqs['fq_global_in'],
                     'id' => $rowfaqs['fq_id_pk']));
@@ -91,8 +103,8 @@ class module_controller extends ctrl_module
             $sql->execute();
             while ($rowfaqs = $sql->fetch()) {
                 array_push($res, array(
-                    'question' => htmlspecialchars((string) $rowfaqs['fq_question_tx'], ENT_QUOTES, 'UTF-8'),
-                    'answer' => nl2br(htmlspecialchars((string) $rowfaqs['fq_answer_tx'], ENT_QUOTES, 'UTF-8')),
+                    'question' => self::Html($rowfaqs['fq_question_tx']),
+                    'answer' => nl2br(self::Html($rowfaqs['fq_answer_tx'])),
                     'reseller' => $rowfaqs['fq_acc_fk'],
                     'global' => $rowfaqs['fq_global_in'],
                     'id' => $rowfaqs['fq_id_pk']));
