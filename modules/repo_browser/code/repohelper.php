@@ -350,6 +350,81 @@ class repo_browser_helper
 
     /** where Module Admin keeps an uploaded .zpp until the root job installs it */
     const UPLOAD_DIR = '/var/lib/sentora/module-uploads/';
-}
 
+    /**
+     * Daemon (every hour, and after a module upgrade): check the installed add-on modules against their
+     * repositories, note each newer version in x_modules.mo_updatever_vc and keep the administrators'
+     * notice (key module-updates) up to date. Reads only <repository>/<module>.xml; installs nothing.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return string What it found, for the daemon log.
+     */
+    static function UpdateCheck()
+    {
+        global $zdbh;
+        $list = ctrl_options::GetSystemOption('sentora_root') . 'etc/zppy-cache/package.list';
+        if (!is_readable($list)) {
+            return 'No package list yet (Repo Browser has not read the repositories).';
+        }
+        // module => repository, for the modules the repositories list
+        $where = array();
+        foreach (preg_split('/\r\n|\r|\n/', (string) file_get_contents($list)) as $line) {
+            $cols = preg_split('/\s+/', trim($line));
+            if (isset($cols[1]) && self::ValidModule($cols[0]) && self::KnownRepo($cols[1]) && !isset($where[$cols[0]])) {
+                $where[$cols[0]] = $cols[1];
+            }
+        }
+        $found = array();
+        $checked = 0;
+        $failed = 0;
+        $rows = $zdbh->query("SELECT mo_folder_vc, mo_name_vc, mo_version_in, mo_updatever_vc FROM x_modules")->fetchAll(PDO::FETCH_ASSOC);
+        foreach ($rows as $r) {
+            $module = (string) $r['mo_folder_vc'];
+            if (!isset($where[$module]) || self::IsCoreModule($module)) {
+                continue;
+            }
+            $checked++;
+            $xml = self::Fetch(self::Base($where[$module]) . '/' . $module . '.xml');
+            $doc = $xml !== '' ? @simplexml_load_string($xml, 'SimpleXMLElement', LIBXML_NONET) : false;
+            $latest = $doc !== false && isset($doc->latestversion) ? trim((string) $doc->latestversion) : '';
+            if (!self::ValidVersion($latest)) {
+                // (could not be asked: keep what was noted before)
+                $failed++;
+                if ((string) $r['mo_updatever_vc'] !== '') {
+                    $found[$module] = array((string) $r['mo_name_vc'], (string) $r['mo_version_in'], (string) $r['mo_updatever_vc']);
+                }
+                continue;
+            }
+            $newer = version_compare($latest, (string) $r['mo_version_in'], '>');
+            if ($newer) {
+                $found[$module] = array((string) $r['mo_name_vc'], (string) $r['mo_version_in'], $latest);
+            }
+            if ((string) $r['mo_updatever_vc'] !== ($newer ? $latest : '')) {
+                $u = $zdbh->prepare("UPDATE x_modules SET mo_updatever_vc = :v, mo_updateurl_tx = :u WHERE mo_folder_vc = :m");
+                $u->bindValue(':v', $newer ? $latest : null);
+                $u->bindValue(':u', $newer ? self::Base($where[$module]) . '/' . $module . '.zpp' : null);
+                $u->bindValue(':m', $module);
+                $u->execute();
+            }
+        }
+        $asked = 'Checked ' . $checked . ' module(s) from your repositories' . ($failed ? ' (' . $failed . ' could not be asked; the next check is in an hour)' : '') . '. ';
+        if (!$found) {
+            $n = ctrl_notices::Withdraw('module-updates', 0);
+            return $asked . 'All up to date.' . ($n ? ' Took the update notice away.' : '');
+        }
+        ksort($found);
+        $lines = array();
+        foreach ($found as $module => $v) {
+            $lines[] = '- **' . ($v[0] !== '' ? $v[0] : $module) . '**: version ' . $v[2] . ' (installed: ' . $v[1] . ')';
+        }
+        $body = (count($found) === 1 ? 'A newer version of an installed module is published in your repositories:' : 'Newer versions of installed modules are published in your repositories:') . "\n"
+            . implode("\n", $lines) . "\n"
+            . 'Install it in [Repo Browser](./?module=repo_browser): the **Updates** tab, then **Update**. The daemon installs it within 5 minutes.';
+        $id = ctrl_notices::Send(array('scope' => 'groups', 'targets' => array(1), 'type' => 'info',
+            'title' => count($found) === 1 ? 'A module update is available' : 'Module updates are available',
+            'body' => $body, 'closable' => 'login', 'key' => 'module-updates', 'source' => 'repo_browser'));
+        return $asked . count($found) . ' update(s): ' . implode(', ', array_map(function ($m, $v) { return $m . ' ' . $v[1] . ' -> ' . $v[2]; }, array_keys($found), $found))
+            . ($id ? '; the administrators have a notice.' : '; the notice was refused: ' . ctrl_notices::$error);
+    }
+}
 ?>

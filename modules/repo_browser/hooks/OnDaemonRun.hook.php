@@ -69,6 +69,10 @@ function RepoBrowserRunQueue()
             if (in_array($args[0], array('install', 'upgrade'), true)) {
                 RepoBrowserSecureModule($root, $args[1]);
             }
+            // an upgrade: the administrators' "module update available" notice follows at once
+            if ($args[0] === 'upgrade' && $status === 'done') {
+                echo "  " . repo_browser_helper::UpdateCheck() . fs_filehandler::NewLine();
+            }
         }
         if (isset($args[0], $args[1]) && in_array($args[0], array('install', 'install-upload'), true)) {
             RepoBrowserGiveToAdmins($args[1]);

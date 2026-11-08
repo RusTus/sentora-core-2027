@@ -161,13 +161,21 @@ if ((isset($argv[1])) && ($argv[1] == 'upgrade')) {
     $contents = file_get_contents($package_file);
     $lines = preg_split('/\r\n|\r|\n/', $contents);
     $newconf = "";
+    $fetched = false;
     foreach ($lines as $line) {
         $this_line = preg_split('/\t/', $line);
         if ($this_line[0] == $argv[2]) {
             if (!zppy_download($this_line[1], $argv[2])) {
                 exit(1);
             }
+            $fetched = true;
+            break;
         }
+    }
+    // (not in any repository's list: it unpacked whatever old download was left in the cache)
+    if (!$fetched) {
+        fwrite(STDOUT, "The module '" . $argv[2] . "' is not in your repositories' package list: run 'zppy update' first.\n");
+        exit(1);
     }
     if (!fs_director::CheckFolderExists(ctrl_options::GetSystemOption('sentora_root') . 'modules/' . $argv[2])) {
         fwrite(STDOUT, "The module '" . $argv[2] . "' is not installed, install it first before you can upgrade it!\n");
@@ -185,6 +193,19 @@ if ((isset($argv[1])) && ($argv[1] == 'upgrade')) {
                 $extra_config = ctrl_options::GetSystemOption('sentora_root') . "modules/" . $argv[2] . "/deploy/upgrade.run";
                 if (fs_director::CheckFileExists($extra_config))
                     include($extra_config);
+                // The panel's record follows the new module.xml (it kept the old version, so Repo
+                // Browser went on offering the same update and asked to "fix the version number")
+                $info = ui_module::GetModuleXMLTags($argv[2]);
+                if (is_array($info) && isset($info['version']) && preg_match('/^[0-9][0-9.]{0,19}$/', (string) $info['version'])) {
+                    $sql = $zdbh->prepare("UPDATE x_modules SET mo_version_in = :v, mo_updatever_vc = NULL, mo_updateurl_tx = NULL" . (isset($info['desc']) && $info['desc'] !== '' ? ", mo_desc_tx = :d" : "") . " WHERE mo_folder_vc = :m");
+                    $sql->bindValue(':v', (string) $info['version']);
+                    if (isset($info['desc']) && $info['desc'] !== '') {
+                        $sql->bindValue(':d', (string) $info['desc']);
+                    }
+                    $sql->bindValue(':m', $argv[2]);
+                    $sql->execute();
+                    fwrite(STDOUT, "Now version " . $info['version'] . ".\n");
+                }
                 fwrite(STDOUT, "Module upgraded successfully!\n");
                 exit(0);
             }

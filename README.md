@@ -399,6 +399,8 @@ Every login lands on the **Dashboard**, where each account arranges its own widg
 
 The add-ons live in the [`sentora-repo` folder](https://github.com/RusTus/sentora-installers-2027/tree/master2027/sentora-repo) of the installers repository. To add your own: put `<Name>.zpp` there, add `<Name>` to `packages.txt`, run `sha256sum *.zpp > SHA256SUMS`, and push to `master2027`. A module's code runs inside the panel, so add only modules you trust.
 
+**Updates:** every hour the daemon reads each installed add-on's `<Name>.xml` from its repository. When its `<latestversion>` is higher than the installed version, the administrators get a notice (*A module update is available*), and Repo Browser shows the module under **Updates** with an **Update** button. The notice goes away once the module is updated. Opening Repo Browser checks at once. To publish an update, raise `<version>` in the module's own `module.xml` inside the `.zpp` and `<latestversion>` in `<Name>.xml` to the same number, then update `SHA256SUMS`.
+
 ---
 
 # Behind the scenes
