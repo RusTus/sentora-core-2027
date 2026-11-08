@@ -511,6 +511,20 @@ Accounts move from an old Sentora server (1.0.x or 2.0.x, on Debian, Ubuntu or C
 
    It goes into `/root/sentora-export-<server>-<date>/` there (`--to <folder>` for another folder there, `--port <n>` for another SSH port), and the end of the output gives the import command to run on the new server. Then skip the copying below.
 
+   This needs **root to be able to log in to the new server over SSH**. Ubuntu's default lets root log in only with a key, not a password (`PermitRootLogin prohibit-password`). When the login fails, the export shows SSH's message and what to do. To allow root's password while you move the accounts, on the new server, as root:
+
+   ```bash
+   printf 'PermitRootLogin yes\nPasswordAuthentication yes\n' > /etc/ssh/sshd_config.d/10-sentora-move.conf && systemctl restart ssh
+   ```
+
+   and afterwards, to switch it off again:
+
+   ```bash
+   rm /etc/ssh/sshd_config.d/10-sentora-move.conf && systemctl restart ssh
+   ```
+
+   Other messages it explains: a new server installed again (its key changed: `ssh-keygen -R <address>` on the old server), the key not accepted (answer `yes` the first time), nothing answering on that port, and fail2ban on the new server banning the old one after 5 wrong passwords (`fail2ban-client set sshd unbanip <address>` there).
+
    (On a very old server whose `wget` rejects GitHub's certificate, add `--no-check-certificate` and compare `sha256sum sentora-migrate-export` with the SHA-256 on the release page.) It writes `/root/sentora-export-<server>-<date>/`: the panel's databases, every account's databases, folders and mail, with checksums. Copy that folder here:
 
    ```bash

@@ -11,7 +11,10 @@
 #                                                  straight onto the new server over SSH (its root password
 #                                                  is asked once): nothing is written on this server, for
 #                                                  one without room for the export; --to <folder> is then a
-#                                                  folder there, --port <n> its SSH port
+#                                                  folder there, --port <n> its SSH port. The new server
+#                                                  must let root log in over SSH with a password (or a key):
+#                                                  Ubuntu's default refuses root's password; if it says so,
+#                                                  it shows how to allow it for the move
 #
 # What it writes (one folder; copy it to the new server, for example with rsync or scp):
 #   manifest.txt                 the server, the Sentora version and every account with its domains
@@ -80,10 +83,48 @@ if [ -n "$REMOTE" ]; then
     SSHCTL="/tmp/sentora-export-ssh-$$"
     SSHOPT=(-F /dev/null -p "$RPORT" -o ControlPath="$SSHCTL" -o ServerAliveInterval=30 -o ServerAliveCountMax=10)
     echo "Connecting to $REMOTE (port $RPORT): the new server's password is asked once."
-    if ! ssh "${SSHOPT[@]}" -o ControlMaster=yes -o ControlPersist=yes -fN "$REMOTE"; then
+    echo "(This needs $REMOTE to be allowed to log in to the new server over SSH: see below if it is refused.)"
+    SSHERR=$(mktemp /tmp/sentora-export-sshlog.XXXXXX)
+    # (the questions, yes/no for a new server and the password, go to the terminal; SSH's errors to $SSHERR)
+    if ! ssh "${SSHOPT[@]}" -o ControlMaster=yes -o ControlPersist=yes -fN "$REMOTE" 2> "$SSHERR"; then
         SSHCTL=""
-        echo "Could not connect to $REMOTE: check the address, the port and the password. Nothing was exported."; exit 1
+        RUSER="${REMOTE%%@*}"; RHOST="${REMOTE#*@}"
+        echo
+        echo "Could not log in to $REMOTE over SSH. Nothing was exported. SSH said:"
+        grep -v '^[[:space:]]*$' "$SSHERR" | tail -4 | sed 's/^/    /'
+        echo
+        if grep -qi 'IDENTIFICATION HAS CHANGED\|Host key for .* has changed' "$SSHERR"; then
+            echo "  The new server's key is not the one this server saw before there: usually because it was"
+            echo "  installed again. If it is the same machine, forget the old key, then run this again:"
+            echo "      ssh-keygen -R $RHOST"
+            [ "$RPORT" != 22 ] && echo "      ssh-keygen -R '[$RHOST]:$RPORT'"
+        elif grep -qi 'Host key verification failed' "$SSHERR"; then
+            echo "  The new server's key was not accepted. The first time, SSH asks whether to trust it: run this"
+            echo "  in a terminal and answer yes (to check it, compare the fingerprint SSH shows with"
+            echo "  ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub on the new server)."
+        elif grep -qi 'Permission denied\|Too many authentication failures' "$SSHERR"; then
+            echo "  The new server refused the login. Either the password is wrong, or it does not let $RUSER log in"
+            echo "  over SSH with a password (Ubuntu's default: PermitRootLogin prohibit-password). On the NEW server,"
+            echo "  as root, to allow it while you move the accounts:"
+            echo "      printf 'PermitRootLogin yes\\nPasswordAuthentication yes\\n' > /etc/ssh/sshd_config.d/10-sentora-move.conf && systemctl restart ssh"
+            echo "  and to switch it off again afterwards:"
+            echo "      rm /etc/ssh/sshd_config.d/10-sentora-move.conf && systemctl restart ssh"
+            echo "  (After 5 wrong passwords, fail2ban there bans this server's address for an hour:"
+            echo "   fail2ban-client set sshd unbanip <this server's address> lifts it.)"
+        elif grep -qi 'Connection refused' "$SSHERR"; then
+            echo "  Nothing answers SSH on $RHOST port $RPORT: check the address and the port (--port), and that"
+            echo "  the SSH server runs there (systemctl status ssh)."
+        elif grep -qi 'timed out\|No route to host\|Network is unreachable\|Could not resolve\|Name or service not known' "$SSHERR"; then
+            echo "  $RHOST can not be reached from here: check the address, and that no firewall between the"
+            echo "  two servers blocks port $RPORT. If this server bans it after too many tries (fail2ban on"
+            echo "  the new server), wait an hour or lift it there: fail2ban-client set sshd unbanip <address>"
+        else
+            echo "  Check the address, the port (--port), the password, and that $RUSER may log in over SSH there."
+        fi
+        rm -f "$SSHERR"
+        exit 1
     fi
+    rm -f "$SSHERR"
     # (-n: a command run there must not read this script's input, or it ends the loop it is in)
     rsh() { ssh -n "${SSHOPT[@]}" "$REMOTE" "$@"; }
     rput() { ssh "${SSHOPT[@]}" "$REMOTE" "$@"; }
