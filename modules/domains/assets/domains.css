@@ -58,6 +58,7 @@
 .dm-phpnote .label { font-size: 10px; white-space: normal; }
 /* which PHP the domain really runs on (filled in after the page loads) */
 .dm-run { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--dm-muted); max-width: 300px; }
+.dm-run[hidden] { display: none; }
 .dm-run::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex: none; }
 .dm-run.is-ok { color: var(--dm-ok); }
 .dm-run.is-pending { color: var(--dm-warn); }

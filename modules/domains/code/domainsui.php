@@ -140,10 +140,10 @@ class domains_ui
                 . '</div>';
         }
         // which PHP each domain really runs on: asked once, after the page is shown (phpstate.php)
-        static $loader = false;
-        if (!$loader && strpos($out, 'class="dm-run"') !== false) {
-            $loader = true;
-            $out .= '<script>(function () { var b = document.querySelectorAll(".dm-run[data-vh]"), ids = [];'
+        // (added every time: the template parser calls a <@ X @> function once while compiling and again
+        // for the page, so a PHP "only once" flag left the real page without it; the page itself runs it once)
+        if (strpos($out, 'class="dm-run"') !== false) {
+            $out .= '<script>(function () { if (window.dmRunAsked) { return; } window.dmRunAsked = true; var b = document.querySelectorAll(".dm-run[data-vh]"), ids = [];'
                 . ' for (var i = 0; i < b.length; i++) { ids.push(b[i].getAttribute("data-vh")); } if (!ids.length || !window.fetch) { return; }'
                 . ' fetch("modules/domains/code/phpstate.php?ids=" + ids.join(","), { credentials: "same-origin" }).then(function (r) { return r.ok ? r.json() : {}; }).then(function (d) {'
                 . ' for (var i = 0; i < b.length; i++) { var s = d[b[i].getAttribute("data-vh")]; if (!s || !s.text) { continue; }'
