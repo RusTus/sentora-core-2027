@@ -6,7 +6,7 @@
  * @package Sentora
  * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
  *
- * Written by RusTus, 2026-11-07
+ * Written by RusTus, 2026-11-08
  */
 
 /**
@@ -27,6 +27,7 @@ class sys_phpversions
     /** @var array<string, string> Last day of security fixes from the PHP project for each version: version => 'Y-m-d'. */
     static $supportEnds = array(
         '7.1' => '2019-12-01',
+        '7.4' => '2022-11-28',
         '8.1' => '2025-12-31',
         '8.2' => '2026-12-31',
         '8.3' => '2027-12-31',
@@ -35,12 +36,13 @@ class sys_phpversions
     );
 
     /**
-     * Versions that are only there to move old websites (from Sentora 2.0.2) to this server: no security
-     * fixes for years, installed switched off, and marked as such wherever they can be chosen.
+     * Versions that are only there to move old websites to this server (7.1, from Sentora 2.0.2) or to
+     * move their apps on to a supported PHP step by step (7.4, 8.1): no security fixes, installed switched
+     * off, and marked as such wherever they can be chosen.
      *
      * @var string[]
      */
-    static $migrationOnly = array('7.1');
+    static $migrationOnly = array('7.1', '7.4', '8.1');
 
     /**
      * Whether a version is only for moving old websites (see $migrationOnly).
