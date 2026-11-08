@@ -207,7 +207,8 @@ class ui_template {
 
     /**
      * A template can draw module icons of its own: img/icons/<module>.svg (Modern does).
-     * Returns that file's path for the current user's template, or false.
+     * Returns that file's path for the current user's template; for a template that has icons
+     * but none for this module, the module's own assets/icon.svg (add-ons); otherwise false.
      * @param string $module The module folder name.
      * @return string|false The SVG path, or false when there is none or the name is not valid.
      */
@@ -218,7 +219,10 @@ class ui_template {
         }
         if (!array_key_exists($module, $cache)) {
             $path = 'etc/styles/' . self::CurrentTemplateCached() . '/img/icons/' . $module . '.svg';
-            $cache[$module] = is_file($path) ? $path : false;
+            // an add-on module can bring its own line icon (assets/icon.svg) for templates that draw
+            // module icons, so it matches the others instead of showing its old PNG
+            $own = 'modules/' . $module . '/assets/icon.svg';
+            $cache[$module] = is_file($path) ? $path : (self::HasThemeIcons() && is_file($own) ? $own : false);
         }
         return $cache[$module];
     }
