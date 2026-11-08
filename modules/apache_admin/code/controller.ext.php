@@ -456,7 +456,7 @@ class module_controller extends ctrl_module
         $code = function ($k) use ($val) { return '<textarea class="form-control sf-code" name="' . $k . '" id="' . $k . '" rows="7" spellcheck="false">' . self::h($val($k)) . '</textarea>'; };
         return '<section class="sf-pane">'
             . $row('vh_enabled_in', 'Website answers', 'Off: Apache does not serve this domain.', $sw('vh_enabled_in'))
-            . $row('vh_obasedir_in', 'Keep PHP in the account\'s folder', 'open_basedir. Turn it off only for a program that needs files elsewhere.', $sw('vh_obasedir_in'))
+            . $row('vh_obasedir_in', 'Limit PHP to this site\'s folder', 'open_basedir. Off: PHP may use the whole account\'s folder (never other accounts\' or the system\'s), for a program that keeps files beside its site folder, such as OpenCart\'s storage.', $sw('vh_obasedir_in'))
             . $row('vh_symlinks_in', 'Allow FollowSymLinks (for moving an old site)', 'Off (recommended): Apache follows a symbolic link only to a file of the same owner, and an .htaccess with "Options +FollowSymLinks" gives error 500. On: this site\'s .htaccess may use it, and every link is followed, also to other accounts\' files. Switch it off again once the site uses "Options +SymLinksIfOwnerMatch".', $sw('vh_symlinks_in'))
             . $row('vh_custom_port_in', 'Port', 'Empty: the server\'s port.', $num('vh_custom_port_in'))
             . $row('vh_portforward_in', 'Send port 80 to that port', 'Needs Apache\'s mod_rewrite.', $sw('vh_portforward_in'))

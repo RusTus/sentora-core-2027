@@ -1074,7 +1074,7 @@ return array(
     'Kazakhstan' => 'Cazaquistão',
     'Keep' => 'Manter',
     'Keep PHP in each account\'s folder' => 'Restringir o PHP à pasta de cada conta',
-    'Keep PHP in the account\'s folder' => 'Manter o PHP na pasta da conta',
+    'Limit PHP to this site\'s folder' => 'Limitar o PHP à pasta deste site',
     'Keep a copy in the mailbox' => 'Manter uma cópia na caixa de correio',
     'Keep a copy of the previous vhost configuration before a new one is written.' => 'Manter uma cópia da configuração de vhost anterior antes de gravar uma nova.',
     'Keep activity for (days)' => 'Manter a atividade por (dias)',
