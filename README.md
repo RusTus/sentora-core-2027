@@ -414,7 +414,7 @@ Most of what the panel changes is done by the **daemon**: `bin/daemon.php`, run 
 
 **When the server's IP changes.** The websites' Apache settings name their domains, so they keep working on a new IP. Two things depend on the address itself: the panel answering on the server's IP, and the panel's IP setting (Sentora Config, used for new DNS records). The daemon follows a change by itself within 5 minutes. It rewrites Apache's settings whenever the server's addresses change. When the panel's IP is a local address the server no longer has and it now has exactly one local address, the panel's IP becomes that one, and the DNS records that pointed to the old address follow. That is logged in `alerts.log` and emailed to the alert address. A public panel IP (reached through a router) is left to AutoIP. With several local addresses it changes nothing and says so once, with the command to run.
 
-To run it by hand, including the hourly part: `setso --set daemon_hourrun 0 && php /etc/sentora/panel/bin/daemon.php`.
+To run it at once, use **Run the daemon now** in Sentora Config > Daemon (administrators; its report goes to `/var/sentora/logs/daemon-panel-run.log`, and a press while one it started is busy is dropped). From the console, including the hourly part: `setso --set daemon_hourrun 0 && php /etc/sentora/panel/bin/daemon.php`.
 
 ## How the panel gets root work done
 
@@ -426,7 +426,7 @@ The panel's PHP runs as the Linux user `sentora` in its own PHP-FPM pool, which 
 - files in `/var/lib/sentora/tmp/`: widget installs, restores;
 - off-server backup and FTP backup requests, the older-logins switch-off.
 
-For the few things that can't wait 5 minutes there is `zsudo`, a small root program only the panel's user can run (`root:sentora 4750`). It clears the environment and hands one of a fixed list of command lines to `atd`: reload or restart Apache, start/stop/reload BIND, end switched-off clients' FTP sessions, and the panel update's check, update and rollback. Nothing else is accepted. `sentora-update` rebuilds it when its source changes.
+For the few things that can't wait 5 minutes there is `zsudo`, a small root program only the panel's user can run (`root:sentora 4750`). It clears the environment and hands one of a fixed list of command lines to `atd`: reload or restart Apache, start/stop/reload BIND, end switched-off clients' FTP sessions, run the daemon now (Sentora Config > Daemon), and the panel update's check, update and rollback. Nothing else is accepted. `sentora-update` rebuilds it when its source changes.
 
 ## How accounts are kept apart
 

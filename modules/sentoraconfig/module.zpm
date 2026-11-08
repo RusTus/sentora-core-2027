@@ -30,6 +30,10 @@
                     <div><b><: Full daemon run :></b><small><: Resets the run times above so the next run also does every daily, weekly and monthly job, such as backups and statistics. :></small></div>
                     <@ CSFR_Tag @><button class="btn btn-default" type="submit" name="inForceFull"><: Queue a full run :></button>
                 </form>
+                <form class="sc-reset sc-now" action="./?module=sentoraconfig&amp;action=RunDaemon" method="post">
+                    <div><b><: Run the daemon now :></b><small><: Starts it right away instead of within 5 minutes, to apply a change at once. It does the usual run; for the daily, weekly and monthly jobs too, queue a full run first. :></small></div>
+                    <@ CSFR_Tag @><button class="btn btn-primary" type="submit" name="inRunNow"><: Run the daemon now :></button>
+                </form>
             </section>
         </div>
     </div>

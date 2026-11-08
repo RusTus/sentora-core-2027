@@ -41,6 +41,10 @@
  *                       published: sentora-update --status)
  *   zsudo panel-update (no arguments: updates the panel from the published
  *                       release: sentora-update --yes --from-panel)
+ *   zsudo daemon-run   (no arguments: runs the Sentora daemon now, the same
+ *                       command cron runs every 5 minutes; a press while one
+ *                       it started is still busy is dropped, and its report
+ *                       goes to its own log, daemon-panel-run.log)
  *   zsudo panel-rollback panel-before-update-YYYYMMDD-HHMMSS.tar.gz
  *                      (puts back one of the backups sentora-update made in
  *                       /var/sentora/backups; only a name of exactly that
@@ -118,6 +122,11 @@ int main(int argc, char *argv[])
         snprintf(cmd, sizeof cmd, "/bin/bash /etc/sentora/panel/bin/sentora-update --status");
     } else if (argc == 2 && strcmp(argv[1], "panel-update") == 0) {
         snprintf(cmd, sizeof cmd, "/bin/bash /etc/sentora/panel/bin/sentora-update --yes --from-panel");
+    } else if (argc == 2 && strcmp(argv[1], "daemon-run") == 0) {
+        /* a fixed line: the daemon cron runs anyway, sooner; flock -n drops a second press while one
+           runs (the daemon's own lock keeps it from overlapping a cron run), and its own log never cuts
+           into the report of a cron run that is writing daemon-last-run.log */
+        snprintf(cmd, sizeof cmd, "/usr/bin/flock -n /run/sentora-daemon-now.lock /bin/sh -c '/usr/bin/php -q /etc/sentora/panel/bin/daemon.php > /var/sentora/logs/daemon-panel-run.log 2>&1'");
     } else if (argc == 3 && strcmp(argv[1], "panel-rollback") == 0 && backup_name(argv[2])) {
         /* the name was checked character by character above: digits, one hyphen, fixed text */
         snprintf(cmd, sizeof cmd, "/bin/bash /etc/sentora/panel/bin/sentora-update --from-panel --rollback /var/sentora/backups/%s", argv[2]);

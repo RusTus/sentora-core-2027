@@ -23,7 +23,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
- * Updated by RusTus, 2026-11-07
+ * Updated by RusTus, 2026-11-08
  */
 /**
  * Sentora Config module (Admin): the panel's general settings and the daemon run times.
@@ -464,6 +464,28 @@ class module_controller extends ctrl_module
     }
 
     /**
+     * Handle "Run the daemon now": start it at once through zsudo daemon-run (the same command cron runs
+     * every 5 minutes, as root). Administrators only; sets self::$done.
+     *
+     * @return void
+     */
+    static function doRunDaemon()
+    {
+        runtime_csfr::Protect();
+        $u = ctrl_users::GetUserDetail();
+        if (!$u || (int) $u['usergroupid'] !== 1) {
+            return;
+        }
+        $zsudo = (string) ctrl_options::GetSystemOption('zsudo');
+        $rc = 1;
+        if ($zsudo !== '' && is_executable($zsudo) && function_exists('exec')) {
+            $out = array();
+            exec(escapeshellcmd($zsudo) . ' daemon-run 2>&1', $out, $rc);
+        }
+        self::$done = (int) $rc === 0 ? 'daemonnow' : ((int) $rc === 2 ? 'daemonnow-old' : 'daemonnow-fail');
+    }
+
+    /**
      * The question asked before queueing a full daemon run (template data attribute <@ ResetConfirm @>).
      *
      * @return string The translated text, escaped for an HTML attribute.
@@ -494,6 +516,12 @@ class module_controller extends ctrl_module
             $out .= ui_sysmessage::shout(ui_language::translate('Nothing had changed.'), 'zannounceinfo');
         } elseif (self::$done === 'daemon') {
             $out .= ui_sysmessage::shout(ui_language::translate('A full daemon run is queued: every daily, weekly and monthly job runs within 5 minutes.'), 'zannounceok');
+        } elseif (self::$done === 'daemonnow') {
+            $out .= ui_sysmessage::shout(ui_language::translate('The daemon is starting now. It usually takes under a minute (longer while another run is busy); reload this page to see the new run times. Its report: /var/sentora/logs/daemon-panel-run.log'), 'zannounceok');
+        } elseif (self::$done === 'daemonnow-old') {
+            $out .= ui_sysmessage::shout(ui_language::translate('This server\'s zsudo does not know this action yet. Run sentora-update once on the server\'s console, as root: it builds the new zsudo, and then this works from here.'), 'zannounceerror');
+        } elseif (self::$done === 'daemonnow-fail') {
+            $out .= ui_sysmessage::shout(ui_language::translate('The daemon could not be started from here (check that the at service runs: systemctl status atd). It still runs within 5 minutes.'), 'zannounceerror');
         }
         return $out === '' ? null : $out;
     }
