@@ -16,7 +16,7 @@
  * - added timestamp of begin and end of dameon run for logfile
  * - corrected OnDaemonHour that occured on each cron run (5 min,)
  *
- * Updated by RusTus, 2026-11-07
+ * Updated by RusTus, 2026-11-08
  */
 set_time_limit(0);
 
@@ -27,6 +27,11 @@ chdir($rootPath);
 require_once 'dryden/loader.inc.php';
 require_once 'cnf/db.php';
 require_once 'inc/dbc.inc.php';
+
+// /var/lib/sentora must be root's before root opens or writes anything there (the lock below too)
+foreach (sys_statedir::Secure() as $statedirChange) {
+    echo 'State folder: ' . $statedirChange . fs_filehandler::NewLine();
+}
 
 // One run at a time. A run that takes longer than 5 minutes (a big backup, many sites) overlapped
 // the next one from cron, and both then wrote the same files and settings. A second run now waits

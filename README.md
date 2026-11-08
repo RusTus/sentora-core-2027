@@ -646,7 +646,7 @@ Start with `sentora-post-install-check`: most problems show up there as a FAIL l
 | `/var/sentora/logs/` | Panel, domain and tool logs |
 | `/var/sentora/stats/` | GoAccess, Webalizer and Visitors reports |
 | `/var/sentora/backups/` | Panel backups (updates, moves, restores) |
-| `/var/lib/sentora/` | The panel's working data: sessions, queues, security logs, alert state |
+| `/var/lib/sentora/` | The panel's working data: sessions, queues, security logs, alert state. The folder is root's: root jobs write their state there, and the panel keeps only its own subfolders and log files (the daemon keeps it so) |
 | `/opt/sentora-php/<version>/` | Extra PHP versions (services `sentora-php<version>-fpm`) |
 | `/root/passwords.txt` | The passwords made at install |
 
