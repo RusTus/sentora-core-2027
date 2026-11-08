@@ -287,7 +287,10 @@ if ($opt['all']) {
     foreach ($names as $n => $u) {
         echo "\n" . c('bold') . c('cyan') . '  ==== ' . ($n + 1) . '/' . count($names) . ": $u " . str_repeat('=', 40) . c('reset') . "\n";
         $env = 'SENTORA_MIGRATE_CHILD=1 SENTORA_MIGRATE_NO_DAEMON=1 SENTORA_MIGRATE_CHECKED=' . q($EXP);
-        passthru("$env php -q " . q(__FILE__) . ' ' . q($EXP) . ' ' . q($u) . ' ' . implode(' ', $pass), $rc);
+        // on this same terminal (passthru() gave it a pipe, so it showed plain lines instead of the
+        // progress bar, and looked stuck during a long step)
+        $proc = proc_open("$env php -q " . q(__FILE__) . ' ' . q($EXP) . ' ' . q($u) . ' ' . implode(' ', $pass), array(0 => STDIN, 1 => STDOUT, 2 => STDERR), $pipes);
+        $rc = is_resource($proc) ? proc_close($proc) : 1;
         $result[$u] = $rc;
     }
     if ($APPLY) {
