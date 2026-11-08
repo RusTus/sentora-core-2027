@@ -240,7 +240,8 @@ The menus:
 | Setting | Default | Effect |
 | --- | --- | --- |
 | Two-factor login | enabled | `disabled`; `enabled` (each account can turn it on in My Account); `enabled-forced` (every account must set it up at its next login) |
-| Serve panel on server IP | on | The panel also answers on `https://<server ip>`. Switch it off on an internet-facing server so scanners of the IP don't see the login |
+| Site not found falls back to panel login | on | An address with no site here (a typo, a domain not set up yet, the server's IP) opens the panel login, so new users always find it. Off: such addresses get a plain 404, so IP scanners and bots don't learn a panel is here; the more private choice once you know the panel's address. As root: `setso --set panel_fallback false && setso --set apache_changed true` |
+| Serve panel on server IP | on | The panel also answers on `https://<server ip>` (matters only when the fallback above is off). Switch it off on an internet-facing server so scanners of the IP don't see the login |
 | Shortest password | 10 | For panel passwords |
 | Alert email address | empty (zadmin's address) | Where server alerts go |
 | Alert disk use percent | 85 | Disk alert threshold (50 to 99) |
@@ -626,6 +627,7 @@ Start with `sentora-post-install-check`: most problems show up there as a FAIL l
 | A mailbox password is lost | Mailbox passwords are never shown | Set a new one in Mail > Mailboxes |
 | A repository shows FAILED in Repo Browser | It can't be reached, or has no `packages.txt` | Check the address in a browser, then Retry |
 | The daemon log stops part way with an SQL error | A database error ends the run | Fix it, then run `php /etc/sentora/panel/bin/daemon.php` |
+| The panel's address shows *Not Found* (a different name or the IP was typed) | *Site not found falls back to panel login* is off | Use the panel's exact name, or as root: `setso --set panel_fallback true && setso --set apache_changed true && php /etc/sentora/panel/bin/daemon.php` |
 | The panel says *Not Found* on the server's IP after the IP changed | The panel's IP is still the old one | Wait 5 minutes (the daemon follows it); with several local addresses: `setso --set server_ip <address> && setso --set apache_changed true && php /etc/sentora/panel/bin/daemon.php` |
 | A site's Active Directory (LDAP) sign-in fails, or names ending in `.local` don't resolve on the server (osTicket: error 500, `bind() on null`) | Ubuntu's DNS helper (`systemd-resolved`, 127.0.0.53) treats `.local` as local-network names and never asks your DNS servers | Send your domain to your DNS servers, as root (your domain and DNS servers): `mkdir -p /etc/systemd/resolved.conf.d && printf '[Resolve]\nDNS=172.16.0.10 172.16.16.10\nDomains=example.local\nMulticastDNS=no\n' > /etc/systemd/resolved.conf.d/ad.conf && systemctl restart systemd-resolved`. Check with `dig +short _ldap._tcp.example.local SRV`. PHP 7.1 writes the typed password into the error log when that sign-in crashes: empty the site's `-error.log` afterwards |
 | A site moved from Sentora 1.0.x says *redirected you too many times* | Sentora 1.0.x's Sencrypt kept the certificate in the domain's Extra directives on port 443; here SSL lives in its SSL settings | Nothing: the daemon takes the certificate lines out within 5 minutes. When the certificate's files are on the server they become its SSL settings; else the site runs on http until you request a certificate in Sencrypt SSL |

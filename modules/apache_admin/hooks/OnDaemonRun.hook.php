@@ -34,6 +34,15 @@ if (ui_module::CheckModuleEnabled('Apache Config')) {
         echo "Apache Config: old certificate settings not checked (" . $e->getMessage() . ")" . fs_filehandler::NewLine();
     }
     TriggerApacheQuotaUsage();
+    // "Site not found falls back to panel login": added on servers installed before it existed,
+    // on (as Sentora always behaved before the "Not Found" catch-all); Sentora Config shows it
+    global $zdbh;
+    if ($zdbh->query("SELECT COUNT(*) FROM x_settings WHERE so_name_vc = 'panel_fallback'")->fetchColumn() == 0) {
+        $zdbh->exec("INSERT INTO x_settings (so_name_vc, so_cleanname_vc, so_value_tx, so_defvalues_tx, so_desc_tx, so_module_vc, so_usereditable_en)
+            VALUES ('panel_fallback', 'Site not found falls back to panel login', 'true', 'true|false', 'A name this server has no site for opens the panel login. Off: such names get a plain 404.', 'Sentora Config', 'true')");
+        $zdbh->exec("UPDATE x_settings SET so_value_tx = 'true' WHERE so_name_vc = 'apache_changed'");
+        echo "Apache Config: new setting \"Site not found falls back to panel login\" (on)" . fs_filehandler::NewLine();
+    }
     // (the domains' live PHP, for the badges, from the file Apache runs with when not noted yet)
     if (!is_file(sys_phpversions::LIVE_FILE) && is_readable((string) ctrl_options::GetSystemOption('apache_vhost'))) {
         sys_phpversions::RecordLive((string) file_get_contents((string) ctrl_options::GetSystemOption('apache_vhost')));
@@ -145,6 +154,20 @@ function BuildVhostReWriteSSL($vhostName, $userEmail) {
 	$line .= fs_filehandler::NewLine();
 		
     return $line;
+}
+
+/**
+ * Whether a name this server has no site for (a typo, a domain not set up yet, a scanner trying
+ * the IP) opens the panel login ("Site not found falls back to panel login", panel_fallback):
+ * on unless set to an off value, so a missing setting keeps new users finding the panel.
+ *
+ * Updated by RusTus, 2026-11-08
+ *
+ * @return bool True: unknown names get the panel; false: they get "Not Found".
+ */
+function SentoraPanelFallback() {
+    $v = strtolower(trim((string) ctrl_options::GetSystemOption('panel_fallback')));
+    return !in_array($v, array('false', '0', 'no', 'off'), true);
 }
 
 /**
@@ -366,8 +389,10 @@ function BuildVhostConfig() {
 	// HTTPS for a name with no certificate of its own here (a domain whose SSL is not
 	// set up or failed, an address): "not found", instead of Apache falling back to the
 	// first HTTPS vhost, which is the panel's login page. It must be the first one.
+	// Not written when "Site not found falls back to panel login" (panel_fallback) is on: the
+	// panel's own HTTPS vhost is then the first one, and Apache shows it for any unknown name.
 	$sslCert = '/etc/sentora/configs/ssl/';
-	if (ctrl_options::GetSystemOption('panel_ssl_tx') != null && is_file($sslCert . 'sentora.crt') && is_file($sslCert . 'sentora.key')) {
+	if (!SentoraPanelFallback() && ctrl_options::GetSystemOption('panel_ssl_tx') != null && is_file($sslCert . 'sentora.crt') && is_file($sslCert . 'sentora.key')) {
 		$line .= "# Any HTTPS name without its own vhost here: 404" . fs_filehandler::NewLine();
 		$line .= "<VirtualHost *:443>" . fs_filehandler::NewLine();
 		$line .= "ServerName sentora-default.invalid" . fs_filehandler::NewLine();

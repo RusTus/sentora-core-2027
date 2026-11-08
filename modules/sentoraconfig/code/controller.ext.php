@@ -47,7 +47,7 @@ class module_controller extends ctrl_module
     {
         return array(
             'panel' => array('Panel', 'How the panel is reached and shown.',
-                array('sentora_port', 'server_ip', 'panel_ip_access', 'Sentora_df', 'root_drive', 'servicechk_to', 'panel_ssl_tx')),
+                array('sentora_port', 'server_ip', 'panel_fallback', 'panel_ip_access', 'Sentora_df', 'root_drive', 'servicechk_to', 'panel_ssl_tx')),
             'security' => array('Security', 'Logins and passwords.',
                 array('twofactor_enabled', 'password_minlength', 'login_csfr')),
             'email' => array('Email', 'How the panel sends email: notices, password resets and the welcome message.',
@@ -68,7 +68,8 @@ class module_controller extends ctrl_module
         return array(
             'sentora_port' => array('label' => 'Panel port', 'help' => 'The port Apache serves the panel on (80, or 443 with SSL). Takes effect on the next daemon run.', 'type' => 'number', 'min' => 1, 'max' => 65535, 'apache' => true),
             'server_ip' => array('label' => 'Server IP address', 'help' => "This server's public address, used in DNS records and the panel's links. Empty: found automatically.", 'type' => 'text', 'clear' => true, 'ip' => true, 'apache' => true),
-            'panel_ip_access' => array('label' => 'Serve the panel on the server IP', 'help' => "Also show the panel at the server's own IP address (https://ip), not only at its host name.", 'type' => 'switch', 'apache' => true),
+            'panel_fallback' => array('label' => 'Site not found falls back to panel login', 'help' => "On: an address this server has no site for (a typo, a domain not set up yet, the server's IP) opens the panel login, so new users always find the panel. Off: those get a plain 404 (Not Found), so IP scanners and bots do not learn a Sentora panel is here, and a domain whose SSL is not set up shows Not Found rather than your panel. Off is the more private choice once you know the panel's address.", 'type' => 'switch', 'apache' => true),
+            'panel_ip_access' => array('label' => 'Serve the panel on the server IP', 'help' => "Also show the panel at the server's own IP address (https://ip), not only at its host name. Matters only when \"Site not found falls back to panel login\" is off (on, the IP opens the panel anyway).", 'type' => 'switch', 'apache' => true),
             'Sentora_df' => array('label' => 'Date format', 'help' => 'How dates are shown in the panel, as a PHP date() format.', 'type' => 'text', 'date' => true),
             'root_drive' => array('label' => 'Root drive', 'help' => 'The drive Sentora is installed on, for the disk figures.', 'type' => 'text'),
             'servicechk_to' => array('label' => 'Service check timeout', 'help' => 'Seconds to wait for a service before it is shown as down.', 'type' => 'number', 'min' => 1, 'max' => 120),
