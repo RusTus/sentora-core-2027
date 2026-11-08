@@ -1163,6 +1163,9 @@ foreach ($plan['domains'] as $v) {
     }
     if (trim((string) ($v['vh_ssl_tx'] ?? '')) !== '') {
         warn($v['vh_name_vc'] . ': its SSL settings were not copied (the old certificate files are not here): request a certificate in Sencrypt');
+    } elseif (sys_apachecustom::OldSencrypt(array_merge($v, array('vh_ssl_tx' => ''))) !== null) {
+        // (the daemon puts it right once the files are here: sys_apachecustom::RepairOldSencrypt)
+        warn($v['vh_name_vc'] . ': its certificate was in its Extra directives on port 443 (Sencrypt of Sentora 1.0.x): it moves to its SSL settings if its files came along, else the site runs on http until a certificate is requested in Sencrypt');
     }
 }
 ui_info(count($VHMAP) . ' added, PHP ' . ($PHPV !== '' ? $PHPV : sys_phpversions::DefaultVersion()));

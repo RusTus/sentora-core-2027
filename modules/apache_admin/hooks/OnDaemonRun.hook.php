@@ -24,6 +24,13 @@ if (ui_module::CheckModuleEnabled('Apache Config')) {
         echo "Server address: not checked (" . $e->getMessage() . ")" . fs_filehandler::NewLine();
     }
     echo "Apache Admin module ENABLED..." . fs_filehandler::NewLine();
+    // Certificates in Extra directives on port 443 (Sentora 1.0.x's Sencrypt, or moved from such a
+    // server): to the SSL settings when their files are here, else the domain runs on http
+    try {
+        sys_apachecustom::RepairOldSencrypt();
+    } catch (Exception $e) {
+        echo "Apache Config: old certificate settings not checked (" . $e->getMessage() . ")" . fs_filehandler::NewLine();
+    }
     TriggerApacheQuotaUsage();
     // Write the vhosts once more if they do not have the request guard yet (servers
     // updated from an earlier version), or its account map is missing

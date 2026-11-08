@@ -287,6 +287,95 @@ class sys_apachecustom
         $zdbh->prepare("UPDATE x_settings SET so_value_tx = :v WHERE so_name_vc = :n")->execute(array(':v' => $p ? json_encode($p) : '', ':n' => self::SETTING));
     }
 
+    /** The certificate lines that belong in a domain's SSL settings, not in its Extra directives. */
+    const CERT_LINES = '/^[ \t]*(?:SSLEngine|SSLCertificateFile|SSLCertificateKeyFile|SSLCertificateChainFile|SSLCACertificateFile|SSLProtocol|SSLCipherSuite|SSLHonorCipherOrder)\b[^\n]*(?:\n|$)/mi';
+
+    /**
+     * A domain whose certificate is in its Extra directives on port 443, as Sentora 1.0.x's Sencrypt
+     * made it (between "# Made from Sencrypt - ... - start/end", with the domain's port set to 443),
+     * or that is on port 443 without SSL settings. Here SSL lives in the domain's SSL settings and
+     * SSLEngine is not taken in Extra directives, so such a domain became a port-443 site without
+     * SSL: browsers got the server's default certificate, and a shop that sends http to https
+     * (Magento) sent them round in circles.
+     *
+     * The certificate lines leave the Extra directives. When their files are on this server, they
+     * become the domain's SSL settings (port 443, with the usual http-to-https redirect); else the
+     * domain is a plain http site until a certificate is requested in Sencrypt.
+     *
+     * @param array<string,mixed> $v The x_vhosts row ('vh_custom_tx', 'vh_custom_port_in', 'vh_ssl_tx', 'vh_ssl_port_in', 'vh_portforward_in').
+     * @return array<string,mixed>|null The columns to change and 'note' (what happened), or null when there is nothing to change.
+     */
+    static function OldSencrypt(array $v)
+    {
+        $custom = (string) ($v['vh_custom_tx'] ?? '');
+        $ssl = trim((string) ($v['vh_ssl_tx'] ?? ''));
+        $port = (string) ($v['vh_custom_port_in'] ?? '');
+        // the Sencrypt blocks (with their marker lines), then any other certificate lines
+        $part = '';
+        $rest = preg_replace_callback('/^[ \t]*# Made from Sencrypt - ([\w-]+) - start[^\n]*\n.*?^[ \t]*# Made from Sencrypt - \1 - end[^\n]*(?:\n|$)/msi',
+            function ($m) use (&$part) { $part .= $m[0] . (substr($m[0], -1) === "\n" ? '' : "\n"); return ''; }, $custom);
+        $rest = preg_replace_callback(self::CERT_LINES, function ($m) use (&$part) { $part .= rtrim($m[0], "\n") . "\n"; return ''; }, $rest);
+        $hasCert = (bool) preg_match('/^[ \t]*SSLCertificateFile\b/mi', $part);
+        if ($part === '' && !($port === '443' && $ssl === '')) {
+            return null;
+        }
+        $out = array('vh_custom_tx' => trim(preg_replace("/\n{3,}/", "\n\n", (string) $rest)) === '' ? null : trim(preg_replace("/\n{3,}/", "\n\n", (string) $rest)) . "\n");
+        if ($port === '443') {
+            $out['vh_custom_port_in'] = null;
+            $out['vh_portforward_in'] = null;
+        }
+        if ($ssl === '' && $hasCert && self::CheckSsl("SSLEngine On\n" . $part, true) === '') {
+            if (!preg_match('/^[ \t]*SSLEngine\s+on\b/mi', $part)) {
+                $part = "SSLEngine On\n" . $part;
+            }
+            $out['vh_ssl_tx'] = trim($part) . "\n";
+            $out['vh_ssl_port_in'] = 443;
+            $out['note'] = 'its certificate moved from Extra directives to its SSL settings (https on port 443, http redirected to it)';
+        } else {
+            $out['note'] = $ssl !== ''
+                ? 'certificate lines taken out of Extra directives (its SSL settings already have one)'
+                : 'no certificate on this server: it runs on http (port 80) until one is requested in Sencrypt SSL';
+        }
+        return $out;
+    }
+
+    /**
+     * Daemon: put right every domain OldSencrypt() finds (moved from a Sentora 1.0.x server, or
+     * set up that way by hand). Cheap when there is nothing to do.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return int How many domains were changed (apache_changed is then set).
+     */
+    static function RepairOldSencrypt()
+    {
+        global $zdbh;
+        $n = 0;
+        $rows = $zdbh->query("SELECT * FROM x_vhosts WHERE vh_deleted_ts IS NULL AND (vh_custom_port_in = 443 OR vh_custom_tx LIKE '%Made from Sencrypt%' OR vh_custom_tx LIKE '%SSLEngine%' OR vh_custom_tx LIKE '%SSLCertificate%')")->fetchAll();
+        foreach ($rows as $v) {
+            $fix = self::OldSencrypt($v);
+            if ($fix === null) {
+                continue;
+            }
+            $note = $fix['note'];
+            unset($fix['note']);
+            $set = array();
+            $args = array(':id' => (int) $v['vh_id_pk']);
+            foreach ($fix as $col => $val) {
+                $set[] = "$col = :$col";
+                $args[":$col"] = $val;
+            }
+            $zdbh->prepare("UPDATE x_vhosts SET " . implode(', ', $set) . " WHERE vh_id_pk = :id")->execute($args);
+            // its Extra directives get another chance without the certificate lines
+            self::Clear('vh:' . (int) $v['vh_id_pk'] . ':custom');
+            echo "Apache Config: " . $v['vh_name_vc'] . ": " . $note . fs_filehandler::NewLine();
+            $n++;
+        }
+        if ($n) {
+            $zdbh->exec("UPDATE x_settings SET so_value_tx = 'true' WHERE so_name_vc = 'apache_changed'");
+        }
+        return $n;
+    }
+
     /**
      * What an entry is, for messages: the domain and which field.
      *
