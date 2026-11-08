@@ -146,6 +146,10 @@ LOGF="$OUT/export.log"; : > "$LOGF"
 put() {
     if [ -n "$REMOTE" ]; then rput "cat > '$RDIR/$1'"; else cat > "$OUT/$1"; fi
 }
+# packed <tar's exit code> <put's exit code>: was it packed and sent? tar's 1 means some files changed while
+# they were read (a log or session being written, normal on a live server): those are in it as they were then
+packed() { [ "$2" = 0 ] && { [ "$1" = 0 ] || [ "$1" = 1 ]; }; }
+changed_note() { [ "$1" = 1 ] && echo " (some files changed while being packed, normal on a running server)"; }
 fsize() { if [ -n "$REMOTE" ]; then rsh "du -sh '$RDIR/$1' | cut -f1"; else du -sh "$OUT/$1" | cut -f1; fi; }
 fexists() { if [ -n "$REMOTE" ]; then rsh "test -s '$RDIR/$1'"; else [ -s "$OUT/$1" ]; fi; }
 WHERE="$OUT"; [ -n "$REMOTE" ] && WHERE="$REMOTE:$RDIR"
@@ -320,11 +324,11 @@ while IFS= read -r u; do
     ui_item "$u ($(du -sh "$HOSTED/$u" 2> /dev/null | cut -f1), this can take a while)"
     tar -C "$HOSTED" --numeric-owner -czf - "$u" 2>> "$LOGF" | put "files/$u.tar.gz"
     st=("${PIPESTATUS[@]}")
-    if [ "${st[0]}" = 0 ] && [ "${st[1]}" = 0 ]; then
-        say "$(printf '%-28s %s packed' "$u" "$(fsize "files/$u.tar.gz")")"
+    if packed "${st[0]}" "${st[1]}"; then
+        say "$(printf '%-28s %s packed' "$u" "$(fsize "files/$u.tar.gz")")$(changed_note "${st[0]}")"
         NACC=$((NACC + 1))
     else
-        warn "the folder of $u was not packed completely (see export.log)"
+        warn "the folder of $u was not packed completely (tar ${st[0]}, sending ${st[1]}; tar's messages are in export.log)"
     fi
 done <<< "$(sql "SELECT ac_user_vc FROM $DBNAME.x_accounts WHERE ac_deleted_ts IS NULL")"
 
@@ -337,7 +341,7 @@ if [ "$MAIL" = yes ] && [ -d "$VMAIL" ]; then
         ui_item "$dom"
         tar -C "$VMAIL" --numeric-owner -czf - "$dom" 2>> "$LOGF" | put "mail/$dom.tar.gz"
         st=("${PIPESTATUS[@]}")
-        if [ "${st[0]}" = 0 ] && [ "${st[1]}" = 0 ]; then say "$dom"; NMAIL=$((NMAIL + 1)); else warn "the mail of $dom was not packed completely (see export.log)"; fi
+        if packed "${st[0]}" "${st[1]}"; then say "$dom$(changed_note "${st[0]}")"; NMAIL=$((NMAIL + 1)); else warn "the mail of $dom was not packed completely (see export.log)"; fi
     done
 fi
 [ "$NMAIL" -gt 0 ] || say "$( [ "$MAIL" = yes ] && echo 'no mailboxes' || echo 'left out (--no-mail)')"
@@ -359,7 +363,7 @@ if [ "$MAIL" = yes ]; then
     if [ -n "$SBASE" ] && [ -d "$SBASE" ]; then
         tar -C "$(dirname "$SBASE")" --numeric-owner -czf - "$(basename "$SBASE")" 2>> "$LOGF" | put mail/sieve.tar.gz
         st=("${PIPESTATUS[@]}")
-        if [ "${st[0]}" = 0 ] && [ "${st[1]}" = 0 ]; then
+        if packed "${st[0]}" "${st[1]}"; then
             say "mail filters (Sieve): $SBASE"
         else
             warn "the mail filters in $SBASE were not packed completely (see export.log)"
