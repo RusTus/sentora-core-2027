@@ -172,6 +172,11 @@ class Lescript
             // --------------------------------------
             $response = $this->signedRequest($authz, "");
             $domain = $response['identifier']['value'];
+            // (Let's Encrypt reuses a name it checked recently: nothing to do for it)
+            if (isset($response['status']) && $response['status'] === 'valid') {
+                $this->log("$domain was checked recently, no new check needed");
+                continue;
+            }
             if (empty($response['challenges'])) {
                 throw new RuntimeException("HTTP Challenge for $domain is not available. Whole response: " . json_encode($response));
             }
@@ -213,34 +218,30 @@ class Lescript
 
             $this->log("Sending request to challenge");
                 
-            // send request to challenge
-            $maxAllowedLoops = 6;
-            $loopCount = 1;
-            $result = null;
-            while ($loopCount < $maxAllowedLoops) {
-                $result = $this->signedRequest(
-                    $challenge['url'],
-                    array("keyAuthorization" => $payload)
-                );
-
-                if (empty($result['status']) || $result['status'] == "invalid") {
-                    throw new RuntimeException("Verification ended with error: " . json_encode($result));
-                }
-
-                if ($result['status'] != "pending") {
-                    break;
-                }
-
-                $sleepTime = $loopCount * $loopCount; // 1 4 9 16 25 36
-                $loopCount++;
-
-                $this->log("Verification pending, sleeping " . $sleepTime . "s");
-                sleep($sleepTime);
+            // ask for the check once, then ask how it went (sending the answer again while Let's Encrypt
+            // checks is refused with "authorization must be pending", which hid the real result)
+            $result = $this->signedRequest($challenge['url'], array("keyAuthorization" => $payload));
+            $status = isset($result['status']) ? $result['status'] : '';
+            $authzNow = null;
+            for ($try = 1; $try <= 15 && in_array($status, array('', 'pending', 'processing'), true); $try++) {
+                sleep($try < 5 ? 2 : 4);
+                $authzNow = $this->signedRequest($authz, "");
+                $status = isset($authzNow['status']) ? $authzNow['status'] : '';
+                $this->log("Check of $domain: " . ($status !== '' ? $status : 'no answer'));
             }
-
-            if ($result['status'] === "pending") {
-                throw new RuntimeException("Verification timed out");
+            if ($status !== 'valid') {
+                // Let's Encrypt's own reason, from the challenge it tried
+                $why = '';
+                foreach (array_merge(array($result), isset($authzNow['challenges']) ? $authzNow['challenges'] : array()) as $c) {
+                    if (!empty($c['error']['detail'])) {
+                        $why = $c['error']['detail'];
+                    }
+                }
+                @unlink($tokenPath);
+                throw new RuntimeException($domain . ': ' . ($why !== '' ? $why
+                    : ($status === 'pending' || $status === 'processing' ? 'the check did not finish in time, try again in a few minutes' : 'the check ended with status ' . ($status !== '' ? $status : 'unknown'))));
             }
+            $result = array('status' => $status);
 
             $this->log("Verification ended with status: {$result['status']}");
 
