@@ -8,7 +8,7 @@
  * @package Sentora
  * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
  *
- * Written by RusTus, 2026-11-07
+ * Written by RusTus, 2026-11-08
  */
 
 /**
@@ -118,9 +118,10 @@ class domains_ui
                         . '<label><span>PHP</span><select class="form-control input-sm" name="inPhpVersion" aria-label="' . self::t('PHP version for') . ' ' . self::h($name) . '" onchange="this.form.submit()">'
                         . sys_phpversions::SelectOptions((string) $r['php']) . '</select></label>'
                         . '<noscript><button class="btn btn-default btn-sm" type="submit">' . self::t('Change') . '</button></noscript>'
-                        . ($note !== '' ? '<div class="dm-phpnote">' . $note . '</div>' : '') . '</form>';
+                        . ($note !== '' ? '<div class="dm-phpnote">' . $note . '</div>' : '')
+                        . ($live ? '<span class="dm-run" data-vh="' . $id . '" hidden></span>' : '') . '</form>';
                 } else {
-                    $phpMeta = '<span class="dm-phpv">PHP ' . $label . '</span>';
+                    $phpMeta = '<span class="dm-phpv">PHP ' . $label . '</span>' . ($live ? '<span class="dm-run" data-vh="' . $id . '" hidden></span>' : '');
                 }
             }
             $out .= '<div class="dm-card' . ($live ? '' : ' is-wait') . '" data-s="' . self::h(strtolower($name)) . '">'
@@ -137,6 +138,16 @@ class domains_ui
                 . '<div class="dm-act"><a class="btn btn-default btn-sm" href="http://' . self::h($name) . '/" target="_blank" rel="noopener">' . self::Icon('open') . self::t('Visit') . '</a>'
                 . '<button class="btn btn-default btn-sm dm-del" type="submit" form="dm-delete" name="inDelete_' . $id . '" value="inDelete_' . $id . '" title="' . self::t('Delete') . '" aria-label="' . self::t('Delete') . ' ' . self::h($name) . '">' . self::Icon('trash') . '</button></div>'
                 . '</div>';
+        }
+        // which PHP each domain really runs on: asked once, after the page is shown (phpstate.php)
+        static $loader = false;
+        if (!$loader && strpos($out, 'class="dm-run"') !== false) {
+            $loader = true;
+            $out .= '<script>(function () { var b = document.querySelectorAll(".dm-run[data-vh]"), ids = [];'
+                . ' for (var i = 0; i < b.length; i++) { ids.push(b[i].getAttribute("data-vh")); } if (!ids.length || !window.fetch) { return; }'
+                . ' fetch("modules/domains/code/phpstate.php?ids=" + ids.join(","), { credentials: "same-origin" }).then(function (r) { return r.ok ? r.json() : {}; }).then(function (d) {'
+                . ' for (var i = 0; i < b.length; i++) { var s = d[b[i].getAttribute("data-vh")]; if (!s || !s.text) { continue; }'
+                . ' b[i].textContent = s.text; b[i].className = "dm-run is-" + s.state; b[i].hidden = false; } }).catch(function () {}); })();</script>';
         }
         return $out;
     }

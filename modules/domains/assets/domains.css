@@ -56,6 +56,12 @@
 .dm-php label span { font-size: 11px; font-weight: 700; color: var(--dm-muted); }
 .dm-php select { width: auto; max-width: 300px; min-width: 0; }
 .dm-phpnote .label { font-size: 10px; white-space: normal; }
+/* which PHP the domain really runs on (filled in after the page loads) */
+.dm-run { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--dm-muted); max-width: 300px; }
+.dm-run::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex: none; }
+.dm-run.is-ok { color: var(--dm-ok); }
+.dm-run.is-pending { color: var(--dm-warn); }
+.dm-run.is-down { color: var(--dm-bad); font-weight: 600; }
 .dm-act { display: flex; gap: 6px; flex: none; }
 .dm-act .btn { display: inline-flex; align-items: center; gap: 6px; }
 .dm-del { padding-left: 8px; padding-right: 8px; }

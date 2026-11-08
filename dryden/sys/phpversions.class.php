@@ -345,6 +345,88 @@ class sys_phpversions
         return $counts;
     }
 
+
+    /** Which PHP socket Apache was given for each domain, as the daemon last wrote it (and Apache ran with it). */
+    const LIVE_FILE = '/var/lib/sentora/php-live.json';
+
+    /**
+     * Daemon: note, from the vhost configuration Apache now runs with, which PHP socket each domain was
+     * given ({"domains": {"example.com": "/run/sentora-php/web1-7.1.sock", ...}, "time": ...}), for
+     * LiveState(). Readable by the panel; it holds no secrets.
+     *
+     * @param string $config The vhost configuration text.
+     * @return void
+     */
+    static function RecordLive($config)
+    {
+        $map = array();
+        foreach (preg_split('/<virtualhost\b/i', (string) $config) as $block) {
+            if (preg_match('/^\s*ServerName\s+(\S+)/mi', $block, $n) && preg_match('#SetHandler\s+"proxy:unix:([^|"]+)\|#i', $block, $h)) {
+                $map[strtolower($n[1])] = $h[1];
+            }
+        }
+        $dir = dirname(self::LIVE_FILE);
+        if (!is_dir($dir)) {
+            return;
+        }
+        $tmp = self::LIVE_FILE . '.new';
+        if (@file_put_contents($tmp, json_encode(array('domains' => $map, 'time' => time()))) !== false) {
+            @chmod($tmp, 0644);
+            @rename($tmp, self::LIVE_FILE);
+        }
+    }
+
+    /**
+     * The exact PHP version of a version that is installed here, e.g. '7.1.33' for '7.1'.
+     *
+     * @param string $version 'major.minor'.
+     * @return string The full version, or the same 'major.minor' when it can not be read.
+     */
+    static function ExactVersion($version)
+    {
+        if ($version === self::DefaultVersion()) {
+            return PHP_VERSION;
+        }
+        $info = @file_get_contents(self::BASE_DIR . $version . '/BUILD-INFO', false, null, 0, 200);
+        return ($info !== false && preg_match('/PHP (' . preg_quote($version, '/') . '\.\d+)/', $info, $m)) ? $m[1] : $version;
+    }
+
+    /**
+     * Which PHP a domain really runs on, for the badge next to its PHP choice: the version Apache was
+     * given for it (LIVE_FILE), whether that matches the choice, and whether that PHP's socket is there.
+     *
+     * @param string $domain The domain name.
+     * @param string $chosen The domain's choice ('' = the default).
+     * @return array{state: string, text: string} state: 'ok', 'pending', 'down' or 'unknown'.
+     */
+    static function LiveState($domain, $chosen)
+    {
+        static $live = null;
+        if ($live === null) {
+            $j = @json_decode((string) @file_get_contents(self::LIVE_FILE), true);
+            $live = is_array($j) && isset($j['domains']) && is_array($j['domains']) ? $j['domains'] : array();
+        }
+        $want = self::Effective((string) $chosen);
+        $sock = isset($live[strtolower($domain)]) ? (string) $live[strtolower($domain)] : '';
+        if ($sock === '') {
+            return array('state' => 'unknown', 'text' => '');
+        }
+        if (preg_match('#^/run/php/web\d+\.sock$#', $sock)) {
+            $runs = self::DefaultVersion();
+        } elseif (preg_match('#^' . preg_quote(self::SOCKET_DIR, '#') . 'web\d+-(\d+\.\d+)\.sock$#', $sock, $m)) {
+            $runs = $m[1];
+        } else {
+            return array('state' => 'unknown', 'text' => '');
+        }
+        if ($runs !== $want) {
+            return array('state' => 'pending', 'text' => str_replace('%s', $runs, ui_language::translate('Changing within 5 minutes (PHP %s until then)')));
+        }
+        if (!file_exists($sock)) {
+            return array('state' => 'down', 'text' => str_replace('%s', $runs, ui_language::translate('PHP %s is not running')));
+        }
+        return array('state' => 'ok', 'text' => str_replace('%s', self::ExactVersion($runs), ui_language::translate('Running PHP %s')));
+    }
+
 }
 
 ?>

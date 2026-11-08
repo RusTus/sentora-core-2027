@@ -34,6 +34,10 @@ if (ui_module::CheckModuleEnabled('Apache Config')) {
         echo "Apache Config: old certificate settings not checked (" . $e->getMessage() . ")" . fs_filehandler::NewLine();
     }
     TriggerApacheQuotaUsage();
+    // (the domains' live PHP, for the badges, from the file Apache runs with when not noted yet)
+    if (!is_file(sys_phpversions::LIVE_FILE) && is_readable((string) ctrl_options::GetSystemOption('apache_vhost'))) {
+        sys_phpversions::RecordLive((string) file_get_contents((string) ctrl_options::GetSystemOption('apache_vhost')));
+    }
     // Write the vhosts once more if they do not have the request guard yet (servers
     // updated from an earlier version), or its account map is missing
     $vhostFile = (string) ctrl_options::GetSystemOption('apache_vhost');
@@ -1377,6 +1381,8 @@ function WriteVhostConfigFile() {
 	// stops the running Apache): it must still run, or the previous file goes back
 	if (ApacheIsRunning()) {
 		sys_apachecustom::Clear('apache');
+		// which PHP each domain was given, for the badge next to its PHP choice
+		sys_phpversions::RecordLive($line);
 		if (isset($BackupFileName) && is_file($BackupFileName)) {
 			unlink($BackupFileName);
 		}
