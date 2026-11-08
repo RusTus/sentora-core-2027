@@ -42,6 +42,11 @@ if (ui_module::CheckModuleEnabled('Apache Config')) {
     }
     // ... or a domain still sends its PHP settings without a folder limit (written before 2027.19:
     // it then ran with the limit of another of the account's domains)
+    // ... or a domain on an extra PHP version still uses the socket all extra versions shared (before 2027.24)
+    if (!$guardMissing && preg_match('#proxy:unix:/run/sentora-php/web[0-9]+\.sock\|#', (string) @file_get_contents($vhostFile))) {
+        echo "Apache Config: every PHP version gets its own socket per account..." . fs_filehandler::NewLine();
+        $guardMissing = true;
+    }
     if (!$guardMissing && strpos((string) @file_get_contents($vhostFile), 'PHP_ADMIN_VALUE "upload_tmp_dir=') !== false) {
         echo "Apache Config: every domain gets its own PHP folder limit..." . fs_filehandler::NewLine();
         $guardMissing = true;

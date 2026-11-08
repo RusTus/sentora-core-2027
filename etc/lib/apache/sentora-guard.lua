@@ -57,6 +57,7 @@ function sentora_guard(r)
         local account = root:sub(#hosted + 1):match("^([^/]+)/")
         local id = account and cache.ids[account]
         local sock = handler:match("^proxy:unix:/run/php/web(%d+)%.sock|")
+            or handler:match("^proxy:unix:/run/sentora%-php/web(%d+)%-%d+%.%d+%.sock|")
             or handler:match("^proxy:unix:/run/sentora%-php/web(%d+)%.sock|")
         if not id or sock ~= id then
             r:warn("Sentora: refused PHP handler '" .. handler .. "' for account " .. tostring(account) .. ": " .. (r.uri or ""))

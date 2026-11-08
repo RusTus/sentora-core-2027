@@ -87,9 +87,11 @@ class sys_accountphp
      */
     static function Socket($accountId, $version)
     {
+        // (each extra version its own: they all shared web<id>.sock, so an account with sites on two
+        // extra versions, 8.2 and 7.1, had two pools on one socket and only the first one started)
         return ($version === self::DefaultVersion())
             ? '/run/php/' . self::UserName($accountId) . '.sock'
-            : sys_phpversions::SOCKET_DIR . self::UserName($accountId) . '.sock';
+            : sys_phpversions::SOCKET_DIR . self::UserName($accountId) . '-' . $version . '.sock';
     }
 
     /**
@@ -154,7 +156,7 @@ class sys_accountphp
     static function ApacheGuard($accountId)
     {
         $nl = fs_filehandler::NewLine();
-        $notOwn = '"%{HANDLER} !~ m#^proxy:unix:/run/(php|sentora-php)/web' . (int) $accountId . '\\.sock\\|#"';
+        $notOwn = '"%{HANDLER} !~ m#^proxy:unix:/run/(php|sentora-php)/web' . (int) $accountId . '(-[0-9]+\\.[0-9]+)?\\.sock\\|#"';
         return '<Location "/">' . $nl
             . '    # only this account\'s own PHP pools (see sys_accountphp::ApacheGuard)' . $nl
             . '    ProxyFCGISetEnvIf ' . $notOwn . ' !PHP_ADMIN_VALUE' . $nl
