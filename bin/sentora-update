@@ -187,6 +187,18 @@ st_init() { # mode
 say()  { st info "$*"; [ "$UI_LOGGING" = 1 ] && echo "$*"; if [ -n "$UI_TITLE" ]; then ui_line "         $C_DIM$*$C_RESET"; else ui_info "$*"; fi; }
 warn() { st warn "$*"; [ "$UI_LOGGING" = 1 ] && echo "WARNING: $*"; UI_STEP_WARN=1; UI_WARNS=$(( UI_WARNS + 1 )); if [ -n "$UI_TITLE" ]; then ui_line "         $C_YELLOW$*$C_RESET"; else ui_warn "$*"; fi; }
 # die: the step fails, and the screen says where it stopped and what to do
+# Download a file, trying again when GitHub's download host refuses for a moment (it answers 5xx or
+# 429 at once now and then, which looked like a broken update); FETCH_ERR keeps wget's reason
+FETCH_ERR=""
+fetch() {
+    local try out
+    for try in 1 2 3 4; do
+        out=$(wget -nv -T 30 -O "$2" "$1" 2>&1) && { FETCH_ERR=""; return 0; }
+        FETCH_ERR=$(printf '%s\n' "$out" | grep -v '^\s*$' | tail -1)
+        [ "$try" -lt 4 ] && sleep $(( try * 5 ))
+    done
+    return 1
+}
 die()  {
     [ "$UI_LOGGING" = 1 ] && echo "ERROR: $*"
     st fail "$*" "${B:-}"
@@ -434,7 +446,7 @@ if [ "$MODE" = check ]; then
     fi
     ui_info "GitHub lists no checksum: downloading the core to compare"
     TMP=$(mktemp -d); trap 'ui_ticker_stop; rm -rf "$TMP"' EXIT
-    wget -q -O "$TMP/$ZIP" "$DL" || die "could not download $DL"
+    fetch "$DL" "$TMP/$ZIP" || die "could not download $DL: $FETCH_ERR"
     if [ "$(sha256sum "$TMP/$ZIP" | cut -d' ' -f1)" = "$LAST" ]; then
         ui_ok "Up to date: installed ${INSTALLED:-?}"; echo >&3; exit 0
     fi
@@ -462,7 +474,7 @@ fi
 say "installed: ${INSTALLED:-not recorded}"
 
 ui_step "Downloading the core"
-wget -q -O "$TMP/$ZIP" "$DL" || die "could not download $DL"
+fetch "$DL" "$TMP/$ZIP" || die "could not download $DL: $FETCH_ERR"
 say "$ZIP, $(du -h "$TMP/$ZIP" | cut -f1)"
 
 ui_step "Checking the download"
