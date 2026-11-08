@@ -12,7 +12,7 @@
  * @package Sentora
  * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
  *
- * Written by RusTus, 2026-11-07
+ * Written by RusTus, 2026-11-08
  */
 return array(
     '	Path to named-compilezone bind utility.' => '	Caminho para o utilitário named-compilezone do BIND.',
@@ -1137,7 +1137,7 @@ return array(
     'Let a password manager remember it for you.' => 'Deixe um gerenciador de senhas lembrá-la por você.',
     'Let clients copy their backups (websites and databases) to their own FTP server (Advanced > Backup).' => 'Permitir que os clientes copiem seus backups (sites e bancos de dados) para o próprio servidor FTP (Avançado > Backup).',
     'Let users change their spam settings' => 'Permitir que os usuários alterem suas configurações de spam',
-    'Let\'s Encrypt checks that the domain is yours by reaching it over the internet, so its DNS must point to this server and the site must answer on port 80. Each certificate lasts 90 days and is renewed 30 days before it ends.' => 'O Let\'s Encrypt verifica que o domínio é seu acessando-o pela internet, então o DNS dele deve apontar para este servidor e o site deve responder na porta 80. Cada certificado dura 90 dias e é renovado 30 dias antes de expirar.',
+    'Let\'s Encrypt checks that the domain is yours by reaching it over the internet, so its DNS must point to this server and the site must answer on port 80. Certificates renew by themselves when a third of their lifetime is left (30 days of today\'s 90).' => 'O Let\'s Encrypt verifica que o domínio é seu acessando-o pela internet, então o DNS dele deve apontar para este servidor e o site deve responder na porta 80. Os certificados são renovados automaticamente quando resta um terço da sua validade (30 dos 90 dias atuais).',
     'Let\'s Encrypt did not revoke the certificate. It is still in place; try again later, or delete it instead.' => 'O Let\'s Encrypt não revogou o certificado. Ele continua ativo; tente novamente mais tarde ou exclua-o.',
     'Letters, digits and dashes, not at the start or end' => 'Letras, dígitos e hífens, não no início nem no fim',
     'Letters, digits and dashes, under one of your own domains.' => 'Letras, dígitos e hifens, sob um dos seus domínios.',

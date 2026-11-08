@@ -49,7 +49,7 @@
                 <@ IconInfo @>
                 <div>
                     <b><: Free certificates that renew by themselves :></b>
-                    <: Let's Encrypt checks that the domain is yours by reaching it over the internet, so its DNS must point to this server and the site must answer on port 80. Each certificate lasts 90 days and is renewed 30 days before it ends. :>
+                    <: Let's Encrypt checks that the domain is yours by reaching it over the internet, so its DNS must point to this server and the site must answer on port 80. Certificates renew by themselves when a third of their lifetime is left (30 days of today's 90). :>
                     <a href="https://letsencrypt.org/" target="_blank" rel="noopener noreferrer"><: About Let's Encrypt :></a>
                 </div>
             </div>

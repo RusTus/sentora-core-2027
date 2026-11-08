@@ -12,7 +12,7 @@
  * @package Sentora
  * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
  *
- * Written by RusTus, 2026-11-07
+ * Written by RusTus, 2026-11-08
  */
 return array(
     '	Path to named-compilezone bind utility.' => '	Путь к утилите BIND named-compilezone.',
@@ -1137,7 +1137,7 @@ return array(
     'Let a password manager remember it for you.' => 'Пусть его запоминает менеджер паролей.',
     'Let clients copy their backups (websites and databases) to their own FTP server (Advanced > Backup).' => 'Разрешить клиентам копировать свои резервные копии (сайты и базы данных) на собственный FTP-сервер (Дополнительно > Резервное копирование).',
     'Let users change their spam settings' => 'Разрешить пользователям менять настройки спама',
-    'Let\'s Encrypt checks that the domain is yours by reaching it over the internet, so its DNS must point to this server and the site must answer on port 80. Each certificate lasts 90 days and is renewed 30 days before it ends.' => 'Let\'s Encrypt проверяет, что домен принадлежит вам, обращаясь к нему через интернет, поэтому его DNS должен указывать на этот сервер, а сайт должен отвечать на порту 80. Каждый сертификат действует 90 дней и продлевается за 30 дней до окончания.',
+    'Let\'s Encrypt checks that the domain is yours by reaching it over the internet, so its DNS must point to this server and the site must answer on port 80. Certificates renew by themselves when a third of their lifetime is left (30 days of today\'s 90).' => 'Let\'s Encrypt проверяет, что домен принадлежит вам, обращаясь к нему через интернет, поэтому его DNS должен указывать на этот сервер, а сайт должен отвечать на порту 80. Сертификаты продлеваются сами, когда остаётся треть срока их действия (30 из нынешних 90 дней).',
     'Let\'s Encrypt did not revoke the certificate. It is still in place; try again later, or delete it instead.' => 'Let\'s Encrypt не отозвал сертификат. Он по-прежнему действует; повторите попытку позже или удалите его.',
     'Letters, digits and dashes, not at the start or end' => 'Буквы, цифры и дефисы (не в начале и не в конце)',
     'Letters, digits and dashes, under one of your own domains.' => 'Буквы, цифры и дефисы, в одном из ваших доменов.',

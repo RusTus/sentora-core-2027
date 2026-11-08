@@ -12,7 +12,7 @@
  * @package Sentora
  * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
  *
- * Written by RusTus, 2026-11-07
+ * Written by RusTus, 2026-11-08
  */
 return array(
     '	Path to named-compilezone bind utility.' => '	Pfad zum BIND-Hilfsprogramm named-compilezone.',
@@ -1137,7 +1137,7 @@ return array(
     'Let a password manager remember it for you.' => 'Lassen Sie es von einem Passwort-Manager speichern.',
     'Let clients copy their backups (websites and databases) to their own FTP server (Advanced > Backup).' => 'Kunden erlauben, ihre Backups (Websites und Datenbanken) auf ihren eigenen FTP-Server zu kopieren (Erweitert > Backup).',
     'Let users change their spam settings' => 'Benutzern erlauben, ihre Spam-Einstellungen zu ändern',
-    'Let\'s Encrypt checks that the domain is yours by reaching it over the internet, so its DNS must point to this server and the site must answer on port 80. Each certificate lasts 90 days and is renewed 30 days before it ends.' => 'Let\'s Encrypt prüft über das Internet, ob die Domain Ihnen gehört. Daher muss ihr DNS auf diesen Server zeigen und die Website auf Port 80 antworten. Jedes Zertifikat gilt 90 Tage und wird 30 Tage vor Ablauf verlängert.',
+    'Let\'s Encrypt checks that the domain is yours by reaching it over the internet, so its DNS must point to this server and the site must answer on port 80. Certificates renew by themselves when a third of their lifetime is left (30 days of today\'s 90).' => 'Let\'s Encrypt prüft über das Internet, ob die Domain Ihnen gehört. Daher muss ihr DNS auf diesen Server zeigen und die Website auf Port 80 antworten. Zertifikate werden automatisch erneuert, wenn noch ein Drittel ihrer Laufzeit übrig ist (30 der heutigen 90 Tage).',
     'Let\'s Encrypt did not revoke the certificate. It is still in place; try again later, or delete it instead.' => 'Let\'s Encrypt hat das Zertifikat nicht widerrufen. Es ist weiterhin aktiv; versuchen Sie es später erneut oder löschen Sie es stattdessen.',
     'Letters, digits and dashes, not at the start or end' => 'Buchstaben, Ziffern und Bindestriche, nicht am Anfang oder Ende',
     'Letters, digits and dashes, under one of your own domains.' => 'Buchstaben, Ziffern und Bindestriche, unter einer Ihrer eigenen Domains.',

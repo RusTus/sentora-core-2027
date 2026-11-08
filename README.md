@@ -286,9 +286,9 @@ Domains run on the server's own PHP 8.5 unless they choose another version. **PH
 | 8.4 | 2028-12-31 | Bundle in `/opt/sentora-php/8.4` |
 | 8.3 | 2027-12-31 | Bundle in `/opt/sentora-php/8.3` |
 | 8.2 | 2026-12-31 | Bundle in `/opt/sentora-php/8.2` |
-| 7.1 | ended | Only for moving old sites: switched off, and asks before switching on |
+| 7.1 | ended | Only for moving old sites: switched off, and asks before switching on. Also has intl and xsl (Magento 2) and the add-ons apcu, redis, memcached, imagick and imap |
 
-Domain lists mark a version whose fixes have ended (red) or end within 90 days (yellow); each day the daemon logs those domains and sends their owners a notice. Every version has LDAP, for sites that log users in against Active Directory. Bundles are updated with `sentora-php-install <version>` (see [Updating](#updating)).
+Domain lists mark a version whose fixes have ended (red) or end within 90 days (yellow); each day the daemon logs those domains and sends their owners a notice. Every version has LDAP, for sites that log users in against Active Directory. PHP 7.1 carries its own OpenSSL 1.1, libxml2 and ICU, kept private to it; its add-ons use Ubuntu's own libraries and are switched on only when they load (`sentora-php-install 7.1` does that, and the installer). Each account's pool runs a set number of PHP processes (**PHP processes per account** in Apache Config, 10 by default): a busy shop can use them all, and PHP's log then says *server reached max_children*. Bundles are updated with `sentora-php-install <version>` (see [Updating](#updating)).
 
 **Older logins.** PHP 7.1 can't log in to MySQL 8.4 with its default method, so the MySQL users of sites on PHP 7.1 use the older `mysql_native_password`, which MySQL only allows once it is switched on (the move from an old server does that). The *Older logins* card on PHP Versions lists those users (with **Use the modern login**, which keeps each password) and the mailboxes still on old MD5 passwords, and switches MySQL's older method off once no user needs it. MySQL Users marks them *Older login (PHP 7.1)*, and `sentora-post-install-check` warns while the method is on. Move each site to PHP 8, then retire its older login.
 
@@ -296,7 +296,17 @@ Domain lists mark a version whose fixes have ended (red) or end within 90 days (
 
 The installer makes a self-signed certificate (10 years, for the panel name and the server's IPs) in `/etc/sentora/configs/ssl/`. Browsers and mail programs warn about it until you replace it.
 
-**Sencrypt SSL** issues and renews Let's Encrypt certificates (renewed daily when they expire within 30 days), makes self-signed ones, takes third-party certificates and makes certificate requests (CSRs). An administrator can secure the panel's own name, as soon as it resolves to this server from the internet and port 80 is reachable. Within 5 minutes the daemon copies the panel's certificate to Postfix, Dovecot and ProFTPD too (the self-signed one is kept as `selfsigned.*`). To use your own CA instead, replace `sentora.crt`, `sentora.key` and `sentora-chain.crt` in `/etc/sentora/configs/ssl/` and reload the services. The server monitor alerts 14 days before a certificate expires.
+**Sencrypt SSL** issues and renews Let's Encrypt certificates (checked daily and renewed when a third of a certificate's lifetime is left: 30 days of today's 90, and still right when Let's Encrypt moves to 64 days in February 2027 and 45 in February 2028), makes self-signed ones, takes third-party certificates and makes certificate requests (CSRs). An administrator can secure the panel's own name, as soon as it resolves to this server from the internet and port 80 is reachable. Within 5 minutes the daemon copies the panel's certificate to Postfix, Dovecot and ProFTPD too (the self-signed one is kept as `selfsigned.*`). To use your own CA instead, replace `sentora.crt`, `sentora.key` and `sentora-chain.crt` in `/etc/sentora/configs/ssl/` and reload the services. The server monitor alerts 14 days before a certificate expires.
+
+A main domain's certificate covers its `www.` name too, unless public DNS has no address for `www.` (then it covers the domain only, and Sencrypt says so: one name Let's Encrypt can not check fails the whole request). It works behind a router: the panel's IP may be a local one. When Let's Encrypt refuses, Sencrypt says why in plain words with what to do, followed by Let's Encrypt's own message:
+
+| Let's Encrypt found | Usually | What to do |
+| --- | --- | --- |
+| No address in public DNS (NXDOMAIN, *no valid A records*) | The name, often `www.`, has no DNS record | Add an A record pointing to the server's public address (behind a router: the router's) |
+| Could not connect (*Timeout during connect*, *Connection refused*) | Port 80 is not reachable from the internet | Forward port 80 to the server and allow it in any firewall; renewals need it too |
+| Wrong answer (*Invalid response … 404*) | DNS points to another server, or the site blocks `/.well-known/acme-challenge/` | Fix the DNS record or the `.htaccess` rule or redirect |
+| Too many attempts (*rateLimited*) | Several failures or certificates in a short time | Wait until the time it names, fix the cause first |
+| CAA record, or an internal name such as `.local` | The domain does not allow Let's Encrypt, or is not public | Add `0 issue "letsencrypt.org"`; internal names need a self-signed certificate |
 
 ## Email
 
@@ -419,7 +429,7 @@ For the few things that can't wait 5 minutes there is `zsudo`, a small root prog
 ## How accounts are kept apart
 
 - **One Linux user per account**, `web<account id>`, with its own group, no shell, and a home folder `/var/sentora/hostdata/<account>/` (with `public_html`, `backups`, `tmp`). The folder belongs to that user and is closed to everyone else; access lists give the panel read-write and Apache read-only access. `hostdata` itself is `711`, so no one can list the accounts.
-- **One PHP-FPM pool per account and PHP version**, running as the account's user, with `open_basedir` set to its home and its own temporary, upload and session folders (`/run/php/web<id>.sock`, or `/run/sentora-php/web<id>.sock` for extra versions).
+- **One PHP-FPM pool per account and PHP version**, running as the account's user, with `open_basedir` set to its home and its own temporary, upload and session folders (`/run/php/web<id>.sock`, or `/run/sentora-php/web<id>-<version>.sock` for extra versions, each its own). A domain with *open_basedir* on is limited to its own folder; every request names its limit, so a worker never keeps another domain's.
 - **FTP logins and cron jobs** run as the account's user (cron jobs also with a time limit and lower priority).
 - **Every hour** the daemon gives files back to the account's user (files written by the panel, root or Apache) and closes the folders again.
 - **Log analysers** (GoAccess, Webalizer, Visitors) run as `sentora-stats`, which can read nothing else; root hands them the log lines.
@@ -579,7 +589,7 @@ What the move takes care of:
 - **FollowSymLinks in a domain's own Apache settings** is switched off here; `--allow-symlinks` switches *Allow FollowSymLinks* on for exactly the domains that need it (see [Websites and Apache](#websites-and-apache)).
 - **Laravel apps** (Snipe-IT and the like) get the caches made on the old server cleared (cached settings, when the app has a `.env`, and compiled templates), so they read their `.env` again here.
 - **Magento and OpenCart shops** get their cache files cleared (Magento 2: `var/cache` and `var/page_cache`; Magento 1: `var/cache` and `var/full_page_cache`; OpenCart: the `cache.*` files in its cache folder), which the shop rebuilds on its next page. Magento 2's `generated/` and `pub/static` are left alone (a shop in production mode can't rebuild them by itself); a shop that keeps its cache in Redis is named, with the command to flush it.
-- **Never moved:** the old panel itself: its modules (custom ones included), add-ons, settings, themes and translations.
+- **Never moved:** the old panel itself: its modules (custom ones included), add-ons, settings, themes and translations; and databases or MySQL users made outside the old panel (by hand in MySQL): move those with `mysqldump` and create the user again (with `mysql_native_password` for a site on PHP 7.1).
 
 ## Logs
 
@@ -617,6 +627,9 @@ Start with `sentora-post-install-check`: most problems show up there as a FAIL l
 | The panel says *Not Found* on the server's IP after the IP changed | The panel's IP is still the old one | Wait 5 minutes (the daemon follows it); with several local addresses: `setso --set server_ip <address> && setso --set apache_changed true && php /etc/sentora/panel/bin/daemon.php` |
 | A site's Active Directory (LDAP) sign-in fails, or names ending in `.local` don't resolve on the server (osTicket: error 500, `bind() on null`) | Ubuntu's DNS helper (`systemd-resolved`, 127.0.0.53) treats `.local` as local-network names and never asks your DNS servers | Send your domain to your DNS servers, as root (your domain and DNS servers): `mkdir -p /etc/systemd/resolved.conf.d && printf '[Resolve]\nDNS=172.16.0.10 172.16.16.10\nDomains=example.local\nMulticastDNS=no\n' > /etc/systemd/resolved.conf.d/ad.conf && systemctl restart systemd-resolved`. Check with `dig +short _ldap._tcp.example.local SRV`. PHP 7.1 writes the typed password into the error log when that sign-in crashes: empty the site's `-error.log` afterwards |
 | A site moved from Sentora 1.0.x says *redirected you too many times* | Sentora 1.0.x's Sencrypt kept the certificate in the domain's Extra directives on port 443; here SSL lives in its SSL settings | Nothing: the daemon takes the certificate lines out within 5 minutes. When the certificate's files are on the server they become its SSL settings; else the site runs on http until you request a certificate in Sencrypt SSL |
+| `sentora-update` stops at *Downloading the core* | GitHub's download host refused for a while (it tries four times first; the message gives wget's reason) | Run it again later; [githubstatus.com](https://www.githubstatus.com) shows GitHub problems |
+| A moved site shows a blank page; its log says *Access denied for user* | Its database or MySQL user was made outside the old panel, so the move did not take it | `mysqldump` it on the old server, load it here and create the user with the password the site's settings use |
+| Sites slow down under load; `php<version>-fpm.log` says *server reached max_children* | The account's PHP processes are all busy | Raise **PHP processes per account** in Apache Config (each busy one uses 50 to 100 MB of memory) |
 | An update went wrong | | `sentora-update --rollback` |
 | Locked out by two-factor (administrator) | Lost phone and codes | `setso --set twofactor_enabled disabled` as root |
 
@@ -646,7 +659,7 @@ Both repositories have one release with the tag **`current`**; new installs, `se
 | [sentora-core-2027](https://github.com/RusTus/sentora-core-2027/releases) | `sentora-core-2027.zip` (the panel) |
 | [sentora-installers-2027](https://github.com/RusTus/sentora-installers-2027/releases) | `sentora2027-ub26.04` (the installer), `sentora-installers-2027.zip`, `sentora-php-<version>-ubuntu26.04-amd64.tar.gz`, `sentora-migrate-export`, `sentora-smoke-test`, `sentora-web-probe`, `sentora-tls-check.sh`, `testssl_sh-3_2_5.zip` |
 
-**Making a release.** Push to `master2027`, add the changes to the change log as usual (one file, written as always), bump `VERSION` and add a `- Release <version>:` line to the change log, then in each repository open **Actions > Release > Run workflow**. The workflow:
+**Making a release.** Push to `master2027`, add the changes to the change log as usual (one file, written as always), run `php .github/scripts/stamp-rustus.php` in the core (it keeps the *Updated by RusTus* / *Written by RusTus* line and its date in the header of every PHP file that differs from Sentora 2.0.2), bump `VERSION` and add a `- Release <version>:` line to the change log, then in each repository open **Actions > Release > Run workflow**. The workflow:
 
 1. builds the files from `master2027` (the zips with `git archive`, the scripts from their only copy);
 2. uploads a file to `current` only when its content changed, so a run with nothing new makes no update for servers (*force* uploads anyway), and prints each file's SHA-256;
@@ -654,7 +667,7 @@ Both repositories have one release with the tag **`current`**; new installs, `se
 4. rewrites the `current` release page: the title `Sentora-<VERSION>`, What's new, and this README;
 5. makes a release for the version, once (tag `v<VERSION>`), with What's new, the whole `CHANGELOG.md` and a copy of every file of `current`. The Releases page so lists every version with what changed in it and its files; later runs of the same version replace the files they changed there too.
 
-The README and the change log are not in the core zip, so editing them never makes an update for servers. The PHP bundles and the testssl zip are replaced by hand on the installers release (a version release made after that copies them).
+The README and the change log are not in the core zip, so editing them never makes an update for servers. The PHP bundles and the testssl zip are replaced by hand on the installers release (a version release made after that copies them). Upload them to `current` itself, from https://github.com/RusTus/sentora-installers-2027/releases/tag/current > Edit: the `current` release and the newest version release carry the same title, so the Releases page alone does not tell them apart.
 
 ## Repository layout
 

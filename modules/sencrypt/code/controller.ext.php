@@ -2178,15 +2178,10 @@ class module_controller extends ctrl_module {
 	 * @return array{0: string, 1: string} Two-letter country code (or '') and region (or '').
 	 */
 	static function ServerLocation() {
-		$ip = trim((string) ctrl_options::GetSystemOption('server_ip'));
-		$public = filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) ? $ip : '';
-		$ctx = stream_context_create(array('http' => array('timeout' => 8)));
-		$a = json_decode((string) @file_get_contents('http://ip-api.com/json/' . $public, false, $ctx));
-		if (!$a || !isset($a->status) || $a->status !== 'success') {
-			return array('', '');
-		}
-		return array(preg_match('/^[A-Z]{2}$/', (string) $a->countryCode) ? (string) $a->countryCode : '', (string) $a->regionName);
+		require_once 'modules/sencrypt/code/Lescript.php';
+		return \Analogic\ACME\Lescript::serverLocation();
 	}
+
 
 	/**
 	 * Let's Encrypt's answer in plain words, with what to do (Lescript::explain()).
