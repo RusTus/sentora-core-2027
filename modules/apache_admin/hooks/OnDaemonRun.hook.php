@@ -17,6 +17,12 @@ if (ui_module::CheckModuleEnabled('Apache Config')) {
     // Account users, PHP pools, FTP owners and cron jobs: every run (cheap when
     // nothing changed), so a new account, cron job or FTP login is ready within 5 minutes
     sys_accountphp::Sync();
+    // The server's address changed (a new IP): the panel's IP alias and setting follow it
+    try {
+        sys_serverip::Follow();
+    } catch (Exception $e) {
+        echo "Server address: not checked (" . $e->getMessage() . ")" . fs_filehandler::NewLine();
+    }
     echo "Apache Admin module ENABLED..." . fs_filehandler::NewLine();
     TriggerApacheQuotaUsage();
     // Write the vhosts once more if they do not have the request guard yet (servers

@@ -396,9 +396,11 @@ Most of what the panel changes is done by the **daemon**: `bin/daemon.php`, run 
 
 | When | What |
 | --- | --- |
-| Every 5 minutes | Account users, PHP-FPM pools, FTP owners and cron jobs brought in line; Apache's settings rewritten, tested and reloaded when something changed; DNS zones written; queued module installs, widget installs, off-server backup and restore requests carried out; client FTP backups due; SOGo, SpamAV and Matomo settings applied; FTP logins of switched-off clients stopped; disk use and bandwidth counted; Let's Encrypt certificates copied to mail and FTP; the server checked for alerts; the public IP checked (AutoIP) |
+| Every 5 minutes | Account users, PHP-FPM pools, FTP owners and cron jobs brought in line; Apache's settings rewritten, tested and reloaded when something changed; DNS zones written; queued module installs, widget installs, off-server backup and restore requests carried out; client FTP backups due; SOGo, SpamAV and Matomo settings applied; FTP logins of switched-off clients stopped; disk use and bandwidth counted; Let's Encrypt certificates copied to mail and FTP; the server checked for alerts; the public IP checked (AutoIP); the server's own addresses checked (see below) |
 | Every hour | Account files given back to their owner and folders closed again; GoAccess and Matomo fed the new log lines; the check for a newer panel release |
 | Every day | Scheduled account backups and purging old ones; Let's Encrypt renewals; PHP end-of-support notices |
+
+**When the server's IP changes.** The websites' Apache settings name their domains, so they keep working on a new IP. Two things depend on the address itself: the panel answering on the server's IP, and the panel's IP setting (Sentora Config, used for new DNS records). The daemon follows a change by itself within 5 minutes. It rewrites Apache's settings whenever the server's addresses change. When the panel's IP is a local address the server no longer has and it now has exactly one local address, the panel's IP becomes that one, and the DNS records that pointed to the old address follow. That is logged in `alerts.log` and emailed to the alert address. A public panel IP (reached through a router) is left to AutoIP. With several local addresses it changes nothing and says so once, with the command to run.
 
 To run it by hand, including the hourly part: `setso --set daemon_hourrun 0 && php /etc/sentora/panel/bin/daemon.php`.
 
@@ -598,6 +600,7 @@ Start with `sentora-post-install-check`: most problems show up there as a FAIL l
 | A mailbox password is lost | Mailbox passwords are never shown | Set a new one in Mail > Mailboxes |
 | A repository shows FAILED in Repo Browser | It can't be reached, or has no `packages.txt` | Check the address in a browser, then Retry |
 | The daemon log stops part way with an SQL error | A database error ends the run | Fix it, then run `php /etc/sentora/panel/bin/daemon.php` |
+| The panel says *Not Found* on the server's IP after the IP changed | The panel's IP is still the old one | Wait 5 minutes (the daemon follows it); with several local addresses: `setso --set server_ip <address> && setso --set apache_changed true && php /etc/sentora/panel/bin/daemon.php` |
 | An update went wrong | | `sentora-update --rollback` |
 | Locked out by two-factor (administrator) | Lost phone and codes | `setso --set twofactor_enabled disabled` as root |
 
