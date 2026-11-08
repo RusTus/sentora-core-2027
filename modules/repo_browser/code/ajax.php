@@ -196,9 +196,13 @@ function AjaxReturnUpdate($full)
             . '<p>' . $h(ui_language::translate('This usually means the module developer did not update the version number in the database when the module was updated. If you just upgraded this module, Repo Browser can correct the number.')) . '</p>'
             . '<p><button class="btn btn-default btn-sm" type="submit" name="inUpdateVersionDB" value="' . $h($local['version'] . ':::' . $module . ':::' . $installed) . '">' . $h(ui_language::translate('Fix the version number')) . '</button></p></div>';
     }
+    // (already queued: say so instead of offering the button again)
+    $queued = repo_browser_helper::Pending($module) === 'upgrade';
     $line .= '<div class="rb-notice"><b>' . str_replace('%s', $h($latest), $h(ui_language::translate('Version %s is available'))) . '</b>'
         . (isset($info['updatedesc']) ? '<p>' . $h($info['updatedesc']) . '</p>' : '')
-        . '<button class="btn btn-primary btn-sm" type="submit" name="inUpdateModule" value="' . $h($repo . ':::' . $module) . '">' . $h(ui_language::translate('Update')) . '</button></div>';
+        . ($queued ? '<p><b>' . $h(ui_language::translate('Upgrade queued: the daemon runs it within 5 minutes.')) . '</b></p>'
+            : '<button class="btn btn-primary btn-sm" type="submit" name="inUpdateModule" value="' . $h($repo . ':::' . $module) . '">' . $h(ui_language::translate('Update')) . '</button>')
+        . '</div>';
     echo $line;
 }
 
