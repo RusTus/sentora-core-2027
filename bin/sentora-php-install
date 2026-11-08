@@ -96,6 +96,8 @@ if [ "$UPDATE" = 1 ]; then
     done
     cp "$P/BUILD-INFO" "$WORK/BUILD-INFO.old" 2> /dev/null || true
     cp "$NEW/BUILD-INFO" "$P/BUILD-INFO" 2> /dev/null || true
+    # add-on extensions the bundle brings (PHP 7.1): only those that load are switched on
+    if [ -x "$P/bin/sentora-php-addons" ]; then echo "Add-ons:"; "$P/bin/sentora-php-addons"; fi
     if [ "$WAS_ON" = 0 ] || systemctl start "$SERVICE"; then
         for d in bin sbin lib include php; do rm -rf "${P:?}/${d:?}.old"; done
         echo "Updated: $OLD  ->  $("$P/sbin/php-fpm" -v | head -1)"
@@ -107,6 +109,11 @@ if [ "$UPDATE" = 1 ]; then
         [ -d "$P/$d.old" ] && { rm -rf "${P:?}/${d:?}"; mv "$P/$d.old" "$P/$d"; }
     done
     cp "$WORK/BUILD-INFO.old" "$P/BUILD-INFO" 2> /dev/null || true
+    # (add-ons the old files do not have are switched off again)
+    for f in "$P"/etc/conf.d/30-*.ini; do
+        [ -f "$f" ] || continue
+        so=$(sed -n 's/^extension=//p' "$f"); [ -f "$("$P/bin/php-config" --extension-dir)/$so" ] || rm -f "$f"
+    done
     systemctl start "$SERVICE" || true
     exit 1
 fi
@@ -128,6 +135,7 @@ sed -i "s|^;upload_tmp_dir =.*|upload_tmp_dir = $DATA/temp/|" "$P/etc/php.ini"
 sed -i "s|^mysqli.default_socket =.*|mysqli.default_socket = /var/run/mysqld/mysqld.sock|" "$P/etc/php.ini"
 sed -i "s|^pdo_mysql.default_socket *=.*|pdo_mysql.default_socket = /var/run/mysqld/mysqld.sock|" "$P/etc/php.ini"
 echo "zend_extension=opcache.so" > "$P/etc/conf.d/10-opcache.ini"
+if [ -x "$P/bin/sentora-php-addons" ]; then echo "Add-ons:"; "$P/bin/sentora-php-addons"; fi
 cat > "$P/etc/php-fpm.conf" <<EOF_FPM
 [global]
 pid = /run/sentora-php/php$MM-fpm.pid
