@@ -669,7 +669,7 @@ Both repositories have one release with the tag **`current`**; new installs, `se
 4. rewrites the `current` release page: the title `Sentora-<VERSION>`, What's new, and this README;
 5. makes a release for the version, once (tag `v<VERSION>`), with What's new, the whole `CHANGELOG.md` and a copy of every file of `current`. The Releases page so lists every version with what changed in it and its files; later runs of the same version replace the files they changed there too.
 
-The README and the change log are not in the core zip, so editing them never makes an update for servers. The PHP bundles and the testssl zip are replaced by hand on the installers release (a version release made after that copies them). Upload them to `current` itself, from https://github.com/RusTus/sentora-installers-2027/releases/tag/current > Edit: the `current` release and the newest version release carry the same title, so the Releases page alone does not tell them apart.
+The README and the change log are not in the core zip, so editing them never makes an update for servers. The PHP bundles and the testssl zip are replaced by hand on the installers release (a version release made after that copies them). Upload them to `current` itself: the release titled *Sentora-<version> (current)*, marked **Latest** at the top of the Releases page (or https://github.com/RusTus/sentora-installers-2027/releases/tag/current), then Edit. The version releases (*Sentora-<version>*, tag `v<version>`) are copies.
 
 ## Repository layout
 
