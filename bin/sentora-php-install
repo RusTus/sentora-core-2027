@@ -63,7 +63,8 @@ fi
 tar -tzf "$FILE" "opt/sentora-php/$MM/sbin/php-fpm" > /dev/null 2>&1 || { echo "$FILE is not a PHP $MM bundle. Nothing changed."; exit 1; }
 
 # the libraries the bundles link against (all part of Ubuntu 26.04; newer bundles need more, such as LDAP's)
-apt-get -qq -y install libpng16-16t64 libjpeg-turbo8 libfreetype6 libwebp7 libgmp10 zlib1g libldap2 libgnutls30t64 > /dev/null 2>&1 || true
+apt-get -qq -y install libpng16-16t64 libjpeg-turbo8 libfreetype6 libwebp7 libgmp10 zlib1g libldap2 libgnutls30t64 \
+    libonig5 libzip5 libsodium23 libargon2-1 libsqlite3-0 libxml2-16 libcurl4t64 libicu78 libxslt1.1 libssl3t64 > /dev/null 2>&1 || true
 
 # --- already installed: replace its program files with the bundle's, keep its settings (etc/) --------
 if [ "$UPDATE" = 1 ]; then
