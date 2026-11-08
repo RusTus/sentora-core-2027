@@ -106,6 +106,27 @@ else
 fi
 
 # --- 3. network -----------------------------------------------------------------
+# The panel's IP (Sentora Config, server_ip): the websites' and the panel's Apache settings are written for
+# it. After the server's own address changes it must be changed too, or the panel and the sites stop
+# answering on the new one ("Not Found"). A public address the server is reached on through a router (NAT)
+# is not one of its own, and is fine.
+section "The panel's address"
+if [ $DB -eq 1 ]; then
+    SIP=$(q "SELECT so_value_tx FROM sentora_core.x_settings WHERE so_name_vc = 'server_ip'")
+    OWN=$(ip -o -4 addr show 2> /dev/null | awk '{print $4}' | cut -d/ -f1 | grep -v '^127\.' | tr '\n' ' ' | sed 's/ $//')
+    is_private() { echo "$1" | grep -qE '^(10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.|169\.254\.)'; }
+    if [ -z "$SIP" ]; then
+        fail "the panel has no IP address set: setso --set server_ip <this server's address>"
+    elif echo " $OWN " | grep -q " $SIP "; then
+        ok "the panel's IP ($SIP) is this server's"
+    elif is_private "$SIP"; then
+        NEWIP=$(echo $OWN | awk '{print $1}')
+        fail "the panel's IP is $SIP, which this server no longer has (it has: ${OWN:-none}): the panel and the websites do not answer on the new address. Fix: setso --set server_ip ${NEWIP:-<new address>} && setso --set apache_changed true && php /etc/sentora/panel/bin/daemon.php > /dev/null"
+    else
+        ok "the panel's IP ($SIP) is a public address this server is reached on through a router (its own: ${OWN:-none})"
+    fi
+fi
+
 section "Listening ports"
 if command -v ss > /dev/null; then
     LIST=$(ss -Hltn 2> /dev/null | awk '{print $4}')
