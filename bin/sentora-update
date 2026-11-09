@@ -278,13 +278,21 @@ finish() {
     say "its report: /var/sentora/logs/daemon-last-run.log"
     if [ -x "$PANEL/bin/sentora-post-install-check" ]; then
         ui_step "Checking the installation"
-        local r
-        r=$("$PANEL/bin/sentora-post-install-check" 9>&- | grep -E "^Result:" | tail -1)
+        local report r line
+        report=$("$PANEL/bin/sentora-post-install-check" 9>&-)
+        r=$(printf '%s\n' "$report" | grep -E "^Result:" | tail -1)
+        # The check's own log is rewritten on every run, so its FAIL and WARN lines are
+        # kept here in the update log as well; the FAIL lines are also shown on screen.
+        printf '%s\n' "$report" | grep -E "^  (FAIL|WARN)  "
         echo "$r"
         case "$r" in
             *" 0 FAIL"*) say "${r#Result: }" ;;
             "") warn "the check did not finish (run sentora-post-install-check)" ;;
-            *) warn "${r#Result: }: run sentora-post-install-check to see the FAIL lines" ;;
+            *)
+                while IFS= read -r line; do
+                    warn "FAIL: ${line#  FAIL  }"
+                done < <(printf '%s\n' "$report" | grep -E "^  FAIL  ")
+                warn "${r#Result: }: run sentora-post-install-check to check again" ;;
         esac
         say "full report: /var/sentora/logs/post-install-check.log"
     fi
