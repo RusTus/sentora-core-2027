@@ -1,7 +1,7 @@
 <?php
 
 /**
- * @copyright 2014-2023 Sentora Project (http://www.sentora.org/) 
+ * @copyright 2014-2023 Sentora Project (http://www.sentora.org/)
  * Sentora is a GPL fork of the ZPanel Project whose original header follows:
  *
  * The ZPanel(X) (M)odular (W)eb (S)ervice class.
@@ -13,9 +13,20 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  *
+ * Sentora: requests come as XML (<xmws>...</xmws>) or JSON ({"apikey": ..., "request": ...,
+ * "content": {...}}) and are answered the same way. The key is the server's own (the administrator)
+ * or one made on the API Access page (ctrl_apikeys): a reseller's key acts as the reseller and
+ * reaches only its own clients (Target()). Every request is logged (ctrl_apikeys::Log()).
+ *
  * Updated by RusTus, 2026-11-09
  */
 class ws_xmws {
+
+    /** The API's version, in every answer (2: keys of one's own, JSON, the checks below). */
+    const VERSION = 2;
+
+    /** Wrong API keys allowed from one address within ctrl_loginguard::WINDOW (15 minutes); then it waits. */
+    const KEY_LIMIT = 10;
 
     /**
      * @var string|false Used to store the current RAW XML request data (false when the request had no body).
@@ -37,14 +48,93 @@ class ws_xmws {
      */
     var $authuserid;
 
+    /** @var int The account the request acts as (the key's owner; the administrator for the server's key). */
+    static $actor = 0;
+
+    /** @var int The key used (x_api_keys; 0 for the server's own key or none). */
+    static $keyId = 0;
+
+    /** @var bool Whether the request acts with an administrator's power. */
+    static $admin = false;
+
+    /** @var bool Whether the request came as JSON (and is answered so). */
+    static $json = false;
+
+    /** @var string The module and request, for the log. */
+    static $module = '';
+    static $request = '';
+
+    /** @var string A note for the log (the account acted on, what was refused). */
+    static $note = '';
+
     /**
      * Constructs the object setting the web service request data to a class variable.
+     * A JSON request is turned into the XML one the modules read.
      * @author Bobby Allen (ballen@bobbyallen.me)
      */
     function __construct() {
-        $this->wsdata = ws_generic::ProcessRawRequest();
+        $raw = ws_generic::ProcessRawRequest();
+        if (is_string($raw) && strpos(ltrim($raw), '{') === 0) {
+            self::$json = true;
+            $raw = self::JsonToXmws($raw);
+        }
+        $this->wsdata = $raw;
         $this->wsdataarray = $this->RawXMWSToArray($this->wsdata);
         $this->currentmodule = new module_controller;
+    }
+
+    /**
+     * A JSON request as the XML request the modules read: {"apikey", "request", "version", "content"}.
+     *
+     * @param string $json
+     * @return string The XML ('' when it is not a JSON object).
+     */
+    static function JsonToXmws($json)
+    {
+        $j = json_decode($json, true, 16);
+        if (!is_array($j)) {
+            return '';
+        }
+        $head = '';
+        foreach (array('version', 'apikey', 'request') as $k) {
+            if (isset($j[$k]) && is_scalar($j[$k])) {
+                $head .= '<' . $k . '>' . self::Esc($j[$k]) . '</' . $k . '>';
+            }
+        }
+        $content = isset($j['content']) ? $j['content'] : '';
+        $body = is_array($content) ? self::ArrayToXml($content) : self::Esc($content);
+        return '<?xml version="1.0" encoding="UTF-8"?><xmws>' . $head . '<content>' . $body . '</content></xmws>';
+    }
+
+    /**
+     * Values as XML tags (lists repeat the tag; objects nest).
+     *
+     * @param array $a
+     * @param int $depth (nesting is limited)
+     * @return string
+     */
+    static function ArrayToXml(array $a, $depth = 0)
+    {
+        $out = '';
+        if ($depth > 6) {
+            return $out;
+        }
+        foreach ($a as $k => $v) {
+            $k = preg_replace('/[^A-Za-z0-9_]/', '', (string) $k);
+            if ($k === '' || ctype_digit($k[0])) {
+                continue;
+            }
+            if (is_array($v) && array_keys($v) === range(0, count($v) - 1)) {
+                foreach ($v as $item) {
+                    $out .= '<' . $k . '>' . (is_array($item) ? self::ArrayToXml($item, $depth + 1) : self::Esc($item)) . '</' . $k . '>';
+                }
+            } elseif (is_array($v)) {
+                $out .= '<' . $k . '>' . self::ArrayToXml($v, $depth + 1) . '</' . $k . '>';
+            } else {
+                $out .= '<' . $k . '>' . self::Esc($v) . '</' . $k . '>';
+            }
+        }
+        return $out;
     }
 
     /**
@@ -59,8 +149,9 @@ class ws_xmws {
     /**
      * Requests that the web service method requires that the user must be authenticated wth the server.
      *
-     * On failure it sends a 1105 response and ends the request (die).
-     * @author Bobby Allen (ballen@bobbyallen.me) 
+     * On failure it sends a 1105 response and ends the request (die). (No module uses it; requests
+     * can not name it: api.php runs only a module's own requests.)
+     * @author Bobby Allen (ballen@bobbyallen.me)
      * @return bool True when authenticated (otherwise the request ends).
      */
     public function RequireUserAuth() {
@@ -76,14 +167,6 @@ class ws_xmws {
             die($this->SendResponse($dataobject->getDataObject()));
         }
     }
-
-    /**
-     * Checks that the Server API given in the webservice request XML is valid and matches the one stored in the x_settings table.
-     * @author Bobby Allen (ballen@bobbyallen.me)
-     * @return bool
-     */
-    /** Wrong API keys allowed from one address within ctrl_loginguard::WINDOW (15 minutes); then it waits. */
-    const KEY_LIMIT = 10;
 
     /**
      * Too many wrong API keys from this address lately? (Counted per address, not for the API as a
@@ -104,12 +187,14 @@ class ws_xmws {
     /**
      * An error answer.
      *
-     * @param string $code The response code (1104 too many wrong keys, 1107 a value that is not allowed).
+     * @param string $code The response code (1104 too many wrong keys, 1107 a value that is not
+     *                     allowed, 1108 not allowed with this key).
      * @param string $text What is wrong.
      * @return array The data object for SendResponse().
      */
     static function Error($code, $text)
     {
+        self::$note = mb_substr((string) $text, 0, 255);
         $d = new runtime_dataobject();
         $d->addItemValue('response', $code);
         $d->addItemValue('content', self::Esc($text));
@@ -131,9 +216,10 @@ class ws_xmws {
     }
 
     /**
-     * A live account the API may act on: it exists and is not deleted; with $notAdmin, not an
-     * administrator either (the API never deletes, switches off or sets the password of an
-     * administrator, so a leaked key can not lock the server's owner out or take the panel over).
+     * A live account: it exists and is not deleted; with $notAdmin, not an administrator either
+     * (the API never deletes, switches off or sets the password of an administrator, so a leaked
+     * key can not lock the server's owner out or take the panel over). Not limited to the key's
+     * reach: Target() is.
      *
      * @global db_driver $zdbh The panel's database connection.
      * @param mixed $uid The account ID as sent.
@@ -155,27 +241,132 @@ class ws_xmws {
         return (int) $uid;
     }
 
+    /**
+     * An account this request may act on: live (Account()), never an administrator unless $mayBeAdmin,
+     * and with a reseller's key one of the reseller's own clients (or theirs, at any depth), never
+     * the reseller itself nor an account above it (ctrl_privilege).
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param mixed $uid The account ID as sent.
+     * @param bool $mayBeAdmin Allow administrators (reading, with an administrator's key).
+     * @return int The ID, or 0 when it may not be used.
+     */
+    static function Target($uid, $mayBeAdmin = false)
+    {
+        global $zdbh;
+        $uid = self::Account($uid, !$mayBeAdmin);
+        if ($uid === 0) {
+            return 0;
+        }
+        if (self::$admin) {
+            self::$note = 'account ' . $uid;
+            return $uid;
+        }
+        if ($uid === self::$actor || !self::IsBelow($uid, self::$actor)) {
+            return 0;
+        }
+        $g = $zdbh->prepare("SELECT ac_group_fk FROM x_accounts WHERE ac_id_pk = :id");
+        $g->execute(array(':id' => self::$actor));
+        if (ctrl_privilege::AccountAbove($uid, (int) $g->fetchColumn())) {
+            return 0;
+        }
+        self::$note = 'account ' . $uid;
+        return $uid;
+    }
+
+    /**
+     * Is account $uid below account $owner (its client, or a client's client...)?
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param int $uid
+     * @param int $owner
+     * @return bool
+     */
+    static function IsBelow($uid, $owner)
+    {
+        global $zdbh;
+        $up = $zdbh->prepare("SELECT ac_reseller_fk FROM x_accounts WHERE ac_id_pk = :id");
+        $seen = array();
+        $cur = (int) $uid;
+        while ($cur > 0 && !isset($seen[$cur]) && count($seen) < 12) {
+            $seen[$cur] = true;
+            $up->execute(array(':id' => $cur));
+            $parent = (int) $up->fetchColumn();
+            if ($parent === (int) $owner && $cur !== (int) $owner) {
+                return true;
+            }
+            $cur = $parent;
+        }
+        return false;
+    }
+
+    /**
+     * May this request do things only an administrator may (the server's settings, its totals, its
+     * services, every domain)?
+     *
+     * @return bool
+     */
+    static function IsAdmin()
+    {
+        return self::$admin;
+    }
+
+    /**
+     * The answer for a request only an administrator's key may make.
+     *
+     * @return array The data object for SendResponse().
+     */
+    static function AdminOnly()
+    {
+        return self::Error('1108', 'Only an administrator\'s key may make this request');
+    }
+
+    /**
+     * Check the request's key: the server's own (the administrator), or a key made on the API Access
+     * page that is live and allowed from this address. Sets who the request acts as.
+     * @author Bobby Allen (ballen@bobbyallen.me)
+     * @return bool
+     */
     public function CheckServerAPIKey() {
-        // Sentora: the key must be this server's own (the installer and the daemon make a
+        // Sentora: the server's key must be its own (the installer and the daemon make a
         // random one). The key every Sentora shipped with is public, and with it alone the
         // API resets passwords, creates clients and domains and reads every setting, so it
         // is never accepted, nor a short or empty one; compared in constant time.
         $key = (string) ctrl_options::GetSystemOption('apikey');
-        $given = isset($this->wsdataarray['apikey']) ? (string) $this->wsdataarray['apikey'] : '';
-        if (strlen($key) < 32 || in_array(strtolower($key), self::PublicKeys(), true) || $given === '' || !hash_equals($key, $given)) {
-            // counted for this address (KeyLocked()), and logged for fail2ban, which blocks an
-            // address that keeps guessing at the firewall
-            ctrl_loginguard::Failed('api:key');
-            runtime_hook::Execute('OnBadAPIKeyAuth');
-            return false;
-        } else {
+        $given = isset($this->wsdataarray['apikey']) ? trim((string) $this->wsdataarray['apikey']) : '';
+        if ($given !== '' && strlen($key) >= 32 && !in_array(strtolower($key), self::PublicKeys(), true) && hash_equals($key, $given)) {
+            // (the first live administrator: asked directly, nobody is logged in yet)
+            global $zdbh;
+            $a = (int) $zdbh->query("SELECT ac_id_pk FROM x_accounts WHERE ac_group_fk = 1 AND ac_enabled_in = 1 AND ac_deleted_ts IS NULL ORDER BY ac_id_pk LIMIT 1")->fetchColumn();
+            self::$actor = $a > 0 ? $a : 1;
+            self::$keyId = 0;
+            self::$admin = true;
             runtime_hook::Execute('OnGoodAPIKeyAuth');
             return true;
         }
+        $found = $given !== '' ? ctrl_apikeys::Find($given) : null;
+        if ($found && ctrl_apikeys::IpAllowed(ctrl_loginguard::Address(), $found['ips'])) {
+            self::$actor = $found['uid'];
+            self::$keyId = $found['id'];
+            self::$admin = ctrl_branding::IsAdmin($found['uid']);
+            ctrl_apikeys::Touch($found['id'], ctrl_loginguard::Address());
+            runtime_hook::Execute('OnGoodAPIKeyAuth');
+            return true;
+        }
+        if ($found) {
+            // a right key from an address it is not allowed from: refused like a wrong one
+            self::$keyId = $found['id'];
+            self::$note = 'key not allowed from this address';
+        }
+        // counted for this address (KeyLocked()), and logged for fail2ban, which blocks an
+        // address that keeps guessing at the firewall
+        ctrl_loginguard::Failed('api:key');
+        runtime_hook::Execute('OnBadAPIKeyAuth');
+        return false;
     }
 
     /**
-     * Will format and send a valid XMWS XML response.
+     * Will format and send a valid XMWS XML response (JSON for a JSON request), and log the request.
      * @author Bobby Allen (ballen@bobbyallen.me)
      * Sends the Content-Type header and echoes the XML; an empty 'response' becomes '1101'.
      * @param array<string,string> $responsearray Array of data to send: 'response' (code) and 'content' (XML or text).
@@ -189,15 +380,38 @@ class ws_xmws {
             ob_end_clean();
         }
         $GLOBALS['xmwsAnswered'] = true;
-        header("Content-Type: text/xml; charset=utf-8");
+        $code = preg_replace('/[^0-9]/', '', (string) $responsearray['response']);
+        ctrl_apikeys::Log(self::$keyId, self::$actor, self::$module, self::$request, $code, self::$note);
         header('X-Content-Type-Options: nosniff');
         header('Cache-Control: no-store');
-        $responsearray['response'] = preg_replace('/[^0-9]/', '', (string) $responsearray['response']);
+        if (self::$json) {
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(array('version' => self::VERSION, 'response' => $code, 'content' => self::ContentToArray((string) $responsearray['content'])),
+                JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            return;
+        }
+        header("Content-Type: text/xml; charset=utf-8");
         echo "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" .
         "<xmws>\n" .
-        "\t<response>" . $responsearray['response'] . "</response>\n" .
+        "\t<version>" . self::VERSION . "</version>\n" .
+        "\t<response>" . $code . "</response>\n" .
         "\t<content>" . $responsearray['content'] . "</content>\n" .
         "</xmws>";
+    }
+
+    /**
+     * An answer's content for JSON: its tags as an object (a repeated tag becomes a list), or its text.
+     *
+     * @param string $content The XML content.
+     * @return mixed
+     */
+    static function ContentToArray($content)
+    {
+        if (strpos($content, '<') === false) {
+            return html_entity_decode(trim($content), ENT_XML1 | ENT_QUOTES, 'UTF-8');
+        }
+        $a = ws_generic::XMLToArray('<xmwscontent>' . $content . '</xmwscontent>');
+        return (is_array($a) && isset($a['xmwscontent'])) ? $a['xmwscontent'] : null;
     }
 
     /**
@@ -216,6 +430,18 @@ class ws_xmws {
         $return_dataobject->addItemValue('authpass', runtime_haystack::GetValueBetween($xml, '<authpass>', '</authpass>'));
         $return_dataobject->addItemValue('content', runtime_haystack::GetValueBetween($xml, '<content>', '</content>'));
         return $return_dataobject->getDataObject();
+    }
+
+    /**
+     * One value of the request's content (decoded: &amp; is &).
+     *
+     * @param string $name The tag.
+     * @return string|null Null when it was not sent.
+     */
+    function Get($name)
+    {
+        $v = ws_generic::GetTagValue($name, (string) $this->wsdataarray['content']);
+        return $v === null ? null : trim($v);
     }
 
     /**

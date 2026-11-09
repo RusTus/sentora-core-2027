@@ -95,7 +95,9 @@ class ws_generic {
         if (!preg_match('/<' . $t . '>(.*?)<\/' . $t . '>/s', (string) $xml, $matches)) {
             return null;
         }
-        return $matches[1];
+        // decoded as XML is (a value sent as a &amp; b is a & b): JSON requests are turned into XML,
+        // so a password with & in it must come back as it was sent
+        return html_entity_decode($matches[1], ENT_XML1 | ENT_QUOTES, 'UTF-8');
     }
 
     /**

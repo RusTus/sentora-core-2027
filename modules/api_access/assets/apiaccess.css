@@ -1,0 +1,38 @@
+/* API Access in the panel's style. Colours come from the theme's shared --sn-* variables
+   (etc/styles/THEMES.md), with these as the fallback, so it follows Light, Dark and Auto. */
+.ak { --ak-ink: var(--sn-ink, #1f2933); --ak-muted: var(--sn-muted, #6b7785); --ak-line: var(--sn-line, #e6e9ee);
+      --ak-card: var(--sn-card, #ffffff); --ak-bg: var(--sn-soft, #f4f6f9); --ak-accent: var(--sn-accent, #447fb3);
+      --ak-ok: var(--sn-ok, #1b7a50); --ak-ok-soft: var(--sn-ok-soft, #e3f5ec);
+      --ak-warn: var(--sn-warn, #8f5b00); --ak-warn-soft: var(--sn-warn-soft, #fff4d6);
+      --ak-bad: var(--sn-bad, #b42318); --ak-bad-soft: var(--sn-bad-soft, #fdecea);
+      color: var(--ak-ink); background: var(--ak-bg); border-radius: 8px; padding: 18px; margin-top: 10px; }
+.ak * { box-sizing: border-box; }
+.ak-intro { margin: 0 2px 14px; color: var(--ak-muted); line-height: 1.5; }
+.ak-intro code, .ak-table code { background: none; color: var(--ak-ink); padding: 0; overflow-wrap: anywhere; }
+.ak-sub { color: var(--ak-muted); font-size: 12px; }
+.ak-msg { margin: 0 0 14px; padding: 10px 12px; border-left: 4px solid; border-radius: 4px; font-size: 13px; }
+.ak-msg.is-ok { color: var(--ak-ok); background: var(--ak-ok-soft); }
+.ak-msg.is-bad { color: var(--ak-bad); background: var(--ak-bad-soft); }
+.ak-card { background: var(--ak-card); border-radius: 6px; box-shadow: 0 1px 3px rgba(20,30,40,0.08); padding: 16px 18px; margin: 0 0 14px; min-width: 0; }
+.ak-card h4 { margin: 0 0 12px; font-size: 15px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; overflow-wrap: anywhere; }
+.ak-card p { line-height: 1.5; }
+.ak-new { border-left: 4px solid var(--ak-warn); background: var(--ak-warn-soft); }
+.ak-keybox { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.ak-keybox code { padding: 8px 10px; background: var(--ak-card); color: var(--ak-ink); border: 1px solid var(--ak-line); border-radius: 4px; font-size: 13px; overflow-wrap: anywhere; user-select: all; }
+.ak-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; }
+.ak-field { display: block; margin: 0; font-weight: normal; }
+.ak-field > span { display: block; font-size: 12px; font-weight: 600; color: var(--ak-muted); margin-bottom: 4px; }
+.ak-field small { display: block; color: var(--ak-muted); font-size: 12px; margin-top: 4px; }
+.ak-foot { display: flex; justify-content: flex-end; padding-top: 12px; margin-top: 12px; border-top: 1px solid var(--ak-line); }
+.ak-scroll { overflow-x: auto; }
+.ak-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.ak-table th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--ak-muted); padding: 4px 8px; border-bottom: 1px solid var(--ak-line); white-space: nowrap; }
+.ak-table td { padding: 6px 8px; border-bottom: 1px solid var(--ak-line); vertical-align: top; }
+.ak-start { font-size: 11px; color: var(--ak-muted) !important; }
+.ak-act { display: flex; gap: 4px; justify-content: flex-end; white-space: nowrap; }
+.ak-act form { margin: 0; }
+.ak-del { color: var(--ak-bad); }
+.ak-pill { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--ak-line); color: var(--ak-muted); white-space: nowrap; }
+.ak-pill.is-ok { background: var(--ak-ok-soft); color: var(--ak-ok); }
+.ak-pill.is-bad { background: var(--ak-bad-soft); color: var(--ak-bad); }
+@media (max-width: 700px) { .ak-fields { grid-template-columns: minmax(0, 1fr); } .ak { padding: 12px; } }
