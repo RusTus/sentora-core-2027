@@ -12,7 +12,6 @@
  * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
  *
  * Written by RusTus, 2026-11-09
- * Updated by RusTus, 2026-11-09
  */
 class ui_loginpage
 {
