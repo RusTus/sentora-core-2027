@@ -311,6 +311,24 @@ class ws_xmws {
     }
 
     /**
+     * Run the rest of the request as another account, for module code that works only on "the
+     * logged-in account" (Sencrypt makes certificates for the account that asks; Backups backs it
+     * up). Only ever for an account already checked with Reach() or Target(); in memory only, as
+     * the request itself. The log still names the key's owner.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @param int $uid The account.
+     * @return void
+     */
+    static function ActAs($uid)
+    {
+        global $controller;
+        $_SESSION = array('zpuid' => (int) $uid);
+        $controller = new runtime_controller();
+        $controller->Init();
+    }
+
+    /**
      * Is account $uid below account $owner (its client, or a client's client...)?
      *
      * @global db_driver $zdbh The panel's database connection.
@@ -447,7 +465,23 @@ class ws_xmws {
             return html_entity_decode(trim($content), ENT_XML1 | ENT_QUOTES, 'UTF-8');
         }
         $a = ws_generic::XMLToArray('<xmwscontent>' . $content . '</xmwscontent>');
-        return (is_array($a) && isset($a['xmwscontent'])) ? $a['xmwscontent'] : null;
+        if (!is_array($a) || !isset($a['xmwscontent'])) {
+            return null;
+        }
+        // (an empty tag comes back from the XML reader as an empty list: it is an empty value)
+        $fix = function ($v) use (&$fix) {
+            if (!is_array($v)) {
+                return $v;
+            }
+            if ($v === array()) {
+                return '';
+            }
+            foreach ($v as $k => $x) {
+                $v[$k] = $fix($x);
+            }
+            return $v;
+        };
+        return $fix($a['xmwscontent']);
     }
 
     /**
