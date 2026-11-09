@@ -262,10 +262,19 @@ The menus:
 | Allow remote login forms | off | Leave off: logins only from the panel's own form |
 | Sending method, SMTP settings, welcome email | | How the panel sends its own email |
 | Debug mode, log mode | prod | Errors go to the log, not the page |
+| Customer feedback | on | Once a day (and on the daemon's first run), a short report about this server to the Sentora-2027 project: see [Customer feedback](#customer-feedback). Off: `setso --set customer_feedback false` |
 
 The panel's port, IP and SSL lines are here too; changing them rewrites Apache's settings. *Queue a full daemon run* runs every part of the daemon at its next run. Path and command settings (`zsudo`, `hosted_dir`, `httpd_exe` and others) are locked in the panel; change them as root with `setso --set <name> <value>`.
 
 **AutoIP Updater** (administrators only) watches the server's public IP: when it changes, it updates the panel's IP and DNS records and emails the alert address.
+
+### Customer feedback
+
+To learn on what servers, in what parts of the world and how heavily the panel is used, each panel sends the Sentora-2027 project a short report on the daemon's first run and then once a day. It is on by default; **Sentora Config > Customer feedback** (or `setso --set customer_feedback false`) turns it off, and nothing more is sent.
+
+What a report holds: a random ID made for this server (to tell reports apart), the panel's version and install date, the operating system, kernel, architecture and virtualisation, the CPU, cores, memory and disk, the PHP, database and Apache versions, the server's public IP (Sentora Config's) and internal IP, the time zone, how busy it is (load average, free memory, this month's website traffic and disk used of all accounts together), how many accounts, resellers, domains, sub-domains, parked domains, mailboxes, databases, FTP accounts and cron jobs there are, and which modules are on. Never a domain name, user name, email address, password, file or anything a client wrote. The report sent last is in `/var/lib/sentora/feedback-last.json`, and every send is in the daemon's log.
+
+Where it goes: the address in `feedback-endpoint.txt` of the installers repository (read once a day; none there, nothing is sent), or a server's own **Sentora Config > Customer feedback address**. The statistics server is in the installers repository's `feedback-server/` folder.
 
 ## Websites and Apache
 
