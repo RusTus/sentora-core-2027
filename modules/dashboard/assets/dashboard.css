@@ -105,3 +105,16 @@ body.dw-drag-on, body.dw-drag-on * { cursor: grabbing !important; user-select: n
     .dw, .wa { padding: 12px; }
     .dw-grid { grid-template-columns: 1fr; }
 }
+
+/* Site health widget */
+.dw-sh-sum { display: flex; align-items: center; gap: 8px; font-size: 13px; margin: 0 0 8px; }
+.dw-sh-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; background: var(--dw-muted); }
+.dw-sh-dot.is-ok { background: var(--dw-ok); } .dw-sh-dot.is-warn { background: var(--dw-warn); } .dw-sh-dot.is-bad { background: var(--dw-bad); }
+.dw-sh { list-style: none; margin: 0 0 10px; padding: 0; }
+.dw-sh li { display: flex; flex-direction: column; gap: 1px; padding: 6px 0 6px 12px; border-bottom: 1px solid var(--dw-line); border-left: 3px solid var(--dw-line); margin-bottom: 4px; }
+.dw-sh li:last-child { border-bottom: 0; }
+.dw-sh li.is-ok { border-left-color: var(--dw-ok); } .dw-sh li.is-warn { border-left-color: var(--dw-warn); } .dw-sh li.is-bad { border-left-color: var(--dw-bad); }
+.dw-sh li a { font-weight: 600; overflow-wrap: anywhere; }
+.dw-sh li span { font-size: 12px; color: var(--dw-muted); }
+.dw-sh li.is-bad span { color: var(--dw-bad); } .dw-sh li.is-warn span { color: var(--dw-warn); }
+.dw-sh-more { font-size: 12px; margin: -4px 0 8px; }

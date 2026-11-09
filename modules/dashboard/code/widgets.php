@@ -27,6 +27,7 @@ class dashboard_widgets
         return array(
             'getting_started' => array('Getting started', 'The steps to get a website running, ticked off as you do them.', false, true),
             'usage' => array('Account usage', 'Disk, bandwidth, domains, mailboxes and databases against your package.', false, true),
+            'site_health' => array('Site health', 'Whether each of your websites works, and what needs attention (Site Health).', false, true),
             'domains' => array('Your domains', 'Your domains and subdomains, with quick links.', false, false),
             'security' => array('Security', 'Two-factor login and recovery codes.', false, false),
             'backups' => array('Backups', 'Your latest backup and your FTP backup.', false, false),
@@ -506,6 +507,42 @@ class dashboard_widgets
      * @param array<string,string> $user The logged-in account (ctrl_users::GetUserDetail()).
      * @return string HTML.
      */
+    static function WSiteHealth($user)
+    {
+        if (!self::CanOpen($user, 'site_health')) {
+            return '<p class="text-muted">' . self::t('Site Health is not available to your account.') . '</p>';
+        }
+        $sum = sys_sitehealth::Load((int) $user['userid']);
+        $sites = array();
+        foreach (sys_sitehealth::Domains((int) $user['userid']) as $dom) {
+            $a = sys_sitehealth::Assess(isset($sum['domains'][$dom['name']]) ? $sum['domains'][$dom['name']] : array());
+            $sites[] = array('name' => $dom['name'], 'level' => $a['level'], 'why' => $a['reasons'] ? $a['reasons'][0]['text'] : '');
+        }
+        if (!$sites) {
+            return '<p class="text-muted">' . self::t('You have no websites yet.') . '</p>';
+        }
+        $rank = array('bad' => 0, 'warn' => 1, 'unknown' => 2, 'ok' => 3);
+        usort($sites, function ($a, $b) use ($rank) { return ($rank[$a['level']] - $rank[$b['level']]) ?: strcmp($a['name'], $b['name']); });
+        $n = array('ok' => 0, 'warn' => 0, 'bad' => 0, 'unknown' => 0);
+        foreach ($sites as $x) {
+            $n[$x['level']]++;
+        }
+        $out = '<p class="dw-sh-sum">' . ($n['bad'] + $n['warn'] === 0 && $n['unknown'] === 0
+            ? '<span class="dw-sh-dot is-ok"></span>' . self::t('All your websites are working.')
+            : '<span class="dw-sh-dot is-' . ($n['bad'] ? 'bad' : ($n['warn'] ? 'warn' : 'unknown')) . '"></span>'
+                . str_replace(array('%1', '%2', '%3'), array((string) $n['bad'], (string) $n['warn'], (string) $n['ok']), self::t('%1 not working · %2 need attention · %3 working'))) . '</p>';
+        $out .= '<ul class="dw-sh">';
+        foreach (array_slice($sites, 0, 5) as $x) {
+            $out .= '<li class="is-' . self::h($x['level']) . '"><a href="./?module=site_health&amp;domain=' . self::h(rawurlencode($x['name'])) . '">' . self::h($x['name']) . '</a>'
+                . '<span>' . self::h($x['level'] === 'ok' ? sys_sitehealth::LevelText('ok') : $x['why']) . '</span></li>';
+        }
+        $out .= '</ul>';
+        if (count($sites) > 5) {
+            $out .= '<p class="text-muted dw-sh-more">' . str_replace('%1', (string) (count($sites) - 5), self::t('and %1 more')) . '</p>';
+        }
+        return $out . '<a class="btn btn-default btn-sm" href="./?module=site_health">' . self::t('Site Health') . '</a>';
+    }
+
     static function WBackups($user)
     {
         $files = sys_backup::ListFiles($user['username']);

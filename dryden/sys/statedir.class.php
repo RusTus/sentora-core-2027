@@ -29,7 +29,7 @@ class sys_statedir
     const LOGS = array('sentora-auth.log', 'phpmyadmin-auth.log', 'twofactor.log', 'password-reveal.log', 'shadowing.log', 'panel-update.log');
 
     /** Subfolders only root jobs write into. */
-    const ROOT_DIRS = array('accounts', 'clientftp', 'goaccess', 'matomo');
+    const ROOT_DIRS = array('accounts', 'clientftp', 'goaccess', 'matomo', 'sitehealth');
 
     /**
      * Make the folder safe (see the class comment). Root only; does nothing for anyone else.

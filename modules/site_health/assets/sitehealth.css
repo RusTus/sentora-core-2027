@@ -1,0 +1,83 @@
+/* Site Health in the panel's style. Colours come from the theme's shared --sn-* variables
+   (etc/styles/THEMES.md), with these as the fallback, so it follows Light, Dark and Auto. */
+.sh { --sh-ink: var(--sn-ink, #1f2933); --sh-muted: var(--sn-muted, #6b7785); --sh-line: var(--sn-line, #e6e9ee);
+      --sh-card: var(--sn-card, #ffffff); --sh-bg: var(--sn-soft, #f4f6f9); --sh-accent: var(--sn-accent, #447fb3);
+      --sh-accent-soft: var(--sn-accent-soft, #e3edf6);
+      --sh-ok: var(--sn-ok, #1b7a50); --sh-ok-soft: var(--sn-ok-soft, #e3f5ec);
+      --sh-warn: var(--sn-warn, #8f5b00); --sh-warn-soft: var(--sn-warn-soft, #fff4d6);
+      --sh-bad: var(--sn-bad, #b42318); --sh-bad-soft: var(--sn-bad-soft, #fdecea);
+      color: var(--sh-ink); background: var(--sh-bg); border-radius: 8px; padding: 18px; margin-top: 10px; }
+.sh * { box-sizing: border-box; }
+.sh-ico { width: 16px; height: 16px; flex: none; vertical-align: -3px; }
+.sh-ico-sm { width: 13px; height: 13px; vertical-align: -2px; margin-left: 2px; }
+.sh-ico-lg { width: 44px; height: 44px; padding: 9px; border-radius: 10px; background: var(--sh-accent-soft); color: var(--sh-accent); }
+.sh-card { background: var(--sh-card); border-radius: 8px; box-shadow: 0 1px 3px rgba(20,30,40,0.08); padding: 14px 16px; margin-bottom: 14px; min-width: 0; }
+.sh-state { display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; padding: 28px 16px; }
+.sh-state span, .sh-muted, .sh-note { color: var(--sh-muted); }
+.sh-note { font-size: 12px; margin: 4px 2px 0; }
+.sh-bad-text { color: var(--sh-bad); }
+
+/* the counts */
+.sh-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 14px; }
+.sh-tile { background: var(--sh-card); border-radius: 8px; box-shadow: 0 1px 3px rgba(20,30,40,0.08); padding: 12px 14px; border-top: 3px solid var(--sh-line); }
+.sh-tile b { display: block; font-size: 24px; line-height: 1.2; }
+.sh-tile span { color: var(--sh-muted); font-size: 12px; }
+.sh-tile.is-ok { border-top-color: var(--sh-ok); } .sh-tile.is-warn { border-top-color: var(--sh-warn); } .sh-tile.is-bad { border-top-color: var(--sh-bad); }
+.sh-when { display: flex; gap: 10px; align-items: center; font-size: 12px; }
+.sh-when b { display: inline; font-size: 12px; color: var(--sh-ink); }
+.sh-when .sh-ico { color: var(--sh-accent); width: 22px; height: 22px; }
+
+/* the site cards */
+.sh-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 14px; }
+.sh-grid .sh-card { margin: 0; }
+.sh-site { display: flex; flex-direction: column; gap: 10px; border-top: 3px solid var(--sh-line); }
+.sh-site.is-ok { border-top-color: var(--sh-ok); } .sh-site.is-warn { border-top-color: var(--sh-warn); } .sh-site.is-bad { border-top-color: var(--sh-bad); }
+.sh-site header { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.sh-name { font-weight: 600; font-size: 15px; color: var(--sh-ink) !important; display: inline-flex; gap: 8px; align-items: center; min-width: 0; overflow-wrap: anywhere; }
+.sh-name .sh-ico { color: var(--sh-accent); }
+.sh-pill { flex: none; font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: var(--sh-line); color: var(--sh-muted); white-space: nowrap; }
+.sh-pill.is-ok { background: var(--sh-ok-soft); color: var(--sh-ok); }
+.sh-pill.is-warn { background: var(--sh-warn-soft); color: var(--sh-warn); }
+.sh-pill.is-bad { background: var(--sh-bad-soft); color: var(--sh-bad); }
+.sh-reasons { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.sh-reasons li { font-size: 13px; padding: 6px 10px; border-radius: 6px; background: var(--sh-bg); }
+.sh-reasons li.is-bad { background: var(--sh-bad-soft); color: var(--sh-bad); }
+.sh-reasons li.is-warn { background: var(--sh-warn-soft); color: var(--sh-warn); }
+.sh-reasons li a { font-weight: 600; white-space: nowrap; }
+.sh-reasons .sh-more { background: none; color: var(--sh-muted); font-size: 12px; padding: 0 10px; }
+.sh-lines { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; font-size: 13px; }
+.sh-lines li { display: flex; align-items: center; gap: 8px; }
+.sh-lines li > span { flex: 1; min-width: 0; }
+.sh-lines .sh-ico { color: var(--sh-muted); }
+.sh-site footer { display: flex; gap: 6px; margin-top: auto; padding-top: 4px; }
+.sh-site footer .btn { display: inline-flex; align-items: center; gap: 4px; }
+
+/* small bars: checks, requests, errors */
+.sh-bars { display: inline-flex; align-items: flex-end; gap: 2px; height: 28px; flex: none; margin-left: auto; }
+.sh-bars i { display: block; width: 5px; border-radius: 2px 2px 0 0; background: var(--sh-accent); opacity: 0.75; }
+.sh-bars i.is-warn { background: var(--sh-warn); opacity: 1; } .sh-bars i.is-bad { background: var(--sh-bad); opacity: 1; }
+
+/* details */
+.sh-detail-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+.sh-detail-head h2 { margin: 0; font-size: 20px; font-weight: 600; overflow-wrap: anywhere; }
+.sh-detail-head .btn { display: inline-flex; align-items: center; gap: 4px; }
+.sh-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 14px; align-items: start; }
+.sh-cols .sh-card { margin: 0; }
+.sh-card h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; font-size: 15px; font-weight: 600; }
+.sh-card h3 .sh-ico { color: var(--sh-accent); }
+.sh-card h4 { font-size: 13px; font-weight: 600; margin: 12px 0 6px; }
+.sh-card p { font-size: 13px; margin: 0 0 8px; }
+.sh-scroll { overflow-x: auto; max-height: 360px; overflow-y: auto; }
+.sh-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.sh-table th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--sh-muted); padding: 4px 8px; border-bottom: 1px solid var(--sh-line); }
+.sh-table td { padding: 5px 8px; border-bottom: 1px solid var(--sh-line); }
+.sh-table code { background: none; color: var(--sh-ink); padding: 0; overflow-wrap: anywhere; }
+.sh-num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.sh-code { font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 999px; background: var(--sh-line); white-space: nowrap; }
+.sh-code.is-ok { background: var(--sh-ok-soft); color: var(--sh-ok); } .sh-code.is-warn { background: var(--sh-warn-soft); color: var(--sh-warn); } .sh-code.is-bad { background: var(--sh-bad-soft); color: var(--sh-bad); }
+.sh-errors { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.sh-errors li { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; border-radius: 6px; background: var(--sh-bg); }
+.sh-errors li .sh-code { align-self: flex-start; }
+.sh-errors code { background: none; padding: 0; color: var(--sh-ink); font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.sh-errors small { color: var(--sh-muted); font-size: 11px; }
+@media (max-width: 640px) { .sh { padding: 12px; } .sh-grid, .sh-cols { grid-template-columns: 1fr; } }

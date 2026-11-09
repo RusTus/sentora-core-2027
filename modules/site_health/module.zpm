@@ -1,0 +1,19 @@
+<@ Init @>
+<div class="zmodule_content panel" id="zmodule_header_<@ ModuleName @>">
+    <div class="panel-heading">
+        <img src="<@ ModuleIcon @>" width="35" height="35" border="0" alt="<@ ModuleName @>">
+        <div class="zmodule_title"><@ ModuleName @></div>
+        <div class="zmodule_desc" id="zmodule_desc_<@ ModuleName @>"><@ ModuleDesc @></div>
+    </div>
+    <link rel="stylesheet" href="modules/site_health/assets/sitehealth.css">
+    <div class="sh">
+        <% if Overview %>
+        <@ Summary @>
+        <@ Cards @>
+        <p class="sh-note"><: Checked every hour from this server: the home page of each site, its certificate and its PHP, and the new lines of its logs. The first check of a new site is within the hour. :></p>
+        <% endif %>
+        <% if Details %>
+        <@ Detail @>
+        <% endif %>
+    </div>
+</div>

@@ -38,6 +38,7 @@ This README is the whole guide: how to install and update the server, how to use
 - [Backups and restoring](#backups-and-restoring)
 - [Statistics](#statistics)
 - [Monitoring and alerts](#monitoring-and-alerts)
+- [Site Health](#site-health)
 - [Dashboard and widgets](#dashboard-and-widgets)
 - [Add-on modules](#add-on-modules)
 
@@ -382,6 +383,17 @@ Every 5 minutes the daemon checks the server and emails the alert address (Sento
 One email when a problem starts, a reminder every 24 hours, one when it is resolved; each is also written to `/var/sentora/logs/alerts.log`.
 
 To look yourself: **Server Monitor** (CPU, load, memory, network, disks, busiest processes and services, live), **Apache Status** (requests, workers, slowest requests), **System Log Viewer** (every server log, live, grouped: PHP, panel, panel security, domains, FTP, DNS, Apache, mail, MySQL, system) and **Service Status** (which services answer, and the daemon's last and next run).
+
+## Site Health
+
+**Domain Management > Site Health** shows each account whether its websites work, with a card per site (worst first) and plain reasons with a link to the module that fixes them:
+
+- **Not working**: the home page answered with a server error (5xx), did not answer, the certificate expired, or the site's PHP is not running.
+- **Needs attention**: an answer other than the home page (4xx), slow (over 3 s), a certificate expiring within 14 days or self-signed, a PHP version without security fixes, fatal PHP errors today, or more than 5% of today's visits getting a server error.
+
+Each card shows the last answer and how long it took (with the last 24 checks), the certificate, the PHP the site runs, today's PHP errors and requests (with the last 7 days). **Details** lists the last day of checks, the latest distinct PHP errors from the site's error log (the account's folder shortened to `~/`), and today's pages not found (404) and failing (5xx). The **Site health** dashboard widget shows the same, worst first.
+
+Every hour the daemon asks each live domain and sub-domain for its home page from the server itself (over HTTPS when the site has a certificate of its own here, which it then reads), and reads only the new lines of the site's logs (`/var/sentora/logs/domains/<user>/<domain>-access.log` and `-error.log`). Its own requests (user agent `Sentora-SiteHealth`) are left out of the counts. The summaries are kept in `/var/lib/sentora/sitehealth/` (root's, readable by the panel): 30 days of daily counts and a week of hourly checks. The check runs on the server, so it does not see problems outside it (DNS, the router).
 
 ## Dashboard and widgets
 
