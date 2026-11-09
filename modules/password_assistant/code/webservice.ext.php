@@ -30,7 +30,7 @@ class webservice extends ws_xmws {
         $dataobject->addItemValue('response', '');
         // never an administrator's password (a leaked key must not take the panel over), and never
         // a password shorter than the panel itself allows
-        $uid = ws_xmws::Account($contenttags['xmws']['content']['uid'] ?? '', true);
+        $uid = ws_xmws::Target($contenttags['xmws']['content']['uid'] ?? '');
         $pass = $contenttags['xmws']['content']['newpassword'] ?? '';
         $min = max(8, (int) ctrl_options::GetSystemOption('password_minlength'));
         if ($uid === 0) {

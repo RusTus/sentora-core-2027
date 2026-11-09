@@ -55,7 +55,7 @@ class webservice extends ws_xmws
         $domainName = ws_generic::GetTagValue('domainName', $request_data['content']);
         $uid = ws_generic::GetTagValue('uid', $request_data['content']);
         // a live account and a domain it owns
-        $uid = ws_xmws::Account($uid);
+        $uid = ws_xmws::Reach($uid);
         $domainID = $uid ? self::GetDomainID($uid, $domainName) : null;
         if (!$domainID) {
             return ws_xmws::Error('1107', 'No such domain for that account');
@@ -104,7 +104,7 @@ class webservice extends ws_xmws
         $target = ws_generic::GetTagValue('target', $request_data['content']);
         $ttl = ws_generic::GetTagValue('ttl', $request_data['content']);
         // a live account and a domain it owns
-        $uid = ws_xmws::Account($uid);
+        $uid = ws_xmws::Reach($uid);
         $domainID = $uid ? self::GetDomainID($uid, $domainName) : null;
         if (!$domainID) {
             return ws_xmws::Error('1107', 'No such domain for that account');
@@ -162,7 +162,7 @@ class webservice extends ws_xmws
         $uid = ws_generic::GetTagValue('uid', $request_data['content']);
         $domainName = ws_generic::GetTagValue('domainName', $request_data['content']);
         // a live account and a domain it owns
-        $uid = ws_xmws::Account($uid);
+        $uid = ws_xmws::Reach($uid);
         $domainID = $uid ? self::GetDomainID($uid, $domainName) : null;
         if (!$domainID) {
             return ws_xmws::Error('1107', 'No such domain for that account');

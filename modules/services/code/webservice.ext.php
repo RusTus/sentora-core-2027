@@ -43,6 +43,9 @@ class webservice extends ws_xmws
      */
     function GetServiceStatus()
     {
+        if (!self::IsAdmin()) {
+            return self::AdminOnly();
+        }
         $port_status = array();
         foreach (self::$localports as $key => $value) {
             $up = 0;
@@ -69,6 +72,9 @@ class webservice extends ws_xmws
      */
     function GetPortStatus()
     {
+        if (!self::IsAdmin()) {
+            return self::AdminOnly();
+        }
         $request_data = $this->RawXMWSToArray($this->wsdata);
         $contenttags = $this->XMLDataToArray($this->wsdata);
         $port = $contenttags['xmws']['content']['port'] ?? '';

@@ -655,6 +655,8 @@ class module_controller extends ctrl_module
         $sql = $zdbh->prepare("UPDATE x_accounts SET ac_enabled_in=1 WHERE ac_id_pk=:userid");
         $sql->bindParam(':userid', $userid);
         $sql->execute();
+        // on again: the reason it was switched off (the API's SuspendClient) no longer applies
+        ws_suspend::Clear((int) $userid);
         runtime_hook::Execute('OnAfterEnableClient');
         return true;
     }

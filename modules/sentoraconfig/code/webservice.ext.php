@@ -28,6 +28,9 @@ class webservice extends ws_xmws {
      */
     function GetAllSystemOptions() {
         global $zdbh;
+        if (!self::IsAdmin()) {
+            return self::AdminOnly();
+        }
         $response_xml = "\n";
         $sql = $zdbh->prepare("SELECT * FROM x_settings ORDER BY so_id_pk ASC");
         $sql->execute();

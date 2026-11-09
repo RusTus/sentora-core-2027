@@ -275,6 +275,42 @@ class ws_xmws {
     }
 
     /**
+     * The key's own account, or an account it may reach (Target(), administrators allowed): for
+     * requests about an account's own things (its domains, records, mailboxes...).
+     *
+     * @param mixed $uid The account ID as sent.
+     * @return int The ID, or 0.
+     */
+    static function Reach($uid)
+    {
+        if (is_scalar($uid) && ctype_digit((string) $uid) && (int) $uid === self::$actor && self::Account($uid) !== 0) {
+            self::$note = 'account ' . (int) $uid;
+            return (int) $uid;
+        }
+        return self::Target($uid, true);
+    }
+
+    /**
+     * The account a domain, sub-domain or parked domain belongs to, when the key may reach it.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param mixed $id The vhost (x_vhosts) ID as sent.
+     * @param int $type 1 domain, 2 sub-domain, 3 parked domain.
+     * @return int The account, or 0.
+     */
+    static function VhostOwner($id, $type)
+    {
+        global $zdbh;
+        if (!is_scalar($id) || !ctype_digit((string) $id)) {
+            return 0;
+        }
+        $q = $zdbh->prepare("SELECT vh_acc_fk FROM x_vhosts WHERE vh_id_pk = :id AND vh_type_in = :t AND vh_deleted_ts IS NULL");
+        $q->execute(array(':id' => (int) $id, ':t' => (int) $type));
+        $owner = $q->fetchColumn();
+        return $owner === false ? 0 : self::Reach((string) (int) $owner);
+    }
+
+    /**
      * Is account $uid below account $owner (its client, or a client's client...)?
      *
      * @global db_driver $zdbh The panel's database connection.

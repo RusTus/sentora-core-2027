@@ -26,6 +26,10 @@ class webservice extends ws_xmws {
      */
     public function GetAllDomains() {
         global $zdbh;
+        // every account's domains: the server's own business
+        if (!self::IsAdmin()) {
+            return self::AdminOnly();
+        }
         $response_xml = "\n";
         $alldomains = module_controller::ListDomains();
         foreach ($alldomains as $domain) {
@@ -55,9 +59,9 @@ class webservice extends ws_xmws {
         $response_xml = "\n";
         // the account: <uid>n</uid>, or the bare number as before
         $uid = ws_generic::GetTagValue('uid', $request_data['content']);
-        $uid = ws_xmws::Account($uid !== null ? $uid : trim((string) $request_data['content']));
+        $uid = ws_xmws::Reach($uid !== null ? $uid : trim((string) $request_data['content']));
         if ($uid === 0) {
-            return ws_xmws::Error('1107', 'No such account');
+            return ws_xmws::Error('1107', 'No such account you may reach');
         }
         $alldomains = module_controller::ListDomains($uid);
         if (!fs_director::CheckForEmptyValue($alldomains)) {
@@ -90,9 +94,13 @@ class webservice extends ws_xmws {
         $dataobject = new runtime_dataobject();
         $dataobject->addItemValue('response', '');
         // a live account (an unknown one made the site's folder at the top of the hosting folder)
-        $uid = ws_xmws::Account(ws_generic::GetTagValue('uid', $request_data['content']));
+        $uid = ws_xmws::Reach(ws_generic::GetTagValue('uid', $request_data['content']));
         if ($uid === 0) {
-            return ws_xmws::Error('1107', 'No such account');
+            return ws_xmws::Error('1107', 'No such account you may reach');
+        }
+        // the package's limit, as the Domains page checks it
+        if (!ws_data::UnderLimit($uid, 'domains')) {
+            return ws_xmws::Error('1107', 'The account\'s package allows no more domains');
         }
         if (module_controller::ExecuteAddDomain($uid, ws_generic::GetTagValue('domain', $request_data['content']), ws_generic::GetTagValue('destination', $request_data['content']), ws_generic::GetTagValue('autohome', $request_data['content']))) {
             $dataobject->addItemValue('content', ws_xmws::NewXMLTag('domain', ws_generic::GetTagValue('domain', $request_data['content'])) . ws_xmws::NewXMLTag('created', 'true'));
@@ -116,6 +124,9 @@ class webservice extends ws_xmws {
         $domainid = $contenttags['domainid'] ?? '';
         if (!is_scalar($domainid) || !ctype_digit((string) $domainid)) {
             return ws_xmws::Error('1107', 'domainid must be a number');
+        }
+        if (ws_xmws::VhostOwner($domainid, 1) === 0) {
+            return ws_xmws::Error('1107', 'No such domain you may reach');
         }
         if (module_controller::ExecuteDeleteDomain((int) $domainid)) {
             $dataobject->addItemValue('content', ws_xmws::NewXMLTag('domainid', $contenttags['domainid']) . ws_xmws::NewXMLTag('deleted', 'true'));

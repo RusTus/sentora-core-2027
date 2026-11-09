@@ -1,7 +1,7 @@
 <?php
 
 /**
- * @copyright 2014-2023 Sentora Project (http://www.sentora.org/) 
+ * @copyright 2014-2023 Sentora Project (http://www.sentora.org/)
  * Sentora is a GPL fork of the ZPanel Project whose original header follows:
  *
  * @package zpanelx
@@ -11,160 +11,324 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  *
- * Updated by RusTus, 2026-11-09
- */
-/**
- * Manage Clients module: XMWS web service methods.
+ * Manage Clients: the API's client requests. Every account a request names must be one the key may
+ * reach (ws_xmws::Target(): a reseller's key only its own clients, never an administrator to change);
+ * packages must be the client's reseller's own; groups never Administrators.
  *
- * Each method reads the request XML in $this->wsdata and returns the response data.
+ * Updated by RusTus, 2026-11-09
  */
 class webservice extends ws_xmws
 {
 
     /**
-     * Delete a client (request tags: uid, optional moveid; default move target 1).
+     * The reason the page's create or update function gave for refusing (its flags).
      *
-     * @return array<string, string> Response data: 'response' (empty) and 'content' (uid and deleted tags).
+     * @return string
+     */
+    private static function Why()
+    {
+        $why = array(
+            'alreadyexists' => 'That user name is taken', 'badname' => 'The user name may have letters, digits, - and _ only',
+            'userblank' => 'A user name is needed', 'passwordblank' => 'A password is needed',
+            'badpasswordlength' => 'The password is too short', 'badpass' => 'The password has characters that are not allowed',
+            'emailblank' => 'An email address is needed', 'bademail' => 'That is not an email address',
+            'not_unique_email' => 'Another account has that email address', 'packageblank' => 'No such package', 'groupblank' => 'No such group',
+        );
+        foreach ($why as $flag => $text) {
+            if (!empty(module_controller::$$flag)) {
+                return $text;
+            }
+        }
+        return 'The panel refused it';
+    }
+
+    /**
+     * DeleteClient: <uid>, optional <moveid> (who gets its clients, packages and groups; by default
+     * its reseller).
+     *
+     * @return array
      */
     function DeleteClient()
     {
-        $request_data = $this->RawXMWSToArray($this->wsdata);
-        $contenttags = $this->XMLDataToArray($request_data['content']);
-        // never an administrator (a leaked key must not lock the server's owner out); what the
-        // account owned goes to a live account
-        $uid = ws_xmws::Account($contenttags['uid'] ?? '', true);
+        $uid = self::Target($this->Get('uid'));
         if ($uid === 0) {
-            return ws_xmws::Error('1107', 'No such account, or an administrator (the API does not delete administrators)');
+            return self::Error('1107', 'No such account you may delete (never an administrator)');
         }
-        $moveid = empty($contenttags['moveid']) ? 0 : ws_xmws::Account($contenttags['moveid']);
-        if (!empty($contenttags['moveid']) && ($moveid === 0 || $moveid === $uid)) {
-            return ws_xmws::Error('1107', 'moveid is not a live account other than the one deleted');
+        $moveid = 0;
+        if ((string) $this->Get('moveid') !== '') {
+            $moveid = (int) $this->Get('moveid') === self::$actor ? self::$actor : self::Target($this->Get('moveid'), true);
+            if ($moveid === 0 || $moveid === $uid) {
+                return self::Error('1107', 'moveid is not an account you may hand them to (yourself, or one of your clients other than the one deleted)');
+            }
+        } elseif (!self::$admin) {
+            // a reseller's key hands them to the reseller, never further up
+            $moveid = self::$actor;
         }
         module_controller::ExecuteDeleteClient($uid, $moveid);
-        $dataobject = new runtime_dataobject();
-        $dataobject->addItemValue('response', '');
-        $dataobject->addItemValue('content', ws_xmws::NewXMLTag('uid', $contenttags['uid']) . ws_xmws::NewXMLTag('deleted', 'true'));
-
-        return $dataobject->getDataObject();
+        return $this->Answer(self::NewXMLTag('uid', $uid) . self::NewXMLTag('deleted', 'true'));
     }
 
     /**
-     * Enable a client (request tag: uid).
+     * EnableClient: <uid> (switched on again; a reason given by SuspendClient is cleared).
      *
-     * @return array<string, string> Response data: 'response' (empty) and 'content' (uid and enabled tags).
+     * @return array
      */
     function EnableClient()
     {
-        $request_data = $this->RawXMWSToArray($this->wsdata);
-        $contenttags = $this->XMLDataToArray($request_data['content']);
-        $uid = ws_xmws::Account($contenttags['uid'] ?? '', true);
+        $uid = self::Target($this->Get('uid'));
         if ($uid === 0) {
-            return ws_xmws::Error('1107', 'No such account, or an administrator');
+            return self::Error('1107', 'No such account you may switch on');
         }
         module_controller::EnableClient($uid);
-        $dataobject = new runtime_dataobject();
-        $dataobject->addItemValue('response', '');
-        $dataobject->addItemValue('content', ws_xmws::NewXMLTag('uid', $contenttags['uid']) . ws_xmws::NewXMLTag('enabled', 'true'));
-        return $dataobject->getDataObject();
+        return $this->Answer(self::NewXMLTag('uid', $uid) . self::NewXMLTag('enabled', 'true'));
     }
 
     /**
-     * Disable a client (request tag: uid).
+     * DisableClient: <uid>.
      *
-     * @return array<string, string> Response data: 'response' (empty) and 'content' (uid and disabled tags).
+     * @return array
      */
     function DisableClient()
     {
-        $request_data = $this->RawXMWSToArray($this->wsdata);
-        $contenttags = $this->XMLDataToArray($request_data['content']);
-        $uid = ws_xmws::Account($contenttags['uid'] ?? '', true);
+        $uid = self::Target($this->Get('uid'));
         if ($uid === 0) {
-            return ws_xmws::Error('1107', 'No such account, or an administrator (the API does not switch administrators off)');
+            return self::Error('1107', 'No such account you may switch off (never an administrator)');
         }
         module_controller::DisableClient($uid);
-        $dataobject = new runtime_dataobject();
-        $dataobject->addItemValue('response', '');
-        $dataobject->addItemValue('content', ws_xmws::NewXMLTag('uid', $contenttags['uid']) . ws_xmws::NewXMLTag('disabled', 'true'));
-        return $dataobject->getDataObject();
+        return $this->Answer(self::NewXMLTag('uid', $uid) . self::NewXMLTag('disabled', 'true'));
     }
 
     /**
-     * List the enabled clients of a reseller (request tag: uid).
+     * SuspendClient: <uid>, <reason> (one line, up to 200 characters, such as "not paid"). Switched
+     * off like DisableClient; GetClient shows the reason until it is switched on again.
      *
-     * @return array<string, string> Response data: 'response' (empty) and 'content' (one client section per client).
+     * @return array
+     */
+    function SuspendClient()
+    {
+        $uid = self::Target($this->Get('uid'));
+        if ($uid === 0) {
+            return self::Error('1107', 'No such account you may suspend (never an administrator)');
+        }
+        $reason = ws_suspend::Clean((string) $this->Get('reason'));
+        if ($reason === false || $reason === '') {
+            return self::Error('1107', 'reason: one line of up to 200 characters, without < or >');
+        }
+        module_controller::DisableClient($uid);
+        ws_suspend::Set($uid, $reason, self::$actor);
+        return $this->Answer(self::NewXMLTag('uid', $uid) . self::NewXMLTag('suspended', 'true') . self::NewXMLTag('reason', $reason));
+    }
+
+    /**
+     * UnsuspendClient: <uid> (EnableClient, by its billing name).
+     *
+     * @return array
+     */
+    function UnsuspendClient()
+    {
+        $uid = self::Target($this->Get('uid'));
+        if ($uid === 0) {
+            return self::Error('1107', 'No such account you may switch on');
+        }
+        module_controller::EnableClient($uid);
+        return $this->Answer(self::NewXMLTag('uid', $uid) . self::NewXMLTag('suspended', 'false'));
+    }
+
+    /**
+     * GetAllClients: <uid> (the reseller whose clients; by default the key's own account).
+     *
+     * @return array
      */
     public function GetAllClients()
     {
-        $request_data = $this->RawXMWSToArray($this->wsdata);
-        $contenttags = $this->XMLDataToArray($request_data['content']);
-        $response_xml = "\n";
-        if (module_controller::ListClients($contenttags['uid'])) {
-            $allactiveclients = module_controller::ListClients($contenttags['uid']);
-            $currentclient = 0;
-            $newsections = "";
-            foreach ($allactiveclients as $client) {
-                // not the password hash, nor the page's own buttons
-                unset($client['password'], $client['tfreset']);
-                $newsections = $newsections . ws_xmws::NewXMLContentSection('client', $client);
-                $currentclient++;
-            }
-            $response_xml = $response_xml . $newsections;
+        $owner = (string) $this->Get('uid') === '' || (int) $this->Get('uid') === self::$actor ? self::$actor : self::Target($this->Get('uid'), true);
+        if ($owner === 0) {
+            return self::Error('1107', 'No such account whose clients you may list');
         }
-        $dataobject = new runtime_dataobject();
-        $dataobject->addItemValue('response', '');
-        $dataobject->addItemValue('content', $response_xml);
-        return $dataobject->getDataObject();
+        $xml = "\n";
+        foreach ((array) module_controller::ListClients($owner) as $client) {
+            if (!is_array($client)) {
+                continue;
+            }
+            // not the password hash, nor the page's own buttons
+            unset($client['password'], $client['tfreset']);
+            $xml .= self::NewXMLContentSection('client', $client);
+        }
+        return $this->Answer($xml);
     }
 
     /**
-     * Create a client from the request tags (resellerid, username, packageid, groupid, ...).
+     * GetClient: <uid>. Its details (never its password hash), its package, and why it was switched
+     * off when the API gave a reason.
      *
-     * @return array<string, string> Response data: 'response' (empty) and 'content' ("true" when created, else "false").
+     * @return array
+     */
+    public function GetClient()
+    {
+        $uid = self::Target($this->Get('uid'), true);
+        if ($uid === 0) {
+            return self::Error('1107', 'No such account you may see');
+        }
+        return $this->Answer(self::NewXMLContentSection('client', ws_data::Client($uid)));
+    }
+
+    /**
+     * GetClientUsage: <uid>. Use against the package's limits (disk and this month's bandwidth in
+     * MB; -1: no limit).
+     *
+     * @return array
+     */
+    public function GetClientUsage()
+    {
+        $uid = self::Target($this->Get('uid'), true);
+        if ($uid === 0) {
+            return self::Error('1107', 'No such account you may see');
+        }
+        return $this->Answer(self::NewXMLContentSection('usage', array('uid' => $uid) + ws_data::Usage($uid)));
+    }
+
+    /**
+     * CreateClient: <resellerid> (a reseller's key: itself, the default), <username>, <packageid> (the
+     * reseller's own), <groupid> (never Administrators; a reseller's key: one its own page offers),
+     * <fullname>, <email>, <address>, <postcode>, <phone>, <password>, <sendemail>, <emailsubject>,
+     * <emailbody>. Answers the new account's <uid>.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return array
      */
     public function CreateClient()
     {
-        $request_data = $this->RawXMWSToArray($this->wsdata);
-        $response_xml = "false";
-        // a client of a live account, never in the Administrators group: a leaked key must not be
-        // able to make itself an administrator
-        $groupid = ws_generic::GetTagValue('groupid', $request_data['content']);
-        if (ws_xmws::Account(ws_generic::GetTagValue('resellerid', $request_data['content'])) === 0) {
-            return ws_xmws::Error('1107', 'resellerid is not a live account');
+        global $zdbh;
+        $reseller = (string) $this->Get('resellerid') === '' ? self::$actor : (int) $this->Get('resellerid');
+        if (!self::$admin && $reseller !== self::$actor) {
+            return self::Error('1107', 'resellerid: a reseller\'s key makes its own clients only');
         }
-        if (!is_scalar($groupid) || !ctype_digit((string) $groupid) || (int) $groupid === 1) {
-            return ws_xmws::Error('1107', 'groupid must be a group other than Administrators');
+        if (self::Account($reseller) === 0 || !ctrl_support::CanSet($reseller)) {
+            return self::Error('1107', 'resellerid is not a live account that can have clients');
         }
-        $userExits = module_controller::CheckUserExists(ws_generic::GetTagValue('username', $request_data['content']));
-        if (!$userExits) {
-            if(module_controller::ExecuteCreateClient(ws_generic::GetTagValue('resellerid', $request_data['content']), ws_generic::GetTagValue('username', $request_data['content']), ws_generic::GetTagValue('packageid', $request_data['content']), ws_generic::GetTagValue('groupid', $request_data['content']), ws_generic::GetTagValue('fullname', $request_data['content']), ws_generic::GetTagValue('email', $request_data['content']), ws_generic::GetTagValue('address', $request_data['content']), ws_generic::GetTagValue('postcode', $request_data['content']), ws_generic::GetTagValue('phone', $request_data['content']), ws_generic::GetTagValue('password', $request_data['content']), ws_generic::GetTagValue('sendemail', $request_data['content']), ws_generic::GetTagValue('emailsubject', $request_data['content']), ws_generic::GetTagValue('emailbody', $request_data['content']))){
-                $response_xml = "true";
-            }
+        $package = ws_data::OwnPackage($this->Get('packageid'), $reseller);
+        if ($package === 0) {
+            return self::Error('1107', 'packageid is not one of the reseller\'s own packages');
         }
-        $dataobject = new runtime_dataobject();
-        $dataobject->addItemValue('response', '');
-        $dataobject->addItemValue('content', $response_xml);
-        return $dataobject->getDataObject();
+        $group = $this->Get('groupid');
+        if (!is_scalar($group) || !ctype_digit((string) $group) || (int) $group === 1) {
+            return self::Error('1107', 'groupid must be a group other than Administrators');
+        }
+        if (!self::$admin && !module_controller::AllowedGroup((int) $group)) {
+            return self::Error('1107', 'groupid is not one of the groups you may give');
+        }
+        $username = strtolower(str_replace(' ', '', (string) $this->Get('username')));
+        if (module_controller::CheckUserExists($username)) {
+            return self::Error('1107', 'That user name is taken');
+        }
+        $ok = module_controller::ExecuteCreateClient($reseller, $username, $package, (int) $group, (string) $this->Get('fullname'), trim((string) $this->Get('email')),
+            (string) $this->Get('address'), (string) $this->Get('postcode'), (string) $this->Get('phone'), (string) $this->Get('password'),
+            (int) $this->Get('sendemail'), (string) $this->Get('emailsubject'), (string) $this->Get('emailbody'));
+        if (!$ok) {
+            return self::Error('1107', self::Why());
+        }
+        $q = $zdbh->prepare("SELECT ac_id_pk FROM x_accounts WHERE ac_user_vc = :u AND ac_deleted_ts IS NULL");
+        $q->execute(array(':u' => $username));
+        $uid = (int) $q->fetchColumn();
+        self::$note = 'account ' . $uid;
+        return $this->Answer(self::NewXMLTag('created', 'true') . self::NewXMLTag('uid', $uid));
     }
 
     /**
-     * Check whether a user name is taken (request tag: username).
+     * UpdateClient: <uid> and any of <fullname>, <email>, <phone>, <address>, <postcode> (the others
+     * stay as they are).
      *
-     * @return array<string, string> Response data: 'response' (empty) and 'content' ("true" or "false").
+     * @return array
+     */
+    public function UpdateClient()
+    {
+        $uid = self::Target($this->Get('uid'));
+        if ($uid === 0) {
+            return self::Error('1107', 'No such account you may change (never an administrator)');
+        }
+        $u = ctrl_users::GetUserDetail($uid);
+        $v = array();
+        foreach (array('fullname', 'email', 'phone', 'address', 'postcode') as $k) {
+            $sent = $this->Get($k);
+            $v[$k] = $sent === null ? (string) $u[$k] : $sent;
+            if (mb_strlen($v[$k]) > 255 || preg_match('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F<>]/u', $v[$k])) {
+                return self::Error('1107', $k . ': up to 255 characters, without < or >');
+            }
+        }
+        if (!module_controller::ExecuteUpdateClient($uid, (int) $u['packageid'], (int) $u['enabled'], (int) $u['usergroupid'], $v['fullname'], $v['email'], $v['address'], $v['postcode'], $v['phone'], '')) {
+            return self::Error('1107', self::Why());
+        }
+        return $this->Answer(self::NewXMLTag('uid', $uid) . self::NewXMLTag('updated', 'true'));
+    }
+
+    /**
+     * ChangePackage: <uid>, <packageid> (one of the client's reseller's own packages). For upgrades and
+     * downgrades: the new limits apply at once.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return array
+     */
+    public function ChangePackage()
+    {
+        global $zdbh;
+        $uid = self::Target($this->Get('uid'));
+        if ($uid === 0) {
+            return self::Error('1107', 'No such account you may change (never an administrator)');
+        }
+        $u = ctrl_users::GetUserDetail($uid);
+        $package = ws_data::OwnPackage($this->Get('packageid'), (int) $u['resellerid']);
+        if ($package === 0) {
+            return self::Error('1107', 'packageid is not one of the client\'s reseller\'s packages');
+        }
+        if (!module_controller::ExecuteUpdateClient($uid, $package, (int) $u['enabled'], (int) $u['usergroupid'], (string) $u['fullname'], (string) $u['email'], (string) $u['address'], (string) $u['postcode'], (string) $u['phone'], '')) {
+            return self::Error('1107', self::Why());
+        }
+        // the web server's settings follow the package (PHP on or off, limits)
+        $zdbh->exec("UPDATE x_settings SET so_value_tx = 'true' WHERE so_name_vc = 'apache_changed'");
+        return $this->Answer(self::NewXMLTag('uid', $uid) . self::NewXMLTag('packageid', $package) . self::NewXMLTag('changed', 'true'));
+    }
+
+    /**
+     * CreateLoginLink: <uid>. An address that logs the client into the panel once, within two minutes
+     * (two-factor login still asks for its code). Never for an administrator.
+     *
+     * @return array
+     */
+    public function CreateLoginLink()
+    {
+        $uid = self::Target($this->Get('uid'));
+        if ($uid === 0) {
+            return self::Error('1107', 'No such account you may log in as (never an administrator)');
+        }
+        if ((int) ctrl_users::GetUserDetail($uid)['enabled'] !== 1) {
+            return self::Error('1107', 'The account is switched off');
+        }
+        return $this->Answer(self::NewXMLTag('uid', $uid) . self::NewXMLTag('url', ws_loginlink::Create($uid, self::$keyId))
+            . self::NewXMLTag('expires', time() + ws_loginlink::TTL));
+    }
+
+    /**
+     * UsernameExists: <username>.
+     *
+     * @return array
      */
     public function UsernameExists()
     {
-        $request_data = $this->RawXMWSToArray($this->wsdata);
-        $contenttags = $this->XMLDataToArray($request_data['content']);
-        $UsernameExists = module_controller::CheckUserExists($contenttags['username']);
-        $response = "false";
-        if ($UsernameExists) {
-            $response = "true";
-        }
-        $dataobject = new runtime_dataobject();
-        $dataobject->addItemValue('response', '');
-        $dataobject->addItemValue('content', $response);
-        return $dataobject->getDataObject();
+        $exists = module_controller::CheckUserExists(strtolower(str_replace(' ', '', (string) $this->Get('username'))));
+        return $this->Answer($exists ? 'true' : 'false');
+    }
+
+    /**
+     * A done answer.
+     *
+     * @param string $content The XML content.
+     * @return array
+     */
+    private function Answer($content)
+    {
+        $d = new runtime_dataobject();
+        $d->addItemValue('response', '');
+        $d->addItemValue('content', $content);
+        return $d->getDataObject();
     }
 }
-
-?>

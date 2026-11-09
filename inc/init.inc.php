@@ -179,6 +179,42 @@ if (isset($_POST['inConfEmail'])) {
     exit();
 }
 
+// A one-time login link made through the API (manage_clients CreateLoginLink): ./?loginlink=<token>.
+// It stands for the password only (ws_loginlink): two-factor login still asks for the code, and a
+// server that requires two-factor login still makes the account set it up. Whoever was logged in on
+// this browser is logged out first; a wrong or used link counts like a wrong password.
+if (isset($_GET['loginlink']) && is_string($_GET['loginlink'])) {
+    ctrl_auth::KillSession();
+    // (counted per address: a shared count would let anyone lock every link out)
+    $linkGuard = 'loginlink:' . ctrl_loginguard::Address();
+    if (ctrl_loginguard::IsLocked($linkGuard)) {
+        header("location: ./?invalidlogin");
+        exit();
+    }
+    $linkUid = ws_loginlink::Redeem($_GET['loginlink']);
+    if ($linkUid === 0) {
+        ctrl_loginguard::Failed($linkGuard);
+        header("location: ./?invalidlogin");
+        exit();
+    }
+    $linkUser = (string) ctrl_users::GetUserDetail($linkUid)['username'];
+    if (ctrl_twofactor::Required($linkUid)) {
+        $_SESSION['zp2fa'] = array('uid' => $linkUid, 'user' => $linkUser, 'remember' => false, 'secure' => true, 'time' => time());
+        header("location: ./?twofactor");
+        exit();
+    }
+    if (ctrl_twofactor::Forced()) {
+        $_SESSION['zp2fa_setup'] = array('uid' => $linkUid, 'user' => $linkUser, 'remember' => false, 'secure' => true, 'time' => time());
+        header("location: ./?twofactor-setup");
+        exit();
+    }
+    ctrl_auth::SetUserSession($linkUid, true);
+    $zdbh->prepare("UPDATE x_accounts SET ac_lastlogon_ts = :t WHERE ac_id_pk = :id")->execute(array(':t' => time(), ':id' => $linkUid));
+    runtime_hook::Execute('OnGoodUserLogin');
+    header("location: " . sentora_after_login($linkUid));
+    exit();
+}
+
 if (isset($_POST['inUsername'])) {
     if (ctrl_options::GetSystemOption('login_csfr') == 'false')
         runtime_csfr::Protect();
