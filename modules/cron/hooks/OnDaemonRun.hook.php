@@ -7,7 +7,7 @@
  * root's too). Put back Ubuntu's own permissions and remove that crontab. The jobs
  * are now /etc/cron.d/sentora-accounts, one user per account (sys_accountphp::SyncCron).
  *
- * Written by RusTus, 2026-11-05
+ * Written by RusTus, 2026-11-09
  */
 // (Debian-style cron, with a crontab group; skipped where there is none)
 $crDir = rtrim(sys_platform::Get('crontab_dir'), '/');
