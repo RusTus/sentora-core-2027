@@ -25,7 +25,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
- * Updated by RusTus, 2026-11-07
+ * Updated by RusTus, 2026-11-09
  */
 /**
  * MySQL Databases module: lists, creates and deletes the account's MySQL databases.
