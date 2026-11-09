@@ -5,8 +5,8 @@
  * Only a logged-in administrator may use it, and it only contacts
  * repositories that are listed in etc/zppy-cache/repo.list.
  *
- * GET parameters (one per request): request, modinfo, update or repostat; each
- * prints an HTML fragment.
+ * GET parameters (one per request): request, modinfo, update or repostat, each printing an
+ * HTML fragment; or scan, printing JSON.
  *
  * @package Sentora
  * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
@@ -40,6 +40,62 @@ if (isset($_GET['request'])) {
     AjaxReturnUpdate((string) $_GET['update']);
 } elseif (isset($_GET['repostat'])) {
     AjaxReturnDownloads((string) $_GET['repostat']);
+} elseif (isset($_GET['scan'])) {
+    AjaxReturnScan((string) $_GET['scan']);
+}
+
+/**
+ * Print, as JSON, what a repository offers right now compared with the panel's package list
+ * (etc/zppy-cache/package.list, which only the daemon's "zppy update" refreshes): whether it
+ * answers, how many modules it lists, the modules that are new in it (with their description
+ * from name.xml, at most 12 asked) and those it no longer lists. Only repositories in repo.list
+ * are asked.
+ *
+ * @param string $repo The repository as in repo.list.
+ * @return void
+ */
+function AjaxReturnScan($repo)
+{
+    header('Content-Type: application/json');
+    if (!repo_browser_helper::KnownRepo($repo)) {
+        echo json_encode(array('ok' => false));
+        return;
+    }
+    $base = repo_browser_helper::Base($repo);
+    $txt = repo_browser_helper::Fetch($base . '/packages.txt');
+    if (trim($txt) === '') {
+        echo json_encode(array('ok' => false));
+        return;
+    }
+    $offered = array();
+    foreach (preg_split('/\r\n|\r|\n/', $txt) as $line) {
+        $line = trim($line);
+        if ($line !== '' && $line[0] !== '#' && repo_browser_helper::ValidModule($line) && !repo_browser_helper::IsCoreModule($line)) {
+            $offered[$line] = true;
+        }
+    }
+    $known = array();
+    $list = ctrl_options::GetSystemOption('sentora_root') . 'etc/zppy-cache/package.list';
+    foreach (preg_split('/\r\n|\r|\n/', (string) @file_get_contents($list)) as $line) {
+        $cols = preg_split('/\s+/', trim($line));
+        if (isset($cols[1]) && $cols[1] === $repo && !repo_browser_helper::IsCoreModule($cols[0])) {
+            $known[$cols[0]] = true;
+        }
+    }
+    $new = array();
+    $asked = 0;
+    foreach (array_keys(array_diff_key($offered, $known)) as $module) {
+        $row = array('name' => $module, 'desc' => '', 'version' => '', 'installed' => InstalledModule($module) ? true : false);
+        if ($asked++ < 12) {
+            $info = ModuleXMLTags(null, repo_browser_helper::Fetch($base . '/' . $module . '.xml'));
+            if ($info) {
+                $row['desc'] = isset($info['desc']) ? (string) $info['desc'] : '';
+                $row['version'] = isset($info['latestversion']) && repo_browser_helper::ValidVersion((string) $info['latestversion']) ? (string) $info['latestversion'] : '';
+            }
+        }
+        $new[] = $row;
+    }
+    echo json_encode(array('ok' => true, 'count' => count($offered), 'new' => $new, 'gone' => array_keys(array_diff_key($known, $offered))));
 }
 
 /**

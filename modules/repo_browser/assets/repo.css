@@ -115,3 +115,17 @@
 .rb-debug div { font-family: SFMono-Regular, Menlo, Consolas, monospace; margin-top: 6px; white-space: pre-wrap; }
 
 @media (max-width: 640px) { .rb { padding: 12px; } .rb-tab { padding: 8px 7px; } .rb-repo-row { grid-template-columns: 1fr; } .rb-row { grid-template-columns: minmax(0, 1fr) auto; } .rb-row-side { grid-row: 2; grid-column: 1 / -1; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 4px 12px; } .rb-row-side .rb-repo { flex: 1 1 0; min-width: 0; } .rb-checking { margin-left: 0; width: 100%; padding: 0 0 6px 12px; } }
+
+/* Check all repositories now: what each repository offers, filled in as the answers come */
+.rb-tools { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.rb-checkall { margin: 0; }
+.rb-tools .rb-find { width: 260px; }
+.rb-scan { margin: 0 0 14px; padding: 10px 14px; border-radius: 6px; background: rgba(49, 112, 143, 0.08); border-left: 4px solid #31708f; }
+.rb-scan.is-ok { background: rgba(60, 118, 61, 0.08); border-left-color: #3c763d; }
+.rb-scan-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.rb-new { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
+.rb-new:empty { display: none; }
+.rb-new li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
+.rb-new-desc { flex-basis: 100%; font-size: 12px; }
+.rb-new-repo { font-size: 11px; }
+.rb-scan-note, .rb-gone { margin: 8px 0 0; }

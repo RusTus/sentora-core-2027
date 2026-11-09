@@ -50,6 +50,8 @@ class module_controller extends ctrl_module {
 	static $zppycommandblank = NULL;
 	/** @var bool|null True when the typed command started with "zppy". */
 	static $zppycommandzppynotneeded = NULL;
+	/** @var bool|null True after "Check all repositories now" (an update queued, or one already waiting). */
+	static $checkqueued = NULL;
 	/** @var bool|null ZPPY patch installed (not set any more). */
 	static $zppypatchok = NULL;
 	/** @var bool|null ZPPY patch failed (not set any more). */
@@ -617,6 +619,33 @@ class module_controller extends ctrl_module {
     }
 	
     /**
+     * "Check all repositories now": queue "zppy update" for the daemon (unless one is waiting
+     * already), so the package list is read again within 5 minutes. What the repositories offer
+     * right now is shown on the page at once (ajax.php?scan, one repository at a time).
+     *
+     * Checks the CSRF token.
+     *
+     * @return void
+     */
+    static function doCheckAll() {
+        runtime_csfr::Protect();
+        if (!repo_browser_helper::UpdatePending() && !repo_browser_helper::Enqueue(array('update'))) {
+            self::$zppycommanderror = true;
+            return;
+        }
+        self::$checkqueued = true;
+    }
+
+    /**
+     * Is a "zppy update" waiting for the daemon (template <% if UpdatePending %>)?
+     *
+     * @return bool
+     */
+    static function getUpdatePending() {
+        return repo_browser_helper::UpdatePending();
+    }
+
+    /**
      * Handle the zppy command box: queue the posted command.
      *
      * Checks the CSRF token.
@@ -1046,6 +1075,9 @@ class module_controller extends ctrl_module {
     static function getResult() {
         if (!fs_director::CheckForEmptyValue(self::$alreadyqueued)) {
             return ui_sysmessage::shout(ui_language::translate("That module or repository already has a change queued (this can take up to 5 minutes); you can queue another once it has finished (see Recent ZPPY commands)."), "zannounceerror");
+        }
+        if (!fs_director::CheckForEmptyValue(self::$checkqueued)) {
+            return ui_sysmessage::shout(ui_language::translate("Checking every repository now: what each one offers appears beside it below. The daemon reads their lists again within 5 minutes, so that new modules can then be installed."), "zannounceok");
         }
         if (!fs_director::CheckForEmptyValue(self::$repodismissed)) {
             return ui_sysmessage::shout(ui_language::translate("The repository that could not be added has been removed from the list."), "zannounceok");

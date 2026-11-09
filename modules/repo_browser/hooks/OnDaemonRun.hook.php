@@ -70,7 +70,8 @@ function RepoBrowserRunQueue()
                 RepoBrowserSecureModule($root, $args[1]);
             }
             // an upgrade: the administrators' "module update available" notice follows at once
-            if ($args[0] === 'upgrade' && $status === 'done') {
+            // (and after the repositories' lists were read again: a module may have a newer version)
+            if (in_array($args[0], array('upgrade', 'update'), true) && $status === 'done') {
                 echo "  " . repo_browser_helper::UpdateCheck() . fs_filehandler::NewLine();
             }
         }

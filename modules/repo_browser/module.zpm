@@ -7,7 +7,12 @@
     <@ result @>
     <link rel="stylesheet" href="modules/repo_browser/assets/repo.css">
 
-    <div class="rb" id="rb" data-queued="<: Queued :>" data-installed="<: Installed :>" data-not="<: Not installed :>" data-remove="<@ RemoveConfirm @>" data-update="<: Update available :>">
+    <div class="rb" id="rb" data-queued="<: Queued :>" data-installed="<: Installed :>" data-not="<: Not installed :>" data-remove="<@ RemoveConfirm @>" data-update="<: Update available :>" data-pending="<% if UpdatePending %>1<% endif %>"
+        data-modules="<: %s modules :>" data-new="<: %s new :>" data-ok="<: Repository appears to be valid. :>" data-bad="<: Repository seems to be invalid or offline. Retry fetches its package list again. :>"
+        data-checking="<: Checking your repositories :>" data-newtitle="<: New in your repositories :>" data-uptodate="<: Your module list is up to date with every repository. :>"
+        data-waitlist="<: The daemon is reading the repositories' lists again (within 5 minutes): reload the page, then install them from Available. :>"
+        data-needlist="<: Click Check all repositories now: the daemon reads their lists again within 5 minutes, then you can install them from Available. :>"
+        data-gone="<: No longer offered by its repository: :>" data-installed-already="<: already installed :>">
     <@ ZppyOut @>
 
     <% if isConfirmDeleteRepo %>
@@ -80,7 +85,18 @@
     <div class="rb-card rb-modules">
         <div class="rb-head"><div><h4><: Modules :></h4>
             <p class="rb-sub"><% if TotalPackages %><b><@ totalpackages @></b> <: modules in your repositories. :><% endif %> <: Changes are made by the daemon within 5 minutes. :></p></div>
-            <input type="search" class="form-control rb-find" placeholder="<: Find a module :>" aria-label="<: Find a module :>"></div>
+            <div class="rb-tools">
+            <form class="rb-checkall" action="./?module=repo_browser&amp;action=CheckAll" method="post">
+                <button class="btn btn-default btn-sm" type="submit" title="<: Ask every repository now for its modules and their latest versions, and have the daemon read the lists again. :>"><: Check all repositories now :></button>
+                <@ CSFR_Tag @>
+            </form>
+            <input type="search" class="form-control rb-find" placeholder="<: Find a module :>" aria-label="<: Find a module :>"></div></div>
+        <div class="rb-scan" aria-live="polite" hidden>
+            <div class="rb-scan-head"><span class="rb-wait short"></span> <b class="rb-scan-title"></b> <span class="rb-scan-count rb-sub"></span></div>
+            <ul class="rb-new"></ul>
+            <p class="rb-sub rb-scan-note" hidden></p>
+            <p class="rb-sub rb-gone" hidden></p>
+        </div>
         <% if ModuleList %>
         <div class="rb-tabs" role="tablist">
             <button type="button" class="rb-tab" role="tab" data-tab="installed"><: Installed :> <span class="rb-count"></span></button>
@@ -206,11 +222,54 @@
             el.load(base + '&' + param + '=' + encodeURIComponent(el.attr('item_id')), function () { if (done) { done(el); } });
         });
     };
-    // the repositories' own state
-    load('.rb-repo-row .controls', 'request', function (el) {
-        // a repository that can not be reached: offer Retry beside Remove
-        if (el.find('.label-danger').length) { el.closest('.rb-repo-row').find('.retry-repo').show(); }
-    });
+    var esc = function (t) { return $('<div>').text(t == null ? '' : String(t)).html(); };
+    var rbx = $('#rb'), say = function (k, n) { return (rbx.attr('data-' + k) || '').replace('%s', n); };
+
+    // Each repository is asked as the page is drawn (a few at a time): does it answer, how many
+    // modules it has, and which ones are new since the panel last read its list.
+    var scan = $('.rb-scan'), newList = scan.find('.rb-new'), gone = [], newCount = 0;
+    var repoRows = $('.rb-repo-row .controls').toArray(), scanBusy = 0, scanned = 0, scanTotal = repoRows.length;
+    var scanDone = function () {
+        scan.find('.rb-wait').remove();
+        scan.find('.rb-scan-count').text('');
+        if (newCount) {
+            scan.find('.rb-scan-title').text(say('newtitle') + ' (' + newCount + ')');
+            scan.find('.rb-scan-note').text(say(rbx.attr('data-pending') === '1' ? 'waitlist' : 'needlist')).removeAttr('hidden');
+        } else {
+            scan.find('.rb-scan-title').text(say('uptodate'));
+            scan.addClass('is-ok');
+        }
+        if (gone.length) { scan.find('.rb-gone').text(say('gone') + ' ' + gone.join(', ')).removeAttr('hidden'); }
+    };
+    var scanNext = function () {
+        if (!repoRows.length) { if (!scanBusy) { scanDone(); } return; }
+        var el = $(repoRows.shift()), repo = (el.attr('item_id') || '').replace(/^R:::/, '');
+        scanBusy++;
+        $.ajax({ url: base + '&scan=' + encodeURIComponent(repo), dataType: 'json', timeout: 60000 }).always(function (r) {
+            scanBusy--; scanned++;
+            scan.find('.rb-scan-count').text(scanned + ' / ' + scanTotal);
+            if (r && r.ok) {
+                el.html('<span class="label label-success" title="' + esc(say('ok')) + '">OK</span> <span class="rb-sub">' + esc(say('modules', r.count)) + '</span>'
+                    + (r['new'].length ? ' <span class="label label-info">' + esc(say('new', r['new'].length)) + '</span>' : ''));
+                $.each(r['new'], function (i, m) {
+                    newCount++;
+                    newList.append('<li><b>' + esc(m.name) + '</b>' + (m.version ? ' <span class="rb-sub">' + esc(m.version) + '</span>' : '')
+                        + (m.installed ? ' <span class="label label-default">' + esc(say('installed-already')) + '</span>' : '')
+                        + (m.desc ? '<span class="rb-new-desc">' + esc(m.desc) + '</span>' : '') + '<span class="rb-sub rb-new-repo">' + esc(repo) + '</span></li>');
+                });
+                $.each(r.gone || [], function (i, m) { gone.push(m); });
+            } else {
+                el.html('<span class="label label-danger" title="' + esc(say('bad')) + '">FAILED</span>');
+                // a repository that can not be reached: offer Retry beside Remove
+                el.closest('.rb-repo-row').find('.retry-repo').show();
+            }
+            scanNext();
+        });
+    };
+    if (scanTotal) {
+        scan.removeAttr('hidden').find('.rb-scan-title').text(say('checking'));
+        for (var k = 0; k < 3; k++) { scanNext(); }
+    }
 
     // Modules: one tab each for installed, updates and available, a page at a time. A row's
     // details come from the repository, so they are fetched only when the row is first shown.

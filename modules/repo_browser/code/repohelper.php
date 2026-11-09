@@ -265,6 +265,21 @@ class repo_browser_helper
     }
 
     /**
+     * Is a "zppy update" (reading the repositories' lists again) waiting for the daemon or running?
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return bool
+     */
+    static function UpdatePending()
+    {
+        global $zdbh;
+        self::QueueEnsure();
+        $sql = $zdbh->prepare("SELECT COUNT(*) FROM x_zppy_queue WHERE zq_status_vc IN ('queued', 'running') AND zq_args_tx = :a");
+        $sql->execute(array(':a' => json_encode(array('update'))));
+        return (int) $sql->fetchColumn() > 0;
+    }
+
+    /**
      * Each repository's latest add or remove job, if it is still waiting or it failed:
      * repo => array('state' => 'queued' or 'failed', 'action' => 'add' or 'remove', 'id' => job id).
      *
