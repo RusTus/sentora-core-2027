@@ -302,8 +302,16 @@ class ctrl_branding
             ON DUPLICATE KEY UPDATE br_host_vc = VALUES(br_host_vc), br_name_vc = VALUES(br_name_vc), br_colour_vc = VALUES(br_colour_vc),
                 br_welcome_vc = VALUES(br_welcome_vc), br_variant_vc = VALUES(br_variant_vc), br_updated_ts = VALUES(br_updated_ts)"
             . ($hostChanged ? ", br_state_vc = VALUES(br_state_vc), br_note_vc = '', br_tries_in = 0, br_next_ts = 0" : ''));
-        $q->execute(array(':id' => (int) $uid, ':host' => $host === '' ? null : $host, ':name' => $name, ':colour' => $colour,
-            ':welcome' => $welcome, ':variant' => $variant, ':state' => $host === '' ? '' : 'new', ':t' => time()));
+        try {
+            $q->execute(array(':id' => (int) $uid, ':host' => $host === '' ? null : $host, ':name' => $name, ':colour' => $colour,
+                ':welcome' => $welcome, ':variant' => $variant, ':state' => $host === '' ? '' : 'new', ':t' => time()));
+        } catch (PDOException $e) {
+            // (another account saved the same address a moment ago: the address is unique)
+            if ($hostChanged && $e->getCode() === '23000') {
+                return 'host:Another account uses that address already.';
+            }
+            throw $e;
+        }
         if ($hostChanged) {
             // the daemon writes (or removes) the address's web server settings
             $zdbh->exec("UPDATE x_settings SET so_value_tx = 'true' WHERE so_name_vc = 'apache_changed'");
@@ -429,21 +437,26 @@ class ctrl_branding
             return $cache[$uid] = null;
         }
         self::Ensure();
-        $up = $zdbh->prepare("SELECT ac_reseller_fk FROM x_accounts WHERE ac_id_pk = :id");
+        $up = $zdbh->prepare("SELECT ac_reseller_fk, ac_enabled_in = 1 AND ac_deleted_ts IS NULL AS live FROM x_accounts WHERE ac_id_pk = :id");
         $seen = array();
         $cur = $uid;
         $found = null;
         while ($cur > 0 && !isset($seen[$cur]) && count($seen) < 10) {
             $seen[$cur] = true;
-            if (self::CanSet($cur)) {
+            $up->execute(array(':id' => $cur));
+            $row = $up->fetch(PDO::FETCH_ASSOC);
+            if (!$row) {
+                break;
+            }
+            // (a switched-off or deleted reseller's brand is skipped, as on the login page)
+            if ((int) $row['live'] === 1 && self::CanSet($cur)) {
                 $b = self::Get($cur);
                 if (self::HasLook($b)) {
                     $found = $b;
                     break;
                 }
             }
-            $up->execute(array(':id' => $cur));
-            $cur = (int) $up->fetchColumn();
+            $cur = (int) $row['ac_reseller_fk'];
         }
         if ($found === null) {
             $admin = self::AdminId();
@@ -587,6 +600,8 @@ class ctrl_branding
         } catch (Exception $e) {
             return '';
         }
+        // (ForUser() only returns a brand of a live account that may brand the panel, with the module
+        // on: the same accounts whose addresses Apache serves)
         return ($b && $b['host'] !== '' && $b['state'] === 'live') ? 'https://' . $b['host'] : '';
     }
 

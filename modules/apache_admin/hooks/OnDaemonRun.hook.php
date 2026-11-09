@@ -207,7 +207,8 @@ function SentoraPanelAliases() {
  * folder, where the daemon puts it) and sends everything else to https; until the address has its
  * certificate, the other requests get "being set up" (the login is never offered without https).
  * With the certificate, an https site that runs the panel exactly as the main address does: the
- * same folder, the panel's own PHP-FPM pool and logs; the login page shows the reseller's brand.
+ * same folder, the panel's own PHP-FPM pool and logs, and the administrator's own panel settings
+ * (Apache Config); the login page shows the reseller's brand.
  *
  * Written by RusTus, 2026-11-09
  *
@@ -281,6 +282,9 @@ function BuildBrandingVhosts($serveremail) {
 			$line .= '        Header set Cache-Control "no-cache"' . $nl;
 			$line .= "    </LocationMatch>" . $nl;
 			$line .= "</IfModule>" . $nl;
+			// the administrator's own settings for the panel (Apache Config), as on the main
+			// address: a limit on who may reach the panel covers these addresses too
+			$line .= sys_apachecustom::Block('global_zpcustom', ctrl_options::GetSystemOption('global_zpcustom'));
 			$line .= "</VirtualHost>" . $nl;
 		}
 		$line .= "# END BRANDING: " . $host . $nl . $nl;
