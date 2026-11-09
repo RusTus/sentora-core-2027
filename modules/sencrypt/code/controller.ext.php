@@ -147,6 +147,7 @@ class module_controller extends ctrl_module {
 			'info' => '<circle cx="12" cy="12" r="9"/><path d="M12 16v-5M12 8h.01"/>',
 			'key' => '<circle cx="8" cy="15" r="4"/><path d="m11 12 9-9M17 6l3 3"/>',
 			'clock' => '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+			'open' => '<path d="M14 4h6v6"/><path d="M20 4 10 14"/><path d="M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/>',
 		);
 		if (!isset($p[$name])) {
 			return '';
@@ -363,7 +364,9 @@ class module_controller extends ctrl_module {
 		} else {
 			$type = '<span class="sc-type tp">' . self::Icon('key') . self::t('Your own') . '</span><div class="sc-muted">' . self::t('Self-signed or bought; renew it yourself') . '</div>';
 		}
-		$actions = '';
+		// the site itself, over https (what the certificate is for), in a new tab
+		$actions = '<a class="btn btn-default btn-sm sc-btn sc-visit" href="https://' . self::h($domain) . '/" target="_blank" rel="noopener">'
+			. self::Icon('open') . '<span>' . self::t('Visit') . '</span></a>';
 		if ($panel && $le) {
 			$actions .= self::ActionButton('DeletePanelSSL', 'inDomain', $domain, 'Delete', 'trash', 'default', 'Delete the certificate of %s? The panel goes back to plain http.');
 		} elseif ($panel) {

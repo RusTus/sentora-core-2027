@@ -61,6 +61,7 @@
 .sh-detail-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
 .sh-detail-head h2 { margin: 0; font-size: 20px; font-weight: 600; overflow-wrap: anywhere; }
 .sh-detail-head .btn { display: inline-flex; align-items: center; gap: 4px; }
+.sh-detail-head .sh-visit { margin-left: auto; }
 .sh-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 14px; align-items: start; }
 .sh-cols .sh-card { margin: 0; }
 .sh-card h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; font-size: 15px; font-weight: 600; }

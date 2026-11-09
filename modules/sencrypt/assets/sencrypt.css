@@ -58,6 +58,7 @@
 
 /* buttons */
 .sc-act { display: inline-block; margin: 0 0 0 6px; }
+.sc-visit { margin: 0 0 0 6px; vertical-align: top; }
 .sc-btn { display: inline-flex !important; align-items: center; gap: 6px; }
 .sc-btn .sc-ico { width: 15px; height: 15px; }
 
@@ -89,5 +90,5 @@
     .sc { padding: 12px; }
     .sc-tab { padding: 8px 10px; }
     .sc-table .sc-actions { white-space: normal; }
-    .sc-act { margin: 2px 0 2px 4px; }
+    .sc-act, .sc-visit { margin: 2px 0 2px 4px; }
 }

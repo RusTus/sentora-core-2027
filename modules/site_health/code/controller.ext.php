@@ -54,6 +54,7 @@ class module_controller extends ctrl_module
             'chart' => '<path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M7 15v2"/><path d="M11 11v6"/><path d="M15 8v9"/><path d="M19 5v12"/>',
             'clock' => '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/>',
             'back' => '<path d="m15 18-6-6 6-6"/>',
+            'open' => '<path d="M14 4h6v6"/><path d="M20 4 10 14"/><path d="M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/>',
             'right' => '<path d="m9 18 6-6-6-6"/>',
         );
         return '<svg class="' . $class . '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
@@ -335,7 +336,9 @@ class module_controller extends ctrl_module
         $d = $x['d'];
         $today = sys_sitehealth::Day();
         $out = '<div class="sh-detail-head"><a class="btn btn-default btn-sm" href="./?module=site_health">' . self::Icon('back', 'sh-ico-sm') . self::t('All websites') . '</a>'
-            . '<h2>' . self::h($x['name']) . '</h2>' . self::Pill($x['level']) . '</div>';
+            . '<h2>' . self::h($x['name']) . '</h2>' . self::Pill($x['level'])
+            . '<a class="btn btn-default btn-sm sh-visit" href="' . self::h((!empty($d['check']['https']) ? 'https://' : 'http://') . $x['name'] . '/') . '" target="_blank" rel="noopener">'
+            . self::Icon('open', 'sh-ico-sm') . self::t('Visit') . '</a></div>';
         if ($x['reasons']) {
             $out .= '<div class="sh-card">' . self::Reasons($x['reasons'], 0, $x['sub']) . '</div>';
         }
