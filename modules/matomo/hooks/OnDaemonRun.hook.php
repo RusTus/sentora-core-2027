@@ -75,7 +75,8 @@ function MatomoSync()
             $spec['delete_users'][] = $u['mu_login_vc'];
         }
     }
-    if ((string) ctrl_options::GetSystemOption('matomo_importer_token') === '') {
+    // (also folds the extra rows earlier panels left into one: see matomo_helper::ImporterToken())
+    if (matomo_helper::ImporterToken() === '') {
         $spec['importer'] = 'sentora_importer';
         $spec['importer_new_token'] = true;
     }
@@ -126,7 +127,7 @@ function MatomoSync()
         $zdbh->prepare("DELETE FROM x_matomo_users WHERE mu_login_vc = :l")->execute(array(':l' => $login));
     }
     if (isset($res['tokens']['sentora_importer'])) {
-        ctrl_options::SetSystemOption('matomo_importer_token', $res['tokens']['sentora_importer'], true);
+        matomo_helper::ImporterToken((string) $res['tokens']['sentora_importer']);
     }
     file_put_contents($hashFile, hash('sha256', $json));
     echo "Matomo: " . count($res['sites']) . " sites, " . count($accounts) . " accounts in step." . fs_filehandler::NewLine();

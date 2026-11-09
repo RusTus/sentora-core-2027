@@ -28,7 +28,7 @@ function MatomoImportLogs()
 {
     global $zdbh;
     matomo_helper::Ensure();
-    $token = (string) ctrl_options::GetSystemOption('matomo_importer_token');
+    $token = matomo_helper::ImporterToken();
     if (!preg_match('/^[0-9a-f]{32,64}$/', $token)) {
         echo "No importer token yet (the 5-minute sync makes one)." . fs_filehandler::NewLine();
         return;

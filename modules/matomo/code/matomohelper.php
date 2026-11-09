@@ -52,6 +52,45 @@ class matomo_helper
     }
 
     /**
+     * The log importer's Matomo token: kept in one x_settings row (the installer makes it, empty).
+     * Panels before 2027.60 saved each new token as another row while reading the first, empty one,
+     * so the hourly import never started and the 5-minute sync made a new token every run: those
+     * rows are folded into one here, keeping the newest token.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param string|null $token A new token to keep; null only tidies.
+     * @return string The token kept ('' when there is none).
+     */
+    static function ImporterToken($token = null)
+    {
+        global $zdbh;
+        $rows = $zdbh->query("SELECT so_id_pk, so_value_tx FROM x_settings WHERE so_name_vc = 'matomo_importer_token' ORDER BY so_id_pk")->fetchAll(PDO::FETCH_ASSOC);
+        $keep = '';
+        foreach ($rows as $r) {
+            if (preg_match('/^[0-9a-f]{32,64}$/', (string) $r['so_value_tx'])) {
+                $keep = (string) $r['so_value_tx'];
+            }
+        }
+        if ($token !== null && preg_match('/^[0-9a-f]{32,64}$/', $token)) {
+            $keep = $token;
+        }
+        if (!$rows) {
+            $zdbh->prepare("INSERT INTO x_settings (so_name_vc, so_cleanname_vc, so_value_tx, so_desc_tx, so_module_vc, so_usereditable_en)
+                VALUES ('matomo_importer_token', 'Matomo importer token', :v, 'Token of the Matomo super user the daemon uses for log import (set automatically).', 'Matomo', 'false')")
+                ->execute(array(':v' => $keep));
+            return $keep;
+        }
+        $first = (int) $rows[0]['so_id_pk'];
+        if ((string) $rows[0]['so_value_tx'] !== $keep) {
+            $zdbh->prepare("UPDATE x_settings SET so_value_tx = :v WHERE so_id_pk = :id")->execute(array(':v' => $keep, ':id' => $first));
+        }
+        if (count($rows) > 1) {
+            $zdbh->prepare("DELETE FROM x_settings WHERE so_name_vc = 'matomo_importer_token' AND so_id_pk <> :id")->execute(array(':id' => $first));
+        }
+        return $keep;
+    }
+
+    /**
      * Get the Matomo address on the panel's domain.
      *
      * @return string The URL, ending with a slash.
