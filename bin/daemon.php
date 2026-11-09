@@ -16,7 +16,7 @@
  * - added timestamp of begin and end of dameon run for logfile
  * - corrected OnDaemonHour that occured on each cron run (5 min,)
  *
- * Updated by RusTus, 2026-11-08
+ * Updated by RusTus, 2026-11-09
  */
 // Only ever run from the command line (cron, sentora-update): bin/.htaccess keeps it off the web,
 // and this keeps it so should that file not be read
