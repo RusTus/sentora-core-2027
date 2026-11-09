@@ -12,7 +12,7 @@
 #   sentora-php-install 7.1 <bundle file>   from a file instead of the GitHub release
 #   sentora-php-install 7.1 --yes           update without asking
 #
-# The bundle (sentora-php-<version>-ubuntu26.04-amd64.tar.gz) comes from the "current" release of
+# The bundle (sentora-php-<version>-ubuntu26.04-amd64.tar.gz, on Debian 13 sentora-php-<version>-debian13-amd64.tar.gz) comes from the "current" release of
 # RusTus/sentora-installers-2027 (TAG=<tag> in the environment for another) and is checked against the
 # SHA-256 GitHub lists for it.
 set -euo pipefail
@@ -36,7 +36,9 @@ if [[ ! "$MM" =~ ^[78]\.[0-9]+$ ]]; then
 fi
 [ "$(id -u)" -eq 0 ] || { echo "Run this as root."; exit 1; }
 P="/opt/sentora-php/$MM"
-NAME="sentora-php-$MM-ubuntu26.04-amd64.tar.gz"
+# Bundles are built for one system: Ubuntu 26.04 or Debian 13
+OS_TAG=$(. /etc/os-release; [ "${ID:-}" = debian ] && echo "debian${VERSION_ID:-}" || echo "ubuntu${VERSION_ID:-26.04}")
+NAME="sentora-php-$MM-$OS_TAG-amd64.tar.gz"
 SERVICE="sentora-php$MM-fpm"
 UPDATE=0
 [ -d "$P/etc" ] && UPDATE=1
@@ -62,9 +64,14 @@ if [ -z "$FILE" ]; then
 fi
 tar -tzf "$FILE" "opt/sentora-php/$MM/sbin/php-fpm" > /dev/null 2>&1 || { echo "$FILE is not a PHP $MM bundle. Nothing changed."; exit 1; }
 
-# the libraries the bundles link against (all part of Ubuntu 26.04; newer bundles need more, such as LDAP's)
-apt-get -qq -y install libpng16-16t64 libjpeg-turbo8 libfreetype6 libwebp7 libgmp10 zlib1g libldap2 libgnutls30t64 \
-    libonig5 libzip5 libsodium23 libargon2-1 libsqlite3-0 libxml2-16 libcurl4t64 libicu78 libxslt1.1 libssl3t64 > /dev/null 2>&1 || true
+# the libraries the bundles link against (all part of the system; newer bundles need more, such as LDAP's)
+if [ "$OS_TAG" = debian13 ]; then
+    apt-get -qq -y install libpng16-16t64 libjpeg62-turbo libfreetype6 libwebp7 libgmp10 zlib1g libldap2 libgnutls30t64 \
+        libonig5 libzip5 libsodium23 libargon2-1 libsqlite3-0 libxml2 libcurl4t64 libicu76 libxslt1.1 libssl3t64 > /dev/null 2>&1 || true
+else
+    apt-get -qq -y install libpng16-16t64 libjpeg-turbo8 libfreetype6 libwebp7 libgmp10 zlib1g libldap2 libgnutls30t64 \
+        libonig5 libzip5 libsodium23 libargon2-1 libsqlite3-0 libxml2-16 libcurl4t64 libicu78 libxslt1.1 libssl3t64 > /dev/null 2>&1 || true
+fi
 
 # --- already installed: replace its program files with the bundle's, keep its settings (etc/) --------
 if [ "$UPDATE" = 1 ]; then
@@ -136,7 +143,8 @@ sed -i "s|^;date.timezone =.*|date.timezone = $TZ_NAME|" "$P/etc/php.ini"
 sed -i "s|^;upload_tmp_dir =.*|upload_tmp_dir = $DATA/temp/|" "$P/etc/php.ini"
 sed -i "s|^mysqli.default_socket =.*|mysqli.default_socket = /var/run/mysqld/mysqld.sock|" "$P/etc/php.ini"
 sed -i "s|^pdo_mysql.default_socket *=.*|pdo_mysql.default_socket = /var/run/mysqld/mysqld.sock|" "$P/etc/php.ini"
-echo "zend_extension=opcache.so" > "$P/etc/conf.d/10-opcache.ini"
+# (from PHP 8.5 opcache is part of PHP itself, with no opcache.so to load)
+if [ -f "$("$P/bin/php-config" --extension-dir)/opcache.so" ]; then echo "zend_extension=opcache.so" > "$P/etc/conf.d/10-opcache.ini"; else rm -f "$P/etc/conf.d/10-opcache.ini"; fi
 if [ -x "$P/bin/sentora-php-addons" ]; then echo "Add-ons:"; "$P/bin/sentora-php-addons"; fi
 cat > "$P/etc/php-fpm.conf" <<EOF_FPM
 [global]

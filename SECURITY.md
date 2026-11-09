@@ -5,9 +5,10 @@
 | Version | Supported |
 | --- | --- |
 | Sentora-2027 (Ubuntu 26.04) | :white_check_mark: |
+| Sentora-2027 (Debian 13) | :white_check_mark: |
 | Sentora 2.0.2 and older | :x: |
 
-Extra PHP versions follow PHP's own support dates: PHP 8.2 gets security fixes until 31 December 2026, PHP 8.3 until 31 December 2027 and PHP 8.4 until 31 December 2028.
+Extra PHP versions follow PHP's own support dates: PHP 8.2 gets security fixes until 31 December 2026, PHP 8.3 until 31 December 2027, PHP 8.4 until 31 December 2028 and PHP 8.5 until 31 December 2029.
 
 ## Reporting a vulnerability
 

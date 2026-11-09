@@ -1,6 +1,6 @@
 # Contributing to Sentora-2027
 
-Thanks for helping. This build targets **Ubuntu 26.04 only**, with PHP 8.5, MySQL 8.4 and Apache 2.4.
+Thanks for helping. This build targets **Ubuntu 26.04** (PHP 8.5, MySQL 8.4, Apache 2.4) and **Debian 13** (Debian's own PHP 8.4, MariaDB 11.8, Apache 2.4).
 
 ## Reporting bugs and asking for features
 
@@ -14,7 +14,7 @@ The code lives in two repositories, both on the branch `master2027`:
 - [RusTus/sentora-installers-2027](https://github.com/RusTus/sentora-installers-2027): service configuration, SQL and build sources
 
 1. Branch from `master2027`, and open the pull request against `master2027`. Keep each pull request to one change.
-2. Test on a fresh Ubuntu 26.04 install, then run `sentora-post-install-check` and `sentora-smoke-test`.
+2. Test on a fresh Ubuntu 26.04 install (and Debian 13 when the change touches the system: packages, services, paths), then run `sentora-post-install-check` and `sentora-smoke-test`.
 3. Add a line to [CHANGELOG.md](../CHANGELOG.md) describing the change.
 
 ## Rules every module follows

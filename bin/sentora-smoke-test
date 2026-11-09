@@ -64,7 +64,7 @@ ACC_ID=""; WEBU=""; FTPUSER=""; MAILADDR=""; DBNAME=""; MYUSER=""; MYPW=""; BACK
 pcurl() { curl -sk --max-time 30 --resolve "$FQDN:443:127.0.0.1" -c "$CJ" -b "$CJ" "$@"; }
 token() { pcurl "https://$FQDN/?module=$1" | grep -o 'name="csfr_token" value="[^"]*"' | head -1 | sed 's/.*value="//;s/"//'; }
 php_panel() { # run PHP with the panel loaded, as the administrator (zadmin)
-    ( cd "$PANEL" && php -r 'chdir("'"$PANEL"'"); require "dryden/loader.inc.php"; require "cnf/db.php"; require "inc/dbc.inc.php"; $_SESSION["zpuid"] = 1; '"$1" "${@:2}" 2>&1 )
+    ( cd "$PANEL" && php -r 'chdir("'"$PANEL"'"); require "dryden/loader.inc.php"; require "cnf/db.php"; require "inc/dbc.inc.php"; $_SESSION["zpuid"] = 1; $GLOBALS["controller"] = new runtime_controller(); '"$1" "${@:2}" 2>&1 )
 }
 daemon_run() { php "$PANEL/bin/daemon.php" > "$TMP/daemon.log" 2>&1; }
 
@@ -269,7 +269,8 @@ s_mysql_create() {
     [ -n "$dbid" ] || { DBNAME=""; WHY="the database was not made"; return 1; }
     pcurl -o "$TMP/p.html" -d "inUserName=usr&inDatabase=$dbid&inAccess=1&csfr_token=$(token mysql_users)" "https://$FQDN/?module=mysql_users&action=CreateUser"
     MYUSER="${U}_usr"
-    MYPW=$(grep -o '<code[^>]*>[^<]*</code>' "$TMP/p.html" | head -1 | sed 's/<[^>]*>//g')
+    # (the password's own box: the page also shows the user name and the server in <code>)
+    MYPW=$(grep -o '<code class="mu-pw">[^<]*</code>' "$TMP/p.html" | head -1 | sed 's/<[^>]*>//g')
     [ -n "$MYPW" ] || { WHY="the MySQL user was made but its password was not shown"; return 1; }
 }
 s_mysql_login() {
@@ -281,7 +282,8 @@ s_mysql_login() {
 }
 show_pw() { # module action field -> the password Show password returns
     pcurl -o "$TMP/s.html" -d "$3=1&inConfirmPw=$UPW&csfr_token=$(token "$1")" "https://$FQDN/?module=$1&action=$2"
-    grep -o '<code[^>]*>[^<]*</code>' "$TMP/s.html" | head -1 | sed 's/<[^>]*>//g'
+    # (MySQL Users shows the user name in <code> too: its password has a box of its own)
+    { grep -o '<code class="mu-pw">[^<]*</code>' "$TMP/s.html" || grep -o '<code[^>]*>[^<]*</code>' "$TMP/s.html"; } | head -1 | sed 's/<[^>]*>//g'
 }
 s_show_mysql() {
     need MYPW "Create a database and MySQL user" || return $?

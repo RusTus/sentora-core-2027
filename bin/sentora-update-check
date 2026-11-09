@@ -1,6 +1,6 @@
 #!/bin/bash
 # sentora-update-check: which of the apps bundled with Sentora are behind their latest
-# release, and how many Ubuntu updates are waiting.
+# release, and how many system updates (Ubuntu's or Debian's) are waiting.
 #
 # Run it by hand, as root:   bash /etc/sentora/panel/bin/sentora-update-check
 #
@@ -78,11 +78,13 @@ for row in "${ROWS[@]}"; do
     printf "%-24s %-12s %-12s %s\n" "$name" "$have" "${want:-commit}" "$status"
 done
 echo
-# Ubuntu's own packages (Apache, PHP, MySQL, Postfix, Dovecot, SOGo...)
+# The system's own packages (Ubuntu's or Debian's: Apache, PHP, MySQL or MariaDB, Postfix, Dovecot, SOGo...)
+OS_NAME=$(. /etc/os-release; echo "${NAME%% *}")
+OS_TAG=$(. /etc/os-release; [ "${ID:-}" = debian ] && echo "debian${VERSION_ID:-}" || echo "ubuntu${VERSION_ID:-26.04}")
 apt-get -qq update > /dev/null 2>&1
 all=$(apt-get -s -o Debug::NoLocking=1 upgrade 2>/dev/null | grep -c '^Inst ')
 sec=$(apt-get -s -o Debug::NoLocking=1 upgrade 2>/dev/null | grep '^Inst ' | grep -ci 'security')
-echo "Ubuntu packages: $all update(s) waiting, $sec of them security updates$( [ "$all" -gt 0 ] && echo " (apt-get upgrade)")."
+echo "${OS_NAME:-System} packages: $all update(s) waiting, $sec of them security updates$( [ "$all" -gt 0 ] && echo " (apt-get upgrade)")."
 echo
 if [ $behind -gt 0 ]; then
     echo "$behind bundled app(s) behind: they are updated by rebuilding the Sentora bundles"
@@ -105,7 +107,7 @@ for fpm in /opt/sentora-php/*/sbin/php-fpm; do
     if [ -z "$want" ]; then
         echo "  PHP $branch: $have (could not check: no access to github.com)"
     elif newer "$have" "$want"; then
-        echo "  PHP $branch: $have, PHP $want is out: UPDATE AVAILABLE (rebuild sentora-php-$branch-ubuntu26.04-amd64.tar.gz, usually security fixes)"
+        echo "  PHP $branch: $have, PHP $want is out: UPDATE AVAILABLE (rebuild sentora-php-$branch-$OS_TAG-amd64.tar.gz, usually security fixes)"
         PHP_BEHIND=$((PHP_BEHIND + 1))
     else
         echo "  PHP $branch: $have (latest)"

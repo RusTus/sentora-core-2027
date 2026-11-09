@@ -26,8 +26,8 @@ A screenshot, or the output of `sentora-post-install-check`, if it helps.
 
 **Server**
 - Sentora version: [shown in the panel's footer, e.g. Sentora-2027]
-- Ubuntu version: [output of `lsb_release -d`]
-- Installed with `sentora2027-ub26.04`: yes / no
+- System: [Ubuntu 26.04 or Debian 13: the PRETTY_NAME line of `/etc/os-release`]
+- Installed with `sentora2027-ub26.04` or `sentora2027-deb13`: yes / no
 
 **Anything else**
 Other details that might help.

@@ -110,6 +110,12 @@ function c($name)
 function ui_cols() { $c = (int) @exec('tput cols 2> /dev/null'); return $c >= 40 ? $c : 80; }
 function ui_logline($s) { global $LOG; @file_put_contents($LOG, date('Y-m-d H:i:s') . '  ' . $s . "\n", FILE_APPEND); }
 function ui_clear() { global $UI; if ($UI['tty'] && $UI['drawn']) { echo "\r\e[K"; $UI['drawn'] = false; } }
+// "Ubuntu 26.04" or "Debian 13": the system this runs on
+function ui_os()
+{
+    $o = @parse_ini_file('/etc/os-release') ?: array();
+    return strtok((string) ($o['NAME'] ?? 'Linux'), ' ') . (isset($o['VERSION_ID']) ? ' ' . $o['VERSION_ID'] : '');
+}
 function ui_bar($bg, $text) { echo c($bg) . c('bold') . c('white') . str_pad($text, ui_cols()) . c('reset') . "\n"; }
 function ui_banner($sub)
 {
@@ -117,7 +123,7 @@ function ui_banner($sub)
     $ver = trim((string) @file_get_contents(dirname(__DIR__) . '/VERSION'));
     // a clean screen to start on, like "clear" (on a terminal only: the screen and its scrollback)
     echo $UI['tty'] && !getenv('SENTORA_MIGRATE_CHILD') ? "\e[H\e[2J\e[3J" : '', "\n";
-    ui_bar('bg_title', '  Sentora-' . ($ver !== '' ? preg_replace('/[^A-Za-z0-9._-]/', '', $ver) : '2027') . ' for Ubuntu 26.04  -  Moving accounts from an old server');
+    ui_bar('bg_title', '  Sentora-' . ($ver !== '' ? preg_replace('/[^A-Za-z0-9._-]/', '', $ver) : '2027') . ' for ' . ui_os() . '  -  Moving accounts from an old server');
     if ($sub !== '') { echo c('dim') . '  ' . $sub . c('reset') . "\n"; }
     echo "\n";
 }

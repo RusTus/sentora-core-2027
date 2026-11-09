@@ -66,7 +66,7 @@ function DeleteClientDatabaseUser() {
 								UPDATE x_mysql_users
 								SET mu_deleted_ts = :time 
 								WHERE mu_id_pk = :mu_id_pk");
-                        $delete->bindParam(':time', time());
+                        $delete->bindValue(':time', time());
                         $delete->bindParam(':mu_id_pk', $rowuser['mu_id_pk']);
                         $delete->execute();
                         $delete = $zdbh->prepare("

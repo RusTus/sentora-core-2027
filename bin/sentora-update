@@ -76,7 +76,7 @@ ui_bar() { # background text
 ui_banner() { # subtitle
     local ver; ver=$(head -c 32 "$PANEL/VERSION" 2> /dev/null | tr -cd 'A-Za-z0-9._-')
     echo >&3
-    ui_bar "$BG_TITLE" "  Sentora-${ver:-2027} for Ubuntu 26.04  -  Panel update"
+    ui_bar "$BG_TITLE" "  Sentora-${ver:-2027} for $(. /etc/os-release 2> /dev/null; echo "${NAME%% *} ${VERSION_ID:-}")  -  Panel update"
     [ -n "$1" ] && printf '%s  %s%s\n' "$C_DIM" "$1" "$C_RESET" >&3
     echo >&3
 }

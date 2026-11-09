@@ -137,7 +137,8 @@ $names = array();
 foreach ($out['procs'] as $p) {
     $names[$p[1]] = true;
 }
-$services = array('Apache' => array('apache2'), 'MySQL' => array('mysqld'), 'PHP-FPM' => array('php-fpm8.5', 'php-fpm'),
+$services = array('Apache' => array('apache2'), 'MySQL' => array('mysqld', 'mariadbd'),
+    'PHP-FPM' => array('php-fpm' . PHP_MAJOR_VERSION . '.' . PHP_MINOR_VERSION, 'php-fpm'),
     'Postfix' => array('master'), 'Dovecot' => array('dovecot'), 'BIND' => array('named'), 'ProFTPD' => array('proftpd'),
     'SOGo' => array('sogod'), 'Memcached' => array('memcached'), 'fail2ban' => array('fail2ban-server', 'fail2ban-serve'),
     'Cron' => array('cron'), 'SSH' => array('sshd'));
