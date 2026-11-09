@@ -1,10 +1,11 @@
 # Sentora-2027
 
-An open-source web hosting control panel for **Ubuntu 26.04** and **Debian 13**, rebuilt from Sentora 2.0.2 for PHP 8.5, MySQL 8.4 and Apache 2.4 (on Debian: Debian's own PHP 8.4 and MariaDB).
+An open-source web hosting control panel for **Ubuntu 26.04**, **Debian 13** and **AlmaLinux 10**, rebuilt from Sentora 2.0.2 for PHP 8.5, MySQL 8.4 and Apache 2.4 (on Debian and AlmaLinux: their own PHP and MariaDB).
 
 ![Release](https://img.shields.io/badge/release-Sentora--2027-2b6cb0)
 ![Ubuntu](https://img.shields.io/badge/Ubuntu-26.04-E95420?logo=ubuntu&logoColor=white)
 ![Debian](https://img.shields.io/badge/Debian-13-A81D33?logo=debian&logoColor=white)
+![AlmaLinux](https://img.shields.io/badge/AlmaLinux-10-0F4266?logo=almalinux&logoColor=white)
 ![PHP](https://img.shields.io/badge/PHP-8.5-777BB4?logo=php&logoColor=white)
 ![MySQL](https://img.shields.io/badge/MySQL-8.4-4479A1?logo=mysql&logoColor=white)
 ![License](https://img.shields.io/badge/license-GPLv3-blue)
@@ -14,7 +15,7 @@ Sentora-2027 runs a web hosting server from the browser: websites, domains and D
 This README is the whole guide: how to install and update the server, how to use every part of the panel as its administrator, and how it works behind the scenes. The [change log](CHANGELOG.md) lists every change in detail.
 
 > [!IMPORTANT]
-> Sentora-2027 needs a **fresh Ubuntu 26.04 or Debian 13 server**. It can't upgrade an existing Sentora or ZPanel server, and the installer stops if it finds one. Websites move over from an old Sentora server with two commands (see [Moving websites from an old Sentora server](#moving-websites-from-an-old-sentora-server)).
+> Sentora-2027 needs a **fresh Ubuntu 26.04, Debian 13 or AlmaLinux 10 server**. It can't upgrade an existing Sentora or ZPanel server, and the installer stops if it finds one. Websites move over from an old Sentora server with two commands (see [Moving websites from an old Sentora server](#moving-websites-from-an-old-sentora-server)).
 
 ## Contents
 
@@ -82,7 +83,7 @@ The installer, the service settings and the PHP bundles come from the companion 
 
 ## Requirements
 
-- A clean install of Ubuntu 26.04 LTS or Debian 13 (amd64), with no other control panel, web or mail server. A minimal Debian with only the SSH server is enough.
+- A clean install of Ubuntu 26.04 LTS, Debian 13 or AlmaLinux 10 / Rocky Linux 10 (amd64), with no other control panel, web or mail server. A minimal install with only the SSH server is enough.
 - Root access, and access from the server to github.com and api.github.com.
 - A correct clock: the installer checks it and stops if it is more than 2 minutes off.
 - A fully qualified host name for the panel (for example `panel.example.com`), ideally with an A record pointing at the server, and the server's IP address.
@@ -109,14 +110,29 @@ wget -O sentora2027-deb13 https://github.com/RusTus/sentora-installers-2027/rele
 bash sentora2027-deb13
 ```
 
-Both installers ask the same questions and set up the same panel. On Debian every service comes from Debian's own packages, so apt and Debian's daily security updates keep them current:
+On AlmaLinux 10 (or Rocky Linux 10) the installer is `sentora2027-alma10` (`dnf install -y wget` first):
 
-| | Ubuntu 26.04 | Debian 13 |
-| --- | --- | --- |
-| PHP (the panel's, and the sites' default) | 8.5 | 8.4 |
-| Extra PHP versions (Sentora's builds) | 8.2, 8.3, 8.4, and 7.1 for moved sites | 8.2, 8.3, 8.5, and 7.1 for moved sites (7.1 without imap: Debian has no c-client) |
-| Database server | MySQL 8.4 | MariaDB 11.8 (the panel calls it MySQL; its users log in with `mysql_native_password`, MariaDB's normal method) |
-| Apache, Postfix, Dovecot, BIND, ProFTPD, SOGo | Ubuntu's | Debian's (the same versions or close: Apache 2.4, Postfix 3.10, Dovecot 2.4, BIND 9.20, ProFTPD 1.3.8, SOGo 5.12) |
+```bash
+wget -O sentora2027-alma10 https://github.com/RusTus/sentora-installers-2027/releases/download/current/sentora2027-alma10
+```
+
+```bash
+bash sentora2027-alma10
+```
+
+The installers ask the same questions and set up the same panel. On Debian every service comes from Debian's own packages, so apt and Debian's daily security updates keep them current:
+
+| | Ubuntu 26.04 | Debian 13 | AlmaLinux 10 |
+| --- | --- | --- | --- |
+| PHP (the panel's, and the sites' default) | 8.5 | 8.4 | 8.3 |
+| Extra PHP versions (Sentora's builds) | 8.2, 8.3, 8.4, and 7.1 for moved sites | 8.2, 8.3, 8.5, and 7.1 for moved sites (7.1 without imap: Debian has no c-client) | 8.2, 8.4, 8.5, and 7.1 for moved sites (without imap) |
+| Database server | MySQL 8.4 | MariaDB 11.8 (the panel calls it MySQL; its users log in with `mysql_native_password`, MariaDB's normal method) | MariaDB 10.11 (as on Debian) |
+| Apache, Postfix, Dovecot, BIND, ProFTPD | Ubuntu's | Debian's (Apache 2.4, Postfix 3.10, Dovecot 2.4, BIND 9.20, ProFTPD 1.3.8) | AlmaLinux's and EPEL's (Apache 2.4, Postfix 3.8, Dovecot 2.3, BIND 9.18, ProFTPD 1.3.9) |
+| SOGo (groupware, ActiveSync) | yes | yes | not available (webmail is Roundcube) |
+| Security updates | unattended-upgrades | unattended-upgrades | dnf-automatic |
+| Mandatory access control | AppArmor (switched off) | AppArmor (switched off) | SELinux, on (enforcing), with Sentora's labels |
+
+The commands, paths, services and users that differ are settings in the panel's database (hidden from Sentora Config), set by each installer: the panel's code names no distribution.
 
 It takes about 30 minutes. The installer asks for the time zone, the panel's host name, the IP address and your contact details, installs and configures everything, and ends with a restart. Each download is checked against the SHA-256 GitHub lists for it.
 
@@ -809,7 +825,7 @@ Both repositories have one release with the tag **`current`**; new installs, `se
 | Release | Files |
 | --- | --- |
 | [sentora-core-2027](https://github.com/RusTus/sentora-core-2027/releases) | `sentora-core-2027.zip` (the panel) |
-| [sentora-installers-2027](https://github.com/RusTus/sentora-installers-2027/releases) | `sentora2027-ub26.04` and `sentora2027-deb13` (the installers), `sentora-installers-2027.zip`, `sentora-php-<version>-ubuntu26.04-amd64.tar.gz` and `sentora-php-<version>-debian13-amd64.tar.gz`, `sentora-migrate-export`, `sentora-smoke-test`, `sentora-web-probe`, `sentora-tls-check.sh`, `testssl_sh-3_2_5.zip` |
+| [sentora-installers-2027](https://github.com/RusTus/sentora-installers-2027/releases) | `sentora2027-ub26.04`, `sentora2027-deb13` and `sentora2027-alma10` (the installers), `sentora-installers-2027.zip`, `sentora-php-<version>-<ubuntu26.04, debian13 or alma10>-amd64.tar.gz`, `sentora-migrate-export`, `sentora-smoke-test`, `sentora-web-probe`, `sentora-tls-check.sh`, `testssl_sh-3_2_5.zip` |
 
 **Making a release.** Push to `master2027`, add the changes to the change log as usual (one file, written as always), run `php .github/scripts/stamp-rustus.php` in the core (it keeps the *Updated by RusTus* / *Written by RusTus* line and its date in the header of every PHP file that differs from Sentora 2.0.2), bump `VERSION` and add a `- Release <version>:` line to the change log, then in each repository open **Actions > Release > Run workflow**. The workflow:
 
