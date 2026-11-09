@@ -324,6 +324,11 @@ class ws_xmws {
     {
         global $controller;
         $_SESSION = array('zpuid' => (int) $uid);
+        // the module too: some modules find their own files and settings by the module being run
+        // (the mail modules their Postfix settings), and would quietly skip them without it
+        if (self::$module !== '') {
+            $_GET['module'] = self::$module;
+        }
         $controller = new runtime_controller();
         $controller->Init();
     }
