@@ -30,6 +30,11 @@ function SentoraSOGoPasswordView()
 {
     global $zdbh;
     try {
+        // (no SOGo view on this server, as where SOGo is not installed: nothing to do, and asked
+        // first so the database layer does not print the error of a missing view)
+        if ((int) $zdbh->query("SELECT COUNT(*) FROM information_schema.VIEWS WHERE TABLE_SCHEMA = 'sentora_postfix' AND TABLE_NAME = 'sogo_users'")->fetchColumn() === 0) {
+            return;
+        }
         $row = $zdbh->query("SHOW CREATE VIEW sentora_postfix.sogo_users")->fetch(PDO::FETCH_NUM);
     } catch (Exception $e) {
         return; // no SOGo view on this server

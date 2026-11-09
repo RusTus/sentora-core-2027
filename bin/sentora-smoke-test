@@ -234,7 +234,7 @@ s_delivered() {
 # SpamAV: mail is scanned while the sender is connected (Admin > SpamAV Admin)
 s_virus() {
     need MAILADDR "Create a mailbox" || return $?
-    [ -x /usr/sbin/clamd ] || { WHY="ClamAV is not installed"; return 2; }
+    [ -x "$(sp clamd_bin)" ] || { WHY="ClamAV is not installed"; return 2; }
     postconf -h smtpd_milters 2> /dev/null | grep -q clamav || { WHY="virus scanning is off, or ClamAV is still waiting for its first signatures"; return 2; }
     # EICAR as an attachment with exactly its 68 bytes (ClamAV knows it as a file: pasted
     # into the text of a message, with a line break after it, it is not the same file)
@@ -261,7 +261,7 @@ s_spam() {
 }
 s_sogo() {
     need MAILADDR "Create a mailbox" || return $?
-    [ -x /usr/sbin/sogod ] || { WHY="SOGo is not installed"; return 2; }
+    [ -x "$(sp sogo_bin)" ] || { WHY="SOGo is not installed"; return 2; }
     local c; c=$(pcurl -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' -d "{\"userName\":\"$MAILADDR\",\"password\":\"$MAILPW\",\"rememberLogin\":0}" "https://$FQDN/SOGo/connect")
     [ "$c" = 200 ] || { WHY="SOGo answered $c to the login"; return 1; }
 }

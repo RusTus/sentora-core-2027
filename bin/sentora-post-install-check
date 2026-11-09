@@ -70,17 +70,17 @@ svc "ProFTPD" proftpd proftpd
 BIND_SN=$(sp bind_service); svc "BIND" "${BIND_SN:-named}" named
 svc "fail2ban" fail2ban fail2ban-server
 CRON_SN=$(sp cron_service); svc "cron (the Sentora daemon)" "$CRON_SN" "$CRON_SN"
-if [ -x /usr/sbin/sogod ]; then svc "SOGo" sogo sogod; svc "memcached (SOGo)" memcached memcached; fi
+if [ -x "$(sp sogo_bin)" ]; then svc "SOGo" "$(sp sogo_service)" sogod; svc "memcached (SOGo)" memcached memcached; fi
 # the backup, restore and update tools copy files with rsync
 command -v rsync > /dev/null 2>&1 && ok "rsync (backups, restore, updates)" || fail "rsync is not installed ($PKG rsync): restore, updates and off-server backup need it"
-if [ -x /usr/sbin/spamd ] || [ -x /usr/sbin/clamd ]; then
+if [ -x "$(sp spamd_bin)" ] || [ -x "$(sp clamd_bin)" ]; then
     # SpamAV: only what is switched on in Admin > SpamAV Admin
     SA_ON=$(q "SELECT so_value_tx FROM sentora_core.x_settings WHERE so_name_vc = 'sa_enabled'")
     CL_ON=$(q "SELECT so_value_tx FROM sentora_core.x_settings WHERE so_name_vc = 'clam_enabled'")
-    if [ -x /usr/sbin/spamd ] && [ "$SA_ON" != "false" ]; then svc "SpamAssassin" spamd spamd; svc "SpamAssassin mail connection (spamass-milter)" spamass-milter spamass-milter; fi
-    if [ -x /usr/sbin/clamd ] && [ "$CL_ON" = "true" ]; then
+    if [ -x "$(sp spamd_bin)" ] && [ "$SA_ON" != "false" ]; then svc "SpamAssassin" "$(sp spamd_service)" spamd; svc "SpamAssassin mail connection (spamass-milter)" "$(sp spamass_milter_service)" spamass-milter; fi
+    if [ -x "$(sp clamd_bin)" ] && [ "$CL_ON" = "true" ]; then
         if ls /var/lib/clamav/daily.c?d /var/lib/clamav/main.c?d > /dev/null 2>&1; then
-            svc "ClamAV" clamav-daemon clamd; svc "ClamAV mail connection (clamav-milter)" clamav-milter clamav-milter
+            svc "ClamAV" "$(sp clamd_service)" clamd; svc "ClamAV mail connection (clamav-milter)" "$(sp clamav_milter_service)" clamav-milter
         else
             warn "ClamAV is waiting for its first virus signatures (systemctl status $(sp freshclam_service))"
         fi
@@ -289,7 +289,7 @@ if [ $DB -eq 1 ]; then
         else warn "MySQL: the older login method is on for $natn user(s) of sites on PHP 7.1 (PHP Versions > Older logins: retire it once they run on PHP 8)"; fi
     fi
     if q "SHOW CREATE VIEW sentora_postfix.sogo_users" | grep -qi "case"; then ok "SOGo mailbox view reads SHA-512 crypt"
-    elif [ -x /usr/sbin/sogod ]; then fail "SOGo mailbox view is the old one (the daemon updates it within 5 minutes)"; fi
+    elif [ -x "$(sp sogo_bin)" ]; then fail "SOGo mailbox view is the old one (the daemon updates it within 5 minutes)"; fi
 fi
 grep -qE '^SQLAuthTypes[[:space:]]+Crypt[[:space:]]*$' "$CONF/proftpd/proftpd-mysql.conf" 2> /dev/null && ok "ProFTPD accepts hashes only" || fail "ProFTPD still accepts plain-text passwords (SQLAuthTypes)"
 grep -q "password_algorithm'\] = 'sha512-crypt'" "$CONF/roundcube/password_config.inc.php" 2> /dev/null && ok "Roundcube password change uses SHA-512 crypt" || fail "Roundcube password change does not use SHA-512 crypt"
