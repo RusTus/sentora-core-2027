@@ -5,7 +5,9 @@
  * own look for them: a logo, a company name, a main colour and a welcome line on the login page and
  * in the panel's top bar, and (resellers) its own panel address, such as panel.theirhosting.com,
  * which the daemon sets up with a certificate. The administrator's brand is the main address's, and
- * every account's without a reseller brand above it. The data and the rules: ctrl_branding.
+ * every account's without a reseller brand above it. Templates: ready-made looks (ACME, the example)
+ * and the account's own saved looks, applied with one click (ctrl_brandtemplates). The data and the
+ * rules: ctrl_branding.
  *
  * @package Sentora
  * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
@@ -56,6 +58,7 @@ class module_controller extends ctrl_module
             'globe' => '<circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18a14 14 0 0 1 0-18"/>',
             'contact' => '<path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1v-6h3zM3 19a2 2 0 0 0 2 2h1v-6H3z"/>',
             'list' => '<path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/>',
+            'layers' => '<path d="m12 2 9 5-9 5-9-5 9-5z"/><path d="m3 12 9 5 9-5"/><path d="m3 17 9 5 9-5"/>',
             'open' => '<path d="M14 4h6v6"/><path d="M20 4 10 14"/><path d="M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/>',
         );
         return '<svg class="bd-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
@@ -175,6 +178,143 @@ class module_controller extends ctrl_module
         $f = $controller->GetAllControllerRequests('FORM');
         ctrl_branding::RemoveLogo($uid, !empty($f['inDark']));
         self::$msg[] = array('ok', ui_language::translate('Logo removed.'));
+    }
+
+    /**
+     * Apply a template (built in or the account's own).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return void
+     */
+    static function doApplyTemplate()
+    {
+        global $controller;
+        runtime_csfr::Protect();
+        $uid = self::Uid();
+        if (!ctrl_branding::CanSet($uid)) {
+            return;
+        }
+        $f = $controller->GetAllControllerRequests('FORM');
+        $err = ctrl_brandtemplates::Apply($uid, (string) ($f['inTemplate'] ?? ''));
+        if ($err === '') {
+            self::$msg[] = array('ok', ui_language::translate('Template applied. Your previous look is kept under Templates, if you want it back.'));
+        } else {
+            self::$msg[] = array('error', ui_language::translate($err === 'missing' ? 'That template is not there any more.' : 'That template could not be applied: its settings are not valid.'));
+        }
+    }
+
+    /**
+     * Save the current look as a template.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return void
+     */
+    static function doSaveTemplate()
+    {
+        global $controller;
+        runtime_csfr::Protect();
+        $uid = self::Uid();
+        if (!ctrl_branding::CanSet($uid)) {
+            return;
+        }
+        $f = $controller->GetAllControllerRequests('FORM');
+        $err = ctrl_brandtemplates::SaveCurrent($uid, (string) ($f['inTitle'] ?? ''));
+        $text = array(
+            '' => 'Your look is saved as a template.',
+            'title' => 'Give the template a title: up to 40 characters, without < or > or invisible characters.',
+            'full' => 'You have 10 templates already: delete one first.',
+            'empty' => 'There is no look to save yet: set a name, colour, welcome line or logo first.',
+        );
+        self::$msg[] = array($err === '' ? 'ok' : 'error', ui_language::translate($text[$err]));
+    }
+
+    /**
+     * Delete one of the account's own templates.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return void
+     */
+    static function doDeleteTemplate()
+    {
+        global $controller;
+        runtime_csfr::Protect();
+        $uid = self::Uid();
+        if (!ctrl_branding::CanSet($uid)) {
+            return;
+        }
+        $f = $controller->GetAllControllerRequests('FORM');
+        if (ctrl_brandtemplates::Delete($uid, (int) ($f['inTemplateId'] ?? 0))) {
+            self::$msg[] = array('ok', ui_language::translate('Template deleted.'));
+        }
+    }
+
+    /**
+     * One template's tile: a small picture of the login page in its look, and its buttons.
+     *
+     * @param array $t The template (name, colour, welcome).
+     * @param string $logo Its logo's address ('' for none).
+     * @param string $title Its title.
+     * @param string $about A line under the title.
+     * @param string $which What Apply sends ('b:<id>' or 'u:<id>').
+     * @param int $deleteId The own template's ID (0: no Delete button).
+     * @param string $tok The form token.
+     * @return string HTML.
+     */
+    static function TemplateTile(array $t, $logo, $title, $about, $which, $deleteId, $tok)
+    {
+        $colour = preg_match('/^#[0-9a-f]{6}$/', (string) $t['colour']) ? $t['colour'] : '#447fb3';
+        $head = $logo !== '' ? '<img src="' . self::h($logo) . '" alt="">' : '<b>' . self::h($t['name'] !== '' ? $t['name'] : 'Sentora') . '</b>';
+        $out = '<div class="bd-tpl">'
+            . '<div class="bd-preview bd-tpl-prev" style="--bd-brand:' . self::h($colour) . ';--bd-brand-ink:' . self::h(ctrl_branding::InkOn($colour)) . '">'
+            . '<div class="bd-p-head">' . $head . '</div>'
+            . ($t['welcome'] !== '' ? '<p class="bd-p-welcome">' . self::h($t['welcome']) . '</p>' : '')
+            . '<div class="bd-p-body"><i></i><span class="bd-p-btn">' . self::t('Log in') . '</span></div></div>'
+            . '<b class="bd-tpl-title">' . self::h($title) . '</b><small class="bd-sub">' . self::h($about) . '</small>'
+            . '<div class="bd-tpl-act"><form action="./?module=branding&amp;action=ApplyTemplate" method="post" onsubmit="return confirm(this.dataset.ask)" data-ask="'
+            . self::t('Apply this template? It replaces your company name, colour, welcome line and logos (your panel address stays). Your current look is kept as Your previous look.') . '">'
+            . '<input type="hidden" name="inTemplate" value="' . self::h($which) . '">' . $tok
+            . '<button class="btn btn-primary btn-sm" type="submit">' . self::t('Apply') . '</button></form>';
+        if ($deleteId > 0) {
+            $out .= '<form action="./?module=branding&amp;action=DeleteTemplate" method="post" onsubmit="return confirm(this.dataset.ask)" data-ask="' . self::t('Delete this template?') . '">'
+                . '<input type="hidden" name="inTemplateId" value="' . (int) $deleteId . '">' . $tok
+                . '<button class="btn btn-link btn-sm bd-remove" type="submit">' . self::t('Delete') . '</button></form>';
+        }
+        return $out . '</div></div>';
+    }
+
+    /**
+     * <@ TemplatesCard @>: the built-in templates, the account's own, and saving the current look.
+     *
+     * @return string HTML.
+     */
+    static function getTemplatesCard()
+    {
+        $uid = self::Uid();
+        $tok = runtime_csfr::Token();
+        // the previous look first, then the ready-made ones, then the account's own (newest first)
+        $prev = '';
+        $own = '';
+        foreach (ctrl_brandtemplates::Own($uid) as $t) {
+            $logo = $t['logo'] ? '/modules/branding/code/logo.php?t=' . $t['id'] : '';
+            $when = $t['created'] ? ui_language::Date('j M Y, H:i', $t['created']) : '';
+            if ($t['prev']) {
+                $prev .= self::TemplateTile($t, $logo, ui_language::translate('Your previous look'), str_replace('%s', $when, ui_language::translate('As it was before the last template (%s).')), 'u:' . $t['id'], $t['id'], $tok);
+            } else {
+                $own .= self::TemplateTile($t, $logo, $t['title'], str_replace('%s', $when, ui_language::translate('Saved %s')), 'u:' . $t['id'], $t['id'], $tok);
+            }
+        }
+        $ready = '';
+        foreach (ctrl_brandtemplates::BuiltIn() as $t) {
+            $ready .= self::TemplateTile($t, $t['logo'], $t['title'], ui_language::translate('Ready-made') . ' · ' . $t['about'], 'b:' . $t['id'], 0, $tok);
+        }
+        $tiles = $prev . $ready . $own;
+        return '<div class="bd-card bd-templates"><h4>' . self::Icon('layers') . self::t('Templates') . '</h4>'
+            . '<p class="bd-sub">' . self::t('Ready-made looks, and looks you saved: Apply changes your brand in one click (your panel address stays). Use one as a starting point, then adjust it below.') . '</p>'
+            . '<div class="bd-tpls">' . $tiles . '</div>'
+            . '<form class="bd-tpl-save" action="./?module=branding&amp;action=SaveTemplate" method="post">'
+            . '<label class="bd-field"><span>' . self::t('Save your current look as a template') . '</span>'
+            . '<input class="form-control" type="text" name="inTitle" maxlength="' . ctrl_brandtemplates::TITLE_MAX . '" placeholder="' . self::t('For example: Holiday look') . '" required></label>'
+            . $tok . '<button class="btn btn-default" type="submit">' . self::t('Save as template') . '</button></form></div>';
     }
 
     /**

@@ -10,6 +10,7 @@
         <@ Result @>
         <% if CanBrand %>
         <@ WhereCard @>
+        <@ TemplatesCard @>
         <div class="bd-grid">
             <@ LookCard @>
             <div class="bd-side">
