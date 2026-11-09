@@ -12,7 +12,7 @@
  * @package Sentora
  * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
  *
- * Written by RusTus, 2026-11-08
+ * Written by RusTus, 2026-11-09
  */
 return array(
     '	Path to named-compilezone bind utility.' => '	Путь к утилите BIND named-compilezone.',
