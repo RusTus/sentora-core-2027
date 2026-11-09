@@ -1,0 +1,145 @@
+#!/bin/bash
+# sentora-matomo-setup: set up Matomo (etc/apps/matomo) on a server where it is not set up
+# yet, as root. A server installed before Matomo came with the panel gets Matomo's files from
+# sentora-update but not its setup (only the installer did that); sentora-update now runs this
+# when Matomo has no config.ini.php. The same steps as the installer: a database and MySQL user,
+# Matomo's own installer pages driven over https://127.0.0.1 (super user sentora_admin), then the
+# panel's plugin (SentoraSync) and settings. The passwords are added to /root/passwords.txt.
+#
+#   sentora-matomo-setup           set it up (does nothing when it is set up already)
+#   sentora-matomo-setup --reset   the database sentora_matomo has tables but Matomo has no
+#                                  config (an earlier setup stopped half-way): empty it first
+#
+# Afterwards the daemon (every 5 minutes) makes a Matomo site per domain and a view-only Matomo
+# user per account; the hourly job imports the access logs.
+
+PANEL=${SENTORA_PANEL:-/etc/sentora/panel}
+PANEL_USER=sentora
+HTTP_GROUP=www-data
+M=$PANEL/etc/apps/matomo
+# (for tests: another address for Matomo's pages, another database host)
+MI=${MATOMO_URL:-https://127.0.0.1/etc/apps/matomo/index.php}
+DBHOST=${MATOMO_DBHOST:-127.0.0.1}
+RESET=0
+for a in "$@"; do
+    case "$a" in
+        --reset) RESET=1 ;;
+        -h|--help) sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        *) echo "Unknown option: $a (see --help)"; exit 1 ;;
+    esac
+done
+
+[ "$(id -u)" = 0 ] || { echo "Run it as root."; exit 1; }
+[ -f "$M/index.php" ] || { echo "Matomo is not in this panel ($M): update the panel first (sentora-update)."; exit 1; }
+if [ -f "$M/config/config.ini.php" ]; then
+    echo "Matomo is already set up ($M/config/config.ini.php)."
+    exit 0
+fi
+command -v curl > /dev/null || { echo "curl is needed: apt-get install curl"; exit 1; }
+
+gen() { tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 20; }
+DBPW=$(gen)
+ADMINPW=$(gen)
+
+# The database and its user, with the panel's MySQL login (cnf/db.php); the panel's address
+# shellcheck disable=SC2016
+out=$(cd "$PANEL" && MPW="$DBPW" RESET="$RESET" php <<'PHP'
+<?php
+include 'cnf/db.php';
+try {
+    $db = new PDO("mysql:host=$host;charset=utf8mb4", $user, $pass, array(PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION));
+    $n = (int) $db->query("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'sentora_matomo'")->fetchColumn();
+    if ($n > 0 && getenv('RESET') !== '1') {
+        echo "TABLES $n\n";
+        exit(3);
+    }
+    if ($n > 0) {
+        $db->exec("DROP DATABASE sentora_matomo");
+    }
+    $db->exec("CREATE DATABASE IF NOT EXISTS sentora_matomo CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci");
+    $pw = $db->quote(getenv('MPW'));
+    foreach (array('localhost', '127.0.0.1') as $h) {
+        $db->exec("CREATE USER IF NOT EXISTS 'matomo'@'$h' IDENTIFIED BY $pw");
+        $db->exec("ALTER USER 'matomo'@'$h' IDENTIFIED BY $pw");
+        $db->exec("GRANT ALL PRIVILEGES ON sentora_matomo.* TO 'matomo'@'$h'");
+    }
+    echo 'FQDN ' . $db->query("SELECT so_value_tx FROM `$dbname`.x_settings WHERE so_name_vc = 'sentora_domain'")->fetchColumn() . "\n";
+} catch (Exception $e) {
+    echo 'ERROR ' . $e->getMessage() . "\n";
+    exit(2);
+}
+PHP
+)
+rc=$?
+if [ $rc -eq 3 ]; then
+    echo "The database sentora_matomo already has ${out#TABLES } tables, but Matomo has no config: an earlier setup stopped half-way."
+    echo "Run 'sentora-matomo-setup --reset' to empty that database and set Matomo up again."
+    exit 1
+fi
+if [ $rc -ne 0 ]; then
+    echo "Could not make Matomo's database: ${out#ERROR }"
+    exit 1
+fi
+FQDN=$(printf '%s\n' "$out" | sed -n 's/^FQDN //p' | tr -cd 'A-Za-z0-9.-')
+[ -n "$FQDN" ] || { echo "The panel's address (Sentora Config) is not set."; exit 1; }
+TZ_NAME=$(timedatectl show -p Timezone --value 2> /dev/null); TZ_NAME=${TZ_NAME:-UTC}
+
+mkdir -p "$M/tmp" /var/lib/sentora/matomo
+chown -R "$PANEL_USER:$HTTP_GROUP" "$M/tmp" "$M/config"
+chmod o-rwx,g+s "$M/tmp" "$M/config"
+chown root:"$PANEL_USER" /var/lib/sentora/matomo; chmod 750 /var/lib/sentora/matomo
+# Matomo's pages are asked for under the panel's name, on this server
+case "$FQDN" in
+    *[!0-9.]*) grep -qE "^[^#]*[[:space:]]${FQDN//./\\.}([[:space:]]|\$)" /etc/hosts || echo "127.0.0.1 $FQDN" >> /etc/hosts ;;
+esac
+
+echo "Setting up Matomo for https://$FQDN ..."
+MC=$(mktemp); trap 'rm -f "$MC"' EXIT
+codes=""
+mstep() { local c; c=$(curl -sk -o /dev/null -w "%{http_code}" -c "$MC" -b "$MC" -H "Host: $FQDN" --max-time 300 "$@"); codes="$codes $c"; }
+mstep "$MI"
+mstep "$MI?action=systemCheck"
+mstep --data-urlencode "password=$DBPW" -d "host=$DBHOST&username=matomo&dbname=sentora_matomo&tables_prefix=matomo_&adapter=PDO\MYSQL&schema=Mysql&submit=Next" "$MI?action=databaseSetup"
+mstep "$MI?action=tablesCreation&module=Installation"
+mstep --data-urlencode "password=$ADMINPW" --data-urlencode "password_bis=$ADMINPW" -d "login=sentora_admin&email=postmaster@$FQDN&subscribe_newsletter_piwikorg=0&subscribe_newsletter_professionalservices=0&submit=Next" "$MI?action=setupSuperUser&module=Installation"
+mstep -d "siteName=$FQDN&url=https://$FQDN&timezone=$TZ_NAME&ecommerce=0&submit=Next" "$MI?action=firstWebsiteSetup&module=Installation"
+mstep "$MI?action=trackingCode&module=Installation&site_idSite=1&site_name=$FQDN"
+mstep -d "do_not_track=1&anonymise_ip=1&submit=Continue" "$MI?action=finished&module=Installation&site_idSite=1&site_name=$FQDN"
+
+if [ ! -f "$M/config/config.ini.php" ]; then
+    echo "Matomo's setup did not finish (its pages answered:$codes)."
+    echo "Check that https://$FQDN/etc/apps/matomo/ opens on this server, then run sentora-matomo-setup again"
+    echo "(with --reset if it says the database already has tables)."
+    exit 1
+fi
+
+# the panel (and its PHP) may change Matomo's config; nobody else may read it
+chown root:"$PANEL_USER" "$M/config/config.ini.php"
+chmod 660 "$M/config/config.ini.php"
+failed=""
+mconsole() { (cd "$M" && setpriv --reuid="$PANEL_USER" --regid="$PANEL_USER" --init-groups --reset-env php console "$@" > /dev/null 2>&1) || failed="$failed
+  php console $*"; }
+mconsole plugin:activate SentoraSync
+# The panel opens Matomo in a frame; reports are built by the hourly job, not by visitors
+mconsole config:set --section=General --key=enable_framed_pages --value=1
+mconsole config:set --section=General --key=enable_browser_archiving_triggering --value=0
+mconsole config:set --section=General --key=enable_load_data_infile --value=0
+# No calls home: no marketplace, news feed, update checks, adverts or "what's new" tours
+mconsole config:set --section=General --key=enable_internet_features --value=0
+mconsole plugin:deactivate ProfessionalServices Marketplace Tour Feedback
+
+{
+    echo ""
+    echo "Matomo, set up on $(date '+%Y-%m-%d %H:%M') by sentora-matomo-setup:"
+    echo "MySQL Matomo Password    : $DBPW"
+    echo "Matomo super user        : sentora_admin / $ADMINPW"
+} >> /root/passwords.txt
+chmod 600 /root/passwords.txt
+
+echo "Matomo is set up: super user sentora_admin (its password is in /root/passwords.txt)."
+if [ -n "$failed" ]; then
+    echo "WARNING: these steps failed; run them in $M as the user $PANEL_USER:$failed"
+fi
+echo "Within 5 minutes the daemon makes a Matomo site for every domain and a view-only user per account;"
+echo "the visits in the web server logs are imported every hour (Advanced > Matomo)."
+exit 0

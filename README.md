@@ -163,7 +163,7 @@ sentora-update              # back up the panel, then update it (asks first)
 sentora-update --rollback   # list the backups and restore one
 ```
 
-It downloads `sentora-core-2027.zip` from the `current` release, checks its SHA-256, backs up the panel to `/var/sentora/backups/panel-before-update-<date>.tar.gz` (the last 5 are kept), updates the files while keeping this server's own (database settings and key in `cnf/`, `zsudo`, Matomo's settings, repository lists, add-on modules), registers new modules, runs the daemon and `sentora-post-install-check`, and shows each step with a progress bar. Details go to `/var/sentora/logs/sentora-update.log`.
+It downloads `sentora-core-2027.zip` from the `current` release, checks its SHA-256, backs up the panel to `/var/sentora/backups/panel-before-update-<date>.tar.gz` (the last 5 are kept), updates the files while keeping this server's own (database settings and key in `cnf/`, `zsudo`, Matomo's settings, repository lists, add-on modules), registers new modules, sets Matomo up if this server never had it (`sentora-matomo-setup`), runs the daemon and `sentora-post-install-check`, and shows each step with a progress bar. Details go to `/var/sentora/logs/sentora-update.log`.
 
 - A new version is recognised by its changed SHA-256; `--force` installs the same release again.
 - `/etc/sentora/update.conf` can set `TAG="latest"` (the newest release, pre-releases included) or `URL=` (your own web folder holding the zip and a `SHA256SUMS`).
@@ -617,6 +617,7 @@ All run as root. Most are in `/usr/local/sbin`; `setso`, `setzadmin` and `zppy` 
 | `sentora-update-check` | Bundled apps behind their latest release, and Ubuntu updates waiting | No |
 | `sentora-php-install <version>` | Adds an extra PHP version, or updates one the server has | Yes |
 | `sentora-change-domain <name>` | Moves the panel to another host name | Yes |
+| `sentora-matomo-setup [--reset]` | Sets Matomo up when it is not (a server installed before Matomo came with the panel); `sentora-update` runs it by itself | Yes |
 | `sentora-restore <account> [backup.zip]` | Lists or restores an account's backups | Yes |
 | `sentora-panel-restore` | Restores from the off-server backup: `--list`, `--account`, `--full` | Yes |
 | `sentora-offsite-backup` | The off-server backup: `--setup` (SSH key), `--check`, `--now`, `--status` | Yes |

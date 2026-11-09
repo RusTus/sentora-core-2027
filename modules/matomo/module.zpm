@@ -12,7 +12,7 @@
         <div class="mt-card mt-state">
             <svg class="mt-ico-lg warn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
             <b><: Matomo is not set up on this server :></b>
-            <span><: The Sentora installer sets it up in etc/apps/matomo. :></span>
+            <span><: An administrator sets it up with one command, as root on the server: :> <code>sentora-matomo-setup</code><br><: (A server installed before Matomo came with the panel has its files but not its setup; the next panel update also does it.) :></span>
         </div>
         <% endif %>
         <% if IsInstalled %>
