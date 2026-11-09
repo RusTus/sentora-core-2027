@@ -230,7 +230,7 @@ The menus:
 
 **Client Notice Manager.** Notices at the top of clients' panels: information, warning, maintenance or outage, to all your clients, chosen packages or groups, or one client, with an optional start and end time and whether clients may close them. The panel's own notices (PHP end of support, panel updates) show there too. From the console: `sentora-notice send ...`.
 
-**Support contact.** On **My Account**, an account that can have clients (an administrator, a reseller, or a sub-reseller whose group has Manage Clients) has a *Support for your clients* card: a support email, and optionally a phone number and a one-line note (support hours, or a help desk address, which becomes a link). Its own clients see it on their My Account page in a *Support* card, with the email and phone as links. A client sees only its own reseller's contact: when that one is empty, nothing is shown.
+**Support contact.** On **My Account**, an account that can have clients (an administrator, a reseller, or a sub-reseller whose group has Manage Clients) has a *Support for your clients* card: a support email, and optionally a phone number, a website and a one-line note (support hours, or a help desk address, which becomes a link). Its own clients see it on their My Account page in a *Support* card, with the email, phone and website as links. A client sees only its own reseller's contact: when that one is empty, nothing is shown.
 
 **Theme Manager.** The theme for you and your clients: *Modern*, in light, dark or automatic. A user's own choice (My Account > Appearance) comes first.
 

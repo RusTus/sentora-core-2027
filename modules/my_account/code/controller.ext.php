@@ -82,6 +82,12 @@ class module_controller extends ctrl_module
         return htmlspecialchars(self::SupportValues()['phone'], ENT_QUOTES, 'UTF-8');
     }
 
+    /** <@ SupportWebsite @>. @return string */
+    static function getSupportWebsite()
+    {
+        return htmlspecialchars((string) (self::SupportValues()['website'] ?? ''), ENT_QUOTES, 'UTF-8');
+    }
+
     /** <@ SupportNote @>. @return string */
     static function getSupportNote()
     {
@@ -109,8 +115,9 @@ class module_controller extends ctrl_module
             return;
         }
         $f = $controller->GetAllControllerRequests('FORM');
-        $typed = array('email' => (string) ($f['inSupportEmail'] ?? ''), 'phone' => (string) ($f['inSupportPhone'] ?? ''), 'note' => (string) ($f['inSupportNote'] ?? ''));
-        $err = ctrl_support::Save($uid, $typed['email'], $typed['phone'], $typed['note']);
+        $typed = array('email' => (string) ($f['inSupportEmail'] ?? ''), 'phone' => (string) ($f['inSupportPhone'] ?? ''),
+            'website' => (string) ($f['inSupportWebsite'] ?? ''), 'note' => (string) ($f['inSupportNote'] ?? ''));
+        $err = ctrl_support::Save($uid, $typed['email'], $typed['phone'], $typed['note'], $typed['website']);
         if ($err !== '') {
             self::$supportmsg = $err;
             self::$supporttyped = $typed;
@@ -140,6 +147,10 @@ class module_controller extends ctrl_module
         }
         if ($c['phone'] !== '') {
             $rows .= '<div class="ma-sup-row"><span>' . $t('Phone') . '</span><a href="tel:' . $h(preg_replace('/[^0-9+]/', '', $c['phone'])) . '">' . $h($c['phone']) . '</a></div>';
+        }
+        if ($c['website'] !== '') {
+            $rows .= '<div class="ma-sup-row"><span>' . $t('Website') . '</span><a href="' . $h($c['website']) . '" target="_blank" rel="noopener noreferrer">'
+                . $h(preg_replace('~^https?://~i', '', rtrim($c['website'], '/'))) . '</a></div>';
         }
         if ($c['note'] !== '') {
             $rows .= '<p class="ma-sup-note">' . ctrl_support::NoteHtml($c['note']) . '</p>';
@@ -664,6 +675,7 @@ class module_controller extends ctrl_module
             return ui_sysmessage::shout(ui_language::translate('Your support contact has been saved: your clients see it on their My Account page.'), 'zannounceok');
         }
         $supportErrors = array('email' => 'The support email address is not valid.', 'phone' => 'The support phone number may only have digits, spaces and + ( ) - . /',
+            'website' => 'The support website is not a web address: use one like https://www.example.com.',
             'note' => 'The note is too long.');
         if (isset($supportErrors[self::$supportmsg])) {
             return ui_sysmessage::shout(ui_language::translate($supportErrors[self::$supportmsg]), 'zannounceerror');
