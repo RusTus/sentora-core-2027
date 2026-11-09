@@ -408,6 +408,7 @@ Every login lands on the **Dashboard**, where each account arranges its own widg
 | PHP-Adminer | Adminer for an account's own MySQL databases, with its own MySQL users only |
 | Webalizer Stats | Webalizer reports per domain (builds its program on install) |
 | Visitor Stats | Visitors reports per domain (builds its program on install) |
+| Log Forwarder | Sends website logs (and, for administrators, server logs) live to your own log server (ELK, OpenSearch, Grafana Loki, Graylog) as syslog over TLS, through rsyslog; a client's forwarding counts towards its bandwidth and only goes to addresses on the internet |
 
 The add-ons live in the [`sentora-repo` folder](https://github.com/RusTus/sentora-installers-2027/tree/master2027/sentora-repo) of the installers repository. To add your own: put `<Name>.zpp` there, add `<Name>` to `packages.txt`, run `sha256sum *.zpp > SHA256SUMS`, and push to `master2027`. A module's code runs inside the panel, so add only modules you trust.
 
