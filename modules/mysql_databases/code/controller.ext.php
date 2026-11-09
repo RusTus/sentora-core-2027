@@ -209,8 +209,10 @@ class module_controller extends ctrl_module
         }
         // Check for invalid username, and the length the form promises (the whole name, prefix
         // included, is kept to 32 characters, so it also fits as a MySQL user name)
-        $max = self::getMaxCharAllowed();
-        if (!self::IsValidUserName($databasename) || $max === false || strlen($databasename) > $max) {
+        // (from the account's own user name, the prefix: through the API the logged-in account is the
+        // reseller acting for its client)
+        $max = 32 - strlen($username . "_");
+        if (!self::IsValidUserName($databasename) || $max < 1 || strlen($databasename) > $max) {
             self::$badname = true;
             return false;
         }

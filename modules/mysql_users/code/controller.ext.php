@@ -306,6 +306,21 @@ class module_controller extends ctrl_module
     }
 
     /**
+     * A database name for GRANT and REVOKE. MySQL reads _ and % in a database name there as
+     * wildcards: GRANT ... ON `my_ql`.* (account "my", database "ql") also covered `mysql`, MariaDB's
+     * own database, and with it every MySQL login. Escaped, the name means only itself.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param string $name The database name.
+     * @return string For use between backticks.
+     */
+    static function GrantDb($name)
+    {
+        global $zdbh;
+        return str_replace(array('_', '%'), array('\\_', '\\%'), $zdbh->mysqlRealEscapeString((string) $name));
+    }
+
+    /**
      * Create a MySQL user with access to one of the account's databases.
      *
      * Prefixes the name with "<panel user>_", generates a random password, creates the
@@ -377,7 +392,7 @@ class module_controller extends ctrl_module
         // Grant privileges for new user to the assigned database...
         $usernameClean = $zdbh->mysqlRealEscapeString($username);
         $accessClean = $zdbh->mysqlRealEscapeString($access);
-        $my_name_vc = $zdbh->mysqlRealEscapeString($rowdb['my_name_vc']);
+        $my_name_vc = self::GrantDb($rowdb['my_name_vc']);
         $sql = $zdbh->prepare("GRANT ALL PRIVILEGES ON `$my_name_vc`.* TO `$usernameClean`@`$accessClean`");
         //$sql->bindParam(':username', $username, PDO::PARAM_STR);
         //$sql->bindParam(':access', $access, PDO::PARAM_STR);
@@ -614,7 +629,7 @@ class module_controller extends ctrl_module
         $numrows->execute();
         $rowuser = $numrows->fetch();
 
-        $my_name_vc = $zdbh->mysqlRealEscapeString($rowdb['my_name_vc']);
+        $my_name_vc = self::GrantDb($rowdb['my_name_vc']);
         $mu_name_vc = $zdbh->mysqlRealEscapeString($rowuser['mu_name_vc']);
         $mu_access_vc = $zdbh->mysqlRealEscapeString($rowuser['mu_access_vc']);
         $sql = $zdbh->prepare("GRANT ALL PRIVILEGES ON `$my_name_vc`.* TO `$mu_name_vc`@`$mu_access_vc`");
@@ -670,9 +685,15 @@ class module_controller extends ctrl_module
         $numrows->execute();
         $rowuser = $numrows->fetch();
 
-        // Escaped like the GRANT in ExecuteCreateUser (the names are validated when made)
-        $sql = $zdbh->prepare("REVOKE ALL PRIVILEGES ON `" . $zdbh->mysqlRealEscapeString((string) $rowdb['my_name_vc']) . "`.* FROM `" . $zdbh->mysqlRealEscapeString((string) $rowuser['mu_name_vc']) . "`@`" . $zdbh->mysqlRealEscapeString((string) $rowuser['mu_access_vc']) . "`");
-        $sql->execute();
+        // The grant as made now (GrantDb: _ escaped), and one made before that (unescaped); each
+        // may not exist, which MySQL reports as an error
+        $who = "`" . $zdbh->mysqlRealEscapeString((string) $rowuser['mu_name_vc']) . "`@`" . $zdbh->mysqlRealEscapeString((string) $rowuser['mu_access_vc']) . "`";
+        foreach (array_unique(array(self::GrantDb((string) $rowdb['my_name_vc']), $zdbh->mysqlRealEscapeString((string) $rowdb['my_name_vc']))) as $grantDb) {
+            try {
+                $zdbh->prepare("REVOKE ALL PRIVILEGES ON `" . $grantDb . "`.* FROM " . $who)->execute();
+            } catch (PDOException $e) {
+            }
+        }
 
         $sql = $zdbh->prepare("FLUSH PRIVILEGES");
         $sql->execute();

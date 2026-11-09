@@ -40,3 +40,38 @@ $total = (int) $zdbh->query("SELECT COUNT(*) FROM x_mysql_users WHERE mu_deleted
 $kept = (int) $zdbh->query("SELECT COUNT(*) FROM x_mysql_users WHERE mu_deleted_ts IS NULL AND mu_pass_vc LIKE 'enc1:%'")->fetchColumn();
 echo $total . " MySQL user(s): " . $kept . " with an encrypted password the owner can see, none as plain text." . fs_filehandler::NewLine();
 echo "END MySQL user passwords" . fs_filehandler::NewLine();
+
+// Grants with wildcards. MySQL reads _ and % in a database name in GRANT as wildcards, and the panel
+// did not escape them: account "my" with database "ql" was granted `my_ql`, which also matched
+// `mysql`, MariaDB's own database with every login in it (root's too). New grants are escaped
+// (MySQL Users: GrantDb()); grants made before are put right here, every run (nothing to do once
+// they are): the same access on the escaped name, then the wildcard grant revoked. Only the panel's
+// own MySQL users (MySQL Users); the services' own users are left alone.
+try {
+    // (prepare/execute: an error throws, caught below; exec() would end the whole daemon run)
+    $panelUsers = array();
+    foreach ($zdbh->query("SELECT DISTINCT mu_name_vc FROM x_mysql_users WHERE mu_name_vc IS NOT NULL AND mu_name_vc <> ''")->fetchAll(PDO::FETCH_COLUMN) as $u) {
+        $panelUsers[strtolower((string) $u)] = true;
+    }
+    $fixed = 0;
+    if ($panelUsers) {
+        $tick = function ($s) { return str_replace('`', '``', (string) $s); };
+        foreach ($zdbh->query("SELECT Host, Db, User FROM mysql.db")->fetchAll(PDO::FETCH_ASSOC) as $g) {
+            $db = (string) $g['Db'];
+            if (!isset($panelUsers[strtolower((string) $g['User'])]) || !preg_match('/(?<!\\\\)[_%]/', $db)) {
+                continue;
+            }
+            $escaped = preg_replace('/(?<!\\\\)([_%])/', '\\\\$1', $db);
+            $who = "`" . $tick($g['User']) . "`@`" . $tick($g['Host']) . "`";
+            $zdbh->prepare("GRANT ALL PRIVILEGES ON `" . $tick($escaped) . "`.* TO " . $who)->execute();
+            $zdbh->prepare("REVOKE ALL PRIVILEGES ON `" . $tick($db) . "`.* FROM " . $who)->execute();
+            $fixed++;
+        }
+    }
+    if ($fixed > 0) {
+        $zdbh->prepare("FLUSH PRIVILEGES")->execute();
+        echo "MySQL: " . $fixed . " database grant(s) with wildcards (_ or %) narrowed to their own database." . fs_filehandler::NewLine();
+    }
+} catch (Exception $e) {
+    echo "MySQL: grants with wildcards not checked (" . $e->getMessage() . ")" . fs_filehandler::NewLine();
+}
