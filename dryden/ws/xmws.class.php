@@ -82,6 +82,79 @@ class ws_xmws {
      * @author Bobby Allen (ballen@bobbyallen.me)
      * @return bool
      */
+    /** Wrong API keys allowed from one address within ctrl_loginguard::WINDOW (15 minutes); then it waits. */
+    const KEY_LIMIT = 10;
+
+    /**
+     * Too many wrong API keys from this address lately? (Counted per address, not for the API as a
+     * whole: otherwise anyone could lock the server's own integrations out with a few wrong keys.)
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return bool True when this address must wait.
+     */
+    static function KeyLocked()
+    {
+        global $zdbh;
+        ctrl_loginguard::Ensure();
+        $q = $zdbh->prepare("SELECT COUNT(*) FROM x_login_failures WHERE lf_user_vc = 'api:key' AND lf_ip_vc = :ip AND lf_time_in > :t");
+        $q->execute(array(':ip' => ctrl_loginguard::Address(), ':t' => time() - ctrl_loginguard::WINDOW));
+        return (int) $q->fetchColumn() >= self::KEY_LIMIT;
+    }
+
+    /**
+     * An error answer.
+     *
+     * @param string $code The response code (1104 too many wrong keys, 1107 a value that is not allowed).
+     * @param string $text What is wrong.
+     * @return array The data object for SendResponse().
+     */
+    static function Error($code, $text)
+    {
+        $d = new runtime_dataobject();
+        $d->addItemValue('response', $code);
+        $d->addItemValue('content', self::Esc($text));
+        return $d->getDataObject();
+    }
+
+    /**
+     * Text for the XML answer: escaped, and valid UTF-8.
+     *
+     * @param mixed $v
+     * @return string
+     */
+    static function Esc($v)
+    {
+        if (is_bool($v)) {
+            $v = $v ? 'true' : 'false';
+        }
+        return (is_scalar($v) || $v === null) ? htmlspecialchars((string) $v, ENT_XML1 | ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') : '';
+    }
+
+    /**
+     * A live account the API may act on: it exists and is not deleted; with $notAdmin, not an
+     * administrator either (the API never deletes, switches off or sets the password of an
+     * administrator, so a leaked key can not lock the server's owner out or take the panel over).
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param mixed $uid The account ID as sent.
+     * @param bool $notAdmin Refuse administrators.
+     * @return int The ID, or 0 when it may not be used.
+     */
+    static function Account($uid, $notAdmin = false)
+    {
+        global $zdbh;
+        if (!is_scalar($uid) || !ctype_digit((string) $uid) || (int) $uid < 1) {
+            return 0;
+        }
+        $q = $zdbh->prepare("SELECT ac_group_fk FROM x_accounts WHERE ac_id_pk = :id AND ac_deleted_ts IS NULL");
+        $q->execute(array(':id' => (int) $uid));
+        $g = $q->fetchColumn();
+        if ($g === false || ($notAdmin && (int) $g === 1)) {
+            return 0;
+        }
+        return (int) $uid;
+    }
+
     public function CheckServerAPIKey() {
         // Sentora: the key must be this server's own (the installer and the daemon make a
         // random one). The key every Sentora shipped with is public, and with it alone the
@@ -90,6 +163,9 @@ class ws_xmws {
         $key = (string) ctrl_options::GetSystemOption('apikey');
         $given = isset($this->wsdataarray['apikey']) ? (string) $this->wsdataarray['apikey'] : '';
         if (strlen($key) < 32 || in_array(strtolower($key), self::PublicKeys(), true) || $given === '' || !hash_equals($key, $given)) {
+            // counted for this address (KeyLocked()), and logged for fail2ban, which blocks an
+            // address that keeps guessing at the firewall
+            ctrl_loginguard::Failed('api:key');
             runtime_hook::Execute('OnBadAPIKeyAuth');
             return false;
         } else {
@@ -108,8 +184,16 @@ class ws_xmws {
     public function SendResponse($responsearray) {
         if ($responsearray['response'] == '')
             $responsearray['response'] = '1101';
-        header("Content-Type:text/xml");
-        echo "<?xml version=\"1.0\" encoding=\"ISO-8859-1\"?>\n" .
+        // (the panel's data is UTF-8; the answer said ISO-8859-1, which garbled accented names)
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+        $GLOBALS['xmwsAnswered'] = true;
+        header("Content-Type: text/xml; charset=utf-8");
+        header('X-Content-Type-Options: nosniff');
+        header('Cache-Control: no-store');
+        $responsearray['response'] = preg_replace('/[^0-9]/', '', (string) $responsearray['response']);
+        echo "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" .
         "<xmws>\n" .
         "\t<response>" . $responsearray['response'] . "</response>\n" .
         "\t<content>" . $responsearray['content'] . "</content>\n" .
@@ -142,9 +226,15 @@ class ws_xmws {
      * @return string A formatted XML section block which can then be used in the <content> tag if required.
      */
     static function NewXMLContentSection($name, $tags) {
+        // values are escaped: a name or record with < or & broke the answer, or could add tags to it
+        $name = preg_replace('/[^A-Za-z0-9_]/', '', (string) $name);
         $xml = "\t<" . $name . ">\n";
-        foreach ($tags as $tagname => $tagval) {
-            $xml .="\t\t<" . $tagname . ">" . $tagval . "</" . $tagname . ">\n";
+        foreach ((array) $tags as $tagname => $tagval) {
+            $tagname = preg_replace('/[^A-Za-z0-9_]/', '', (string) $tagname);
+            if ($tagname === '' || ctype_digit($tagname[0])) {
+                continue;
+            }
+            $xml .="\t\t<" . $tagname . ">" . self::Esc($tagval) . "</" . $tagname . ">\n";
         }
         $xml .= "\t</" . $name . ">\n";
         return $xml;
@@ -158,7 +248,8 @@ class ws_xmws {
      * @return string A formatted (single tab indented) XML line designed to be used in the <content> tag.
      */
     static function NewXMLTag($name, $value) {
-        $xml = "\t<" . $name . ">" . $value . "</" . $name . ">\n";
+        $name = preg_replace('/[^A-Za-z0-9_]/', '', (string) $name);
+        $xml = "\t<" . $name . ">" . self::Esc($value) . "</" . $name . ">\n";
         return $xml;
     }
 
@@ -171,7 +262,16 @@ class ws_xmws {
      * @return array<string, mixed>|null Associated array of the XML tag data; null when the XML could not be parsed.
      */
     function XMLDataToArray($contents, $get_attributes = 1, $priority = 'tag') {
-        return ws_generic::XMLToArray($contents, $get_attributes, $priority);
+        // A request's <content> part holds several tags side by side (<uid>3</uid><moveid>5</moveid>),
+        // and an XML reader stops after the first one: the others were silently ignored (a client
+        // was deleted with its accounts given to the default owner, not the one asked for). The
+        // part is read inside one wrapper, so every tag counts; a whole request is read as it is.
+        $contents = (string) $contents;
+        if (strpos(ltrim($contents), '<?xml') === 0 || strpos(ltrim($contents), '<xmws') === 0) {
+            return ws_generic::XMLToArray($contents, $get_attributes, $priority);
+        }
+        $all = ws_generic::XMLToArray('<xmwscontent>' . $contents . '</xmwscontent>', $get_attributes, $priority);
+        return (is_array($all) && isset($all['xmwscontent']) && is_array($all['xmwscontent'])) ? $all['xmwscontent'] : array();
     }
 
 }

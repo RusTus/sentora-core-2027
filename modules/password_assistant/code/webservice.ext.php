@@ -28,7 +28,18 @@ class webservice extends ws_xmws {
         $contenttags = $this->XMLDataToArray($this->wsdata);
         $dataobject = new runtime_dataobject();
         $dataobject->addItemValue('response', '');
-        if (module_controller::UpdatePassword($contenttags['xmws']['content']['uid'], $contenttags['xmws']['content']['newpassword'])) {
+        // never an administrator's password (a leaked key must not take the panel over), and never
+        // a password shorter than the panel itself allows
+        $uid = ws_xmws::Account($contenttags['xmws']['content']['uid'] ?? '', true);
+        $pass = $contenttags['xmws']['content']['newpassword'] ?? '';
+        $min = max(8, (int) ctrl_options::GetSystemOption('password_minlength'));
+        if ($uid === 0) {
+            return ws_xmws::Error('1107', 'No such account, or an administrator (the API does not set administrators\' passwords)');
+        }
+        if (!is_string($pass) || strlen($pass) < $min) {
+            return ws_xmws::Error('1107', 'The new password needs at least ' . $min . ' characters');
+        }
+        if (module_controller::UpdatePassword($uid, $pass)) {
             $dataobject->addItemValue('content', ws_xmws::NewXMLTag('uid', $contenttags['xmws']['content']['uid']) . ws_xmws::NewXMLTag('reset', 'true'));
         } else {
             $dataobject->addItemValue('content', ws_xmws::NewXMLTag('uid', $contenttags['xmws']['content']['uid']) . ws_xmws::NewXMLTag('reset', 'false'));

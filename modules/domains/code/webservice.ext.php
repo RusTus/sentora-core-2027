@@ -53,7 +53,13 @@ class webservice extends ws_xmws {
         global $zdbh;
         $request_data = $this->RawXMWSToArray($this->wsdata);
         $response_xml = "\n";
-        $alldomains = module_controller::ListDomains($request_data['content']);
+        // the account: <uid>n</uid>, or the bare number as before
+        $uid = ws_generic::GetTagValue('uid', $request_data['content']);
+        $uid = ws_xmws::Account($uid !== null ? $uid : trim((string) $request_data['content']));
+        if ($uid === 0) {
+            return ws_xmws::Error('1107', 'No such account');
+        }
+        $alldomains = module_controller::ListDomains($uid);
         if (!fs_director::CheckForEmptyValue($alldomains)) {
             foreach ($alldomains as $domain) {
                 $response_xml = $response_xml . ws_xmws::NewXMLContentSection('domain', array(
@@ -83,7 +89,12 @@ class webservice extends ws_xmws {
         $request_data = $this->RawXMWSToArray($this->wsdata);
         $dataobject = new runtime_dataobject();
         $dataobject->addItemValue('response', '');
-        if (module_controller::ExecuteAddDomain(ws_generic::GetTagValue('uid', $request_data['content']), ws_generic::GetTagValue('domain', $request_data['content']), ws_generic::GetTagValue('destination', $request_data['content']), ws_generic::GetTagValue('autohome', $request_data['content']))) {
+        // a live account (an unknown one made the site's folder at the top of the hosting folder)
+        $uid = ws_xmws::Account(ws_generic::GetTagValue('uid', $request_data['content']));
+        if ($uid === 0) {
+            return ws_xmws::Error('1107', 'No such account');
+        }
+        if (module_controller::ExecuteAddDomain($uid, ws_generic::GetTagValue('domain', $request_data['content']), ws_generic::GetTagValue('destination', $request_data['content']), ws_generic::GetTagValue('autohome', $request_data['content']))) {
             $dataobject->addItemValue('content', ws_xmws::NewXMLTag('domain', ws_generic::GetTagValue('domain', $request_data['content'])) . ws_xmws::NewXMLTag('created', 'true'));
         } else {
             $dataobject->addItemValue('content', ws_xmws::NewXMLTag('domain', ws_generic::GetTagValue('domain', $request_data['content'])) . ws_xmws::NewXMLTag('created', 'false'));
@@ -102,7 +113,11 @@ class webservice extends ws_xmws {
         $dataobject = new runtime_dataobject();
         $dataobject->addItemValue('response', '');
 
-        if (module_controller::ExecuteDeleteDomain($contenttags['domainid'])) {
+        $domainid = $contenttags['domainid'] ?? '';
+        if (!is_scalar($domainid) || !ctype_digit((string) $domainid)) {
+            return ws_xmws::Error('1107', 'domainid must be a number');
+        }
+        if (module_controller::ExecuteDeleteDomain((int) $domainid)) {
             $dataobject->addItemValue('content', ws_xmws::NewXMLTag('domainid', $contenttags['domainid']) . ws_xmws::NewXMLTag('deleted', 'true'));
         } else {
             $dataobject->addItemValue('content', ws_xmws::NewXMLTag('domainid', $contenttags['domainid']) . ws_xmws::NewXMLTag('deleted', 'false'));

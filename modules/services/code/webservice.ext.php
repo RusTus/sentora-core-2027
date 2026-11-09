@@ -71,7 +71,11 @@ class webservice extends ws_xmws
     {
         $request_data = $this->RawXMWSToArray($this->wsdata);
         $contenttags = $this->XMLDataToArray($this->wsdata);
-        if (sys_monitoring::LocalPortStatus($contenttags['xmws']['content']['port'])) {
+        $port = $contenttags['xmws']['content']['port'] ?? '';
+        if (!is_scalar($port) || !ctype_digit((string) $port) || (int) $port < 1 || (int) $port > 65535) {
+            return ws_xmws::Error('1107', 'The port must be a number from 1 to 65535');
+        }
+        if (sys_monitoring::LocalPortStatus((int) $port)) {
             $port_response = 1;
         } else {
             $port_response = 0;

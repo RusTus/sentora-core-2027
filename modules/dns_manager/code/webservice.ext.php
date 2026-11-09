@@ -54,7 +54,12 @@ class webservice extends ws_xmws
         $response_xml = "\n";
         $domainName = ws_generic::GetTagValue('domainName', $request_data['content']);
         $uid = ws_generic::GetTagValue('uid', $request_data['content']);
-        $domainID = self::GetDomainID($uid, $domainName);
+        // a live account and a domain it owns
+        $uid = ws_xmws::Account($uid);
+        $domainID = $uid ? self::GetDomainID($uid, $domainName) : null;
+        if (!$domainID) {
+            return ws_xmws::Error('1107', 'No such domain for that account');
+        }
 
         $sql = $zdbh->prepare("SELECT * FROM x_dns WHERE dn_acc_fk=:userid AND dn_vhost_fk=:domainID AND dn_deleted_ts IS NULL ORDER BY dn_host_vc ASC");
         $sql->bindParam(':userid', $uid);
@@ -98,8 +103,18 @@ class webservice extends ws_xmws
         $type = ws_generic::GetTagValue('type', $request_data['content']);
         $target = ws_generic::GetTagValue('target', $request_data['content']);
         $ttl = ws_generic::GetTagValue('ttl', $request_data['content']);
-        $domainID = self::GetDomainID($uid, $domainName);
+        // a live account and a domain it owns
+        $uid = ws_xmws::Account($uid);
+        $domainID = $uid ? self::GetDomainID($uid, $domainName) : null;
+        if (!$domainID) {
+            return ws_xmws::Error('1107', 'No such domain for that account');
+        }
 
+        // a time-to-live in seconds
+        if (!is_scalar($ttl) || !ctype_digit((string) $ttl) || (int) $ttl < 60 || (int) $ttl > 604800) {
+            return ws_xmws::Error('1107', 'ttl must be a number of seconds from 60 to 604800');
+        }
+        $ttl = (int) $ttl;
         module_controller::createDNSRecord(array(
             "uid" => $uid,
             "domainName" => $domainName,
@@ -146,9 +161,15 @@ class webservice extends ws_xmws
         // these are mandatory parameters
         $uid = ws_generic::GetTagValue('uid', $request_data['content']);
         $domainName = ws_generic::GetTagValue('domainName', $request_data['content']);
-        $domainID = self::GetDomainID($uid, $domainName);
+        // a live account and a domain it owns
+        $uid = ws_xmws::Account($uid);
+        $domainID = $uid ? self::GetDomainID($uid, $domainName) : null;
+        if (!$domainID) {
+            return ws_xmws::Error('1107', 'No such domain for that account');
+        }
 
-        $sqlstr = "SELECT * FROM x_dns WHERE dn_acc_fk=:userid AND vh_deleted_ts IS NULL AND dn_vhost_fk=:domainID ";
+        // (dn_deleted_ts: this named vh_deleted_ts, a column x_dns does not have, so it always failed)
+        $sqlstr = "SELECT * FROM x_dns WHERE dn_acc_fk=:userid AND dn_deleted_ts IS NULL AND dn_vhost_fk=:domainID ";
 
         // iterate through optional parameters
         foreach ($tags as $tag => $sql_param) {

@@ -30,7 +30,17 @@ class webservice extends ws_xmws
     {
         $request_data = $this->RawXMWSToArray($this->wsdata);
         $contenttags = $this->XMLDataToArray($request_data['content']);
-        module_controller::ExecuteDeleteClient($contenttags['uid'], empty($contenttags['moveid']) ? 1 : $contenttags['moveid']);
+        // never an administrator (a leaked key must not lock the server's owner out); what the
+        // account owned goes to a live account
+        $uid = ws_xmws::Account($contenttags['uid'] ?? '', true);
+        if ($uid === 0) {
+            return ws_xmws::Error('1107', 'No such account, or an administrator (the API does not delete administrators)');
+        }
+        $moveid = empty($contenttags['moveid']) ? 0 : ws_xmws::Account($contenttags['moveid']);
+        if (!empty($contenttags['moveid']) && ($moveid === 0 || $moveid === $uid)) {
+            return ws_xmws::Error('1107', 'moveid is not a live account other than the one deleted');
+        }
+        module_controller::ExecuteDeleteClient($uid, $moveid);
         $dataobject = new runtime_dataobject();
         $dataobject->addItemValue('response', '');
         $dataobject->addItemValue('content', ws_xmws::NewXMLTag('uid', $contenttags['uid']) . ws_xmws::NewXMLTag('deleted', 'true'));
@@ -47,7 +57,11 @@ class webservice extends ws_xmws
     {
         $request_data = $this->RawXMWSToArray($this->wsdata);
         $contenttags = $this->XMLDataToArray($request_data['content']);
-        module_controller::EnableClient($contenttags['uid']);
+        $uid = ws_xmws::Account($contenttags['uid'] ?? '', true);
+        if ($uid === 0) {
+            return ws_xmws::Error('1107', 'No such account, or an administrator');
+        }
+        module_controller::EnableClient($uid);
         $dataobject = new runtime_dataobject();
         $dataobject->addItemValue('response', '');
         $dataobject->addItemValue('content', ws_xmws::NewXMLTag('uid', $contenttags['uid']) . ws_xmws::NewXMLTag('enabled', 'true'));
@@ -63,7 +77,11 @@ class webservice extends ws_xmws
     {
         $request_data = $this->RawXMWSToArray($this->wsdata);
         $contenttags = $this->XMLDataToArray($request_data['content']);
-        module_controller::DisableClient($contenttags['uid']);
+        $uid = ws_xmws::Account($contenttags['uid'] ?? '', true);
+        if ($uid === 0) {
+            return ws_xmws::Error('1107', 'No such account, or an administrator (the API does not switch administrators off)');
+        }
+        module_controller::DisableClient($uid);
         $dataobject = new runtime_dataobject();
         $dataobject->addItemValue('response', '');
         $dataobject->addItemValue('content', ws_xmws::NewXMLTag('uid', $contenttags['uid']) . ws_xmws::NewXMLTag('disabled', 'true'));
@@ -85,6 +103,8 @@ class webservice extends ws_xmws
             $currentclient = 0;
             $newsections = "";
             foreach ($allactiveclients as $client) {
+                // not the password hash, nor the page's own buttons
+                unset($client['password'], $client['tfreset']);
                 $newsections = $newsections . ws_xmws::NewXMLContentSection('client', $client);
                 $currentclient++;
             }
@@ -105,6 +125,15 @@ class webservice extends ws_xmws
     {
         $request_data = $this->RawXMWSToArray($this->wsdata);
         $response_xml = "false";
+        // a client of a live account, never in the Administrators group: a leaked key must not be
+        // able to make itself an administrator
+        $groupid = ws_generic::GetTagValue('groupid', $request_data['content']);
+        if (ws_xmws::Account(ws_generic::GetTagValue('resellerid', $request_data['content'])) === 0) {
+            return ws_xmws::Error('1107', 'resellerid is not a live account');
+        }
+        if (!is_scalar($groupid) || !ctype_digit((string) $groupid) || (int) $groupid === 1) {
+            return ws_xmws::Error('1107', 'groupid must be a group other than Administrators');
+        }
         $userExits = module_controller::CheckUserExists(ws_generic::GetTagValue('username', $request_data['content']));
         if (!$userExits) {
             if(module_controller::ExecuteCreateClient(ws_generic::GetTagValue('resellerid', $request_data['content']), ws_generic::GetTagValue('username', $request_data['content']), ws_generic::GetTagValue('packageid', $request_data['content']), ws_generic::GetTagValue('groupid', $request_data['content']), ws_generic::GetTagValue('fullname', $request_data['content']), ws_generic::GetTagValue('email', $request_data['content']), ws_generic::GetTagValue('address', $request_data['content']), ws_generic::GetTagValue('postcode', $request_data['content']), ws_generic::GetTagValue('phone', $request_data['content']), ws_generic::GetTagValue('password', $request_data['content']), ws_generic::GetTagValue('sendemail', $request_data['content']), ws_generic::GetTagValue('emailsubject', $request_data['content']), ws_generic::GetTagValue('emailbody', $request_data['content']))){

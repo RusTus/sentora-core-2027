@@ -430,7 +430,7 @@ class sys_accountphp
         $new = bin2hex(random_bytes(16));
         $zdbh->prepare("UPDATE x_settings SET so_value_tx = :k WHERE so_name_vc = 'apikey'")->execute(array(':k' => $new));
         echo "Security: the web service API key was the public default (or too short): replaced with a random one"
-            . " (Admin > Sentora Config shows it, for programs that use the API)." . fs_filehandler::NewLine();
+            . " (as root: setso --show apikey prints it, for programs that use the API)." . fs_filehandler::NewLine();
     }
 
     /**

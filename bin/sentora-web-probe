@@ -124,7 +124,8 @@ echo; echo "== Web service API"
 # The key every Sentora shipped with is public: with it alone the API resets passwords,
 # so it must be refused. A harmless read-only request; the answer is not printed.
 c=$(get -X POST --data '<?xml version="1.0" encoding="UTF-8"?><xmws><apikey>ee8795c8c53bfdb3b2cc595186b68912</apikey><request>GetAllPackages</request><authuser></authuser><authpass></authpass><content></content></xmws>' "$BASE/api/packages")
-if grep -q '<response>1103</response>' "$TMP/body"; then ok "the public default API key is refused"
+# (1103: refused; 1104: refused because this address sent too many wrong keys lately)
+if grep -qE '<response>110[34]</response>' "$TMP/body"; then ok "the public default API key is refused"
 elif grep -q '<xmws>' "$TMP/body"; then fail "THE PUBLIC DEFAULT API KEY IS ACCEPTED: anyone can reset passwords (update Sentora now)"
 else ok "the API is not reachable with the public key ($c)"; fi
 

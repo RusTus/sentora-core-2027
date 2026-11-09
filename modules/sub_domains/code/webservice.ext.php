@@ -32,7 +32,13 @@ class webservice extends ws_xmws {
         $request_data = $this->RawXMWSToArray($this->wsdata);
         $response_xml = "\n";
 
-        $allSubdomains = module_controller::ListSubDomains($request_data['content']);
+        // the account: <uid>n</uid>, or the bare number as before
+        $uid = ws_generic::GetTagValue('uid', $request_data['content']);
+        $uid = ws_xmws::Account($uid !== null ? $uid : trim((string) $request_data['content']));
+        if ($uid === 0) {
+            return ws_xmws::Error('1107', 'No such account');
+        }
+        $allSubdomains = module_controller::ListSubDomains($uid);
         if (!fs_director::CheckForEmptyValue($allSubdomains)) {
             foreach ($allSubdomains as $domain) {
                 $response_xml = $response_xml . ws_xmws::NewXMLContentSection('subdomain', array(
@@ -66,7 +72,10 @@ class webservice extends ws_xmws {
 
         $subname = ws_generic::GetTagValue('subname', $request_data['content']);
         $subdirectory = ws_generic::GetTagValue('subdirectory', $request_data['content']);
-        $uid = ws_generic::GetTagValue('uid', $request_data['content']);
+        $uid = ws_xmws::Account(ws_generic::GetTagValue('uid', $request_data['content']));
+        if ($uid === 0) {
+            return ws_xmws::Error('1107', 'No such account');
+        }
         $autohome = ws_generic::GetTagValue('autohome', $request_data['content']);
 
         $retval = module_controller::ExecuteAddSubDomain($uid, $subname, $subdirectory, $autohome);
@@ -98,7 +107,11 @@ class webservice extends ws_xmws {
         $dataobject = new runtime_dataobject();
         $dataobject->addItemValue('response', '');
 
-        if (module_controller::ExecuteDeleteSubDomain($contenttags['domainid'])) {
+        $domainid = $contenttags['domainid'] ?? '';
+        if (!is_scalar($domainid) || !ctype_digit((string) $domainid)) {
+            return ws_xmws::Error('1107', 'domainid must be a number');
+        }
+        if (module_controller::ExecuteDeleteSubDomain((int) $domainid)) {
             $dataobject->addItemValue('content', ws_xmws::NewXMLTag('domainid', $contenttags['domainid']) . ws_xmws::NewXMLTag('deleted', 'true'));
         } else {
             $dataobject->addItemValue('content', ws_xmws::NewXMLTag('domainid', $contenttags['domainid']) . ws_xmws::NewXMLTag('deleted', 'false'));

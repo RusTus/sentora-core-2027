@@ -18,6 +18,13 @@
  *
  * Updated by RusTus, 2026-11-08
  */
+// Only ever run from the command line (cron, sentora-update): bin/.htaccess keeps it off the web,
+// and this keeps it so should that file not be read
+if (PHP_SAPI !== 'cli') {
+    http_response_code(404);
+    exit;
+}
+
 set_time_limit(0);
 
 $rawPath = str_replace("\\", "/", dirname(__FILE__));

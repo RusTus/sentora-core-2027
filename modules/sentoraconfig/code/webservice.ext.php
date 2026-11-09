@@ -36,6 +36,10 @@ class webservice extends ws_xmws {
 
             if ($rowoptions['so_value_tx'] == "") {
                 $value = "NULL";
+            } elseif (preg_match('/pass|secret|token|apikey|api_key|_key$|private|credential|smtp_username/i', (string) $rowoptions['so_name_vc'])) {
+                // secrets (the API key itself, the mail server's password, tokens) are never sent:
+                // a program reading the settings sees that one is set, not what it is
+                $value = '********';
             } else {
                 $value = $rowoptions['so_value_tx'];
             }

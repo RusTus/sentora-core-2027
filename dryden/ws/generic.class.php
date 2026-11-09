@@ -90,8 +90,11 @@ class ws_generic {
      */
     static function GetTagValue($tagname, $xml) {
         $matches = array();
-        $pattern = "/<$tagname>(.*?)<\/$tagname>/";
-        preg_match($pattern, $xml, $matches);
+        $t = preg_quote((string) $tagname, '/');
+        // (s: a value may span lines; none sent: null, as before, without a PHP warning)
+        if (!preg_match('/<' . $t . '>(.*?)<\/' . $t . '>/s', (string) $xml, $matches)) {
+            return null;
+        }
         return $matches[1];
     }
 

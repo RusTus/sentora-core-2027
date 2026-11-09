@@ -47,6 +47,7 @@ This README is the whole guide: how to install and update the server, how to use
 - [How the panel gets root work done](#how-the-panel-gets-root-work-done)
 - [How accounts are kept apart](#how-accounts-are-kept-apart)
 - [How Apache is protected](#how-apache-is-protected)
+- [The web service API](#the-web-service-api)
 - [Passwords](#passwords)
 - [Logins and sessions](#logins-and-sessions)
 
@@ -478,6 +479,19 @@ From the administrator's own settings (Apache Config):
 3. If Apache does not run after a reload, the previous file is put back and Apache restarted; the domain named in Apache's error has its entries switched off.
 
 So a typing mistake in Extra directives or a bad certificate can't take every website down; it only switches off that one entry.
+
+## The web service API
+
+Programs (a billing system, an order form) can manage the panel through `https://<panel>/api/<module>`: XML sent with POST, with the server's API key (`apikey`, a random one made on install; as root on the server, `setso --show apikey` prints it). The modules with API requests: Manage Clients (create, delete, switch on and off, list clients), Packages, Domains, Sub Domains, DNS Manager, Password Assistant, Services, Usage Viewer and Sentora Config.
+
+The key acts as the server's administrator, so it belongs only in programs you trust, on servers you trust. Even so, the API never:
+
+- deletes, switches off or sets the password of an **administrator**, or creates an account in the Administrators group: a leaked key can not lock you out or make itself an administrator;
+- sends **secrets**: the settings list shows the API key, the mail server's password and tokens as `********`, and the client list has no password hashes;
+- acts on an account or domain that does not exist (an account must be live, a DNS request's domain must be that account's);
+- answers a **module that is switched off** in Module Admin, or a request that is not a POST.
+
+Wrong keys are counted per address: after 10 within 15 minutes, that address gets "too many attempts" (code 1104) for 15 minutes, even with the right key, and each wrong key is logged for fail2ban (`/var/lib/sentora/sentora-auth.log`), which blocks an address that keeps guessing. Answers are UTF-8 XML with every value escaped; a request that fails inside the panel gets a plain error, never the server's own error text. Codes: 1101 done, 1102 no such request, 1103 wrong key, 1104 too many wrong keys, 1106 no request named, 1107 a value that is not allowed (the answer says which).
 
 ## Passwords
 

@@ -85,7 +85,7 @@ class webservice extends ws_xmws
                 $packageId = $package['packageid'];
             }
         }
-        $response_xml = $response_xml . ws_xmws::NewXMLContentSection('pakageid', $packageId);
+        $response_xml = $response_xml . ws_xmws::NewXMLTag('pakageid', $packageId);
         $dataobject = new runtime_dataobject();
         $dataobject->addItemValue('response', '');
         $dataobject->addItemValue('content', $response_xml);
