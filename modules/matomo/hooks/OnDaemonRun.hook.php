@@ -4,7 +4,7 @@
  * Matomo: keeps Matomo's sites, users and access in step with the panel
  * (every 5 minutes, as root; Matomo itself runs as the panel user).
  *
- * Written by RusTus, 2026-11-06
+ * Written by RusTus, 2026-11-09
  */
 require_once dirname(__FILE__) . '/../code/matomohelper.php';
 

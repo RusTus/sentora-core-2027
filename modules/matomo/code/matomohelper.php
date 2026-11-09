@@ -9,7 +9,7 @@
  * Visits come from the web server logs (imported every hour) or, per domain,
  * from the tracking code the site owner adds to their pages.
  *
- * Written by RusTus, 2026-11-06
+ * Written by RusTus, 2026-11-09
  */
 class matomo_helper
 {
