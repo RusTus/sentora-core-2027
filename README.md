@@ -482,16 +482,92 @@ So a typing mistake in Extra directives or a bad certificate can't take every we
 
 ## The web service API
 
-Programs (a billing system, an order form) can manage the panel through `https://<panel>/api/<module>`: XML sent with POST, with the server's API key (`apikey`, a random one made on install; as root on the server, `setso --show apikey` prints it). The modules with API requests: Manage Clients (create, delete, switch on and off, list clients), Packages, Domains, Sub Domains, DNS Manager, Password Assistant, Services, Usage Viewer and Sentora Config.
+Programs (a billing system, a reseller's own order form or website) manage the panel through `https://<panel>/api/<module>`, with requests sent as POST in XML or JSON. Every answer carries the API's version (2), a response code and its content, in the same format as the request.
 
-The key acts as the server's administrator, so it belongs only in programs you trust, on servers you trust. Even so, the API never:
+**Keys.** On **Advanced > API Access**, an administrator or reseller makes one key per program:
 
-- deletes, switches off or sets the password of an **administrator**, or creates an account in the Administrators group: a leaked key can not lock you out or make itself an administrator;
-- sends **secrets**: the settings list shows the API key, the mail server's password and tokens as `********`, and the client list has no password hashes;
-- acts on an account or domain that does not exist (an account must be live, a DNS request's domain must be that account's);
-- answers a **module that is switched off** in Module Admin, or a request that is not a POST.
+- a key is shown once when it is made; the panel keeps only its fingerprint (SHA-256);
+- it can be limited to the addresses the program connects from (IPs or ranges such as `203.0.113.0/24`);
+- it can be switched off or deleted on its own, and the page shows when and from where it was last used;
+- every request is logged (when, which key, from where, the request, its answer), kept 90 days. Resellers see their own keys' requests; administrators see all, including refused ones.
 
-Wrong keys are counted per address: after 10 within 15 minutes, that address gets "too many attempts" (code 1104) for 15 minutes, even with the right key, and each wrong key is logged for fail2ban (`/var/lib/sentora/sentora-auth.log`), which blocks an address that keeps guessing. Answers are UTF-8 XML with every value escaped; a request that fails inside the panel gets a plain error, never the server's own error text. Codes: 1101 done, 1102 no such request, 1103 wrong key, 1104 too many wrong keys, 1106 no request named, 1107 a value that is not allowed (the answer says which).
+The server's own key (`apikey`; as root, `setso --show apikey` prints it, and API Access can replace it) still works as an administrator's key, for programs set up before keys of their own existed.
+
+**What a key may reach.**
+
+- **A reseller's key acts as the reseller:** its own clients (and their clients, at any depth), its own packages, the groups its Manage Clients page offers, and only the modules its own group has. It can never touch its own account, another reseller's clients, an account above it, or an administrator.
+- **An administrator's key** reaches every account.
+- **No key** deletes, switches off, suspends, changes or sets the password of an **administrator**, makes one, or makes a login link for one: a leaked key can not lock you out or take the panel over.
+- **Server-wide requests** need an administrator's key: the settings list, the server's totals, its services and ports, and every account's domains.
+- **Package limits apply:** a request that adds a domain, sub-domain, parked domain, mailbox, forwarder, database or FTP account is refused when the account's package allows no more, exactly as on the panel's pages.
+
+**Format.** XML:
+
+```xml
+<xmws><apikey>sk_...</apikey><request>GetClient</request><content><uid>12</uid></content></xmws>
+```
+
+JSON (answered in JSON):
+
+```json
+{"apikey": "sk_...", "request": "GetClient", "content": {"uid": 12}}
+```
+
+Answers: `<xmws><version>2</version><response>1101</response><content>...</content></xmws>`, or `{"version": 2, "response": "1101", "content": {...}}`. Codes:
+
+| Code | Meaning |
+|---|---|
+| 1101 | done (or, with a plain message, an internal error: the server's logs say why) |
+| 1102 | no such request in that module |
+| 1103 | wrong key (or a key used from an address it does not allow) |
+| 1104 | too many wrong keys from this address: wait 15 minutes |
+| 1106 | no request named |
+| 1107 | a value that is not allowed, or an account, package or item the key may not reach (the answer says which) |
+| 1108 | not allowed with this key (an administrator's request, or a module the reseller's group lacks) |
+
+Sizes are in MB as the panel counts them (1 MB = 1,024,000 bytes); `-1` is "no limit". Answers are UTF-8 with every value escaped; secrets are never sent (password hashes, the API key, the mail server's password and tokens show as `********` in the settings list).
+
+**Requests.** `uid` is an account's ID; a request about "an account's" things takes the key's own account or one it may reach.
+
+- **manage_clients:**
+  - `GetAllClients` (`uid`: whose clients, default the key's own account);
+  - `GetClient` (`uid`): details (never the password hash), and why it was suspended;
+  - `GetClientUsage` (`uid`): use against the package's limits, this month's bandwidth;
+  - `CreateClient` (`resellerid`: a reseller's key makes its own clients only; `username`, `packageid`: the reseller's own; `groupid`: never Administrators; `fullname`, `email`, `password`, optional `address`, `postcode`, `phone`, `sendemail`, `emailsubject`, `emailbody`): answers the new `uid`;
+  - `UpdateClient` (`uid`, any of `fullname`, `email`, `phone`, `address`, `postcode`);
+  - `ChangePackage` (`uid`, `packageid`: one of the client's reseller's packages);
+  - `SuspendClient` (`uid`, `reason`: one line, such as "not paid") and `UnsuspendClient` (`uid`);
+  - `EnableClient`, `DisableClient` (`uid`);
+  - `DeleteClient` (`uid`, optional `moveid`: who gets its clients, packages and groups);
+  - `UsernameExists` (`username`);
+  - `CreateLoginLink` (`uid`): see below.
+- **packages:**
+  - `GetAllPackages` (optional `uid`), `GetPackage` (`packageid`), `GetPackageId` (`packagename`): each with its limits;
+  - `CreatePackage` (`name`, `php` true/false, and every limit: `domains`, `subdomains`, `parkeddomains`, `mailboxes`, `forwarders`, `distlists`, `ftpaccounts`, `mysql`, `diskspacemb`, `bandwidthmb`): answers `packageid`;
+  - `UpdatePackage` (`packageid`, any of those): its clients get the new limits at once;
+  - `DeletePackage` (`packageid`, `moveto`: another of your packages, for its clients).
+- **domains:** `GetDomainsForUser` (`uid`), `CreateDomain` (`uid`, `domain`, `destination` or `autohome` 1), `DeleteDomain` (`domainid`), `GetAllDomains` (administrators).
+- **sub_domains:** `GetSubDomainsForUser` (`uid`), `CreateSubDomain` (`uid`, `subname`: a name under one of the account's own domains, `subdirectory` or `autohome` 1), `DeleteSubDomain` (`domainid`).
+- **dns_manager:** `GetAllDNSRecords`, `CreateDNSRecord`, `DeleteDNSRecords` (`uid`, `domainName`: one of the account's own domains; `hostName`, `type`, `target`, `ttl` 60 to 604800).
+- **mailboxes:** `GetMailboxes` (`uid`); `CreateMailbox` (`uid`, `address`: a full address on one of the account's own domains, `password`): answers `mailboxid`; `SetMailboxPassword` (`mailboxid`, `password`); `DeleteMailbox` (`mailboxid`, optional `dropaliases`, `leavelists` true: also remove the aliases that deliver to it and take it off mailing lists; its forwarders go with it).
+- **forwarders:** `GetForwarders` (`uid`); `CreateForwarder` (`uid`, `mailboxid` or `address` of one of the account's own mailboxes, `destination`, `keepcopy` true/false): answers `forwarderid`; `DeleteForwarder` (`forwarderid`).
+- **mysql_databases:** `GetDatabases` (`uid`): name, size, users; `CreateDatabase` (`uid`, `name`: letters, digits and -; the panel puts "<user name>_" before it): answers `databaseid` and the full name; `DeleteDatabase` (`databaseid`): the database and everything in it.
+- **mysql_users:** `GetDatabaseUsers` (`uid`): name, access, databases (never passwords); `CreateDatabaseUser` (`uid`, `name`, `databaseid`: its first database, `access`: `any`, `localhost` or an IP address): the panel makes the password and answers it once, with `userid` and the full name; `SetDatabaseUserPassword` (`userid`, `password`); `GrantDatabase`, `RevokeDatabase` (`userid`, `databaseid`: the same account's); `DeleteDatabaseUser` (`userid`).
+- **ftp_management:** `GetFtpAccounts` (`uid`): name, folder, access (never passwords); `CreateFtpAccount` (`uid`, `username`: the panel puts "<user name>_" before it, `password`, `access` RW, RO or WO, `folder`: an existing folder in the account's home, or empty for a new one named after the user): answers its ID and full name; `SetFtpPassword` (`ftpid`, `password`); `DeleteFtpAccount` (`ftpid`).
+- **parked_domains:** `GetParkedDomains` (`uid`); `CreateParkedDomain` (`uid`, `domain`): answers `domainid`; `DeleteParkedDomain` (`domainid`).
+- **sencrypt:** `GetCertificates` (`uid`): each domain's certificate and days left; `RequestCertificate` (`uid`, `domain`: one of the account's own domains or sub-domains): a Let's Encrypt certificate now (up to a minute), used by the site within 5 minutes.
+- **backupmgr:** `StartBackup` (`uid`): a backup of the account's websites and databases in the background (`started`, `running` or `recent`); `GetBackups` (`uid`): the latest backup's progress and the account's backup files. Downloads stay on the Backups page.
+- **password_assistant:** `ResetUserPassword` (`uid`, `newpassword`: at least the panel's minimum length).
+- **Administrators' keys only:** `sentoraconfig` `GetAllSystemOptions`; `usage_viewer` `GetServerUsageStats` (accounts, disk and this month's bandwidth in MB, mail, FTP, databases, packages, sites); `services` `GetServiceStatus`, `GetPortStatus` (`port`).
+
+**One-time login links.** `CreateLoginLink` answers an address that logs a client into the panel without its password, for "Log in to your control panel" buttons on a reseller's own site:
+
+- it works **once**, within **2 minutes**, for a live client account, never for an administrator;
+- it opens at the reseller's own panel address when it has one (Branding), else at the main one;
+- it stands for the password only: two-factor login still asks for its code, and a server that requires two-factor login still makes the client set it up;
+- whoever was logged in on that browser is logged out first; a wrong or used link counts like a wrong password for the address.
+
+**Wrong keys.** They are counted per address (not for the API as a whole, so nobody can lock your programs out): after 10 within 15 minutes, that address gets 1104 for 15 minutes, even with the right key, and each wrong key is logged for fail2ban (`/var/lib/sentora/sentora-auth.log`), which blocks an address that keeps guessing at the firewall. Requests must be POST; a module switched off in Module Admin answers none; only the requests a module's own API defines can be called.
 
 ## Passwords
 
