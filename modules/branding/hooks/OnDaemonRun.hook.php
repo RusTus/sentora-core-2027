@@ -37,8 +37,38 @@ if (ctrl_options::GetSystemOption('branding_setup') === false) {
     }
 }
 
+BrandingSyncApache();
 if (ctrl_branding::Enabled()) {
     BrandingCertificates();
+}
+
+/**
+ * Have Apache's settings written again when the panel addresses in them are not the ones that
+ * should be there: a reseller switched off, deleted or moved out of a group with Manage Clients, an
+ * address removed, the module switched off. (Saving an address does this at once; those changes
+ * happen elsewhere in the panel.)
+ *
+ * @return void
+ */
+function BrandingSyncApache()
+{
+    global $zdbh;
+    if (ctrl_options::GetSystemOption('apache_changed') === 'true') {
+        return;
+    }
+    $file = (string) @file_get_contents((string) ctrl_options::GetSystemOption('apache_vhost'));
+    preg_match_all('/^# BRANDING: (\S+)$/m', $file, $m);
+    $inFile = $m[1];
+    $want = array();
+    foreach (ctrl_branding::Addresses() as $a) {
+        $want[] = $a['host'];
+    }
+    sort($inFile);
+    sort($want);
+    if ($inFile !== $want) {
+        $zdbh->exec("UPDATE x_settings SET so_value_tx = 'true' WHERE so_name_vc = 'apache_changed'");
+        echo "Branding: the panel addresses changed; Apache's settings are written again." . fs_filehandler::NewLine();
+    }
 }
 
 /**

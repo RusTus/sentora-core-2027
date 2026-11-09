@@ -34,8 +34,9 @@ class ctrl_branding
     /** Largest logo upload (bytes). */
     const UPLOAD_MAX = 2097152;
 
-    /** Largest picture accepted (pixels, width times height), before it is made smaller. */
-    const PIXELS_MAX = 25000000;
+    /** Largest picture accepted (pixels, width times height), before it is made smaller: about 30 MB
+     *  of memory to read it (a 25-million-pixel one took 200 MB, too much for many at once). */
+    const PIXELS_MAX = 4000000;
 
     /** The stored logo fits in this box (pixels; twice the size shown, for sharp screens). */
     const LOGO_W = 480;
@@ -270,10 +271,10 @@ class ctrl_branding
         $welcome = trim(preg_replace('/\s+/u', ' ', (string) ($in['welcome'] ?? '')));
         $colour = strtolower(trim((string) ($in['colour'] ?? '')));
         $variant = (string) ($in['variant'] ?? '');
-        if (mb_strlen($name) > self::NAME_MAX || preg_match('/[\x00-\x1F\x7F<>]/u', $name)) {
+        if (mb_strlen($name) > self::NAME_MAX || preg_match('/[\x00-\x1F\x7F<>\p{Cf}]/u', $name)) {
             return 'name';
         }
-        if (mb_strlen($welcome) > self::WELCOME_MAX || preg_match('/[\x00-\x1F\x7F<>]/u', $welcome)) {
+        if (mb_strlen($welcome) > self::WELCOME_MAX || preg_match('/[\x00-\x1F\x7F<>\p{Cf}]/u', $welcome)) {
             return 'welcome';
         }
         if ($colour !== '' && !preg_match('/^#[0-9a-f]{6}$/', $colour)) {
@@ -487,7 +488,9 @@ class ctrl_branding
             self::Ensure();
             $host = self::RequestHost();
             if ($host !== '') {
-                $q = $zdbh->prepare("SELECT br_acc_fk FROM x_branding WHERE br_host_vc = :h");
+                // (only a live account's: a switched-off or deleted reseller's address shows no brand)
+                $q = $zdbh->prepare("SELECT b.br_acc_fk FROM x_branding b JOIN x_accounts a ON a.ac_id_pk = b.br_acc_fk
+                    WHERE b.br_host_vc = :h AND a.ac_enabled_in = 1 AND a.ac_deleted_ts IS NULL");
                 $q->execute(array(':h' => $host));
                 $owner = (int) $q->fetchColumn();
                 if ($owner > 0 && self::CanSet($owner)) {

@@ -109,8 +109,8 @@ class module_controller extends ctrl_module
         }
         self::$typed = $in;
         $text = array(
-            'name' => 'The company name can have up to 60 characters, without < or >.',
-            'welcome' => 'The welcome line can have up to 160 characters, without < or >.',
+            'name' => 'The company name can have up to 60 characters, without < or > or invisible characters.',
+            'welcome' => 'The welcome line can have up to 160 characters, without < or > or invisible characters.',
             'colour' => 'Choose the main colour with the colour picker (#rrggbb).',
             'variant' => 'Choose Light, Dark, Auto or the panel default for the login page.',
         );
@@ -152,7 +152,7 @@ class module_controller extends ctrl_module
         $text = array(
             'big' => 'That picture is too large: at most 2 MB.',
             'type' => 'That is not a PNG, JPG or WebP picture.',
-            'size' => 'That picture is too small or too large (at least 16 pixels each way, at most 25 million pixels).',
+            'size' => 'That picture is too small or too large (at least 16 pixels each way, at most 4 million pixels, such as 2000 x 2000).',
             'gd' => 'This server can not read pictures (the PHP GD extension is missing).',
         );
         self::$msg[] = $err === '' ? array('ok', ui_language::translate('Logo saved.')) : array('error', ui_language::translate($text[$err]));
