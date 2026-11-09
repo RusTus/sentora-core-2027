@@ -54,6 +54,8 @@ class module_controller extends ctrl_module
                 array('mailer_type', 'email_from_name', 'email_from_address', 'email_smtp', 'smtp_server', 'smtp_port', 'smtp_secure', 'smtp_auth', 'smtp_username', 'smtp_password', 'welcome_message')),
             'logging' => array('Logging', 'Where errors go, and whether PHP shows them.',
                 array('debug_mode', 'logmode', 'logfile')),
+            'feedback' => array('Feedback', 'A short daily report about this server for the Sentora-2027 project (nothing private: what is sent is in /var/lib/sentora/feedback-last.json), and the feedback server that also counts the add-on downloads Repo Browser shows. Without a feedback server, nothing is sent or counted: everything else works the same.',
+                array('customer_feedback', 'feedback_url')),
         );
     }
 
@@ -96,6 +98,8 @@ class module_controller extends ctrl_module
             'logmode' => array('label' => 'Log errors to', 'help' => '', 'type' => 'select',
                 'choices' => array('db' => 'The database', 'file' => 'A file (below)', 'email' => 'Email')),
             'logfile' => array('label' => 'Log file', 'help' => 'Used when errors are logged to a file.', 'type' => 'text'),
+            'customer_feedback' => array('label' => 'Send customer feedback', 'help' => 'Once a day: the panel version, operating system, hardware, software versions, public and internal IP address, how busy the server is and counts (accounts, domains, mailboxes). Never a domain, user name, email address, password or file. Off: nothing is sent, and add-on downloads are not counted.', 'type' => 'switch'),
+            'feedback_url' => array('label' => 'Feedback server', 'help' => 'Its address, such as https://stats.example.com (reports go to its api.php; it counts add-on downloads at /repo). Empty: the one the Sentora-2027 project publishes, if any.', 'type' => 'text', 'clear' => true, 'https' => true),
         );
     }
 
@@ -422,6 +426,9 @@ class module_controller extends ctrl_module
         }
         if (in_array($type, array('text', 'email', 'number', 'password'), true) && preg_match('/[\r\n]/', $value)) {
             return 'must be on one line.';
+        }
+        if (!empty($f['https']) && $value !== '' && !preg_match('#^https://[A-Za-z0-9.-]+(:\d{1,5})?(/[A-Za-z0-9._~/%-]*)?$#', $value)) {
+            return 'must be an https:// address.';
         }
         if (!empty($f['date']) && trim($value) === '') {
             return 'can not be empty.';

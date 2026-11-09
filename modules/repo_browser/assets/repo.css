@@ -129,3 +129,19 @@
 .rb-new-desc { flex-basis: 100%; font-size: 12px; }
 .rb-new-repo { font-size: 11px; }
 .rb-scan-note, .rb-gone { margin: 8px 0 0; }
+
+/* Ratings: the "Rate it" box, the average, what others say */
+.rb-rate { margin-top: 6px; font-size: 13px; }
+.rb-rate summary { cursor: pointer; color: #447fb3; }
+.rb-rate-box { margin-top: 6px; display: grid; gap: 6px; max-width: 560px; }
+.rb-stars { display: inline-flex; flex-direction: row-reverse; justify-content: flex-end; gap: 2px; }
+.rb-stars input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.rb-stars label { font-size: 22px; line-height: 1; color: #c4c9d0; cursor: pointer; margin: 0; }
+.rb-stars input:checked ~ label, .rb-stars label:hover, .rb-stars label:hover ~ label { color: #f0a400; }
+.rb-stars input:focus-visible + label { outline: 2px solid #447fb3; outline-offset: 2px; }
+.rb-rate-foot { display: flex; gap: 10px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.rb-avg { color: #b07800; font-weight: 600; white-space: nowrap; }
+.rb-review-box { margin-top: 8px; padding: 8px 10px; border-left: 3px solid #f0a400; background: rgba(240, 164, 0, 0.06); border-radius: 4px; }
+.rb-review-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.rb-review-list p { margin: 2px 0 0; overflow-wrap: anywhere; }
+.rb-stars-shown { color: #f0a400; letter-spacing: 1px; }

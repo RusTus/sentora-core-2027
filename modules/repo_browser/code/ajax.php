@@ -5,8 +5,8 @@
  * Only a logged-in administrator may use it, and it only contacts
  * repositories that are listed in etc/zppy-cache/repo.list.
  *
- * GET parameters (one per request): request, modinfo, update or repostat, each printing an
- * HTML fragment; or scan, printing JSON.
+ * GET parameters (one per request): request, modinfo, update, repostat or reviews, each printing
+ * an HTML fragment; or scan, printing JSON.
  *
  * @package Sentora
  * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
@@ -42,6 +42,36 @@ if (isset($_GET['request'])) {
     AjaxReturnDownloads((string) $_GET['repostat']);
 } elseif (isset($_GET['scan'])) {
     AjaxReturnScan((string) $_GET['scan']);
+} elseif (isset($_GET['reviews'])) {
+    AjaxReturnReviews((string) $_GET['reviews']);
+}
+
+/**
+ * Print what other panels' administrators say about a Sentora-2027 add-on (the feedback server's
+ * newest comments), as plain text: nothing in a comment is shown as HTML.
+ *
+ * @param string $module
+ * @return void
+ */
+function AjaxReturnReviews($module)
+{
+    $h = 'repo_browser_helper::h';
+    $list = class_exists('ctrl_feedback') ? ctrl_feedback::Reviews($module) : null;
+    if ($list === null) {
+        echo '<p class="rb-sub">' . $h(ui_language::translate('The feedback server can not be asked right now.')) . '</p>';
+        return;
+    }
+    if (!$list) {
+        echo '<p class="rb-sub">' . $h(ui_language::translate('No comments yet: only stars.')) . '</p>';
+        return;
+    }
+    $out = '<ul class="rb-review-list">';
+    foreach ($list as $r) {
+        $out .= '<li><span class="rb-stars-shown">' . str_repeat('&#9733;', $r['stars']) . str_repeat('&#9734;', 5 - $r['stars']) . '</span> '
+            . '<span class="rb-sub">' . $h($r['at'] ? date('j M Y', $r['at']) : '') . ($r['version'] !== '' ? ' · ' . $h(str_replace('%s', $r['version'], ui_language::translate('version %s'))) : '') . '</span>'
+            . '<p>' . $h($r['comment']) . '</p></li>';
+    }
+    echo $out . '</ul>';
 }
 
 /**
@@ -275,6 +305,30 @@ function AjaxReturnDownloads($full)
         return;
     }
     list($repo, $module) = $split;
+    // the Sentora-2027 add-ons (on GitHub, which counts nothing): the feedback server's counts, when
+    // there is one (asked once for every row, kept 5 minutes); none, no number is shown
+    if (class_exists('ctrl_feedback') && rtrim($repo, '/') === ctrl_feedback::ADDON_REPO) {
+        $cache = rtrim((string) ctrl_options::GetSystemOption('sentora_root'), '/') . '/etc/tmp/repo-downloads.json';
+        $c = is_file($cache) && !is_link($cache) && filemtime($cache) > time() - 300 ? json_decode((string) file_get_contents($cache), true) : null;
+        if (!is_array($c) || ($c['base'] ?? '') !== ctrl_feedback::Base() || !isset($c['stats']['counts'])) {
+            $c = array('base' => ctrl_feedback::Base(), 'stats' => ctrl_feedback::Downloads());
+            @file_put_contents($cache . '.' . getmypid(), json_encode($c));
+            @rename($cache . '.' . getmypid(), $cache);
+        }
+        $parts = array();
+        if (isset($c['stats']['counts'][$module])) {
+            $n = (int) $c['stats']['counts'][$module];
+            $parts[] = $n === 1 ? repo_browser_helper::h(ui_language::translate('1 download')) : str_replace('%s', number_format($n), repo_browser_helper::h(ui_language::translate('%s downloads')));
+        }
+        if (isset($c['stats']['stars'][$module])) {
+            list($avg, $count) = $c['stats']['stars'][$module];
+            $parts[] = '<span class="rb-avg" title="' . repo_browser_helper::h(str_replace(array('%1', '%2'), array((string) $avg, (string) (int) $count), ui_language::translate('%1 of 5 stars, from %2 panels'))) . '">&#9733; '
+                . repo_browser_helper::h((string) $avg) . ' (' . (int) $count . ')</span> <a href="javascript:void(0)" class="rb-reviews" data-module="' . repo_browser_helper::h($module) . '">'
+                . repo_browser_helper::h(ui_language::translate('What others say')) . '</a>';
+        }
+        echo implode(' · ', $parts);
+        return;
+    }
     $list = repo_browser_helper::Fetch(repo_browser_helper::Base($repo) . '/repostatslist');
     if ($list !== '') {
         foreach (preg_split('/\r\n|\r|\n/', $list) as $row) {

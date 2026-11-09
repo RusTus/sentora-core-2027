@@ -28,6 +28,12 @@ class ctrl_feedback
     /** Root's folder for its state (the install's random ID, the last report). */
     const DIR = '/var/lib/sentora';
 
+    /** The Sentora-2027 add-on repository (Repo Browser's own). */
+    const ADDON_REPO = 'https://raw.githubusercontent.com/RusTus/sentora-installers-2027/master2027/sentora-repo';
+
+    /** The feedback server's address, for the panel and zppy to read (no secret in it). */
+    const BASE_FILE = '/var/lib/sentora/feedback-server.txt';
+
     /**
      * The settings (made when missing, as Sentora Config shows them).
      *
@@ -39,7 +45,7 @@ class ctrl_feedback
         global $zdbh;
         $defs = array(
             array('customer_feedback', 'Customer feedback', 'true', 'true|false', 'Once a day, send the Sentora-2027 project a short report about this server: the panel version, operating system, hardware, software versions, public and internal IP address, how busy it is (load, memory, traffic and disk used of all accounts together) and counts (accounts, domains, mailboxes). Never a domain, user name, email address, password or file. The last report sent is in /var/lib/sentora/feedback-last.json. false: nothing is sent.'),
-            array('feedback_url', 'Customer feedback address', '', '', 'Where the report goes. Empty: the address the Sentora-2027 project publishes.'),
+            array('feedback_url', 'Feedback server', '', '', 'The feedback server\'s address (https://stats.example.com): reports go to its api.php, and it counts the downloads of the Sentora-2027 add-ons. Empty: the one the Sentora-2027 project publishes.'),
         );
         foreach ($defs as $d) {
             $zdbh->prepare("INSERT INTO x_settings (so_name_vc, so_cleanname_vc, so_value_tx, so_defvalues_tx, so_desc_tx, so_module_vc, so_usereditable_en)
@@ -142,6 +148,8 @@ class ctrl_feedback
             return preg_match('#^https://[A-Za-z0-9.-]+(:\d{1,5})?(/[A-Za-z0-9._~/%-]*)?$#', $u) === 1;
         };
         if ($set !== '') {
+            // the server's address (https://stats.example.com) or its api.php
+            $set = preg_match('#\.php$#', $set) ? $set : rtrim($set, '/') . '/api.php';
             return $ok($set) ? $set : '';
         }
         if (!empty($state['endpoint_read']) && time() - (int) $state['endpoint_read'] < 86400) {
@@ -164,6 +172,188 @@ class ctrl_feedback
     }
 
     /**
+     * Daemon (every run): note the feedback server's address for the panel and zppy (BASE_FILE):
+     * the setting, else the address the project published (read by Run() once a day); none when
+     * customer feedback is off. Its download counts and Repo Browser's numbers use it when it is
+     * there, and do without it when it is not.
+     *
+     * @return void
+     */
+    static function NoteBase()
+    {
+        $s = self::Settings();
+        $state = self::State();
+        $api = '';
+        if ($s['on']) {
+            $api = $s['url'] !== '' ? self::Endpoint($s['url'], $state) : (isset($state['endpoint']) ? (string) $state['endpoint'] : '');
+        }
+        $base = preg_match('#^(https://[A-Za-z0-9.-]+(:\d{1,5})?(/[A-Za-z0-9._~/%-]*)?)/api\.php$#', $api, $m) ? $m[1] : '';
+        $now = is_file(self::BASE_FILE) ? trim((string) @file_get_contents(self::BASE_FILE)) : '';
+        if ($base === $now || is_link(self::BASE_FILE)) {
+            return;
+        }
+        if ($base === '') {
+            @unlink(self::BASE_FILE);
+            return;
+        }
+        @file_put_contents(self::BASE_FILE . '.new', $base . "\n");
+        @chmod(self::BASE_FILE . '.new', 0644);
+        @rename(self::BASE_FILE . '.new', self::BASE_FILE);
+    }
+
+    /**
+     * The feedback server's address ('' when there is none), as the daemon noted it.
+     *
+     * @return string Such as https://stats.example.com
+     */
+    static function Base()
+    {
+        $b = is_file(self::BASE_FILE) && !is_link(self::BASE_FILE) ? trim((string) @file_get_contents(self::BASE_FILE, false, null, 0, 300)) : '';
+        return preg_match('#^https://[A-Za-z0-9.-]+(:\d{1,5})?(/[A-Za-z0-9._~/%-]*)?$#', $b) ? rtrim($b, '/') : '';
+    }
+
+    /**
+     * zppy (root), after downloading a module of the Sentora-2027 repository: tell the feedback server,
+     * when there is one, so it counts the download (an install or an update; this panel's random ID
+     * with it, as its reports carry it). Five seconds at most, the answer not waited for beyond that:
+     * the download never depends on it.
+     *
+     * @param string $repo The repository the module came from.
+     * @param string $module
+     * @param string $for install or upgrade
+     * @return void
+     */
+    static function CountDownload($repo, $module, $for)
+    {
+        $base = self::Base();
+        if ($base === '' || rtrim((string) $repo, '/') !== self::ADDON_REPO || !preg_match('/^[A-Za-z0-9_-]{1,64}$/', (string) $module)) {
+            return;
+        }
+        $q = 'for=' . ($for === 'upgrade' ? 'upgrade' : 'install');
+        $f = self::DIR . '/feedback.json';
+        $s = is_file($f) && !is_link($f) ? json_decode((string) @file_get_contents($f), true) : null;
+        if (is_array($s) && isset($s['id']) && preg_match('/^[0-9a-f]{32}$/', (string) $s['id'])) {
+            $q .= '&panel=' . $s['id'];
+        }
+        $c = curl_init($base . '/repo/' . $module . '.zpp?' . $q);
+        curl_setopt_array($c, array(CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 5, CURLOPT_CONNECTTIMEOUT => 3, CURLOPT_FOLLOWLOCATION => false,
+            CURLOPT_PROTOCOLS => CURLPROTO_HTTPS, CURLOPT_USERAGENT => 'ZppyClient (Sentora-2027 ' . self::Version() . ')'));
+        @curl_exec($c);
+        curl_close($c);
+    }
+
+    /**
+     * This panel's ratings of the Sentora-2027 add-ons (Repo Browser), kept until the daemon has sent
+     * them: the table is made when missing.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return void
+     */
+    static function EnsureRatings()
+    {
+        global $zdbh;
+        $zdbh->exec("CREATE TABLE IF NOT EXISTS x_repo_ratings (rr_module_vc VARCHAR(64) NOT NULL PRIMARY KEY, rr_stars_in TINYINT NOT NULL,
+            rr_comment_tx TEXT NULL, rr_acc_fk INT NOT NULL, rr_at_in INT NOT NULL, rr_sent_in INT NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    }
+
+    /**
+     * Daemon (every run): send the ratings not sent yet to the feedback server, with this panel's
+     * random ID (it accepts them only from a panel that reports to it, from that panel's address).
+     * Without a feedback server they wait; a rating it refuses for good is not sent again.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return string What happened ('' when nothing).
+     */
+    static function SendRatings()
+    {
+        global $zdbh;
+        self::EnsureRatings();
+        $base = self::Base();
+        $state = self::State();
+        if ($base === '' || empty($state['sent'])) {
+            return '';
+        }
+        $rows = $zdbh->query("SELECT r.*, m.mo_version_in FROM x_repo_ratings r LEFT JOIN x_modules m ON m.mo_folder_vc = r.rr_module_vc
+            WHERE r.rr_sent_in IS NULL OR r.rr_sent_in < r.rr_at_in")->fetchAll(PDO::FETCH_ASSOC);
+        $sent = 0;
+        foreach ($rows as $r) {
+            $c = curl_init($base . '/repo/rate.php');
+            curl_setopt_array($c, array(CURLOPT_POST => true, CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 8, CURLOPT_CONNECTTIMEOUT => 4, CURLOPT_FOLLOWLOCATION => false,
+                CURLOPT_PROTOCOLS => CURLPROTO_HTTPS, CURLOPT_HTTPHEADER => array('Content-Type: application/json', 'User-Agent: Sentora-2027/' . self::Version()),
+                CURLOPT_POSTFIELDS => json_encode(array('panel' => (string) $state['id'], 'module' => (string) $r['rr_module_vc'], 'stars' => (int) $r['rr_stars_in'],
+                    'comment' => (string) $r['rr_comment_tx'], 'version' => (string) $r['mo_version_in']))));
+            curl_exec($c);
+            $code = (int) curl_getinfo($c, CURLINFO_HTTP_CODE);
+            curl_close($c);
+            // sent; or refused for good (not a rating, no such module): not tried again
+            if (($code >= 200 && $code < 300) || $code === 400 || $code === 404) {
+                $zdbh->prepare("UPDATE x_repo_ratings SET rr_sent_in = :t WHERE rr_module_vc = :m")->execute(array(':t' => time(), ':m' => $r['rr_module_vc']));
+                $sent += $code < 300 ? 1 : 0;
+            }
+        }
+        return $sent ? 'Add-on ratings sent to the feedback server: ' . $sent : '';
+    }
+
+    /**
+     * What the feedback server says other panels think of a module: the newest comments.
+     *
+     * @param string $module
+     * @return array<int, array{stars:int, comment:string, at:int, version:string}>|null Null when it can not be asked.
+     */
+    static function Reviews($module)
+    {
+        $base = self::Base();
+        if ($base === '' || !preg_match('/^[A-Za-z0-9_-]{1,64}$/', (string) $module)) {
+            return null;
+        }
+        $c = curl_init($base . '/repo/reviews.php?module=' . rawurlencode($module));
+        curl_setopt_array($c, array(CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 5, CURLOPT_CONNECTTIMEOUT => 3, CURLOPT_FOLLOWLOCATION => false,
+            CURLOPT_PROTOCOLS => CURLPROTO_HTTPS, CURLOPT_USERAGENT => 'Sentora-2027 Repo Browser'));
+        $j = json_decode((string) curl_exec($c), true);
+        curl_close($c);
+        if (!is_array($j)) {
+            return null;
+        }
+        $out = array();
+        foreach (array_slice($j, 0, 20) as $r) {
+            if (is_array($r) && isset($r['stars'], $r['comment'])) {
+                $out[] = array('stars' => max(1, min(5, (int) $r['stars'])), 'comment' => mb_substr((string) $r['comment'], 0, 500), 'at' => (int) ($r['at'] ?? 0),
+                    'version' => preg_match('/^[0-9][0-9.]{0,20}$/', (string) ($r['version'] ?? '')) ? (string) $r['version'] : '');
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * The download counts and ratings the feedback server keeps of the Sentora-2027 repository's
+     * modules, for Repo Browser; empty when there is no feedback server or it does not answer.
+     *
+     * @return array{counts: array<string, int>, stars: array<string, array{0: float, 1: int}>}
+     */
+    static function Downloads()
+    {
+        $base = self::Base();
+        if ($base === '') {
+            return array();
+        }
+        $c = curl_init($base . '/repo/repostats.php?json=true');
+        curl_setopt_array($c, array(CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 5, CURLOPT_CONNECTTIMEOUT => 3, CURLOPT_FOLLOWLOCATION => false,
+            CURLOPT_PROTOCOLS => CURLPROTO_HTTPS, CURLOPT_USERAGENT => 'Sentora-2027 Repo Browser'));
+        $j = json_decode((string) curl_exec($c), true);
+        curl_close($c);
+        $out = array('counts' => array(), 'stars' => array());
+        foreach (is_array($j) ? $j : array() as $r) {
+            if (is_array($r) && isset($r['package'], $r['downloads']) && preg_match('/^[A-Za-z0-9_-]{1,64}$/', (string) $r['package'])) {
+                $out['counts'][(string) $r['package']] = max(0, (int) $r['downloads']);
+                if (isset($r['rating'], $r['ratings']) && (int) $r['ratings'] > 0) {
+                    $out['stars'][(string) $r['package']] = array(max(1.0, min(5.0, round((float) $r['rating'], 1))), (int) $r['ratings']);
+                }
+            }
+        }
+        return $out;
+    }
+
+    /**
      * Send a report (JSON over HTTPS).
      *
      * @param string $url
@@ -181,6 +371,61 @@ class ctrl_feedback
         $code = (int) curl_getinfo($c, CURLINFO_HTTP_CODE);
         curl_close($c);
         return $code;
+    }
+
+    /**
+     * A key for this computer, the same through every reinstall on it (of the panel, and of the
+     * operating system too): a one-way hash, with Sentora-2027's own label, of the hardware's ID. It
+     * can not be turned back into the ID, nor matched with what other software sends. The install's
+     * random ID (feedback.json) tells installs apart; this tells computers apart, so a reinstall shows
+     * as a new install on a known computer (and cloned virtual machines as one computer).
+     *
+     * Taken from, in turn: the motherboard's UUID (DMI; virtual machines keep theirs too), skipping
+     * the placeholders cheap boards carry; else the built-in addresses of the network cards (real
+     * ones only, sorted); else the operating system's machine ID (which a reinstall of the operating
+     * system changes). Read as root (the daemon).
+     *
+     * @return string 32 hex characters, or '' when the computer has none of them.
+     */
+    static function MachineKey()
+    {
+        $key = function ($what, $v) {
+            return substr(hash('sha256', 'sentora-2027 machine|' . $what . '|' . $v), 0, 32);
+        };
+        $uuid = strtolower(trim((string) @file_get_contents('/sys/class/dmi/id/product_uuid', false, null, 0, 100)));
+        $placeholder = array('03000200-0400-0500-0006-000700080009', '00020003-0004-0005-0006-000700080009', '12345678-1234-5678-90ab-cddeefaabbcc');
+        if (preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/', $uuid) && trim($uuid, '0-') !== '' && trim($uuid, 'f-') !== ''
+            && !in_array($uuid, $placeholder, true)) {
+            return $key('uuid', $uuid);
+        }
+        // the network cards' own addresses (a card with a device behind it: no bridge, VPN or container's)
+        $macs = array();
+        foreach ((array) glob('/sys/class/net/*') as $dev) {
+            if (!is_dir($dev . '/device')) {
+                continue;
+            }
+            $mac = strtolower(trim((string) @file_get_contents($dev . '/address', false, null, 0, 40)));
+            // (the card's own address: a bond or a team may have put another on it)
+            $perm = trim((string) @shell_exec('ethtool -P ' . escapeshellarg(basename($dev)) . ' 2>/dev/null'));
+            if (preg_match('/([0-9a-f]{2}(:[0-9a-f]{2}){5})$/i', $perm, $m) && $m[1] !== '00:00:00:00:00:00') {
+                $mac = strtolower($m[1]);
+            }
+            // (a locally made address, second digit 2, 6, a or e, is no card's own)
+            if (preg_match('/^[0-9a-f]{2}(:[0-9a-f]{2}){5}$/', $mac) && $mac !== '00:00:00:00:00:00' && !(hexdec(substr($mac, 0, 2)) & 2)) {
+                $macs[$mac] = true;
+            }
+        }
+        if ($macs) {
+            ksort($macs);
+            return $key('mac', implode(',', array_keys($macs)));
+        }
+        foreach (array('/etc/machine-id', '/var/lib/dbus/machine-id') as $f) {
+            $v = strtolower(trim((string) @file_get_contents($f, false, null, 0, 100)));
+            if (preg_match('/^[0-9a-f]{32}$/', $v) && trim($v, '0') !== '') {
+                return $key('os', $v);
+            }
+        }
+        return '';
     }
 
     /**
@@ -264,6 +509,7 @@ class ctrl_feedback
         }
         return array(
             'id' => (string) $state['id'],
+            'machine' => self::MachineKey(),
             'panel' => self::Version(),
             'installed' => date('c', (int) ($state['first'] ?? time())),
             'os' => mb_substr((string) ($os['PRETTY_NAME'] ?? php_uname('s')), 0, 80),

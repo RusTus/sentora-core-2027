@@ -14,6 +14,13 @@ try {
     if ($feedbackLine !== '') {
         echo $feedbackLine . fs_filehandler::NewLine();
     }
+    // (where the feedback server is, for download counts: none, they are not counted)
+    ctrl_feedback::NoteBase();
+    // ratings of the add-ons made in Repo Browser (none sent without a feedback server)
+    $feedbackLine = ctrl_feedback::SendRatings();
+    if ($feedbackLine !== '') {
+        echo $feedbackLine . fs_filehandler::NewLine();
+    }
 } catch (Exception $e) {
     echo "Customer feedback: not sent (" . $e->getMessage() . ")" . fs_filehandler::NewLine();
 }

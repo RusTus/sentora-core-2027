@@ -50,6 +50,8 @@ class module_controller extends ctrl_module {
 	static $zppycommandblank = NULL;
 	/** @var bool|null True when the typed command started with "zppy". */
 	static $zppycommandzppynotneeded = NULL;
+	/** @var string|null The module just rated (shown by getResult()); '' when no stars were chosen. */
+	static $rated = NULL;
 	/** @var bool|null True after "Check all repositories now" (an update queued, or one already waiting). */
 	static $checkqueued = NULL;
 	/** @var bool|null ZPPY patch installed (not set any more). */
@@ -165,7 +167,9 @@ class module_controller extends ctrl_module {
 								$buttonattr = 'disabled="disabled"';
 								$title = ui_language::translate($pending === 'remove' ? 'Removal queued: the daemon runs it within 5 minutes.' : ($pending === 'upgrade' ? 'Upgrade queued: the daemon runs it within 5 minutes.' : 'Installation queued: the daemon runs it within 5 minutes.'));
 							}
+								$ratehtml = $installed === 'installed' ? self::RateBox(trim($content[0]), trim($content[1])) : '';
 	                		array_push($res, array('modulename'  => trim($content[0]),
+										   'ratehtml'        => $ratehtml,
 										   'buttonattr'      => $buttonattr,
                     				   	   'reponame'        => trim($content[1]),
 										   'description'     => $description,
@@ -637,6 +641,69 @@ class module_controller extends ctrl_module {
     }
 
     /**
+     * The "Rate it" box of an installed Sentora-2027 add-on: 1 to 5 stars and a short comment, sent
+     * by the daemon to the feedback server. Only when there is a feedback server; its fields belong
+     * to the form rb-rate (outside the module list's own form).
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param string $module
+     * @param string $repo
+     * @return string HTML ('' when it can not be rated).
+     */
+    static function RateBox($module, $repo) {
+        global $zdbh;
+        if (!class_exists('ctrl_feedback') || rtrim($repo, '/') !== ctrl_feedback::ADDON_REPO || ctrl_feedback::Base() === '' || !repo_browser_helper::ValidModule($module)) {
+            return '';
+        }
+        ctrl_feedback::EnsureRatings();
+        $q = $zdbh->prepare("SELECT rr_stars_in, rr_comment_tx, rr_sent_in, rr_at_in FROM x_repo_ratings WHERE rr_module_vc = :m");
+        $q->execute(array(':m' => $module));
+        $mine = $q->fetch(PDO::FETCH_ASSOC);
+        $h = function ($s) { return repo_browser_helper::h($s); };
+        $t = function ($s) { return repo_browser_helper::h(ui_language::translate($s)); };
+        $stars = '';
+        for ($i = 5; $i >= 1; $i--) {
+            $stars .= '<input type="radio" form="rb-rate" id="rb-s-' . $h($module) . '-' . $i . '" name="inStars_' . $h($module) . '" value="' . $i . '"' . ($mine && (int) $mine['rr_stars_in'] === $i ? ' checked' : '') . '>'
+                . '<label for="rb-s-' . $h($module) . '-' . $i . '" title="' . $i . '">&#9733;</label>';
+        }
+        $state = $mine ? ' (' . str_replace('%s', (string) (int) $mine['rr_stars_in'], $t('yours: %s')) . ((int) $mine['rr_sent_in'] >= (int) $mine['rr_at_in'] ? '' : ', ' . $t('sent within 5 minutes')) . ')' : '';
+        return '<details class="rb-rate"><summary>' . $t('Rate it') . $state . '</summary><div class="rb-rate-box">'
+            . '<span class="rb-stars">' . $stars . '</span>'
+            . '<textarea class="form-control" form="rb-rate" name="inComment_' . $h($module) . '" rows="2" maxlength="500" placeholder="' . $t('What do you think of it? (optional; other panels\' administrators see it)') . '">' . $h($mine ? (string) $mine['rr_comment_tx'] : '') . '</textarea>'
+            . '<div class="rb-rate-foot"><small class="rb-sub">' . $t('Sent to the Sentora-2027 feedback server within 5 minutes, with this panel\'s random ID and the version you run; a new rating replaces this one.') . '</small>'
+            . '<button class="btn btn-default btn-sm" type="submit" form="rb-rate" name="inRateModule" value="' . $h($module) . '">' . $t('Send') . '</button></div></div></details>';
+    }
+
+    /**
+     * Rate an installed Sentora-2027 add-on (the "Rate it" box): kept for the daemon to send.
+     *
+     * Checks the CSRF token.
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @return void
+     */
+    static function doRateModule() {
+        global $zdbh;
+        runtime_csfr::Protect();
+        $module = isset($_POST['inRateModule']) && is_string($_POST['inRateModule']) ? $_POST['inRateModule'] : '';
+        if (!repo_browser_helper::ValidModule($module) || !self::InstalledModule($module) || !class_exists('ctrl_feedback') || ctrl_feedback::Base() === '') {
+            return;
+        }
+        $stars = isset($_POST['inStars_' . $module]) && is_string($_POST['inStars_' . $module]) && ctype_digit($_POST['inStars_' . $module]) ? (int) $_POST['inStars_' . $module] : 0;
+        if ($stars < 1 || $stars > 5) {
+            self::$rated = '';
+            return;
+        }
+        $comment = isset($_POST['inComment_' . $module]) && is_string($_POST['inComment_' . $module]) ? $_POST['inComment_' . $module] : '';
+        $comment = mb_substr(trim(preg_replace('/\s+/u', ' ', (string) preg_replace('/[\p{Cc}\p{Cf}]/u', ' ', mb_convert_encoding($comment, 'UTF-8', 'UTF-8')))), 0, 500);
+        ctrl_feedback::EnsureRatings();
+        $me = ctrl_users::GetUserDetail();
+        $zdbh->prepare("REPLACE INTO x_repo_ratings (rr_module_vc, rr_stars_in, rr_comment_tx, rr_acc_fk, rr_at_in, rr_sent_in) VALUES (:m, :s, :c, :a, :t, NULL)")
+            ->execute(array(':m' => $module, ':s' => $stars, ':c' => $comment, ':a' => (int) $me['userid'], ':t' => time()));
+        self::$rated = $module;
+    }
+
+    /**
      * Is a "zppy update" waiting for the daemon (template <% if UpdatePending %>)?
      *
      * @return bool
@@ -1075,6 +1142,11 @@ class module_controller extends ctrl_module {
     static function getResult() {
         if (!fs_director::CheckForEmptyValue(self::$alreadyqueued)) {
             return ui_sysmessage::shout(ui_language::translate("That module or repository already has a change queued (this can take up to 5 minutes); you can queue another once it has finished (see Recent ZPPY commands)."), "zannounceerror");
+        }
+        if (self::$rated !== null) {
+            return self::$rated === ''
+                ? ui_sysmessage::shout(ui_language::translate("Choose 1 to 5 stars, then Send."), "zannounceerror")
+                : ui_sysmessage::shout(str_replace('%s', self::$rated, ui_language::translate("Thank you: your rating of %s is sent to the feedback server within 5 minutes.")), "zannounceok");
         }
         if (!fs_director::CheckForEmptyValue(self::$checkqueued)) {
             return ui_sysmessage::shout(ui_language::translate("Checking every repository now: what each one offers appears beside it below. The daemon reads their lists again within 5 minutes, so that new modules can then be installed."), "zannounceok");

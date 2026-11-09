@@ -112,6 +112,8 @@
                     <div class="rb-row-name"><b><& installedhtml &></b><span class="rb-state"></span></div>
                     <div class="modinfo" item_id="<& reponame &>:::<& modulename &>"><span class="rb-wait wide"></span></div>
                     <div class="update" item_id="<& reponame &>:::<& modulename &>"></div>
+                    <& ratehtml &>
+                    <div class="rb-review-box" hidden></div>
                 </div>
                 <div class="rb-row-side">
                     <span class="controls" item_id="M:::<& url &>"></span>
@@ -131,6 +133,8 @@
             </div>
             <@ CSFR_Tag @>
         </form>
+        <!-- the ratings' own form: the "Rate it" boxes' fields belong to it (form="rb-rate") -->
+        <form id="rb-rate" action="./?module=repo_browser&amp;action=RateModule" method="post"><@ CSFR_Tag @></form>
         <% else %>
         <p class="rb-empty"><: No modules to show yet: add a repository below, then wait a few minutes for its list. :></p>
         <% endif %>
@@ -349,6 +353,13 @@
         };
         if (queue.length) { checking.removeAttr('hidden'); for (var i = 0; i < 4; i++) { next(); } }
     }
+
+    // what other panels' administrators say about a module (loaded when asked)
+    $(document).on('click', '.rb-reviews', function () {
+        var box = $(this).closest('.rb-row').find('.rb-review-box');
+        if (!box.attr('hidden')) { box.attr('hidden', true); return; }
+        box.removeAttr('hidden').html('<span class="rb-wait short"></span>').load(base + '&reviews=' + encodeURIComponent($(this).attr('data-module')));
+    });
 
     // removing asks first; the panel's "working" overlay while a form is sent
     $('#rb form').on('submit', function (e) {

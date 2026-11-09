@@ -48,7 +48,25 @@ function zppy_base($repo)
  * check it against the repository's SHA256SUMS when it has one (a file that does not
  * match is deleted). true when the file is there and fine.
  */
-function zppy_download($repo, $module)
+function zppy_download($repo, $module, $for = 'install')
+{
+    $ok = zppy_fetch($repo, $module);
+    if ($ok && class_exists('ctrl_feedback')) {
+        // a download of the Sentora-2027 repository's: counted by the feedback server, when there is
+        // one (only told, afterwards and briefly: the download never depends on it)
+        ctrl_feedback::CountDownload($repo, $module, $for);
+    }
+    return $ok;
+}
+
+/**
+ * The download itself (zppy_download()).
+ *
+ * @param string $repo
+ * @param string $module
+ * @return bool
+ */
+function zppy_fetch($repo, $module)
 {
     global $rootPath;
     if (!preg_match('/^[A-Za-z0-9_-]{1,64}$/', (string) $module)) {
@@ -165,7 +183,7 @@ if ((isset($argv[1])) && ($argv[1] == 'upgrade')) {
     foreach ($lines as $line) {
         $this_line = preg_split('/\t/', $line);
         if ($this_line[0] == $argv[2]) {
-            if (!zppy_download($this_line[1], $argv[2])) {
+            if (!zppy_download($this_line[1], $argv[2], 'upgrade')) {
                 exit(1);
             }
             $fetched = true;
