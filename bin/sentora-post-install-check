@@ -155,7 +155,7 @@ fi
 
 section "Hosted sites may use only their own PHP"
 VH=/etc/sentora/configs/apache/httpd-vhosts.conf
-if "$(sp apache_ctl)" -M 2> /dev/null | grep -q lua_module && grep -q "LuaHookFixups" "$VH" 2> /dev/null && grep -q "SENTORA_STATUS_BLOCK" "$VH" 2> /dev/null; then ok "Apache request guard in place (sentora-guard.lua)"
+if $(sp apache_modules_cmd) 2> /dev/null | grep -q lua_module && grep -q "LuaHookFixups" "$VH" 2> /dev/null && grep -q "SENTORA_STATUS_BLOCK" "$VH" 2> /dev/null; then ok "Apache request guard in place (sentora-guard.lua)"
 else fail "Apache request guard missing: a site's .htaccess could hand requests to the panel's PHP (the daemon adds it within 5 minutes)"; fi
 PANELPOOL=${PHP_FPM_DIR%/}/sentora.conf
 if [ -n "$PANELPOOL" ] && grep -q "auto_prepend_file.*fpm_guard.php" "$PANELPOOL"; then ok "the panel's PHP pool runs only the panel's own scripts"

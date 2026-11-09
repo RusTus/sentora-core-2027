@@ -152,6 +152,11 @@ if (is_file(sys_platform::Get('clamd_bin'))) {
     @chgrp('/var/spool/postfix/clamav', 'postfix');
     @mkdir('/var/log/clamav', 0775, true);
     @chown('/var/log/clamav', $svP('clamav_user'));
+    // the signature updater writes its own log there, as its own user (clamupdate on AlmaLinux)
+    if (!is_file('/var/log/clamav/freshclam.log')) {
+        @touch('/var/log/clamav/freshclam.log');
+    }
+    @chown('/var/log/clamav/freshclam.log', $svP('freshclam_user'));
     if ($svWrite($svP('clamd_conf'), sys_spamav::ClamdConf())) { $svRestart[$svClamd] = true; }
     if ($svWrite($svP('clamav_milter_conf'), sys_spamav::MilterConf())) { $svRestart[$svClamMilter] = true; }
     if ($svWrite($svP('freshclam_conf'), sys_spamav::FreshclamConf())) { $svRestart[$svFresh] = true; }

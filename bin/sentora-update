@@ -642,7 +642,7 @@ retire_dir modules/apache_status/app
 # Theme and module files are revalidated by the browser after each update (the panel's
 # vhost sends Cache-Control: no-cache for them; that needs mod_headers): rewrite the vhost
 AEN=$(sp apache_enable_module | sed 's/{m}/headers/g')
-if [ -n "$AEN" ] && ! "$(sp apache_ctl)" -M 2> /dev/null | grep -q headers_module; then
+if [ -n "$AEN" ] && ! $(sp apache_modules_cmd) 2> /dev/null | grep -q headers_module; then
     $AEN > /dev/null 2>&1 && say "Enabled Apache's headers module"
 fi
 "$PANEL/bin/setso" --set apache_changed true > /dev/null 2>&1

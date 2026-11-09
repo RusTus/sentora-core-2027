@@ -370,7 +370,9 @@ function SentoraRequestGuard()
     if (!is_file($lua)) {
         return '';
     }
-    $map = "hosted_dir " . rtrim((string) ctrl_options::GetSystemOption('hosted_dir'), '/') . "/\n";
+    $map = "hosted_dir " . rtrim((string) ctrl_options::GetSystemOption('hosted_dir'), '/') . "/\n"
+        // (the system PHP-FPM's socket folder: /run/php/ or /run/php-fpm/, sys_platform)
+        . "php_socket_dir " . rtrim(sys_platform::Get('php_fpm_socket_dir'), '/') . "/\n";
     foreach ($zdbh->query("SELECT ac_id_pk, ac_user_vc FROM x_accounts WHERE ac_deleted_ts IS NULL ORDER BY ac_id_pk")->fetchAll() as $a) {
         if (preg_match('/^[A-Za-z0-9_-]{1,64}$/', $a['ac_user_vc'])) {
             $map .= $a['ac_user_vc'] . ' ' . (int) $a['ac_id_pk'] . "\n";
@@ -385,7 +387,7 @@ function SentoraRequestGuard()
     // mod_lua on, where modules are switched on by a command (sys_platform: apache_enable_module;
     // empty where an installed module is on, as on AlmaLinux)
     $enableCmd = sys_platform::Get('apache_enable_module', array('m' => 'lua'));
-    if ($enableCmd !== '' && strpos((string) shell_exec(escapeshellcmd(sys_platform::Get('apache_ctl')) . ' -M 2>/dev/null'), 'lua_module') === false) {
+    if ($enableCmd !== '' && strpos((string) shell_exec(sys_platform::Get('apache_modules_cmd') . ' 2>/dev/null'), 'lua_module') === false) {
         exec($enableCmd . ' > /dev/null 2>&1', $o, $rc);
         if ($rc === 0) {
             echo "Apache: mod_lua enabled (hosted sites may hand requests only to their own PHP)" . $nl;

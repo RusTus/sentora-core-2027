@@ -177,7 +177,11 @@ class sys_accountphp
     static function ApacheGuard($accountId)
     {
         $nl = fs_filehandler::NewLine();
-        $notOwn = '"%{HANDLER} !~ m#^proxy:unix:/run/(php|sentora-php)/web' . (int) $accountId . '(-[0-9]+\\.[0-9]+)?\\.sock\\|#"';
+        // (the system PHP-FPM's socket folder, sys_platform, and the extra versions' /run/sentora-php;
+        // written as before where the system's folder is /run/php)
+        $sysDir = rtrim(sys_platform::Get('php_fpm_socket_dir'), '/');
+        $dirs = ($sysDir === '/run/php') ? '/run/(php|sentora-php)/' : '(' . preg_quote($sysDir, '#') . '|/run/sentora-php)/';
+        $notOwn = '"%{HANDLER} !~ m#^proxy:unix:' . $dirs . 'web' . (int) $accountId . '(-[0-9]+\\.[0-9]+)?\\.sock\\|#"';
         return '<Location "/">' . $nl
             . '    # only this account\'s own PHP pools (see sys_accountphp::ApacheGuard)' . $nl
             . '    ProxyFCGISetEnvIf ' . $notOwn . ' !PHP_ADMIN_VALUE' . $nl

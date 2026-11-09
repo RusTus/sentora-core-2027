@@ -210,14 +210,54 @@ s_mailbox() {
     MAILADDR="box@$DOM"
     [ "$p" = "{SHA512-CRYPT}" ] || { WHY="the mailbox password is not stored as SHA-512 crypt ($p)"; return 1; }
 }
+# IMAP and SMTP: with curl when it speaks them; some systems build curl without them (AlmaLinux),
+# then with Python's own imaplib and smtplib. A refused message prints the server's reply as curl -v
+# does ("< 554 ..."), so the checks below read both the same way.
+CURL_MAIL=0; curl -V 2> /dev/null | grep -q "Protocols:.* imaps.* smtp" && CURL_MAIL=1
+mailpy() { # imap-examine | imap-search <subject> | submit <file> | send <host> <port> <from> <file>
+    python3 - "$@" <<'EOF_PY'
+import imaplib, smtplib, ssl, sys, os
+ctx = ssl.create_default_context(); ctx.check_hostname = False; ctx.verify_mode = ssl.CERT_NONE
+user, pw = os.environ.get('MAILADDR', ''), os.environ.get('MAILPW', '')
+a = sys.argv[1:]
+try:
+    if a[0] in ('imap-examine', 'imap-search'):
+        m = imaplib.IMAP4_SSL('127.0.0.1', 993, ssl_context=ctx); m.login(user, pw)
+        m.select('INBOX', readonly=True)
+        if a[0] == 'imap-search':
+            typ, data = m.search(None, 'SUBJECT', '"%s"' % a[1])
+            sys.exit(0 if data and data[0].split() else 1)
+        sys.exit(0)
+    if a[0] == 'submit':
+        s = smtplib.SMTP('127.0.0.1', 587, timeout=30); s.starttls(context=ctx); s.login(user, pw)
+        s.sendmail(user, [user], open(a[1], 'rb').read()); s.quit(); sys.exit(0)
+    if a[0] == 'send':
+        s = smtplib.SMTP(a[1], int(a[2]), timeout=90)
+        try:
+            s.sendmail(a[3], [user], open(a[4], 'rb').read()); print('< 250 accepted')
+        except smtplib.SMTPRecipientsRefused as e:
+            for r in e.recipients.values(): print('< %d %s' % (r[0], r[1].decode(errors='replace')))
+        except smtplib.SMTPResponseException as e:
+            print('< %d %s' % (e.smtp_code, e.smtp_error.decode(errors='replace')))
+        sys.exit(0)
+except SystemExit:
+    raise
+except Exception as e:
+    print('error: %s' % e); sys.exit(1)
+EOF_PY
+}
 s_imap() {
     need MAILADDR "Create a mailbox" || return $?
-    local e; e=$(curl -sSk --max-time 30 -u "$MAILADDR:$MAILPW" "imaps://127.0.0.1/INBOX" -X "EXAMINE INBOX" 2>&1) || { WHY="IMAP login on port 993 failed: $(echo "$e" | tail -1 | cut -c1-100)"; return 1; }
+    local e
+    if [ $CURL_MAIL -eq 1 ]; then e=$(curl -sSk --max-time 30 -u "$MAILADDR:$MAILPW" "imaps://127.0.0.1/INBOX" -X "EXAMINE INBOX" 2>&1)
+    else e=$(MAILADDR="$MAILADDR" MAILPW="$MAILPW" mailpy imap-examine 2>&1); fi || { WHY="IMAP login on port 993 failed: $(echo "$e" | tail -1 | cut -c1-100)"; return 1; }
 }
 s_smtp() {
     need MAILADDR "Create a mailbox" || return $?
     printf 'From: %s\r\nTo: %s\r\nSubject: Sentora smoke test %s\r\n\r\nTest message.\r\n' "$MAILADDR" "$MAILADDR" "$RND" > "$TMP/mail.txt"
-    local e; e=$(curl -sSk --max-time 30 --ssl-reqd -u "$MAILADDR:$MAILPW" --mail-from "$MAILADDR" --mail-rcpt "$MAILADDR" -T "$TMP/mail.txt" "smtp://127.0.0.1:587" 2>&1) \
+    local e
+    if [ $CURL_MAIL -eq 1 ]; then e=$(curl -sSk --max-time 30 --ssl-reqd -u "$MAILADDR:$MAILPW" --mail-from "$MAILADDR" --mail-rcpt "$MAILADDR" -T "$TMP/mail.txt" "smtp://127.0.0.1:587" 2>&1)
+    else e=$(MAILADDR="$MAILADDR" MAILPW="$MAILPW" mailpy submit "$TMP/mail.txt" 2>&1); fi \
         || { WHY="sending on port 587 failed: $(echo "$e" | tail -1 | cut -c1-100)"; return 1; }
     # shellcheck disable=SC2034  # read by need() through ${!v}
     SENT=1
@@ -226,10 +266,14 @@ s_delivered() {
     need SENT "Send mail with login" || return $?
     local _
     for _ in $(seq 1 30); do
-        curl -sk --max-time 15 -u "$MAILADDR:$MAILPW" "imaps://127.0.0.1/INBOX" -X "SEARCH SUBJECT \"Sentora smoke test $RND\"" 2> /dev/null | grep -qE '^\* SEARCH [0-9]' && return 0
+        if [ $CURL_MAIL -eq 1 ]; then
+            curl -sk --max-time 15 -u "$MAILADDR:$MAILPW" "imaps://127.0.0.1/INBOX" -X "SEARCH SUBJECT \"Sentora smoke test $RND\"" 2> /dev/null | grep -qE '^\* SEARCH [0-9]' && return 0
+        else
+            MAILADDR="$MAILADDR" MAILPW="$MAILPW" mailpy imap-search "Sentora smoke test $RND" > /dev/null 2>&1 && return 0
+        fi
         sleep 2
     done
-    WHY="the message did not arrive in the mailbox within 60 seconds (see /var/log/mail.log)"; return 1
+    WHY="the message did not arrive in the mailbox within 60 seconds (see the mail log: /var/log/mail.log or journalctl -u postfix)"; return 1
 }
 # SpamAV: mail is scanned while the sender is connected (Admin > SpamAV Admin)
 s_virus() {
@@ -242,7 +286,9 @@ s_virus() {
     printf 'From: virus-test@example.com\r\nTo: %s\r\nSubject: Sentora virus test %s\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary="sentora-%s"\r\n\r\n--sentora-%s\r\nContent-Type: text/plain\r\n\r\nSentora virus test (EICAR test file attached).\r\n--sentora-%s\r\nContent-Type: application/octet-stream; name="eicar.com"\r\nContent-Disposition: attachment; filename="eicar.com"\r\nContent-Transfer-Encoding: base64\r\n\r\n%s\r\n--sentora-%s--\r\n' \
         "$MAILADDR" "$RND" "$RND" "$RND" "$RND" "$b64" "$RND" > "$TMP/eicar.txt"
     # -v: the server's replies (curl itself only says "Weird server reply" for a refusal)
-    local e; e=$(curl -v -sS --max-time 60 --mail-from "virus-test@example.com" --mail-rcpt "$MAILADDR" -T "$TMP/eicar.txt" "smtp://127.0.0.1:25" 2>&1)
+    local e
+    if [ $CURL_MAIL -eq 1 ]; then e=$(curl -v -sS --max-time 60 --mail-from "virus-test@example.com" --mail-rcpt "$MAILADDR" -T "$TMP/eicar.txt" "smtp://127.0.0.1:25" 2>&1)
+    else e=$(MAILADDR="$MAILADDR" mailpy send 127.0.0.1 25 virus-test@example.com "$TMP/eicar.txt" 2>&1); fi
     echo "$e" | grep -qiE '^< 5[0-9][0-9].*virus' && return 0
     WHY="the EICAR test message was not refused as a virus (server: $(echo "$e" | grep -E '^< [245][0-9][0-9] ' | tail -1 | cut -c3-90))"; return 1
 }
@@ -255,7 +301,9 @@ s_spam() {
     local ip; ip=$(hostname -I 2> /dev/null | awk '{print $1}')
     [ -n "$ip" ] || { WHY="this server has no address other than 127.0.0.1"; return 2; }
     printf 'From: spam-test@example.com\r\nTo: %s\r\nSubject: Sentora spam test %s\r\n\r\n%s\r\n' "$MAILADDR" "$RND" 'XJS*C4JDBQADN1.NSBN3*2IDNEN*GTUBE-STANDARD-ANTI-UBE-TEST-EMAIL*C.34X' > "$TMP/gtube.txt"
-    local e; e=$(curl -v -sS --max-time 90 --mail-from "spam-test@example.com" --mail-rcpt "$MAILADDR" -T "$TMP/gtube.txt" "smtp://$ip:25" 2>&1)
+    local e
+    if [ $CURL_MAIL -eq 1 ]; then e=$(curl -v -sS --max-time 90 --mail-from "spam-test@example.com" --mail-rcpt "$MAILADDR" -T "$TMP/gtube.txt" "smtp://$ip:25" 2>&1)
+    else e=$(MAILADDR="$MAILADDR" mailpy send "$ip" 25 spam-test@example.com "$TMP/gtube.txt" 2>&1); fi
     echo "$e" | grep -qiE '^< 5[0-9][0-9].*spam' && return 0
     WHY="the GTUBE test message was not refused as spam (server: $(echo "$e" | grep -E '^< [245][0-9][0-9] ' | tail -1 | cut -c3-90))"; return 1
 }

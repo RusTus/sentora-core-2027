@@ -15,7 +15,7 @@ The account ids come from sentora-accounts.map, written by the Sentora daemon.
 ]]
 
 local MAP = "/etc/sentora/configs/apache/sentora-accounts.map"
-local cache = { mtime = -1, hosted = nil, ids = {} }
+local cache = { mtime = -1, hosted = nil, sockdir = "/run/php/", ids = {} }
 
 local function load_map(r)
     local st = r:stat(MAP)
@@ -23,17 +23,19 @@ local function load_map(r)
     if st.mtime == cache.mtime then return true end
     local f = io.open(MAP, "r")
     if not f then return false end
-    local ids, hosted = {}, nil
+    local ids, hosted, sockdir = {}, nil, "/run/php/"
     for line in f:lines() do
         local key, value = line:match("^(%S+)%s+(%S+)$")
         if key == "hosted_dir" then
             hosted = value
+        elseif key == "php_socket_dir" then
+            sockdir = value -- the system PHP-FPM's socket folder (/run/php/ or /run/php-fpm/)
         elseif key and value and value:match("^%d+$") then
             ids[key] = value
         end
     end
     f:close()
-    cache = { mtime = st.mtime, hosted = hosted, ids = ids }
+    cache = { mtime = st.mtime, hosted = hosted, sockdir = sockdir, ids = ids }
     return hosted ~= nil
 end
 
@@ -56,7 +58,9 @@ function sentora_guard(r)
     if handler:sub(1, 6) == "proxy:" then
         local account = root:sub(#hosted + 1):match("^([^/]+)/")
         local id = account and cache.ids[account]
-        local sock = handler:match("^proxy:unix:/run/php/web(%d+)%.sock|")
+        -- the system PHP's sockets: a plain prefix compare (the folder name is not a pattern)
+        local prefix = "proxy:unix:" .. cache.sockdir
+        local sock = (handler:sub(1, #prefix) == prefix and handler:sub(#prefix + 1):match("^web(%d+)%.sock|"))
             or handler:match("^proxy:unix:/run/sentora%-php/web(%d+)%-%d+%.%d+%.sock|")
             or handler:match("^proxy:unix:/run/sentora%-php/web(%d+)%.sock|")
         if not id or sock ~= id then

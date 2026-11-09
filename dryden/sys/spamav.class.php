@@ -422,7 +422,7 @@ class sys_spamav
      */
     static function MilterDefaults()
     {
-        $opt = "-u " . sys_platform::Get('spamass_milter_user') . " -i 127.0.0.1 " . (self::On('sa_skip_outgoing') ? '-I ' : '') . "-e " . (gethostname() ?: 'localhost');
+        $opt = "-u " . sys_platform::Get('spamass_milter_user') . " -i 127.0.0.1 " . (self::On('sa_skip_outgoing') ? sys_platform::Get('spamass_milter_skip_auth_flag') . ' ' : '') . "-e " . (gethostname() ?: 'localhost');
         $r = (float) self::Get('sa_reject_score');
         if ($r > 0) {
             $opt .= " -r " . (int) ceil($r); // the start script splits OPTIONS on spaces: the default message (Blocked by SpamAssassin) is kept

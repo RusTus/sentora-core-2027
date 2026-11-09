@@ -32,7 +32,8 @@ class sys_platform
         'web_group' => array('www-data', 'The web server\'s Linux group'),
         'nobody_group' => array('nogroup', 'The group of the user nobody'),
         // Apache
-        'apache_ctl' => array('apache2ctl', 'Apache\'s control command (configtest, module list)'),
+        'apache_ctl' => array('apache2ctl', 'Apache\'s control command (configtest)'),
+        'apache_modules_cmd' => array('apache2ctl -M', 'Command that lists Apache\'s loaded modules'),
         'apache_bin' => array('/usr/sbin/apache2', 'Apache\'s program'),
         'apache_server_root' => array('/etc/apache2', 'Apache\'s ServerRoot'),
         'apache_envvars' => array('/etc/apache2/envvars', 'A file Apache\'s environment is read from before it is tested (empty: none)'),
@@ -80,6 +81,7 @@ class sys_platform
         'spamass_milter_user' => array('spamass-milter', 'SpamAssassin mail connection\'s Linux user'),
         'spamass_milter_defaults_file' => array('/etc/default/spamass-milter', 'SpamAssassin mail connection\'s start options file'),
         'spamass_milter_service' => array('spamass-milter', 'SpamAssassin mail connection\'s service'),
+        'spamass_milter_skip_auth_flag' => array('-I', 'Its option that skips mail from logged-in senders (Debian\'s -I, upstream -a)'),
         'spamass_milter_defaults_template' => array("OPTIONS=\"{options}\"\nSOCKET=\"{socket}\"\nSOCKETOWNER=\"{user}:postfix\"\nSOCKETMODE=\"0660\"", 'That file\'s contents ({options}, {socket}, {user})'),
         // SOGo
         'sogo_conf' => array('/etc/sogo/sogo.conf', 'SOGo\'s settings file'),

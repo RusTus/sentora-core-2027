@@ -113,8 +113,11 @@ int main(int argc, char *argv[])
     if (argc == 4 && strcmp(argv[1], "service") == 0
         && ((one_of(argv[2], apache) && one_of(argv[3], apache_act))
             || (one_of(argv[2], bind) && one_of(argv[3], bind_act)))) {
-        /* Every word is one of the constants above */
-        snprintf(cmd, sizeof cmd, "/usr/sbin/service %s %s", argv[2], argv[3]);
+        /* Every word is one of the constants above. systemctl (every supported system has it; the
+           old "service" command is not on a minimal AlmaLinux): its words are the same, but
+           Apache's "graceful" is systemd's "reload" */
+        snprintf(cmd, sizeof cmd, "/usr/bin/systemctl %s %s",
+                 strcmp(argv[3], "graceful") == 0 ? "reload" : argv[3], argv[2]);
     } else if (argc == 2 && strcmp(argv[1], "ftp-kick") == 0) {
         /* A fixed line: the script is root's (the panel folder is root:root) and takes no input from here */
         snprintf(cmd, sizeof cmd, "/usr/bin/php -q /etc/sentora/panel/bin/sentora-ftp-kick");
