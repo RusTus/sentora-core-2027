@@ -12,7 +12,7 @@
  *
  * Updated by RusTus, 2026-11-09
  */
-defined('SENTORA_PANEL_FPM_SOCKET') || define('SENTORA_PANEL_FPM_SOCKET', '/run/php/sentora-panel.sock');
+defined('SENTORA_PANEL_FPM_SOCKET') || define('SENTORA_PANEL_FPM_SOCKET', sys_accountphp::PanelSocket());
 
 echo fs_filehandler::NewLine() . "START Apache Config Hook." . fs_filehandler::NewLine();
 if (ui_module::CheckModuleEnabled('Apache Config')) {
@@ -382,9 +382,14 @@ function SentoraRequestGuard()
         @chmod($mapFile . '.new', 0644);
         @rename($mapFile . '.new', $mapFile);
     }
-    if (!is_file('/etc/apache2/mods-enabled/lua.load') && is_file('/etc/apache2/mods-available/lua.load')) {
-        exec('a2enmod -q lua > /dev/null 2>&1');
-        echo "Apache: mod_lua enabled (hosted sites may hand requests only to their own PHP)" . $nl;
+    // mod_lua on, where modules are switched on by a command (sys_platform: apache_enable_module;
+    // empty where an installed module is on, as on AlmaLinux)
+    $enableCmd = sys_platform::Get('apache_enable_module', array('m' => 'lua'));
+    if ($enableCmd !== '' && strpos((string) shell_exec(escapeshellcmd(sys_platform::Get('apache_ctl')) . ' -M 2>/dev/null'), 'lua_module') === false) {
+        exec($enableCmd . ' > /dev/null 2>&1', $o, $rc);
+        if ($rc === 0) {
+            echo "Apache: mod_lua enabled (hosted sites may hand requests only to their own PHP)" . $nl;
+        }
     }
     return "# What a hosted site's request may be handed to: its own PHP only (" . $lua . ")" . $nl
         . "<IfModule lua_module>" . $nl
@@ -1514,7 +1519,7 @@ function WriteVhostConfigFile() {
 		unlink($BackupFileName);
 	}
 	exec('systemctl restart ' . escapeshellarg((string) ctrl_options::GetSystemOption('apache_sn')) . ' 2>&1');
-	echo "   Apache " . (ApacheIsRunning() ? "runs again on the previous file." : "STILL DOES NOT RUN: check it (systemctl status apache2).") . fs_filehandler::NewLine();
+	echo "   Apache " . (ApacheIsRunning() ? "runs again on the previous file." : "STILL DOES NOT RUN: check it (systemctl status " . ctrl_options::GetSystemOption('apache_sn') . ").") . fs_filehandler::NewLine();
 	// the entry behind it, when Apache's message names a domain whose own settings are written
 	$found = false;
 	foreach ($zdbh->query("SELECT vh_id_pk, vh_name_vc, vh_custom_tx, vh_ssl_tx FROM x_vhosts WHERE vh_deleted_ts IS NULL")->fetchAll(PDO::FETCH_ASSOC) as $v) {
@@ -1576,7 +1581,7 @@ function ApacheIsRunning() {
  * @return string
  */
 function ApacheStartError() {
-	$out = (string) shell_exec('journalctl -u ' . escapeshellarg((string) ctrl_options::GetSystemOption('apache_sn')) . ' -n 15 --no-pager 2>/dev/null; tail -n 8 /var/log/apache2/error.log 2>/dev/null');
+	$out = (string) shell_exec('journalctl -u ' . escapeshellarg((string) ctrl_options::GetSystemOption('apache_sn')) . ' -n 15 --no-pager 2>/dev/null; tail -n 8 ' . escapeshellarg(rtrim(sys_platform::Get('apache_log_dir'), '/') . '/error' . (is_file(rtrim(sys_platform::Get('apache_log_dir'), '/') . '/error_log') ? '_log' : '.log')) . ' 2>/dev/null');
 	$lines = array();
 	foreach (preg_split('/\r?\n/', $out) as $l) {
 		if (preg_match('/(emerg|error|AH\d{5}|fail)/i', $l)) {

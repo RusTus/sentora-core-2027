@@ -28,9 +28,28 @@ class sys_accountphp
 {
 
     const PANEL_USER = 'sentora';
-    const WEB_GROUP = 'www-data';
-    const PANEL_SOCKET = '/run/php/sentora-panel.sock';
     const STATE_DIR = '/var/lib/sentora/accounts/';
+
+    /**
+     * Return the web server's Linux group (it reads the sites' files).
+     *
+     * @return string The group, e.g. 'www-data'.
+     */
+    static function WebGroup()
+    {
+        // the web server's group: www-data, apache... (sys_platform, set by the installer)
+        return sys_platform::Get('web_group');
+    }
+
+    /**
+     * Return the socket of the panel's own PHP-FPM pool (in the system PHP-FPM's socket folder).
+     *
+     * @return string Full socket path.
+     */
+    static function PanelSocket()
+    {
+        return rtrim(sys_platform::Get('php_fpm_socket_dir'), '/') . '/sentora-panel.sock';
+    }
 
     /**
      * Return the Linux user name of an account (web<account id>).
@@ -65,7 +84,7 @@ class sys_accountphp
     static function PoolDir($version)
     {
         return ($version === self::DefaultVersion())
-            ? '/etc/php/' . $version . '/fpm/pool.d/'
+            ? rtrim(sys_platform::Get('php_fpm_pool_dir', array('v' => $version)), '/') . '/'
             : sys_phpversions::BASE_DIR . $version . '/etc/php-fpm.d/';
     }
 
@@ -77,7 +96,7 @@ class sys_accountphp
      */
     static function ServiceName($version)
     {
-        return ($version === self::DefaultVersion()) ? 'php' . $version . '-fpm' : sys_phpversions::Service($version);
+        return ($version === self::DefaultVersion()) ? sys_platform::Get('php_fpm_service', array('v' => $version)) : sys_phpversions::Service($version);
     }
 
     /**
@@ -92,7 +111,7 @@ class sys_accountphp
         // (each extra version its own: they all shared web<id>.sock, so an account with sites on two
         // extra versions, 8.2 and 7.1, had two pools on one socket and only the first one started)
         return ($version === self::DefaultVersion())
-            ? '/run/php/' . self::UserName($accountId) . '.sock'
+            ? rtrim(sys_platform::Get('php_fpm_socket_dir'), '/') . '/' . self::UserName($accountId) . '.sock'
             : sys_phpversions::SOCKET_DIR . self::UserName($accountId) . '-' . $version . '.sock';
     }
 
@@ -179,7 +198,7 @@ class sys_accountphp
     static function PanelHandler()
     {
         $nl = fs_filehandler::NewLine();
-        return '<FilesMatch "\\.php$">' . $nl . '    SetHandler "proxy:unix:' . self::PANEL_SOCKET . '|fcgi://localhost/"' . $nl . '</FilesMatch>' . $nl;
+        return '<FilesMatch "\\.php$">' . $nl . '    SetHandler "proxy:unix:' . self::PanelSocket() . '|fcgi://localhost/"' . $nl . '</FilesMatch>' . $nl;
     }
 
     /**
@@ -203,8 +222,8 @@ class sys_accountphp
             . "user = " . $user . "\n"
             . "group = " . $user . "\n"
             . "listen = " . self::Socket($accountId, $version) . "\n"
-            . "listen.owner = " . self::WEB_GROUP . "\n"
-            . "listen.group = " . self::WEB_GROUP . "\n"
+            . "listen.owner = " . self::WebGroup() . "\n"
+            . "listen.group = " . self::WebGroup() . "\n"
             . "listen.mode = 0660\n"
             . "pm = ondemand\n"
             . "pm.max_children = " . $children . "\n"
@@ -299,9 +318,9 @@ class sys_accountphp
         $h = escapeshellarg($home);
         // The owning group is www-data too (folders keep it for new files), so both
         // the owning-group entry and the named one are read-only
-        $acl = 'u:' . $user . ':rwX,u:' . self::PANEL_USER . ':rwX,g::rX,g:' . self::WEB_GROUP . ':rX,m::rwX,o::---';
-        $def = 'd:u::rwX,d:u:' . $user . ':rwX,d:u:' . self::PANEL_USER . ':rwX,d:g::rX,d:g:' . self::WEB_GROUP . ':rX,d:m::rwX,d:o::---';
-        self::Run('chown -R ' . escapeshellarg($user . ':' . self::WEB_GROUP) . ' ' . $h);
+        $acl = 'u:' . $user . ':rwX,u:' . self::PANEL_USER . ':rwX,g::rX,g:' . self::WebGroup() . ':rX,m::rwX,o::---';
+        $def = 'd:u::rwX,d:u:' . $user . ':rwX,d:u:' . self::PANEL_USER . ':rwX,d:g::rX,d:g:' . self::WebGroup() . ':rX,d:m::rwX,d:o::---';
+        self::Run('chown -R ' . escapeshellarg($user . ':' . self::WebGroup()) . ' ' . $h);
         self::Run('chmod -R u+rwX,g+rX,o-rwx ' . $h);
         self::Run('find ' . $h . ' -type d -exec chmod g+s {} +');
         self::Run('setfacl -R -m ' . escapeshellarg($acl) . ' ' . $h);
@@ -324,7 +343,7 @@ class sys_accountphp
     static function FixOwnership($user, $home, $quick = false)
     {
         $h = escapeshellarg($home);
-        $who = '\\( -user ' . self::PANEL_USER . ' -o -user root -o -user ' . self::WEB_GROUP . ' \\)';
+        $who = '\\( -user ' . self::PANEL_USER . ' -o -user root -o -user ' . self::WebGroup() . ' \\)';
         // quick: the account folder and its first two levels (new domain folders)
         $depth = $quick ? ' -maxdepth 2' : '';
         // -print: one line per file that had another owner, so the change can be counted
@@ -348,8 +367,8 @@ class sys_accountphp
      */
     static function Safeguard($user, $home)
     {
-        $acl = 'u:' . $user . ':rwX,u:' . self::PANEL_USER . ':rwX,g::rX,g:' . self::WEB_GROUP . ':rX,m::rwX,o::---';
-        $def = 'd:u::rwX,d:u:' . $user . ':rwX,d:u:' . self::PANEL_USER . ':rwX,d:g::rX,d:g:' . self::WEB_GROUP . ':rX,d:m::rwX,d:o::---';
+        $acl = 'u:' . $user . ':rwX,u:' . self::PANEL_USER . ':rwX,g::rX,g:' . self::WebGroup() . ':rX,m::rwX,o::---';
+        $def = 'd:u::rwX,d:u:' . $user . ':rwX,d:u:' . self::PANEL_USER . ':rwX,d:g::rX,d:g:' . self::WebGroup() . ':rX,d:m::rwX,d:o::---';
         foreach (array($home, $home . '/public_html') as $dir) {
             if (is_dir($dir) && !is_link($dir)) {
                 $d = escapeshellarg($dir);
@@ -468,12 +487,12 @@ class sys_accountphp
         }
         // BIND's main file holds the rndc key (whoever reads it can stop or reconfigure BIND): root
         // and BIND only. The installer sets it so; this keeps it so whatever rewrites it later.
-        $named = '/etc/bind/named.conf';
+        $named = rtrim((string) ctrl_options::GetSystemOption('bind_dir'), '/') . '/named.conf';
         if (is_file($named) && !is_link($named) && (fileperms($named) & 0007)) {
             @chown($named, 'root');
-            @chgrp($named, 'bind');
+            @chgrp($named, sys_platform::Get('bind_group'));
             @chmod($named, 0640);
-            echo "Permissions: /etc/bind/named.conf (it holds BIND's control key) was readable by every user: closed." . fs_filehandler::NewLine();
+            echo "Permissions: " . $named . " (it holds BIND's control key) was readable by every user: closed." . fs_filehandler::NewLine();
         }
         // the panel's log: written by the daemon (root) and the panel (its own user)
         $log = (string) ctrl_options::GetSystemOption('logfile');
@@ -585,7 +604,7 @@ class sys_accountphp
         // The panel's own pool runs only the panel's own scripts (inc/fpm_guard.php): a
         // hosted site's .htaccess can point at that pool's socket otherwise
         $guard = rtrim((string) ctrl_options::GetSystemOption('sentora_root'), '/') . '/inc/fpm_guard.php';
-        $panelPool = '/etc/php/' . self::DefaultVersion() . '/fpm/pool.d/sentora.conf';
+        $panelPool = self::PoolDir(self::DefaultVersion()) . 'sentora.conf';
         if (is_file($guard) && is_file($panelPool) && !is_link($panelPool)) {
             $conf = (string) file_get_contents($panelPool);
             if (strpos($conf, 'auto_prepend_file') === false) {

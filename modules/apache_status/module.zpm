@@ -140,7 +140,7 @@
             <h4><: Apache's status page is not answering :></h4>
             <p><: This module reads http://127.0.0.1/server-status (Apache's mod_status, with ExtendedStatus On). It returned HTTP :> <@ StatusCode @>.</p>
             <p><: A 301 or 302 means Apache redirected the request, usually to https. The panel's redirect leaves /server-status alone, so let the daemon rewrite the Apache config (within 5 minutes) and reload this page. :></p>
-            <p><: Otherwise check that the status module is enabled with a2enmod status, then restart Apache. :></p>
+            <p><: Otherwise check that Apache's status module (mod_status) is switched on, then restart Apache. :></p>
         </div>
     </div>
     <% endif %>

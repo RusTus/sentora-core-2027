@@ -420,7 +420,7 @@ class sys_phpversions
         if ($sock === '') {
             return array('state' => 'unknown', 'text' => '');
         }
-        if (preg_match('#^/run/php/web\d+\.sock$#', $sock)) {
+        if (preg_match('#^' . preg_quote(rtrim(sys_platform::Get('php_fpm_socket_dir'), '/') . '/', '#') . 'web\d+\.sock$#', $sock)) {
             $runs = self::DefaultVersion();
         } elseif (preg_match('#^' . preg_quote(self::SOCKET_DIR, '#') . 'web\d+-(\d+\.\d+)\.sock$#', $sock, $m)) {
             $runs = $m[1];

@@ -82,7 +82,8 @@ NOW=$(cd "$PANEL" && php -r 'chdir("'"$PANEL"'"); require "dryden/loader.inc.php
 [ -n "$NOW" ] && [ -f "$NOW" ] || die "could not back up the current state: nothing was changed"
 echo "  $NOW (restore it with: sentora-restore $ACC $NOW)"
 
-command -v rsync > /dev/null 2>&1 || apt-get install -y -qq rsync > /dev/null 2>&1 || die "rsync is not installed (apt-get install rsync): nothing was changed"
+PKG=$(php -q "$PANEL/bin/setso" --get package_install 2> /dev/null); PKG=${PKG:-apt-get -qq -y install}
+command -v rsync > /dev/null 2>&1 || $PKG rsync > /dev/null 2>&1 || die "rsync is not installed ($PKG rsync): nothing was changed"
 unzip -q "$ZIPF" -d "$TMP/x" || die "could not unpack $ZIPF"
 if [ $FILES -eq 1 ] && [ -d "$TMP/x/public_html" ]; then
     say "Restoring the web files"

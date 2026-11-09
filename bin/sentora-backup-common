@@ -41,3 +41,7 @@ rpath() { if remote; then echo "${TARGET#*:}"; else echo "$TARGET"; fi; }
 run_there() { # a command on the backup machine (or here, for a local folder)
     if remote; then $SSH "$(rhost)" "$1"; else (cd / && bash -c "$1"); fi
 }
+
+# this Linux system's package command (Sentora's settings: setso --get package_install)
+SENTORA_PKG=$(php -q /etc/sentora/panel/bin/setso --get package_install 2> /dev/null)
+SENTORA_PKG=${SENTORA_PKG:-apt-get -qq -y install}

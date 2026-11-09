@@ -20,7 +20,6 @@
 class sys_oldlogins
 {
     /** MySQL's settings file the older method is switched on in. */
-    const MYCNF = '/etc/mysql/mysql.conf.d/mysqld.cnf';
 
     /** The setting the panel asks the daemon with to switch the older method off ('requested'). */
     const REQUEST = 'mysql_native_off';
@@ -226,15 +225,15 @@ class sys_oldlogins
             $set('failed: ' . count($users) . ' MySQL user(s) still use it');
             return;
         }
-        $c = (string) @file_get_contents(self::MYCNF);
+        $c = (string) @file_get_contents(sys_platform::Get('db_conf_file'));
         if ($c === '' || !preg_match('/^\s*mysql[_-]native[_-]password\s*=\s*(ON|1|TRUE)\s*$/mi', $c)) {
-            $set('failed: ' . self::MYCNF . ' does not switch it on (it may be set elsewhere)');
+            $set('failed: ' . sys_platform::Get('db_conf_file') . ' does not switch it on (it may be set elsewhere)');
             return;
         }
-        @copy(self::MYCNF, self::MYCNF . '.before-off');
+        @copy(sys_platform::Get('db_conf_file'), sys_platform::Get('db_conf_file') . '.before-off');
         $c = preg_replace('/^(\s*)(mysql[_-]native[_-]password\s*=\s*(ON|1|TRUE)\s*)$/mi', '$1# $2  (switched off by Sentora, PHP Versions)', $c);
-        file_put_contents(self::MYCNF, $c);
-        exec('systemctl restart mysql 2>&1', $o, $rc);
+        file_put_contents(sys_platform::Get('db_conf_file'), $c);
+        exec('systemctl restart ' . escapeshellarg(sys_platform::Get('db_service')) . ' 2>&1', $o, $rc);
         echo "MySQL: the older login method (mysql_native_password) switched off, MySQL restarted" . ($rc === 0 ? '' : ' (with an error: ' . implode(' ', $o) . ')') . fs_filehandler::NewLine();
         // the daemon's own connection went with the restart
         include ctrl_options::GetSystemOption('sentora_root') . 'cnf/db.php';

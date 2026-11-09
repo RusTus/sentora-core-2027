@@ -54,7 +54,7 @@ class module_controller extends ctrl_module
      */
     static function getHasSOGo()
     {
-        return is_file('/usr/sbin/sogod');
+        return is_file(sys_platform::Get('sogo_bin'));
     }
 
     /**

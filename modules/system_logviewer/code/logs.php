@@ -23,10 +23,11 @@ class system_logviewer_logs
         'Hosted domains' => array('/var/sentora/logs/domains/*/*.log'),
         'FTP (ProFTPD)' => array('/var/sentora/logs/proftpd/*.log'),
         'DNS (BIND)' => array('/var/sentora/logs/bind/*.log'),
-        'Apache' => array('/var/log/apache2/*.log'),
-        'Mail' => array('/var/log/dovecot*.log', '/var/log/mail.log', '/var/log/mail.err'),
-        'MySQL' => array('/var/log/mysql/*.log'),
-        'System' => array('/var/log/syslog', '/var/log/auth.log', '/var/log/kern.log'),
+        // ({apache_log_dir}: Apache's own log folder on this system, sys_platform)
+        'Apache' => array('{apache_log_dir}/*log'),
+        'Mail' => array('/var/log/dovecot*.log', '/var/log/mail.log', '/var/log/mail.err', '/var/log/maillog'),
+        'MySQL' => array('/var/log/mysql/*.log', '/var/log/mariadb/*.log'),
+        'System' => array('/var/log/syslog', '/var/log/auth.log', '/var/log/kern.log', '/var/log/messages', '/var/log/secure'),
     );
 
     /**
@@ -40,6 +41,7 @@ class system_logviewer_logs
         $list = array();
         foreach (self::$sources as $group => $patterns) {
             foreach ($patterns as $pattern) {
+                $pattern = str_replace('{apache_log_dir}', rtrim(sys_platform::Get('apache_log_dir'), '/'), $pattern);
                 foreach ((array) glob($pattern) as $path) {
                     // Only real files; a symlink can not point the viewer somewhere else
                     if (!is_file($path) || is_link($path)) {

@@ -27,7 +27,10 @@
 
 PANEL=/etc/sentora/panel
 PANEL_USER=sentora
-HTTP_GROUP=www-data
+# this Linux system's commands, paths, services and users (Sentora's settings: setso --get <name>)
+sp() { php -q "$PANEL/bin/setso" --get "$1" 2> /dev/null; }
+HTTP_GROUP=$(sp web_group); HTTP_GROUP=${HTTP_GROUP:-www-data}
+PKG=$(sp package_install); PKG=${PKG:-apt-get -qq -y install}
 BACKUPS=/var/sentora/backups
 STATE=/var/lib/sentora/last-update
 CONF=/etc/sentora/update.conf
@@ -239,7 +242,7 @@ while [ $# -gt 0 ]; do
     shift
 done
 
-need() { command -v "$1" > /dev/null || { say "Installing $2"; apt-get -qq -y install "$2" > /dev/null || die "could not install $2"; }; }
+need() { command -v "$1" > /dev/null || { say "Installing $2"; $PKG "$2" > /dev/null || die "could not install $2"; }; }
 
 # --- permissions the installer sets (also after a rollback) --------------------------
 fix_permissions() {
@@ -262,7 +265,8 @@ fix_permissions() {
     # the panel's working folders: the panel and Apache only (as the daemon keeps them)
     for d in "$PANEL/etc/tmp" "$m/tmp" "$m/config"; do [ -d "$d" ] && chmod o-rwx,g+s "$d"; done
     # BIND's main file holds the rndc key: root and BIND only (installers before 2027.5 left it 644)
-    [ -f /etc/bind/named.conf ] && { chown root:bind /etc/bind/named.conf; chmod 640 /etc/bind/named.conf; }
+    local nc; nc="$(sp bind_dir)"; nc="${nc%/}/named.conf"
+    [ -f "$nc" ] && { chown root:"$(sp bind_group)" "$nc"; chmod 640 "$nc"; }
     for b in sentora-notice sentora-update sentora-update-check sentora-post-install-check sentora-restore sentora-smoke-test sentora-offsite-backup sentora-panel-restore sentora-web-probe sentora-php-install sentora-change-domain sentora-migrate-import sentora-migrate-export sentora-matomo-setup; do
         [ -f "$PANEL/bin/$b" ] && ln -sf "$PANEL/bin/$b" "/usr/local/sbin/$b"
     done
@@ -548,7 +552,7 @@ for unit in /etc/systemd/system/sentora-php*-fpm.service; do
 done
 
 # rsync copies the new core (minimized Ubuntu servers may not have it)
-command -v rsync > /dev/null 2>&1 || apt-get install -y -qq rsync > /dev/null 2>&1 || die "rsync is not installed: apt-get install rsync, then run sentora-update again"
+command -v rsync > /dev/null 2>&1 || $PKG rsync > /dev/null 2>&1 || die "rsync is not installed: $PKG rsync, then run sentora-update again"
 
 # --- copy the new core ------------------------------------------------------------------
 rsync -a --exclude=/cnf/ --exclude=/bin/zsudo --exclude=/etc/tmp/ --exclude=/etc/zppy-cache/ \
@@ -637,8 +641,9 @@ retire_dir() {
 retire_dir modules/apache_status/app
 # Theme and module files are revalidated by the browser after each update (the panel's
 # vhost sends Cache-Control: no-cache for them; that needs mod_headers): rewrite the vhost
-if [ ! -e /etc/apache2/mods-enabled/headers.load ]; then
-    a2enmod -q headers > /dev/null 2>&1 && say "Enabled Apache's headers module"
+AEN=$(sp apache_enable_module | sed 's/{m}/headers/g')
+if [ -n "$AEN" ] && ! "$(sp apache_ctl)" -M 2> /dev/null | grep -q headers_module; then
+    $AEN > /dev/null 2>&1 && say "Enabled Apache's headers module"
 fi
 "$PANEL/bin/setso" --set apache_changed true > /dev/null 2>&1
 fix_permissions
@@ -676,7 +681,7 @@ if [ -f "$PANEL/bin/zsudo.c" ]; then
     ZS_NEW=$(sha256sum "$PANEL/bin/zsudo.c" | cut -d' ' -f1)
     if [ "$ZS_NEW" != "$(cat /etc/sentora/zsudo.sha256 2> /dev/null)" ] || [ ! -u "$PANEL/bin/zsudo" ]; then
         if ! command -v cc > /dev/null 2>&1; then
-            warn "zsudo was not rebuilt: no C compiler (apt-get install build-essential, then run sentora-update --force)"
+            warn "zsudo was not rebuilt: no C compiler (install a C compiler, then run sentora-update --force)"
         elif cc -O2 -o "$TMP/zsudo" "$PANEL/bin/zsudo.c" > /dev/null 2>&1 \
             && install -o root -g "$PANEL_USER" -m 4750 "$TMP/zsudo" "$PANEL/bin/zsudo"; then
             echo "$ZS_NEW" > /etc/sentora/zsudo.sha256
@@ -690,15 +695,18 @@ fi
 # Snipe-IT; the installer adds it since 2027.11)
 PHPV_SYS=$(php -r 'echo PHP_MAJOR_VERSION . "." . PHP_MINOR_VERSION;' 2> /dev/null)
 if [ -n "$PHPV_SYS" ] && ! php -m 2> /dev/null | grep -qix ldap; then
-    if DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "php$PHPV_SYS-ldap" > /dev/null 2>&1; then
-        say "PHP $PHPV_SYS: LDAP added (php$PHPV_SYS-ldap)"
-        systemctl reload "php$PHPV_SYS-fpm" > /dev/null 2>&1 || systemctl restart "php$PHPV_SYS-fpm" > /dev/null 2>&1 || true
+    LDAP_PKG=$(sp php_ext_package | sed "s/{v}/$PHPV_SYS/g; s/{e}/ldap/g")
+    FPM_SN=$(sp php_fpm_service | sed "s/{v}/$PHPV_SYS/g")
+    if DEBIAN_FRONTEND=noninteractive $PKG "$LDAP_PKG" > /dev/null 2>&1; then
+        say "PHP $PHPV_SYS: LDAP added ($LDAP_PKG)"
+        systemctl reload "$FPM_SN" > /dev/null 2>&1 || systemctl restart "$FPM_SN" > /dev/null 2>&1 || true
     else
-        warn "php$PHPV_SYS-ldap did not install: apt-get install php$PHPV_SYS-ldap"
+        warn "$LDAP_PKG did not install: $PKG $LDAP_PKG"
     fi
 fi
-# --- SpamAV: SpamAssassin and ClamAV (the new installer installs them; older servers get them here)
-if [ -d "$PANEL/modules/spamav_admin" ] && { [ ! -x /usr/sbin/spamd ] || [ ! -x /usr/sbin/clamd ]; }; then
+# --- SpamAV: SpamAssassin and ClamAV (the installers install them; Ubuntu servers installed before
+# SpamAV get them here, with Ubuntu's package names)
+if [ -d "$PANEL/modules/spamav_admin" ] && { [ ! -x "$(sp spamd_bin)" ] || [ ! -x "$(sp clamd_bin)" ]; } && command -v apt-get > /dev/null 2>&1; then
     say "Installing SpamAssassin and ClamAV (Admin > SpamAV Admin)"
     if DEBIAN_FRONTEND=noninteractive apt-get install -y -q spamassassin spamc spamd spamass-milter libdbd-mysql-perl \
         clamav clamav-daemon clamav-freshclam clamav-milter > /var/sentora/logs/update-spamav-install.log 2>&1; then

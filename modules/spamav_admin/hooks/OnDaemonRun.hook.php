@@ -8,7 +8,7 @@
  * Written by RusTus, 2026-11-07
  */
 global $zdbh; // hooks are included inside a function
-if (!is_file('/usr/sbin/spamd') && !is_file('/usr/sbin/clamd')) {
+if (!is_file(sys_platform::Get('spamd_bin')) && !is_file(sys_platform::Get('clamd_bin'))) {
     return; // not installed on this server
 }
 sys_spamav::Ensure();
@@ -42,8 +42,8 @@ $svWrite = function ($file, $content, $mode = 0644, $owner = null) {
     return true;
 };
 $svLog = function ($text) { echo "SpamAV: " . $text . fs_filehandler::NewLine(); };
-$clamOn = sys_spamav::On('clam_enabled') && is_file('/usr/sbin/clamd');
-$saOn = sys_spamav::On('sa_enabled') && is_file('/usr/sbin/spamd');
+$clamOn = sys_spamav::On('clam_enabled') && is_file(sys_platform::Get('clamd_bin'));
+$saOn = sys_spamav::On('sa_enabled') && is_file(sys_platform::Get('spamd_bin'));
 
 // --- 1. spamd's per-mailbox settings database (read-only user for spamd) -------------------
 $svSecret = '/etc/sentora/spamav-db.secret';
@@ -120,14 +120,16 @@ if ($svSieveChanged) {
 }
 
 // --- 3. Dovecot: the per-mailbox script runs before the user's own filters -------------------
-$svDove = realpath('/etc/dovecot/dovecot.conf');
-if ($svDove && is_file($svDove) && strpos((string) file_get_contents($svDove), 'sieve_script spamav') === false) {
-    $block = "\n# Spam handling chosen in Mail > SpamAV (one script per mailbox, run before the user's own)\n"
-        . "sieve_script spamav {\n  type = before\n  driver = file\n  path = " . $svDir . "%{user | lower}.sieve\n}\n";
+// (the setting's wording is the Dovecot version's: sys_platform dovecot_spamav_block)
+$svDove = realpath(sys_platform::Get('dovecot_conf'));
+$svDoveMark = "# Spam handling chosen in Mail > SpamAV";
+if ($svDove && is_file($svDove) && strpos((string) file_get_contents($svDove), $svDoveMark) === false && strpos((string) file_get_contents($svDove), 'sieve_script spamav') === false) {
+    $block = "\n" . $svDoveMark . " (one script per mailbox, run before the user's own)\n"
+        . sys_platform::Get('dovecot_spamav_block', array('dir' => $svDir)) . "\n";
     file_put_contents($svDove, $block, FILE_APPEND);
     list($rc, $out) = $sv('doveconf -n > /dev/null');
     if ($rc === 0) {
-        $sv('systemctl reload dovecot');
+        $sv('systemctl reload ' . escapeshellarg(sys_platform::Get('dovecot_service')));
         $svLog('Dovecot now runs the mailbox spam filters');
     } else {
         file_put_contents($svDove, str_replace($block, '', (string) file_get_contents($svDove)));
@@ -136,46 +138,60 @@ if ($svDove && is_file($svDove) && strpos((string) file_get_contents($svDove), '
 }
 
 // --- 4. the configuration files; restart what changed -----------------------------------------
+// (files, services and users of this Linux system: Sentora's settings, sys_platform)
+$svP = function ($name) { return sys_platform::Get($name); };
+$svClamd = $svP('clamd_service');
+$svClamMilter = $svP('clamav_milter_service');
+$svFresh = $svP('freshclam_service');
+$svSpamd = $svP('spamd_service');
+$svSpamMilter = $svP('spamass_milter_service');
 $svRestart = array();
-if (is_file('/usr/sbin/clamd')) {
+if (is_file(sys_platform::Get('clamd_bin'))) {
     @mkdir('/var/spool/postfix/clamav', 0750, true);
-    @chown('/var/spool/postfix/clamav', 'clamav');
+    @chown('/var/spool/postfix/clamav', $svP('clamav_milter_user'));
     @chgrp('/var/spool/postfix/clamav', 'postfix');
-    @mkdir('/var/log/clamav', 0755, true);
-    @chown('/var/log/clamav', 'clamav');
-    if ($svWrite('/etc/clamav/clamd.conf', sys_spamav::ClamdConf())) { $svRestart['clamav-daemon'] = true; }
-    if ($svWrite('/etc/clamav/clamav-milter.conf', sys_spamav::MilterConf())) { $svRestart['clamav-milter'] = true; }
-    if ($svWrite('/etc/clamav/freshclam.conf', sys_spamav::FreshclamConf())) { $svRestart['clamav-freshclam'] = true; }
-    $sv('id -nG clamav | grep -qw postfix || usermod -aG postfix clamav');
+    @mkdir('/var/log/clamav', 0775, true);
+    @chown('/var/log/clamav', $svP('clamav_user'));
+    if ($svWrite($svP('clamd_conf'), sys_spamav::ClamdConf())) { $svRestart[$svClamd] = true; }
+    if ($svWrite($svP('clamav_milter_conf'), sys_spamav::MilterConf())) { $svRestart[$svClamMilter] = true; }
+    if ($svWrite($svP('freshclam_conf'), sys_spamav::FreshclamConf())) { $svRestart[$svFresh] = true; }
+    $u = escapeshellarg($svP('clamav_milter_user'));
+    $sv('id -nG ' . $u . ' | grep -qw postfix || usermod -aG postfix ' . $u);
 }
-if (is_file('/usr/sbin/spamd')) {
+if (is_file(sys_platform::Get('spamd_bin'))) {
+    $svSaUser = $svP('spamd_user');
     @mkdir('/var/lib/spamassassin/bayes', 0770, true);
-    @chown('/var/lib/spamassassin/bayes', 'debian-spamd');
-    @chgrp('/var/lib/spamassassin/bayes', 'debian-spamd');
-    if ($svWrite('/etc/spamassassin/60_sentora.cf', sys_spamav::SaConf($svPass), 0640, 'root:debian-spamd')) { $svRestart['spamd'] = true; }
-    if ($svWrite('/etc/default/spamd', sys_spamav::SpamdDefaults())) { $svRestart['spamd'] = true; }
-    if ($svWrite('/etc/default/spamass-milter', sys_spamav::MilterDefaults())) { $svRestart['spamass-milter'] = true; }
-    $sv('id -nG spamass-milter | grep -qw postfix || usermod -aG postfix spamass-milter');
-    list($rc) = $sv('systemctl is-enabled spamassassin-maintenance.timer');
-    if (sys_spamav::On('sa_rules_update') !== ($rc === 0)) {
-        $sv('systemctl ' . (sys_spamav::On('sa_rules_update') ? 'enable --now' : 'disable --now') . ' spamassassin-maintenance.timer');
+    @chown('/var/lib/spamassassin/bayes', $svSaUser);
+    @chgrp('/var/lib/spamassassin/bayes', $svSaUser);
+    if ($svWrite(rtrim($svP('spamassassin_dir'), '/') . '/60_sentora.cf', sys_spamav::SaConf($svPass), 0640, 'root:' . $svSaUser)) { $svRestart[$svSpamd] = true; }
+    if ($svWrite($svP('spamd_defaults_file'), sys_spamav::SpamdDefaults())) { $svRestart[$svSpamd] = true; }
+    if ($svWrite($svP('spamass_milter_defaults_file'), sys_spamav::MilterDefaults())) { $svRestart[$svSpamMilter] = true; }
+    $u = escapeshellarg($svP('spamass_milter_user'));
+    $sv('id -nG ' . $u . ' | grep -qw postfix || usermod -aG postfix ' . $u);
+    $svTimer = $svP('spamd_maintenance_timer');
+    if ($svTimer !== '') {
+        list($rc) = $sv('systemctl is-enabled ' . escapeshellarg($svTimer));
+        if (sys_spamav::On('sa_rules_update') !== ($rc === 0)) {
+            $sv('systemctl ' . (sys_spamav::On('sa_rules_update') ? 'enable --now' : 'disable --now') . ' ' . escapeshellarg($svTimer));
+        }
     }
 }
 // scanners on or off as set; ClamAV waits for its first signatures
 $svJustStarted = array();
 $svHaveSigs = (bool) glob('/var/lib/clamav/{daily,main}.{cvd,cld}', GLOB_BRACE);
-$svWant = array('clamav-freshclam' => $clamOn, 'clamav-daemon' => $clamOn && $svHaveSigs, 'clamav-milter' => $clamOn && $svHaveSigs, 'spamd' => $saOn, 'spamass-milter' => $saOn);
+$svWant = array($svFresh => $clamOn, $svClamd => $clamOn && $svHaveSigs, $svClamMilter => $clamOn && $svHaveSigs, $svSpamd => $saOn, $svSpamMilter => $saOn);
+$svIsClam = array($svFresh => true, $svClamd => true, $svClamMilter => true);
 foreach ($svWant as $unit => $want) {
-    if (($unit[0] === 'c' && !is_file('/usr/sbin/clamd')) || ($unit[0] === 's' && !is_file('/usr/sbin/spamd'))) {
+    if ((isset($svIsClam[$unit]) && !is_file(sys_platform::Get('clamd_bin'))) || (!isset($svIsClam[$unit]) && !is_file(sys_platform::Get('spamd_bin')))) {
         continue;
     }
     list($rc) = $sv('systemctl is-active --quiet ' . escapeshellarg($unit));
     $active = ($rc === 0);
-    if ($unit === 'clamav-milter' && $want && !$active) {
+    if ($unit === $svClamMilter && $want && !$active) {
         // the milter gives up when ClamAV does not answer, and ClamAV takes a while to load
         // its signatures after it starts: wait (up to 90 seconds) until it answers PING
         for ($i = 0; $i < 45; $i++) {
-            $sock = @stream_socket_client('unix:///run/clamav/clamd.ctl', $en, $es, 2);
+            $sock = @stream_socket_client('unix://' . $svP('clamd_socket'), $en, $es, 2);
             if ($sock) {
                 fwrite($sock, "zPING\0");
                 stream_set_timeout($sock, 2);
@@ -230,10 +246,10 @@ if (is_array($svReq) && isset($svReq['action'])) {
     $by = preg_replace('/[^A-Za-z0-9_-]/', '', (string) ($svReq['by'] ?? ''));
     // updates can take minutes: in the background, the result is read on a later run
     if ($svReq['action'] === 'signatures' && $clamOn) {
-        $sv('setsid nohup sh -c ' . escapeshellarg('systemctl stop clamav-freshclam; timeout 900 freshclam --quiet; r=$?; systemctl start clamav-freshclam; systemctl reload clamav-daemon 2>/dev/null; echo $r > /var/lib/sentora/spamav-request.rc') . ' > /var/lib/sentora/spamav-request.log 2>&1 < /dev/null &');
+        $sv('setsid nohup sh -c ' . escapeshellarg('systemctl stop ' . escapeshellarg($svFresh) . '; timeout 900 freshclam --quiet; r=$?; systemctl start ' . escapeshellarg($svFresh) . '; systemctl reload ' . escapeshellarg($svClamd) . ' 2>/dev/null; echo $r > /var/lib/sentora/spamav-request.rc') . ' > /var/lib/sentora/spamav-request.log 2>&1 < /dev/null &');
         $svStatus['last_request'] = array('time' => time(), 'by' => $by, 'what' => 'Update virus signatures', 'ok' => null, 'text' => 'Running.');
     } elseif ($svReq['action'] === 'rules' && $saOn) {
-        $sv('setsid nohup sh -c ' . escapeshellarg('timeout 900 sa-update; r=$?; [ $r -le 1 ] && systemctl reload spamd; [ $r -le 1 ] && r=0; echo $r > /var/lib/sentora/spamav-request.rc') . ' > /var/lib/sentora/spamav-request.log 2>&1 < /dev/null &');
+        $sv('setsid nohup sh -c ' . escapeshellarg('timeout 900 sa-update; r=$?; [ $r -le 1 ] && systemctl reload ' . escapeshellarg($svSpamd) . '; [ $r -le 1 ] && r=0; echo $r > /var/lib/sentora/spamav-request.rc') . ' > /var/lib/sentora/spamav-request.log 2>&1 < /dev/null &');
         $svStatus['last_request'] = array('time' => time(), 'by' => $by, 'what' => 'Update spam rules', 'ok' => null, 'text' => 'Running.');
     } elseif ($svReq['action'] === 'restart') {
         foreach ($svWant as $unit => $want) {
@@ -268,13 +284,13 @@ foreach ($svJustStarted as $unit) {
     // ClamAV's milter needs ClamAV answering, which takes minutes while it loads its first
     // virus signatures (right after an install): the next daemon runs start it then
     $clamReady = false;
-    if ($unit === 'clamav-milter' && ($sock = @stream_socket_client('unix:///run/clamav/clamd.ctl', $en, $es, 2))) {
+    if ($unit === $svClamMilter && ($sock = @stream_socket_client('unix://' . $svP('clamd_socket'), $en, $es, 2))) {
         fwrite($sock, "zPING\0");
         stream_set_timeout($sock, 2);
         $clamReady = (strpos((string) fread($sock, 16), 'PONG') === 0);
         fclose($sock);
     }
-    if ($unit === 'clamav-milter' && !$clamReady) {
+    if ($unit === $svClamMilter && !$clamReady) {
         $svLog('clamav-milter waits for ClamAV to load its virus signatures; it is started on a later daemon run');
         continue;
     }
@@ -323,7 +339,7 @@ $svCursorFile = '/var/lib/sentora/spamav-journal.cursor';
 $svStateFile = '/var/lib/sentora/spamav-parse.json';
 $svCursor = trim((string) @file_get_contents($svCursorFile));
 $cmd = 'journalctl -q -o json --no-pager ' . ($svCursor !== '' ? '--after-cursor=' . escapeshellarg($svCursor) : '--since=-15min')
-    . ' -n 50000 SYSLOG_IDENTIFIER=spamd SYSLOG_IDENTIFIER=clamav-milter + _SYSTEMD_UNIT=postfix@-.service 2>/dev/null';
+    . ' -n 50000 SYSLOG_IDENTIFIER=spamd SYSLOG_IDENTIFIER=clamav-milter + _SYSTEMD_UNIT=postfix@-.service + _SYSTEMD_UNIT=postfix.service 2>/dev/null';
 $svLines = array();
 $svLast = '';
 $h = popen($cmd, 'r');

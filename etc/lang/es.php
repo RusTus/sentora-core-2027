@@ -1533,7 +1533,7 @@ return array(
     'Organization' => 'Organización',
     'Other' => 'Otro',
     'Other mail accounts' => 'Otras cuentas de correo',
-    'Otherwise check that the status module is enabled with a2enmod status, then restart Apache.' => 'Si no, compruebe que el módulo de estado esté activado con a2enmod status y reinicie Apache.',
+    'Otherwise check that Apache\'s status module (mod_status) is switched on, then restart Apache.' => 'Si no, compruebe que el módulo de estado de Apache (mod_status) esté activado y reinicie Apache.',
     'Out of the way, still there to check' => 'Fuera de la vista, pero disponible para revisar',
     'Out-of-office replies' => 'Respuestas de ausencia',
     'Outage' => 'Interrupción',

@@ -90,20 +90,23 @@ class sys_apachecustom
      */
     static function Test($text, $ssl = false, $symlinks = false)
     {
-        if (trim((string) $text) === '' || !is_executable('/usr/sbin/apache2') || !is_dir('/etc/apache2/mods-enabled')) {
+        $bin = sys_platform::Get('apache_bin');
+        $root = sys_platform::Get('apache_server_root');
+        if (trim((string) $text) === '' || !is_executable($bin) || !is_dir($root)) {
             return '';
         }
         $dir = sys_get_temp_dir() . '/apachecheck-' . bin2hex(random_bytes(6));
         if (!@mkdir($dir, 0700)) {
             return '';
         }
-        $conf = "ServerRoot /etc/apache2\nInclude /etc/apache2/mods-enabled/*.load\nInclude /etc/apache2/mods-enabled/*.conf\n"
+        $conf = "ServerRoot " . $root . "\n" . sys_platform::Get('apache_module_includes') . "\n"
             . "PidFile $dir/pid\nErrorLog $dir/error.log\nServerName sentora-check.invalid\n"
             . '<VirtualHost *:' . ($ssl ? '443' : '80') . ">\nServerName sentora-check.invalid\nDocumentRoot $dir\n"
             . "#--- the entry\n" . self::Filter($text, $symlinks, $ssl) . "\n#--- end\n</VirtualHost>\n";
         file_put_contents("$dir/check.conf", $conf);
-        // (the modules' settings use Apache's environment: /etc/apache2/envvars)
-        exec('/bin/sh -c ' . escapeshellarg('. /etc/apache2/envvars 2> /dev/null; exec /usr/sbin/apache2 -t -f ' . $dir . '/check.conf') . ' 2>&1', $out, $rc);
+        // (the modules' settings may use Apache's environment, such as Debian's /etc/apache2/envvars)
+        $env = sys_platform::Get('apache_envvars');
+        exec('/bin/sh -c ' . escapeshellarg(($env !== '' ? '. ' . escapeshellarg($env) . ' 2> /dev/null; ' : '') . 'exec ' . escapeshellarg($bin) . ' -t -f ' . $dir . '/check.conf') . ' 2>&1', $out, $rc);
         @unlink("$dir/check.conf");
         @unlink("$dir/error.log");
         @rmdir($dir);

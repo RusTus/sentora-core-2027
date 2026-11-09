@@ -15,7 +15,7 @@
 
 PANEL=${SENTORA_PANEL:-/etc/sentora/panel}
 PANEL_USER=sentora
-HTTP_GROUP=www-data
+HTTP_GROUP=$(php -q "$PANEL/bin/setso" --get web_group 2> /dev/null); HTTP_GROUP=${HTTP_GROUP:-www-data}
 M=$PANEL/etc/apps/matomo
 # (for tests: another address for Matomo's pages, another database host)
 MI=${MATOMO_URL:-https://127.0.0.1/etc/apps/matomo/index.php}
@@ -35,7 +35,7 @@ if [ -f "$M/config/config.ini.php" ]; then
     echo "Matomo is already set up ($M/config/config.ini.php)."
     exit 0
 fi
-command -v curl > /dev/null || { echo "curl is needed: apt-get install curl"; exit 1; }
+command -v curl > /dev/null || { echo "curl is needed: install the curl package"; exit 1; }
 
 gen() { tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 20; }
 DBPW=$(gen)

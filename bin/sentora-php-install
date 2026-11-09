@@ -36,8 +36,12 @@ if [[ ! "$MM" =~ ^[78]\.[0-9]+$ ]]; then
 fi
 [ "$(id -u)" -eq 0 ] || { echo "Run this as root."; exit 1; }
 P="/opt/sentora-php/$MM"
-# Bundles are built for one system: Ubuntu 26.04 or Debian 13
-OS_TAG=$(. /etc/os-release; [ "${ID:-}" = debian ] && echo "debian${VERSION_ID:-}" || echo "ubuntu${VERSION_ID:-26.04}")
+# Bundles are built for one system (Sentora's settings: php_bundle_tag, php_bundle_libs, package_install;
+# a server installed before them works it out as before)
+sp() { php -q "$PANEL/bin/setso" --get "$1" 2> /dev/null; }
+OS_TAG=$(sp php_bundle_tag)
+[ -n "$OS_TAG" ] || OS_TAG=$(. /etc/os-release; [ "${ID:-}" = debian ] && echo "debian${VERSION_ID:-}" || echo "ubuntu${VERSION_ID:-26.04}")
+PKG=$(sp package_install); PKG=${PKG:-apt-get -qq -y install}
 NAME="sentora-php-$MM-$OS_TAG-amd64.tar.gz"
 SERVICE="sentora-php$MM-fpm"
 UPDATE=0
@@ -65,7 +69,11 @@ fi
 tar -tzf "$FILE" "opt/sentora-php/$MM/sbin/php-fpm" > /dev/null 2>&1 || { echo "$FILE is not a PHP $MM bundle. Nothing changed."; exit 1; }
 
 # the libraries the bundles link against (all part of the system; newer bundles need more, such as LDAP's)
-if [ "$OS_TAG" = debian13 ]; then
+LIBS=$(sp php_bundle_libs)
+if [ -n "$LIBS" ]; then
+    # shellcheck disable=SC2086
+    $PKG $LIBS > /dev/null 2>&1 || true
+elif [ "$OS_TAG" = debian13 ]; then
     apt-get -qq -y install libpng16-16t64 libjpeg62-turbo libfreetype6 libwebp7 libgmp10 zlib1g libldap2 libgnutls30t64 \
         libonig5 libzip5 libsodium23 libargon2-1 libsqlite3-0 libxml2 libcurl4t64 libicu76 libxslt1.1 libssl3t64 > /dev/null 2>&1 || true
 else
@@ -141,8 +149,9 @@ sed -i "s|^memory_limit = .*|memory_limit = 256M|" "$P/etc/php.ini"
 sed -i "s|^expose_php = .*|expose_php = Off|" "$P/etc/php.ini"
 sed -i "s|^;date.timezone =.*|date.timezone = $TZ_NAME|" "$P/etc/php.ini"
 sed -i "s|^;upload_tmp_dir =.*|upload_tmp_dir = $DATA/temp/|" "$P/etc/php.ini"
-sed -i "s|^mysqli.default_socket =.*|mysqli.default_socket = /var/run/mysqld/mysqld.sock|" "$P/etc/php.ini"
-sed -i "s|^pdo_mysql.default_socket *=.*|pdo_mysql.default_socket = /var/run/mysqld/mysqld.sock|" "$P/etc/php.ini"
+DBSOCK=$(sp db_socket)
+sed -i "s|^mysqli.default_socket =.*|mysqli.default_socket = $DBSOCK|" "$P/etc/php.ini"
+sed -i "s|^pdo_mysql.default_socket *=.*|pdo_mysql.default_socket = $DBSOCK|" "$P/etc/php.ini"
 # (from PHP 8.5 opcache is part of PHP itself, with no opcache.so to load)
 if [ -f "$("$P/bin/php-config" --extension-dir)/opcache.so" ]; then echo "zend_extension=opcache.so" > "$P/etc/conf.d/10-opcache.ini"; else rm -f "$P/etc/conf.d/10-opcache.ini"; fi
 if [ -x "$P/bin/sentora-php-addons" ]; then echo "Add-ons:"; "$P/bin/sentora-php-addons"; fi
@@ -156,7 +165,7 @@ EOF_FPM
 cat > "$P/etc/php-fpm.d/00-idle.conf" <<EOF_POOL
 [sentora-idle]
 user = nobody
-group = nogroup
+group = $(sp nobody_group)
 listen = /run/sentora-php/php$MM-idle.sock
 listen.owner = root
 listen.group = root

@@ -1320,14 +1320,14 @@ if ($isMysql && $PHPV !== '' && version_compare($PHPV, '7.4', '<') && $plan['use
     $NATIVE = true;
     $active = $zdbh->query("SELECT PLUGIN_STATUS FROM information_schema.PLUGINS WHERE PLUGIN_NAME = 'mysql_native_password'")->fetchColumn();
     if ($active !== 'ACTIVE') {
-        $cnf = '/etc/mysql/mysql.conf.d/mysqld.cnf';
+        $cnf = sys_platform::Get('db_conf_file');
         $c = (string) @file_get_contents($cnf);
         if ($c !== '' && !preg_match('/^\s*mysql[_-]native[_-]password\s*=/mi', $c)) {
             @copy($cnf, $cnf . '.before-migrate');
             file_put_contents($cnf, preg_replace('/^\[mysqld\]\s*$/m', "[mysqld]\n# PHP $PHPV (moved sites) logs in with it: MySQL 8.4 keeps it off by default\nmysql_native_password = ON", $c, 1));
         }
         ui_info("PHP $PHPV needs MySQL's older login method: switching it on (MySQL restarts)");
-        if (!sh('systemctl restart mysql', $o)) {
+        if (!sh('systemctl restart ' . escapeshellarg(sys_platform::Get('db_service')), $o)) {
             warn('MySQL did not restart: ' . substr($o, 0, 200) . " (see $cnf)");
         }
         // the panel's own connection went with the restart

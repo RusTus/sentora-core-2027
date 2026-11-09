@@ -31,7 +31,19 @@ if (!runtime_controller::IsCLI())
 
 if ((isset($argv[1])) && ($argv[1] == '--set')) {
     if (isset($argv[2]) && isset($argv[3])) {
+        // (a setting of the Linux system, sys_platform, may not be in the database yet)
+        if (isset(sys_platform::$settings[$argv[2]])) {
+            sys_platform::Ensure();
+        }
         ctrl_options::SetSystemOption($argv[2], $argv[3], false);
+    }
+}
+
+// --get: like --show, and a setting of the Linux system (sys_platform) not in the database yet
+// gives its default
+if ((isset($argv[1])) && ($argv[1] == '--get')) {
+    if (isset($argv[2])) {
+        echo (isset(sys_platform::$settings[$argv[2]]) ? sys_platform::Get($argv[2]) : (string) ctrl_options::GetSystemOption($argv[2])) . "\n";
     }
 }
 
@@ -51,6 +63,7 @@ if ((!isset($argv[1])) || ($argv[1] == 'help') || ($argv[1] == '-h') || ($argv[1
     fwrite(STDOUT, "Options:\n");
     fwrite(STDOUT, "  --set - Sets a value of a named system option.\n");
     fwrite(STDOUT, "  --show - Displays the value of a named system option.\n");
+    fwrite(STDOUT, "  --get - The same, with the default of a Linux system setting not set yet.\n");
     fwrite(STDOUT, "  --help - Displays this text.\n\n");
     exit(0);
 }

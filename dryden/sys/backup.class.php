@@ -388,8 +388,8 @@ class sys_backup
                     // Made by the daemon (root): it belongs to the account's own user, which
                     // its FTP logins run as (the panel reads it through the folder's access list)
                     $owner = sys_accountphp::UserName((int) $userid);
-                    @chown($dir . $name, posix_getpwnam($owner) !== false ? $owner : 'www-data');
-                    @chgrp($dir . $name, 'www-data');
+                    @chown($dir . $name, posix_getpwnam($owner) !== false ? $owner : sys_platform::Get('web_user'));
+                    @chgrp($dir . $name, sys_platform::Get('web_group'));
                 }
                 $result = $dir . $name;
             }

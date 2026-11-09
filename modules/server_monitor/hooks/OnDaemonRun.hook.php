@@ -101,11 +101,15 @@ function SentoraServerAlerts()
     }
     $systemd = is_dir('/run/systemd/system');
     $php = PHP_MAJOR_VERSION . '.' . PHP_MINOR_VERSION;
-    $services = array('Apache' => array('apache2', 'apache2'), 'PHP ' . $php => array('php' . $php . '-fpm', 'php-fpm' . $php),
-        'MySQL' => array('mysql', 'mysqld'), 'Postfix' => array('postfix', 'master'), 'Dovecot' => array('dovecot', 'dovecot'),
-        'ProFTPD' => array('proftpd', 'proftpd'), 'BIND' => array('named', 'named'), 'fail2ban' => array('fail2ban', 'fail2ban-server'),
-        'cron' => array('cron', 'cron'));
-    if (is_file('/usr/sbin/sogod')) {
+    // (service and process names of this Linux system: Sentora's settings, sys_platform)
+    $smOpt = function ($name, $default) { $v = (string) ctrl_options::GetSystemOption($name); return $v !== '' ? $v : $default; };
+    $smApache = $smOpt('apache_sn', 'apache2');
+    $smCron = sys_platform::Get('cron_service');
+    $services = array('Apache' => array($smApache, $smApache), 'PHP ' . $php => array(sys_platform::Get('php_fpm_service', array('v' => $php)), sys_platform::Get('php_fpm_process', array('v' => $php))),
+        'MySQL' => array(sys_platform::Get('db_service'), 'mysqld'), 'Postfix' => array('postfix', 'master'), 'Dovecot' => array(sys_platform::Get('dovecot_service'), 'dovecot'),
+        'ProFTPD' => array($smOpt('ftp_service', 'proftpd'), 'proftpd'), 'BIND' => array($smOpt('bind_service', 'named'), 'named'), 'fail2ban' => array('fail2ban', 'fail2ban-server'),
+        'cron' => array($smCron, $smCron));
+    if (is_file(sys_platform::Get('sogo_bin'))) {
         $services['SOGo'] = array('sogo', 'sogod');
         $services['memcached'] = array('memcached', 'memcached');
     }

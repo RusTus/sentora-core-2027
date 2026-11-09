@@ -9,7 +9,9 @@
  *
  * Written by RusTus, 2026-11-05
  */
-$crDir = '/var/spool/cron/crontabs';
+// (Debian-style cron, with a crontab group; skipped where there is none)
+$crDir = rtrim(sys_platform::Get('crontab_dir'), '/');
+$crWeb = sys_platform::Get('web_user');
 if (is_dir($crDir) && !is_link($crDir) && function_exists('posix_getgrnam') && posix_getgrnam('crontab') !== false) {
     $crFixed = 0;
     $st = stat($crDir);
@@ -38,9 +40,9 @@ if (is_dir($crDir) && !is_link($crDir) && function_exists('posix_getgrnam') && p
         }
     }
     // the web server user's crontab held only Sentora's jobs: remove it
-    $wd = $crDir . '/www-data';
+    $wd = $crDir . '/' . $crWeb;
     if (is_file($wd) && !is_link($wd) && preg_match('/SENTORA|Sentora|^SHELL=\/bin\/bash/m', (string) file_get_contents($wd))) {
-        exec('crontab -r -u www-data 2>&1');
+        exec('crontab -r -u ' . escapeshellarg($crWeb) . ' 2>&1');
         echo "Cron: removed the web server user's old crontab (the jobs run from /etc/cron.d/sentora-accounts)" . fs_filehandler::NewLine();
     }
     // the file the panel used to write it from: root's now, and empty

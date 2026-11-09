@@ -7,6 +7,8 @@
 # /var/sentora/logs/post-install-check.log (System Log Viewer).
 
 PANEL=${SENTORA_PANEL:-/etc/sentora/panel}
+# this Linux system's commands, paths, services and users (Sentora's settings: setso --get <name>)
+sp() { php -q "$PANEL/bin/setso" --get "$1" 2> /dev/null; }
 CONF=/etc/sentora/configs
 LOG=${SENTORA_CHECK_LOG:-/var/sentora/logs/post-install-check.log}
 
@@ -55,18 +57,22 @@ svc() { # label  systemd-unit  process-name
     elif [ $running -eq 1 ]; then warn "$1 runs but is not started at boot (systemctl enable $2)"
     else fail "$1 is not running (systemctl status $2)"; fi
 }
-svc "Apache" apache2 apache2
-svc "PHP $PHPVER (panel and accounts)" "php$PHPVER-fpm" "php-fpm$PHPVER"
-svc "MySQL" mysql mysqld
+APACHE_SN=$(sp apache_sn); APACHE_SN=${APACHE_SN:-apache2}
+PHP_FPM_DIR=$(sp php_fpm_pool_dir); PHP_FPM_DIR=${PHP_FPM_DIR//\{v\}/$PHPVER}
+PHP_SOCK_DIR=$(sp php_fpm_socket_dir); PHP_SOCK_DIR=${PHP_SOCK_DIR%/}
+PKG=$(sp package_install)
+svc "Apache" "$APACHE_SN" "$APACHE_SN"
+svc "PHP $PHPVER (panel and accounts)" "$(sp php_fpm_service | sed "s/{v}/$PHPVER/g")" "$(sp php_fpm_process | sed "s/{v}/$PHPVER/g")"
+svc "MySQL" "$(sp db_service)" mysqld
 svc "Postfix" postfix master
-svc "Dovecot" dovecot dovecot
+svc "Dovecot" "$(sp dovecot_service)" dovecot
 svc "ProFTPD" proftpd proftpd
-svc "BIND" named named
+BIND_SN=$(sp bind_service); svc "BIND" "${BIND_SN:-named}" named
 svc "fail2ban" fail2ban fail2ban-server
-svc "cron (the Sentora daemon)" cron cron
+CRON_SN=$(sp cron_service); svc "cron (the Sentora daemon)" "$CRON_SN" "$CRON_SN"
 if [ -x /usr/sbin/sogod ]; then svc "SOGo" sogo sogod; svc "memcached (SOGo)" memcached memcached; fi
 # the backup, restore and update tools copy files with rsync
-command -v rsync > /dev/null 2>&1 && ok "rsync (backups, restore, updates)" || fail "rsync is not installed (apt-get install rsync): restore, updates and off-server backup need it"
+command -v rsync > /dev/null 2>&1 && ok "rsync (backups, restore, updates)" || fail "rsync is not installed ($PKG rsync): restore, updates and off-server backup need it"
 if [ -x /usr/sbin/spamd ] || [ -x /usr/sbin/clamd ]; then
     # SpamAV: only what is switched on in Admin > SpamAV Admin
     SA_ON=$(q "SELECT so_value_tx FROM sentora_core.x_settings WHERE so_name_vc = 'sa_enabled'")
@@ -76,7 +82,7 @@ if [ -x /usr/sbin/spamd ] || [ -x /usr/sbin/clamd ]; then
         if ls /var/lib/clamav/daily.c?d /var/lib/clamav/main.c?d > /dev/null 2>&1; then
             svc "ClamAV" clamav-daemon clamd; svc "ClamAV mail connection (clamav-milter)" clamav-milter clamav-milter
         else
-            warn "ClamAV is waiting for its first virus signatures (systemctl status clamav-freshclam)"
+            warn "ClamAV is waiting for its first virus signatures (systemctl status $(sp freshclam_service))"
         fi
     fi
     MILTERS=$(postconf -h smtpd_milters 2> /dev/null)
@@ -149,9 +155,9 @@ fi
 
 section "Hosted sites may use only their own PHP"
 VH=/etc/sentora/configs/apache/httpd-vhosts.conf
-if [ -f /etc/apache2/mods-enabled/lua.load ] && grep -q "LuaHookFixups" "$VH" 2> /dev/null && grep -q "SENTORA_STATUS_BLOCK" "$VH" 2> /dev/null; then ok "Apache request guard in place (sentora-guard.lua)"
+if "$(sp apache_ctl)" -M 2> /dev/null | grep -q lua_module && grep -q "LuaHookFixups" "$VH" 2> /dev/null && grep -q "SENTORA_STATUS_BLOCK" "$VH" 2> /dev/null; then ok "Apache request guard in place (sentora-guard.lua)"
 else fail "Apache request guard missing: a site's .htaccess could hand requests to the panel's PHP (the daemon adds it within 5 minutes)"; fi
-PANELPOOL=$(ls /etc/php/*/fpm/pool.d/sentora.conf 2> /dev/null | head -1)
+PANELPOOL=${PHP_FPM_DIR%/}/sentora.conf
 if [ -n "$PANELPOOL" ] && grep -q "auto_prepend_file.*fpm_guard.php" "$PANELPOOL"; then ok "the panel's PHP pool runs only the panel's own scripts"
 else fail "the panel's PHP pool has no guard (the daemon adds it within 5 minutes)"; fi
 
@@ -170,7 +176,7 @@ perm "$CONF/dovecot2/dovecot-mysql.conf" 640 root mail
 perm "$CONF/phpmyadmin/config.inc.php" 640 root sentora
 for f in "$CONF"/postfix/mysql-*.cf; do [ -e "$f" ] && perm "$f" 640 root postfix; done
 for f in "$CONF"/roundcube/*.inc.php; do [ -e "$f" ] && perm "$f" 640 root sentora; done
-[ -e /etc/sogo/sogo.conf ] && perm /etc/sogo/sogo.conf 640 root sogo
+SOGO_CONF=$(sp sogo_conf); [ -e "$SOGO_CONF" ] && perm "$SOGO_CONF" 640 root sogo
 MCFG=$PANEL/etc/apps/matomo/config/config.ini.php
 if [ -e "$MCFG" ]; then
     # Matomo may rewrite its own config: what matters is that only the panel can reach it
@@ -178,10 +184,11 @@ if [ -e "$MCFG" ]; then
     else fail "$MCFG can be read by every user"; fi
 fi
 perm "$PANEL/bin/zsudo" 4750 root sentora
-if [ -e /etc/bind/named.conf ]; then
-    got=$(stat -c '%a %U %G' /etc/bind/named.conf)
-    if [ "$got" = "640 root bind" ]; then ok "/etc/bind/named.conf (640 root:bind, it holds BIND's control key)"
-    else fail "/etc/bind/named.conf is $got, expected 640 root:bind (the daemon closes it within 5 minutes)"; fi
+NAMED_CONF="$(sp bind_dir)"; NAMED_CONF="${NAMED_CONF%/}/named.conf"; BIND_GROUP=$(sp bind_group)
+if [ -e "$NAMED_CONF" ]; then
+    got=$(stat -c '%a %U %G' "$NAMED_CONF")
+    if [ "$got" = "640 root $BIND_GROUP" ]; then ok "$NAMED_CONF (640 root:$BIND_GROUP, it holds BIND's control key)"
+    else fail "$NAMED_CONF is $got, expected 640 root:$BIND_GROUP (the daemon closes it within 5 minutes)"; fi
 fi
 for b in sentora-notice sentora-update sentora-post-install-check; do
     if [ -x "$PANEL/bin/$b" ]; then ok "$b can be run"; else fail "$PANEL/bin/$b is not executable (chmod 755 it)"; fi
@@ -222,8 +229,8 @@ if [ $DB -eq 1 ]; then
         [ -d "$home" ] || { warn "$name: no hosting folder yet"; continue; }
         problems=""
         id "$u" > /dev/null 2>&1 || problems="$problems, no Linux user $u"
-        [ -f "/etc/php/$PHPVER/fpm/pool.d/$u.conf" ] || problems="$problems, no PHP pool"
-        [ -S "/run/php/$u.sock" ] || problems="$problems, no PHP socket"
+        [ -f "${PHP_FPM_DIR%/}/$u.conf" ] || problems="$problems, no PHP pool"
+        [ -S "$PHP_SOCK_DIR/$u.sock" ] || problems="$problems, no PHP socket"
         [ "$(stat -c '%U' "$home")" = "$u" ] || problems="$problems, folder not owned by $u"
         [ $(( 8#$(stat -c '%a' "$home") & 7 )) -eq 0 ] || problems="$problems, folder open to others"
         if command -v getfacl > /dev/null && ! getfacl -p "$home" 2> /dev/null | grep -q '^other::---'; then problems="$problems, access list lets others in"; fi
@@ -311,7 +318,7 @@ fi
 
 # --- 8. automatic security updates --------------------------------------------------
 section "Automatic security updates"
-if dpkg -l unattended-upgrades 2> /dev/null | grep -q '^ii'; then
+if command -v dpkg > /dev/null 2>&1 && dpkg -l unattended-upgrades 2> /dev/null | grep -q '^ii'; then
     if [ "$(apt-config shell X APT::Periodic::Unattended-Upgrade | cut -d"'" -f2)" = "1" ]; then ok "unattended-upgrades is on"
     else fail "unattended-upgrades is installed but switched off (/etc/apt/apt.conf.d/20auto-upgrades)"; fi
     if [ $SYSTEMD -eq 1 ]; then
@@ -325,8 +332,16 @@ if dpkg -l unattended-upgrades 2> /dev/null | grep -q '^ii'; then
         warn "unattended-upgrades has not run yet (it runs once a day)"
     fi
     [ -f /var/run/reboot-required ] && warn "a restart is needed to finish updates ($(tr '\n' ' ' < /var/run/reboot-required.pkgs 2> /dev/null | cut -c1-80))"
+elif command -v dnf > /dev/null 2>&1 && rpm -q dnf-automatic > /dev/null 2>&1; then
+    # dnf-automatic (AlmaLinux and the other Red Hat-family systems)
+    if grep -Eq '^\s*apply_updates\s*=\s*(yes|true|1)' /etc/dnf/automatic.conf 2> /dev/null; then ok "dnf-automatic installs updates"
+    else fail "dnf-automatic is installed but does not install updates (apply_updates in /etc/dnf/automatic.conf)"; fi
+    if [ $SYSTEMD -eq 1 ]; then
+        systemctl is-active --quiet dnf-automatic.timer && ok "the daily update timer is active" || fail "dnf-automatic.timer is not active (systemctl enable --now dnf-automatic.timer)"
+    fi
+    [ -n "$(systemctl show -p LastTriggerUSec --value dnf-automatic.timer 2> /dev/null | grep -v '^n/a$')" ] || warn "dnf-automatic has not run yet (it runs once a day)"
 else
-    fail "unattended-upgrades is not installed: security updates are not installed automatically (apt-get install unattended-upgrades)"
+    fail "no automatic security updates are installed (unattended-upgrades or dnf-automatic): security updates are not installed automatically"
 fi
 
 # --- 9. alerts -----------------------------------------------------------------------

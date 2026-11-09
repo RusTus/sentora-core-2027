@@ -40,8 +40,8 @@ rstate() { # key value [key value...]: merged into the progress file the page sh
 }
 die() { echo "$(date '+%Y-%m-%d %H:%M:%S')  FAILED: $*" | tee -a "$LOG"; rstate running 0 result failed message "$*" finished "$(date +%s)"; exit 1; }
 [ -n "$TARGET" ] || die "no backup machine or folder set: Admin > Backup Config > Off-server backup"
-command -v rsync > /dev/null || apt-get -qq -y install rsync > /dev/null 2>&1 || die "rsync is not installed"
-if [ -n "$OB_PASSWORD" ] && ! command -v sshpass > /dev/null; then apt-get -qq -y install sshpass > /dev/null 2>&1 || die "sshpass is not installed"; fi
+command -v rsync > /dev/null || $SENTORA_PKG rsync > /dev/null 2>&1 || die "rsync is not installed"
+if [ -n "$OB_PASSWORD" ] && ! command -v sshpass > /dev/null; then $SENTORA_PKG sshpass > /dev/null 2>&1 || die "sshpass is not installed"; fi
 BASE=$(rpath)
 
 # MySQL as the panel's root user (from the panel's database settings)

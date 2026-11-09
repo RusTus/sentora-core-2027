@@ -109,8 +109,8 @@ function SentoraSOGoList($name, $default, $allowed)
  */
 function SentoraApplySOGoSettings()
 {
-    $conf = '/etc/sogo/sogo.conf';
-    if (!is_file('/usr/sbin/sogod') || !is_file($conf)) {
+    $conf = sys_platform::Get('sogo_conf');
+    if (!is_file(sys_platform::Get('sogo_bin')) || !is_file($conf)) {
         echo "SOGo is not installed." . fs_filehandler::NewLine();
         return;
     }
@@ -181,7 +181,7 @@ function SentoraApplySOGoSettings()
     if (!is_file($access) || file_get_contents($access) !== $want) {
         @mkdir(dirname($access), 0755, true);
         file_put_contents($access, $want);
-        exec('apache2ctl -t > /dev/null 2>&1 && systemctl reload apache2 > /dev/null 2>&1');
+        exec(escapeshellcmd(sys_platform::Get('apache_ctl')) . ' -t > /dev/null 2>&1 && systemctl reload ' . escapeshellarg((string) ctrl_options::GetSystemOption('apache_sn')) . ' > /dev/null 2>&1');
         echo "ActiveSync " . (strpos($want, 'denied') ? 'turned off' : 'turned on') . "." . fs_filehandler::NewLine();
         $changed = true;
     }
@@ -210,7 +210,7 @@ function SentoraApplySOGoSettings()
         echo "SOGo settings unchanged (ActiveSync " . (strpos($want, 'denied') ? 'off' : 'on') . "), nothing to do." . fs_filehandler::NewLine();
     }
     if ($restart) {
-        exec('systemctl restart sogo > /dev/null 2>&1', $out, $rc);
+        exec('systemctl restart ' . escapeshellarg(sys_platform::Get('sogo_service')) . ' > /dev/null 2>&1', $out, $rc);
         echo "SOGo restarted" . ($rc === 0 ? '' : ' (FAILED, check /var/log/sogo/sogo.log)') . "." . fs_filehandler::NewLine();
     }
 }

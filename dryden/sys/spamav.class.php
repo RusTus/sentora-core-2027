@@ -326,7 +326,7 @@ class sys_spamav
     static function ClamdConf()
     {
         return "# Written by Sentora (Admin > SpamAV Admin): changes here are replaced\n"
-            . "LocalSocket /run/clamav/clamd.ctl\nFixStaleSocket true\nLocalSocketGroup clamav\nLocalSocketMode 666\nUser clamav\n"
+            . "LocalSocket " . sys_platform::Get('clamd_socket') . "\nFixStaleSocket true\nLocalSocketGroup " . sys_platform::Get('clamav_user') . "\nLocalSocketMode 666\nUser " . sys_platform::Get('clamav_user') . "\n"
             . "ScanMail true\nScanArchive " . (self::On('clam_scan_archive') ? 'true' : 'false') . "\nScanPDF " . (self::On('clam_scan_pdf') ? 'true' : 'false')
             . "\nScanOLE2 " . (self::On('clam_scan_ole2') ? 'true' : 'false') . "\nOLE2BlockMacros " . (self::On('clam_block_macros') ? 'true' : 'false')
             . "\nScanHTML " . (self::On('clam_scan_html') ? 'true' : 'false') . "\nPhishingSignatures " . (self::On('clam_phishing_sigs') ? 'true' : 'false')
@@ -348,8 +348,8 @@ class sys_spamav
     static function MilterConf()
     {
         return "# Written by Sentora (Admin > SpamAV Admin): changes here are replaced\n"
-            . "MilterSocket /var/spool/postfix/clamav/clamav-milter.ctl\nFixStaleSocket true\nMilterSocketGroup postfix\nMilterSocketMode 660\nUser clamav\n"
-            . "ClamdSocket unix:/run/clamav/clamd.ctl\nReadTimeout 120\nForeground false\nPidFile /run/clamav/clamav-milter.pid\nTemporaryDirectory /tmp\n"
+            . "MilterSocket /var/spool/postfix/clamav/clamav-milter.ctl\nFixStaleSocket true\nMilterSocketGroup postfix\nMilterSocketMode 660\nUser " . sys_platform::Get('clamav_milter_user') . "\n"
+            . "ClamdSocket unix:" . sys_platform::Get('clamd_socket') . "\nReadTimeout 120\nForeground false\nPidFile " . sys_platform::Get('clamav_milter_pid') . "\nTemporaryDirectory /tmp\n"
             . "OnClean Accept\nOnInfected " . self::Get('clam_on_infected') . "\nOnFail " . self::Get('clam_on_fail') . "\n"
             . "RejectMsg Rejected: virus %v found in the message\nAddHeader " . (self::On('clam_add_header') ? 'Replace' : 'No') . "\nReportHostname " . (gethostname() ?: 'localhost') . "\n"
             . (self::On('clam_scan_outgoing') ? '' : "SkipAuthenticated .*\n")
@@ -365,10 +365,10 @@ class sys_spamav
     static function FreshclamConf()
     {
         return "# Written by Sentora (Admin > SpamAV Admin): changes here are replaced\n"
-            . "DatabaseOwner clamav\nUpdateLogFile /var/log/clamav/freshclam.log\nLogVerbose false\nLogSyslog false\nLogFileMaxSize 0\nLogRotate true\nLogTime true\n"
+            . "DatabaseOwner " . sys_platform::Get('freshclam_user') . "\nUpdateLogFile /var/log/clamav/freshclam.log\nLogVerbose false\nLogSyslog false\nLogFileMaxSize 0\nLogRotate true\nLogTime true\n"
             . "Foreground false\nDebug false\nMaxAttempts 5\nDatabaseDirectory /var/lib/clamav\nDNSDatabaseInfo current.cvd.clamav.net\n"
             . "ConnectTimeout 30\nReceiveTimeout 0\nTestDatabases yes\nScriptedUpdates yes\nCompressLocalDatabase no\nBytecode true\n"
-            . "NotifyClamd /etc/clamav/clamd.conf\nChecks " . (int) self::Get('clam_db_checks') . "\nDatabaseMirror database.clamav.net\n";
+            . "NotifyClamd " . sys_platform::Get('clamd_conf') . "\nChecks " . (int) self::Get('clam_db_checks') . "\nDatabaseMirror database.clamav.net\n";
     }
 
     /**
@@ -411,9 +411,8 @@ class sys_spamav
      */
     static function SpamdDefaults()
     {
-        return "# Written by Sentora (Admin > SpamAV Admin)\n"
-            . "OPTIONS=\"--max-children " . (int) self::Get('sa_children') . " --helper-home-dir=/var/lib/spamassassin -u debian-spamd -x --sql-config --listen 127.0.0.1 --syslog=mail\"\n"
-            . "PIDFILE=\"/run/spamd.pid\"\n";
+        $opt = "--max-children " . (int) self::Get('sa_children') . " --helper-home-dir=/var/lib/spamassassin -u " . sys_platform::Get('spamd_user') . " -x --sql-config --listen 127.0.0.1 --syslog=mail";
+        return "# Written by Sentora (Admin > SpamAV Admin)\n" . sys_platform::Get('spamd_defaults_template', array('options' => $opt)) . "\n";
     }
 
     /**
@@ -423,13 +422,14 @@ class sys_spamav
      */
     static function MilterDefaults()
     {
-        $opt = "-u spamass-milter -i 127.0.0.1 " . (self::On('sa_skip_outgoing') ? '-I ' : '') . "-e " . (gethostname() ?: 'localhost');
+        $opt = "-u " . sys_platform::Get('spamass_milter_user') . " -i 127.0.0.1 " . (self::On('sa_skip_outgoing') ? '-I ' : '') . "-e " . (gethostname() ?: 'localhost');
         $r = (float) self::Get('sa_reject_score');
         if ($r > 0) {
             $opt .= " -r " . (int) ceil($r); // the start script splits OPTIONS on spaces: the default message (Blocked by SpamAssassin) is kept
         }
-        return "# Written by Sentora (Admin > SpamAV Admin)\nOPTIONS=\"" . $opt . " -- -s " . ((int) self::Get('sa_max_size') * 1024) . "\"\n"
-            . "SOCKET=\"/var/spool/postfix/spamass/spamass.sock\"\nSOCKETOWNER=\"spamass-milter:postfix\"\nSOCKETMODE=\"0660\"\n";
+        return "# Written by Sentora (Admin > SpamAV Admin)\n" . sys_platform::Get('spamass_milter_defaults_template', array(
+            'options' => $opt . " -- -s " . ((int) self::Get('sa_max_size') * 1024), 'socket' => '/var/spool/postfix/spamass/spamass.sock',
+            'user' => sys_platform::Get('spamass_milter_user'))) . "\n";
     }
 
     /**

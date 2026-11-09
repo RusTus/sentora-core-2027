@@ -15,6 +15,8 @@
 set -uo pipefail
 
 PANEL=/etc/sentora/panel
+# this Linux system's commands, paths, services and users (Sentora's settings: setso --get <name>)
+sp() { php -q "$PANEL/bin/setso" --get "$1" 2> /dev/null; }
 CONF=/etc/sentora/configs
 NEW=$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]')
 YES=0; [ "${2:-}" = "--yes" ] && YES=1
@@ -88,9 +90,10 @@ fi
 echo "-- Mail (Postfix, Dovecot) and SOGo"
 swap "$CONF/postfix/main.cf"
 swap "$CONF/dovecot2/dovecot.conf"
-if [ -f /etc/sogo/sogo.conf ]; then
-    swap /etc/sogo/sogo.conf
-    chown root:sogo /etc/sogo/sogo.conf; chmod 640 /etc/sogo/sogo.conf
+SOGO_CONF=$(sp sogo_conf)
+if [ -f "$SOGO_CONF" ]; then
+    swap "$SOGO_CONF"
+    chown root:sogo "$SOGO_CONF"; chmod 640 "$SOGO_CONF"
 fi
 
 echo "-- A new self-signed certificate for $NEW"
@@ -137,7 +140,8 @@ echo "-- Apache and the services"
 setso --set apache_changed true > /dev/null
 php "$PANEL/bin/daemon.php" > /var/sentora/logs/daemon-last-run.log 2>&1 || echo "  WARNING: the daemon run reported an error (see /var/sentora/logs/daemon-last-run.log)"
 newaliases 2> /dev/null
-for s in postfix dovecot proftpd sogo apache2; do
+for s in postfix "$(sp dovecot_service)" "$(sp ftp_service)" "$(sp sogo_service)" "$(sp apache_sn)"; do
+    [ -n "$s" ] || continue
     systemctl is-enabled --quiet "$s" 2> /dev/null || continue
     systemctl restart "$s" 2> /dev/null || echo "  WARNING: $s did not restart: systemctl status $s"
 done

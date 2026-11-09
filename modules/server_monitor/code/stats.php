@@ -137,11 +137,13 @@ $names = array();
 foreach ($out['procs'] as $p) {
     $names[$p[1]] = true;
 }
-$services = array('Apache' => array('apache2'), 'MySQL' => array('mysqld', 'mariadbd'),
-    'PHP-FPM' => array('php-fpm' . PHP_MAJOR_VERSION . '.' . PHP_MINOR_VERSION, 'php-fpm'),
+// (Apache's and cron's process names on this Linux system: Sentora's settings, sys_platform)
+$smApache = (string) ctrl_options::GetSystemOption('apache_sn');
+$services = array('Apache' => array($smApache !== '' ? $smApache : 'apache2'), 'MySQL' => array('mysqld', 'mariadbd'),
+    'PHP-FPM' => array(sys_platform::Get('php_fpm_process', array('v' => PHP_MAJOR_VERSION . '.' . PHP_MINOR_VERSION)), 'php-fpm'),
     'Postfix' => array('master'), 'Dovecot' => array('dovecot'), 'BIND' => array('named'), 'ProFTPD' => array('proftpd'),
     'SOGo' => array('sogod'), 'Memcached' => array('memcached'), 'fail2ban' => array('fail2ban-server', 'fail2ban-serve'),
-    'Cron' => array('cron'), 'SSH' => array('sshd'));
+    'Cron' => array(sys_platform::Get('cron_service')), 'SSH' => array('sshd'));
 $out['services'] = array();
 foreach ($services as $label => $procs) {
     $up = false;

@@ -193,7 +193,8 @@ function FtpWriteAccessRules($conf = null, $reload = true)
         return false;
     }
     if ($reload) {
-        exec('systemctl reload proftpd 2>&1 || service proftpd reload 2>&1', $out, $rc);
+        $ftpSvc = (string) ctrl_options::GetSystemOption('ftp_service');
+        exec('systemctl reload ' . escapeshellarg($ftpSvc !== '' ? $ftpSvc : 'proftpd') . ' 2>&1', $out, $rc);
     }
     echo "FTP access rules written: " . count($deny['WRITE']) . " read-only, " . count($deny['READ']) . " write-only account(s)" . fs_filehandler::NewLine();
     return true;

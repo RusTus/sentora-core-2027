@@ -421,7 +421,7 @@ class sys_clientftp
             9 => 'the folder could not be opened or made', 28 => 'the connection timed out', 35 => 'the TLS connection failed',
             60 => 'the server\'s certificate is not trusted (tick "accept a self-signed certificate" if you trust it)',
             64 => 'the server does not offer FTPS (choose plain FTP only if you accept sending the password unencrypted)',
-            77 => 'the server\'s certificate could not be checked (the CA certificates on this server are missing: apt-get install ca-certificates)',
+            77 => 'the server\'s certificate could not be checked (the CA certificates on this server are missing: install the ca-certificates package)',
             67 => 'the username or password was refused', 25 => 'the server refused the upload (no permission, or the disk is full)');
         $t = isset($known[$rc]) ? $known[$rc] : 'error ' . (int) $rc;
         return $t . ($out !== '' ? ' (' . substr($out, 0, 160) . ')' : '') . '.';

@@ -578,7 +578,7 @@ class dashboard_widgets
     static function WSpamav($user)
     {
         global $zdbh;
-        if (!class_exists('sys_spamav') || !is_file('/usr/sbin/spamd') && !is_file('/usr/sbin/clamd')) {
+        if (!class_exists('sys_spamav') || !is_file(sys_platform::Get('spamd_bin')) && !is_file(sys_platform::Get('clamd_bin'))) {
             return '<p class="text-muted">' . self::t('Spam and virus filtering is not installed on this server.') . '</p>';
         }
         sys_spamav::Ensure();

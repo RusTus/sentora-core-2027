@@ -76,6 +76,16 @@ echo "Daemon is now running... (".date($dateformat).")\n";
 $daemonLog->detail = "Daemon execution started...";
 $daemonLog->writeLog();
 
+// the settings of this Linux system (sys_platform): the missing ones added, hidden, with defaults
+try {
+    $platformAdded = sys_platform::Ensure();
+    if ($platformAdded > 0) {
+        echo "Linux system settings: " . $platformAdded . " added with their defaults (sys_platform)\n";
+    }
+} catch (Exception $e) {
+    echo "Linux system settings not checked: " . $e->getMessage() . "\n";
+}
+
 runtime_hook::Execute("OnStartDaemonRun");
 runtime_hook::Execute("OnDaemonRun");
 runtime_hook::Execute("OnEndDaemonRun");

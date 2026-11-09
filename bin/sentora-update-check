@@ -78,13 +78,22 @@ for row in "${ROWS[@]}"; do
     printf "%-24s %-12s %-12s %s\n" "$name" "$have" "${want:-commit}" "$status"
 done
 echo
-# The system's own packages (Ubuntu's or Debian's: Apache, PHP, MySQL or MariaDB, Postfix, Dovecot, SOGo...)
+# The system's own packages (Apache, PHP, MySQL or MariaDB, Postfix, Dovecot, SOGo...), with
+# whichever package tool it has
 OS_NAME=$(. /etc/os-release; echo "${NAME%% *}")
-OS_TAG=$(. /etc/os-release; [ "${ID:-}" = debian ] && echo "debian${VERSION_ID:-}" || echo "ubuntu${VERSION_ID:-26.04}")
-apt-get -qq update > /dev/null 2>&1
-all=$(apt-get -s -o Debug::NoLocking=1 upgrade 2>/dev/null | grep -c '^Inst ')
-sec=$(apt-get -s -o Debug::NoLocking=1 upgrade 2>/dev/null | grep '^Inst ' | grep -ci 'security')
-echo "${OS_NAME:-System} packages: $all update(s) waiting, $sec of them security updates$( [ "$all" -gt 0 ] && echo " (apt-get upgrade)")."
+OS_TAG=$(php -q "$PANEL/bin/setso" --get php_bundle_tag 2> /dev/null)
+[ -n "$OS_TAG" ] || OS_TAG=$(. /etc/os-release; [ "${ID:-}" = debian ] && echo "debian${VERSION_ID:-}" || echo "ubuntu${VERSION_ID:-26.04}")
+if command -v apt-get > /dev/null 2>&1; then
+    apt-get -qq update > /dev/null 2>&1
+    all=$(apt-get -s -o Debug::NoLocking=1 upgrade 2>/dev/null | grep -c '^Inst ')
+    sec=$(apt-get -s -o Debug::NoLocking=1 upgrade 2>/dev/null | grep '^Inst ' | grep -ci 'security')
+    how="apt-get upgrade"
+else
+    all=$(dnf -q check-update 2> /dev/null | grep -cE '^[A-Za-z0-9_.+-]+\.[a-z0-9_]+ ')
+    sec=$(dnf -q updateinfo list --security 2> /dev/null | grep -c .)
+    how="dnf upgrade"
+fi
+echo "${OS_NAME:-System} packages: $all update(s) waiting, $sec of them security updates$( [ "$all" -gt 0 ] && echo " ($how)")."
 echo
 if [ $behind -gt 0 ]; then
     echo "$behind bundled app(s) behind: they are updated by rebuilding the Sentora bundles"

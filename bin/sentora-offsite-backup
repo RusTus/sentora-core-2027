@@ -57,7 +57,7 @@ case "${1:-}" in
         echo "     install -d -m 700 -o sentora-backup ~sentora-backup/.ssh"
         echo "     echo '$(cat "$KEY.pub")' >> ~sentora-backup/.ssh/authorized_keys"
         echo "     chown sentora-backup ~sentora-backup/.ssh/authorized_keys && chmod 600 ~sentora-backup/.ssh/authorized_keys"
-        echo "   (it needs rsync installed: apt-get install rsync)"
+        echo "   (it needs rsync installed: $SENTORA_PKG rsync)"
         echo "2. Set the server, username and folder in Admin > Backup Config > Off-server backup."
         echo "3. Press Test connection there, or run: sentora-offsite-backup --check"
         exit 0 ;;
@@ -78,9 +78,9 @@ if [ -z "$TARGET" ]; then
     [ "${1:-}" = "--check" ] && state_set check_time "$(date +%s)" check_ok 0 check_message "no server or folder set"
     exit 2
 fi
-command -v rsync > /dev/null || { apt-get -qq -y install rsync > /dev/null || die "rsync is missing and could not be installed"; }
+command -v rsync > /dev/null || { $SENTORA_PKG rsync > /dev/null || die "rsync is missing and could not be installed"; }
 if [ -n "$OB_PASSWORD" ] && ! command -v sshpass > /dev/null; then
-    apt-get -qq -y install sshpass > /dev/null 2>&1 || die "sshpass (for the password) is missing and could not be installed"
+    $SENTORA_PKG sshpass > /dev/null 2>&1 || die "sshpass (for the password) is missing and could not be installed"
 fi
 BASE="$(rpath)/$HOST"
 

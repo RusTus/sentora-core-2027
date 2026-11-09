@@ -14,6 +14,8 @@
 # The report is also saved in /var/sentora/logs/smoke-test.log.
 
 PANEL=${SENTORA_PANEL:-/etc/sentora/panel}
+# this Linux system's commands, paths, services and users (Sentora's settings: setso --get <name>)
+sp() { php -q "$PANEL/bin/setso" --get "$1" 2> /dev/null; }
 LOG=${SENTORA_SMOKE_LOG:-/var/sentora/logs/smoke-test.log}
 KEEP=0; [ "${1:-}" = "--keep" ] && KEEP=1
 
@@ -139,15 +141,17 @@ s_account() {
     [ -d "$HOSTED/$U/public_html${DOMDIR}" ] || { WHY="no folder for the domain ($HOSTED/$U/public_html$DOMDIR)"; return 1; }
     [ "$(stat -c '%U' "$HOSTED/$U")" = "$WEBU" ] || { WHY="the account folder is not owned by $WEBU"; return 1; }
     local _
-    # the system PHP's pools listen in /run/php, the extra versions' in /run/sentora-php
-    # (each checked on its own: one missing must not hide the other)
+    # the system PHP's pools listen in its socket folder (/run/php...), the extra versions' in
+    # /run/sentora-php (each checked on its own: one missing must not hide the other)
+    local sockdir; sockdir=$(sp php_fpm_socket_dir); sockdir=${sockdir%/}
+    local pooldir; pooldir=$(sp php_fpm_pool_dir | sed 's/{v}/*/g'); pooldir=${pooldir%/}
     for _ in $(seq 1 30); do
-        [ -S "/run/php/$WEBU.sock" ] && return 0
+        [ -S "$sockdir/$WEBU.sock" ] && return 0
         [ -S "/run/sentora-php/$WEBU.sock" ] && return 0
         sleep 2
     done
-    if grep -qs "^\[$WEBU\]" /etc/php/*/fpm/pool.d/*.conf /opt/sentora-php/*/etc/php-fpm.d/*.conf; then
-        WHY="the pool for $WEBU is written but PHP-FPM has not opened its socket after 60 seconds (systemctl status php*-fpm sentora-php*-fpm)"
+    if grep -qs "^\[$WEBU\]" $pooldir/*.conf /opt/sentora-php/*/etc/php-fpm.d/*.conf; then
+        WHY="the pool for $WEBU is written but PHP-FPM has not opened its socket after 60 seconds (systemctl status $(sp php_fpm_service | sed 's/{v}/*/g') sentora-php*-fpm)"
     else
         WHY="no PHP pool was written for $WEBU (the daemon makes it: see $TMP/daemon.log)"
     fi
@@ -188,7 +192,7 @@ s_htaccess_guard() {
     local d="$HOSTED/$U/public_html${DOMDIR}/smokeguard" out
     mkdir -p "$d/a" "$d/b"
     cp "$TMP/index.php" "$d/a/index.php"
-    printf '<FilesMatch "\\.php$">\n    SetHandler "proxy:unix:/run/php/sentora-panel.sock|fcgi://localhost"\n</FilesMatch>\n' > "$d/a/.htaccess"
+    printf '<FilesMatch "\\.php$">\n    SetHandler "proxy:unix:%s/sentora-panel.sock|fcgi://localhost"\n</FilesMatch>\n' "$(sp php_fpm_socket_dir | sed 's#/$##')" > "$d/a/.htaccess"
     printf 'RewriteEngine On\nRewriteRule ^ - [H=server-status]\n' > "$d/b/.htaccess"
     chown -R "$WEBU" "$d"
     out=$(curl -s --max-time 20 --resolve "$DOM:80:127.0.0.1" "http://$DOM/smokeguard/a/index.php")
@@ -244,9 +248,9 @@ s_virus() {
 }
 s_spam() {
     need MAILADDR "Create a mailbox" || return $?
-    [ -x /usr/sbin/spamd ] || { WHY="SpamAssassin is not installed"; return 2; }
+    [ -x "$(sp spamd_bin)" ] || { WHY="SpamAssassin is not installed"; return 2; }
     postconf -h smtpd_milters 2> /dev/null | grep -q spamass || { WHY="spam filtering is off"; return 2; }
-    grep -q -- ' -r ' /etc/default/spamass-milter 2> /dev/null || { WHY="no reject score is set (Reject at score is 0)"; return 2; }
+    grep -q -- ' -r ' "$(sp spamass_milter_defaults_file)" 2> /dev/null || { WHY="no reject score is set (Reject at score is 0)"; return 2; }
     # from this server's own address: mail from 127.0.0.1 is not checked for spam (on purpose)
     local ip; ip=$(hostname -I 2> /dev/null | awk '{print $1}')
     [ -n "$ip" ] || { WHY="this server has no address other than 127.0.0.1"; return 2; }

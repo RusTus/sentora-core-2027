@@ -151,7 +151,7 @@ class module_controller extends ctrl_module
     {
         global $zdbh;
         $list = array(array('Incoming mail (SMTP)', 25), array('Sending (submission)', 587), array('IMAP', 993), array('POP3', 995));
-        if (is_file('/usr/sbin/sogod')) {
+        if (is_file(sys_platform::Get('sogo_bin'))) {
             $list[] = array('SOGo groupware', 20000);
         }
         $out = '';
@@ -163,7 +163,7 @@ class module_controller extends ctrl_module
         $boxes = (int) $zdbh->query("SELECT COUNT(*) FROM x_mailboxes WHERE mb_deleted_ts IS NULL")->fetchColumn();
         return '<ul class="ma-svc">' . $out . '</ul><p class="ma-sub">' . ($boxes === 1 ? htmlspecialchars(ui_language::translate('1 mailbox on the server.'), ENT_QUOTES, 'UTF-8')
                 : str_replace('%d', (string) $boxes, htmlspecialchars(ui_language::translate('%d mailboxes on the server.'), ENT_QUOTES, 'UTF-8')))
-            . (is_file('/usr/sbin/sogod') ? '' : ' ' . htmlspecialchars(ui_language::translate('SOGo is not installed: its settings apply when it is.'), ENT_QUOTES, 'UTF-8')) . '</p>';
+            . (is_file(sys_platform::Get('sogo_bin')) ? '' : ' ' . htmlspecialchars(ui_language::translate('SOGo is not installed: its settings apply when it is.'), ENT_QUOTES, 'UTF-8')) . '</p>';
     }
 
 }

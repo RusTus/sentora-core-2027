@@ -1533,7 +1533,7 @@ return array(
     'Organization' => 'Организация',
     'Other' => 'Другое',
     'Other mail accounts' => 'Другие почтовые аккаунты',
-    'Otherwise check that the status module is enabled with a2enmod status, then restart Apache.' => 'В противном случае убедитесь, что модуль status включён командой a2enmod status, и перезапустите Apache.',
+    'Otherwise check that Apache\'s status module (mod_status) is switched on, then restart Apache.' => 'Иначе проверьте, что модуль состояния Apache (mod_status) включён, затем перезапустите Apache.',
     'Out of the way, still there to check' => 'Не мешает, но остаётся для проверки',
     'Out-of-office replies' => 'Автоответы об отсутствии',
     'Outage' => 'Сбой',
