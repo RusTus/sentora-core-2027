@@ -822,7 +822,9 @@ class module_controller extends ctrl_module
             $emailbody = str_replace("{{username}}", $username, $emailbody);
             $emailbody = str_replace("{{password}}", $password, $emailbody);
             $emailbody = str_replace("{{fullname}}", $fullname, $emailbody);
-            $emailbody = str_replace('{{controlpanelurl}}', $protocol . $domain, $emailbody);
+            // the reseller's own panel address when it has one (Branding)
+            $panelUrl = ctrl_branding::PanelUrlFor((int) $uid);
+            $emailbody = str_replace('{{controlpanelurl}}', $panelUrl !== '' ? $panelUrl : $protocol . $domain, $emailbody);
 
             $phpmailer = new sys_email();
             $phpmailer->Subject = $emailsubject;

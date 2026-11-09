@@ -1,0 +1,26 @@
+<@ Init @>
+<div class="zmodule_content panel" id="zmodule_header_<@ ModuleName @>">
+    <div class="panel-heading">
+        <img src="<@ ModuleIcon @>" width="35" height="35" border="0" alt="<@ ModuleName @>">
+        <div class="zmodule_title"><@ ModuleName @></div>
+        <div class="zmodule_desc" id="zmodule_desc_<@ ModuleName @>"><@ ModuleDesc @></div>
+    </div>
+    <link rel="stylesheet" href="modules/branding/assets/branding.css">
+    <div class="bd">
+        <@ Result @>
+        <% if CanBrand %>
+        <@ WhereCard @>
+        <div class="bd-grid">
+            <@ LookCard @>
+            <div class="bd-side">
+                <@ LogoCard @>
+                <@ ContactCard @>
+            </div>
+        </div>
+        <@ AddressList @>
+        <% endif %>
+        <% if NoBrand %>
+        <div class="bd-card"><p><: Branding is for accounts that can have clients (resellers and administrators). :></p></div>
+        <% endif %>
+    </div>
+</div>

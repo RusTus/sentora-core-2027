@@ -202,6 +202,93 @@ function SentoraPanelAliases() {
 }
 
 /**
+ * The panel at resellers' own addresses (Branding: panel.theirhosting.com). Each address gets a
+ * plain-http site that answers Let's Encrypt's check (/.well-known/acme-challenge/, from the panel's
+ * folder, where the daemon puts it) and sends everything else to https; until the address has its
+ * certificate, the other requests get "being set up" (the login is never offered without https).
+ * With the certificate, an https site that runs the panel exactly as the main address does: the
+ * same folder, the panel's own PHP-FPM pool and logs; the login page shows the reseller's brand.
+ *
+ * Written by RusTus, 2026-11-09
+ *
+ * @param string $serveremail The ServerAdmin address.
+ * @return string The vhost entries ('' when there are none).
+ */
+function BuildBrandingVhosts($serveremail) {
+	$nl = fs_filehandler::NewLine();
+	try {
+		$addresses = ctrl_branding::Addresses();
+	} catch (Exception $e) {
+		echo "Branding: panel addresses not read (" . $e->getMessage() . ")" . $nl;
+		return '';
+	}
+	if (!count($addresses)) {
+		return '';
+	}
+	$root = rtrim((string) ctrl_options::GetSystemOption('sentora_root'), '/') . '/';
+	$logs = (string) ctrl_options::GetSystemOption('log_dir');
+	$port = SentoraOneLine(ctrl_options::GetSystemOption('apache_port'));
+	$line = "# Panel addresses of resellers (Branding)" . $nl;
+	foreach ($addresses as $a) {
+		$host = $a['host'];
+		$line .= "# BRANDING: " . $host . $nl;
+		$line .= "<VirtualHost *:" . ($port !== '' ? $port : '80') . ">" . $nl;
+		$line .= "ServerName " . $host . $nl;
+		$line .= "ServerAdmin " . $serveremail . $nl;
+		$line .= 'DocumentRoot "' . $root . '"' . $nl;
+		$line .= 'ErrorLog "' . $logs . 'sentora-error.log"' . $nl;
+		$line .= "RewriteEngine On" . $nl;
+		$line .= "RewriteCond %{REQUEST_URI} !^/\\.well-known/acme-challenge/[A-Za-z0-9_-]+$" . $nl;
+		if ($a['cert'] !== '') {
+			$line .= "RewriteRule ^/?(.*) https://" . $host . "/$1 [R=301,L]" . $nl;
+		} else {
+			$line .= "RewriteRule ^ - [R=503,L]" . $nl;
+			$line .= 'ErrorDocument 503 "This panel address is being set up: it works within a few minutes, once its certificate is ready."' . $nl;
+		}
+		$line .= '<Directory "' . $root . '.well-known/acme-challenge">' . $nl;
+		$line .= "    Options -Indexes" . $nl;
+		$line .= "    AllowOverride None" . $nl;
+		$line .= "    Require all granted" . $nl;
+		$line .= "    <FilesMatch \"\\.(php|phtml)$\">" . $nl;
+		$line .= "        Require all denied" . $nl;
+		$line .= "    </FilesMatch>" . $nl;
+		$line .= "</Directory>" . $nl;
+		$line .= "</VirtualHost>" . $nl;
+		if ($a['cert'] !== '') {
+			$line .= "<VirtualHost *:443>" . $nl;
+			$line .= "ServerName " . $host . $nl;
+			$line .= "ServerAdmin " . $serveremail . $nl;
+			$line .= 'DocumentRoot "' . $root . '"' . $nl;
+			$line .= '<FilesMatch "\.(php|phtml)$">' . $nl;
+			$line .= '    SetHandler "proxy:unix:' . SENTORA_PANEL_FPM_SOCKET . '|fcgi://localhost/"' . $nl;
+			$line .= '</FilesMatch>' . $nl;
+			$line .= 'ErrorLog "' . $logs . 'sentora-error.log" ' . $nl;
+			$line .= 'CustomLog "' . $logs . 'sentora-access.log" ' . SentoraOneLine(ctrl_options::GetSystemOption('access_log_format')) . $nl;
+			$line .= 'CustomLog "' . $logs . 'sentora-bandwidth.log" ' . SentoraOneLine(ctrl_options::GetSystemOption('bandwidth_log_format')) . $nl;
+			$line .= '<Directory "' . $root . '">' . $nl;
+			$line .= "    Options +FollowSymLinks -Indexes" . $nl;
+			$line .= "    AllowOverride All" . $nl;
+			$line .= "    Require all granted" . $nl;
+			$line .= "</Directory>" . $nl;
+			$line .= "SSLEngine On" . $nl;
+			$line .= "SSLProtocol all -SSLv3 -TLSv1 -TLSv1.1" . $nl;
+			$line .= "SSLHonorCipherOrder on" . $nl;
+			$line .= "SSLCipherSuite \"ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384\"" . $nl;
+			$line .= "SSLCertificateFile " . $a['cert'] . $nl;
+			$line .= "SSLCertificateKeyFile " . $a['key'] . $nl;
+			$line .= "<IfModule mod_headers.c>" . $nl;
+			$line .= '    <LocationMatch "^/(etc/styles|modules/[^/]+/assets)/">' . $nl;
+			$line .= '        Header set Cache-Control "no-cache"' . $nl;
+			$line .= "    </LocationMatch>" . $nl;
+			$line .= "</IfModule>" . $nl;
+			$line .= "</VirtualHost>" . $nl;
+		}
+		$line .= "# END BRANDING: " . $host . $nl . $nl;
+	}
+	return $line;
+}
+
+/**
  * A setting that belongs on one line of the Apache config (no line breaks).
  *
  * @param mixed $v The setting value.
@@ -588,6 +675,8 @@ function BuildVhostConfig() {
 	//***********
 	
 	//$line .= fs_filehandler::NewLine();
+    $line .= BuildBrandingVhosts($serveremail);
+
     $line .= "################################################################" . fs_filehandler::NewLine();
     $line .= "# Sentora generated VHOST configurations below....." . fs_filehandler::NewLine();
     $line .= "################################################################" . fs_filehandler::NewLine();

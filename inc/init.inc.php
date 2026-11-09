@@ -110,6 +110,12 @@ if (isset($_POST['inForgotPassword'])) {
             // Append port to domain
             $domain .= ":" . $port;
         }
+        $base = $protocol . $domain;
+        // a client of a reseller with its own panel address (Branding) is sent there
+        $branded = ctrl_branding::PanelUrlFor((int) $result['ac_id_pk']);
+        if ($branded !== '') {
+            $base = $branded;
+        }
         $phpmailer = new sys_email();
         $phpmailer->Subject = "Hosting Panel Password Reset";
         $phpmailer->Body = "Hi " . $result['ac_user_vc'] . ",
@@ -118,7 +124,7 @@ You, or somebody pretending to be you, has requested a password reset link to be
         
 If you wish to proceed with the password reset on your account, please use the link below to be taken to the password reset page.
             
-" . $protocol . $domain . "/?resetkey=" . $randomkey . "
+" . $base . "/?resetkey=" . $randomkey . "
 
 
                 ";

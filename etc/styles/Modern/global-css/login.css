@@ -48,6 +48,18 @@ a:hover, a:focus, a:active { color: var(--ml-link-hover); text-decoration: under
 .ml-sub { color: var(--ml-muted); font-size: 13px; }
 .ml-powered { margin: 18px 0 0; color: var(--ml-muted); font-size: 13px; text-align: center; }
 
+/* a brand (Branding): its logo (at most 240 x 80), or its name; its welcome line; its support contact */
+.ml-head img.ml-brand { width: auto; max-width: 100%; max-height: 80px; }
+.ml-head img.ml-chip { padding: 6px 10px; border-radius: 6px; }
+html.ml-dark .ml-head img.ml-chip { background: #fff; }
+@media (prefers-color-scheme: dark) { html.ml-auto .ml-head img.ml-chip { background: #fff; } }
+.ml-brand-name { display: block; color: var(--ml-ink); font-size: 22px; font-weight: 600; line-height: 1.3; overflow-wrap: anywhere; }
+.ml-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.ml-welcome { margin: 0; padding: 14px 24px; color: var(--ml-ink); font-size: 14px; line-height: 1.5; text-align: center; border-bottom: 1px solid var(--ml-line); overflow-wrap: anywhere; }
+.ml-contact { max-width: 400px; margin: 18px 0 0; color: var(--ml-muted); font-size: 13px; line-height: 1.6; text-align: center; overflow-wrap: anywhere; }
+.ml-contact b { color: var(--ml-ink); font-weight: 600; }
+.ml-powered.ml-small { margin-top: 10px; font-size: 11px; opacity: 0.8; }
+
 /* fields: a small label above a full-width field, as in the modules */
 .ml-field { display: block; margin: 0 0 16px; font-weight: normal; }
 .ml-field > span { display: block; margin-bottom: 5px; color: var(--ml-muted); font-size: 12px; font-weight: 600; }
@@ -72,8 +84,8 @@ a:hover, a:focus, a:active { color: var(--ml-link-hover); text-decoration: under
     margin-top: 16px; padding: 14px 24px; background: var(--ml-foot); border-top: 1px solid var(--ml-line); }
 .ml-foot .btn { min-width: 96px; }
 .ml-body .ml-foot { margin: 16px -24px 0; }
-.btn-primary { background-color: var(--ml-blue); border-color: var(--ml-blue-dark); color: #fff; }
-.btn-primary:hover, .btn-primary:focus, .btn-primary:active { background-color: var(--ml-blue-dark); border-color: var(--ml-blue-dark); color: #fff; }
+.btn-primary { background-color: var(--ml-blue); border-color: var(--ml-blue-dark); color: var(--ml-btn-ink, #fff); }
+.btn-primary:hover, .btn-primary:focus, .btn-primary:active { background-color: var(--ml-blue-dark); border-color: var(--ml-blue-dark); color: var(--ml-btn-ink, #fff); }
 
 /* messages, as the panel's notices */
 .ml-msg { margin: 0 0 16px; padding: 10px 12px; border-left: 4px solid; border-radius: 4px; font-size: 13px; line-height: 1.45; }

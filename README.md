@@ -232,6 +232,15 @@ The menus:
 
 **Support contact.** On **My Account**, an account that can have clients (an administrator, a reseller, or a sub-reseller whose group has Manage Clients) has a *Support for your clients* card: a support email, and optionally a phone number, a website and a one-line note (support hours, or a help desk address, which becomes a link). Its own clients see it on their My Account page in a *Support* card, with the email, phone and website as links. A client sees only its own reseller's contact: when that one is empty, nothing is shown.
 
+**Branding.** **Reseller > Branding** gives the panel your own look for your clients (administrators and any account whose group has Manage Clients):
+
+- **Look:** a company name (browser tab, footer, and the login page when there is no logo), a main colour (the login button and the line above the login box; the button text turns black or white, whichever reads better), a welcome line, and Light, Dark or Auto for the login page. A small picture of the login page follows what you type.
+- **Logo:** PNG, JPG or WebP, up to 2 MB, and optionally a light version for dark pages (without one, the logo sits on a white tile there). The panel draws every upload again as a new PNG, so nothing but its pixels is kept. It shows up to 240 x 80 pixels on the login page and 36 pixels high in the top bar.
+- **Contact:** the login page shows your support contact from My Account (email, phone, website) under the login box, and a small "Powered by Sentora" line.
+- **Your panel address** (resellers): a name under one of your own domains, such as `panel.yourdomain.com`. Add a DNS A record for it pointing to the server; the daemon checks every 5 minutes, adds it to Apache, gets its Let's Encrypt certificate (renewed like the panel's) and shows *Live*. Until then the address answers "being set up": the login is never offered without https. A failed request is tried again after 1, 2, 4... hours. Password-reset and welcome emails send your clients to your address once it is live. A name that is a website on the server, the main panel name, another account's address or (for resellers) a name outside your own domains is refused.
+- **Who sees which brand:** after login, an account sees its own brand if it has one, else its nearest reseller's, else the administrator's (zadmin's), else the standard look. Before login, the login page shows the brand of the address it was opened at; the main address shows the administrator's. The administrator's page lists every reseller's address and its state.
+- Nothing a reseller enters is used as HTML, CSS or a script: names and lines are plain text, the colour is a checked `#rrggbb`, and the logo is redrawn. Switching the module off in Module Admin removes every brand and takes the addresses out of Apache. The certificates are kept in `/etc/sentora/configs/ssl/branding/` (root only).
+
 **Theme Manager.** The theme for you and your clients: *Modern*, in light, dark or automatic. A user's own choice (My Account > Appearance) comes first.
 
 ## Panel settings (Sentora Config)

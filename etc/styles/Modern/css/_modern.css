@@ -32,6 +32,11 @@ hr { border-top-color: var(--ml-line); }
 .navbar-inverse .nav > li > a.nav-stat-button { color: var(--ml-blue); }
 .navbar-brand .logo-ink { display: var(--ml-logo-ink, inline); }
 .navbar-brand .logo-white { display: var(--ml-logo-white, none); }
+/* a brand's logo (Branding): at most 36 px high and 180 px wide; on a light tile in a dark bar when it has no dark version */
+.navbar-brand img.brand-logo { width: auto; max-width: 180px; height: 36px; object-fit: contain; }
+.navbar-brand img.brand-chip { box-sizing: border-box; padding: 3px 6px; background: #fff; border-radius: 5px; }
+.navbar-brand .brand-name { display: inline-block; max-width: 220px; overflow: hidden; color: var(--ml-ink); font-size: 18px; font-weight: 600; line-height: 36px; white-space: nowrap; text-overflow: ellipsis; vertical-align: middle; }
+#footer .brand-powered { font-size: 11px; opacity: 0.8; }
 
 /* Drop-down menus */
 .dropdown-menu { background: var(--ml-card); border-color: var(--ml-line); box-shadow: 0 6px 16px rgba(20, 30, 40, 0.14); }
