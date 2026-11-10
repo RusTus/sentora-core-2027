@@ -58,6 +58,7 @@
         <@ LegacyHint @>
         <@ CSFR_Tag @>
     </form>
+    <@ BundleUpdates @>
     <@ OldLogins @>
 </div>
 <script>

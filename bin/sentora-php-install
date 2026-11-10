@@ -60,6 +60,19 @@ if [ -z "$FILE" ]; then
         }
         exit(1);
     ' "$NAME" 2> /dev/null) || INFO=""
+    if [ -z "$INFO" ]; then
+        # GitHub's API did not answer (its hourly limit for this address) or does not list the file: the
+        # release's list of builds, php-bundles.json, has each file's SHA-256 too (a plain download)
+        INFO=$(wget -q -T 20 -O - "https://github.com/$REPO/releases/download/$TAG/php-bundles.json" 2> /dev/null | php -r '
+            $d = json_decode(stream_get_contents(STDIN), true);
+            foreach ((array) ($d["bundles"] ?? array()) as $sys) {
+                foreach ((array) $sys as $b) {
+                    if (($b["file"] ?? "") === $argv[1] && preg_match("/^[0-9a-f]{64}$/", (string) ($b["sha256"] ?? ""))) { echo $b["sha256"]; exit(0); }
+                }
+            }
+            exit(1);
+        ' "$NAME" 2> /dev/null) || INFO=""
+    fi
     [ -n "$INFO" ] || { echo "Release $TAG of $REPO has no $NAME (or GitHub did not answer). Nothing changed."; exit 1; }
     echo "Downloading $NAME from release $TAG of $REPO"
     wget -q -O "$FILE" "https://github.com/$REPO/releases/download/$TAG/$NAME" || { echo "Could not download $NAME."; exit 1; }

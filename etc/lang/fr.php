@@ -12,7 +12,7 @@
  * @package Sentora
  * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
  *
- * Written by RusTus, 2026-11-09
+ * Written by RusTus, 2026-11-10
  */
 return array(
     '	Path to named-compilezone bind utility.' => '	Chemin vers l\'utilitaire named-compilezone de BIND.',
@@ -2921,6 +2921,20 @@ return array(
     'Running PHP %s' => 'Tourne sous PHP %s',
     'Changing within 5 minutes (PHP %s until then)' => 'Change dans les 5 minutes (PHP %s jusque-là)',
     'PHP %s is not running' => 'PHP %s ne tourne pas',
+    // PHP Versions: updates of the extra versions
+    '%1$s is ready (this server runs %2$s)' => '%1$s est prête (ce serveur a %2$s)',
+    'Updating within 5 minutes' => 'Mise à jour dans les 5 minutes',
+    'Install PHP %s now? The sites on this version pause for a few seconds; the old files come back if the new build does not start.' => 'Installer PHP %s maintenant ? Les sites sur cette version s\'interrompent quelques secondes ; si la nouvelle version ne démarre pas, les anciens fichiers reviennent.',
+    '%1$s is out, its build is not ready yet (this server runs %2$s)' => '%1$s est sortie, sa version Sentora n\'est pas encore prête (ce serveur a %2$s)',
+    '%s, the newest' => '%s, la plus récente',
+    'Checked %s (once a day).' => 'Vérifié le %s (une fois par jour).',
+    'Not checked yet: the daemon checks within 5 minutes.' => 'Pas encore vérifié : le démon vérifie dans les 5 minutes.',
+    'PHP %1$s was updated on %2$s.' => 'PHP %1$s a été mis à jour le %2$s.',
+    'The update of PHP %1$s on %2$s did not work:' => 'La mise à jour de PHP %1$s le %2$s n\'a pas fonctionné :',
+    'The extra versions are Sentora\'s own builds, not the system\'s packages: a new PHP release is offered here when its build is published.' => 'Les versions supplémentaires sont des compilations propres à Sentora, pas des paquets du système : une nouvelle version de PHP est proposée ici dès que sa compilation est publiée.',
+    'The list of builds (php-bundles.json) could not be read from GitHub.' => 'La liste des compilations (php-bundles.json) n\'a pas pu être lue sur GitHub.',
+    'The daemon installs the new PHP %s within 5 minutes.' => 'Le démon installe le nouveau PHP %s dans les 5 minutes.',
+    'There is no update ready for that version.' => 'Aucune mise à jour n\'est prête pour cette version.',
     '@months' => array('janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'),
     '@months_short' => array('janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'),
     '@days' => array('dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'),

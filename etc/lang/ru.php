@@ -12,7 +12,7 @@
  * @package Sentora
  * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
  *
- * Written by RusTus, 2026-11-09
+ * Written by RusTus, 2026-11-10
  */
 return array(
     '	Path to named-compilezone bind utility.' => '	Путь к утилите BIND named-compilezone.',
@@ -2921,6 +2921,20 @@ return array(
     'Running PHP %s' => 'Работает на PHP %s',
     'Changing within 5 minutes (PHP %s until then)' => 'Сменится в течение 5 минут (до этого PHP %s)',
     'PHP %s is not running' => 'PHP %s не запущен',
+    // PHP Versions: updates of the extra versions
+    '%1$s is ready (this server runs %2$s)' => '%1$s готова (на этом сервере %2$s)',
+    'Updating within 5 minutes' => 'Обновится в течение 5 минут',
+    'Install PHP %s now? The sites on this version pause for a few seconds; the old files come back if the new build does not start.' => 'Установить PHP %s сейчас? Сайты на этой версии остановятся на несколько секунд; если новая сборка не запустится, вернутся старые файлы.',
+    '%1$s is out, its build is not ready yet (this server runs %2$s)' => 'Вышла %1$s, её сборка ещё не готова (на этом сервере %2$s)',
+    '%s, the newest' => '%s, самая новая',
+    'Checked %s (once a day).' => 'Проверено %s (раз в день).',
+    'Not checked yet: the daemon checks within 5 minutes.' => 'Ещё не проверено: демон проверит в течение 5 минут.',
+    'PHP %1$s was updated on %2$s.' => 'PHP %1$s обновлён %2$s.',
+    'The update of PHP %1$s on %2$s did not work:' => 'Обновление PHP %1$s %2$s не удалось:',
+    'The extra versions are Sentora\'s own builds, not the system\'s packages: a new PHP release is offered here when its build is published.' => 'Дополнительные версии — собственные сборки Sentora, а не пакеты системы: новая версия PHP предлагается здесь, когда опубликована её сборка.',
+    'The list of builds (php-bundles.json) could not be read from GitHub.' => 'Не удалось прочитать список сборок (php-bundles.json) с GitHub.',
+    'The daemon installs the new PHP %s within 5 minutes.' => 'Демон установит новый PHP %s в течение 5 минут.',
+    'There is no update ready for that version.' => 'Для этой версии нет готового обновления.',
     '@months' => array('января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'),
     '@months_short' => array('янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'),
     '@days' => array('воскресенье', 'понедельник', 'вторник', 'среда', 'четверг', 'пятница', 'суббота'),

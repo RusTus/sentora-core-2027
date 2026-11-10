@@ -6,7 +6,7 @@
  * @package Sentora
  * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
  *
- * Written by RusTus, 2026-11-08
+ * Written by RusTus, 2026-11-10
  */
 /**
  * PHP Versions module (administrators): the PHP versions on the server (the default one Apache runs,
@@ -277,6 +277,65 @@ class module_controller extends ctrl_module
         }
         sys_oldlogins::RequestOff();
         self::$old = array(self::t('The daemon switches MySQL\'s older login method off within 5 minutes (MySQL restarts once).'), 'zannounceok');
+    }
+
+    /**
+     * The updates of the extra versions (<@ BundleUpdates @>): each one's state from the daemon's daily
+     * check, with an Update button where the release has a newer build (sys_phpbundles).
+     *
+     * @return string The HTML ('' when no extra version is installed).
+     */
+    static function getBundleUpdates()
+    {
+        $state = sys_phpbundles::State();
+        if (!sys_phpversions::Installed()) {
+            return '';
+        }
+        $rows = '';
+        $asked = sys_phpbundles::Setting(sys_phpbundles::REQUEST);
+        foreach ((array) $state['versions'] as $mm => $v) {
+            if ($v['state'] === 'ready') {
+                $what = '<span class="pv-sup warn">' . str_replace(array('%1$s', '%2$s'), array(self::h($v['built']), self::h($v['installed'])), self::t('%1$s is ready (this server runs %2$s)')) . '</span>';
+                $btn = ($asked === (string) $mm)
+                    ? '<span class="pv-sub">' . self::t('Updating within 5 minutes') . '</span>'
+                    : '<button class="btn btn-primary btn-sm" type="submit" name="inVersion" value="' . self::h($mm) . '" data-confirm="'
+                        . str_replace('%s', self::h($v['built']), self::t('Install PHP %s now? The sites on this version pause for a few seconds; the old files come back if the new build does not start.')) . '">' . self::t('Update') . '</button>';
+            } elseif ($v['state'] === 'waiting') {
+                $what = '<span class="pv-sup warn">' . str_replace(array('%1$s', '%2$s'), array(self::h($v['latest']), self::h($v['installed'])), self::t('%1$s is out, its build is not ready yet (this server runs %2$s)')) . '</span>';
+                $btn = '';
+            } else {
+                $what = '<span class="pv-sup ok">' . str_replace('%s', self::h($v['installed']), self::t('%s, the newest')) . '</span>';
+                $btn = '';
+            }
+            $rows .= '<div class="pv-old-row"><span><b>PHP ' . self::h($mm) . '</b> ' . $what . '</span>' . $btn . '</div>';
+        }
+        $when = (int) $state['checked'] > 0 ? str_replace('%s', self::h(date('Y-m-d H:i', (int) $state['checked'])), self::t('Checked %s (once a day).')) : self::t('Not checked yet: the daemon checks within 5 minutes.');
+        $res = json_decode(sys_phpbundles::Setting(sys_phpbundles::RESULT), true);
+        $last = (is_array($res) && (int) $res['time'] > time() - 7 * 86400)
+            ? '<p class="' . ($res['ok'] ? 'pv-old-why ok' : 'pv-old-fail') . '">' . str_replace(array('%1$s', '%2$s'), array(self::h($res['version']), self::h(date('Y-m-d H:i', (int) $res['time']))), self::t($res['ok'] ? 'PHP %1$s was updated on %2$s.' : 'The update of PHP %1$s on %2$s did not work:'))
+                . ($res['ok'] ? '' : ' ' . self::h($res['text'])) . '</p>' : '';
+        return '<form class="pv-old is-clean" action="./?module=php_versions&amp;action=UpdateBundle" method="post"><h4>' . self::t('Updates') . '</h4>'
+            . '<p class="pv-sub">' . self::t('The extra versions are Sentora\'s own builds, not the system\'s packages: a new PHP release is offered here when its build is published.') . ' ' . $when . '</p>'
+            . ($state['error'] !== '' ? '<p class="pv-old-fail">' . self::t($state['error']) . '</p>' : '')
+            . $last . '<div class="pv-old-rows">' . $rows . '</div>' . runtime_csfr::Token() . '</form>';
+    }
+
+    /**
+     * Ask the daemon to install the ready build of a version (the Update button).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return void
+     */
+    static function doUpdateBundle()
+    {
+        global $controller;
+        runtime_csfr::Protect();
+        $mm = (string) $controller->GetControllerRequest('FORM', 'inVersion');
+        if (sys_phpbundles::Request($mm)) {
+            self::$old = array(str_replace('%s', self::h($mm), self::t('The daemon installs the new PHP %s within 5 minutes.')), 'zannounceok');
+        } else {
+            self::$old = array(self::t('There is no update ready for that version.'), 'zannounceerror');
+        }
     }
 
     /**
