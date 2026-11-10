@@ -171,6 +171,34 @@ if ls "$MS_CONF"/*.conf > /dev/null 2>&1; then
 elif [ "${MS_LOADED:-0}" -gt 0 ]; then warn "ModSecurity is loaded by the system's own settings, not Sentora's (switch that off: $(sp modsec_off_cmd); then reload Apache)"
 else ok "ModSecurity switched off until the Web Hardening add-on switches it on"; fi
 
+section "SELinux / AppArmor (the system's limits on what each program may touch)"
+if [ -r /sys/fs/selinux/enforce ]; then
+    if [ "$(cat /sys/fs/selinux/enforce)" = "1" ]; then ok "SELinux is on (enforcing)"
+    else warn "SELinux only watches (permissive), it blocks nothing: setenforce 1, and SELINUX=enforcing in /etc/selinux/config"; fi
+elif [ "$(cat /sys/module/apparmor/parameters/enabled 2> /dev/null)" = "Y" ]; then
+    AA_ENF=$(grep -c '(enforce)' /sys/kernel/security/apparmor/profiles 2> /dev/null)
+    if [ "${AA_ENF:-0}" -eq 0 ]; then
+        warn "AppArmor is switched off (no profiles loaded; older Sentora installers switched it off): systemctl enable --now apparmor"
+    else
+        ok "AppArmor is on ($AA_ENF profiles in enforce mode)"
+        # every running program a profile confines, once
+        for d in /proc/[0-9]*; do
+            c=$(cat "$d/attr/current" 2> /dev/null | tr -d '\0'); [ -n "$c" ] && [ "$c" != unconfined ] || continue
+            echo "$(cat "$d/comm" 2> /dev/null)|$c"
+        done | sort -u | while IFS='|' read -r prog prof; do
+            case "$prof" in
+                *"(enforce)") ok "$prog runs confined by its profile ($prof)" ;;
+                *"(complain)") warn "$prog is only watched by its profile ($prof), not confined: aa-enforce ${prof% (complain)}" ;;
+            esac
+        done
+        AA_DEN=$(journalctl -k -b --no-pager 2> /dev/null | grep -c 'apparmor="DENIED"')
+        if [ "${AA_DEN:-0}" -gt 0 ]; then warn "AppArmor refused something $AA_DEN time(s) since the start (journalctl -k -b | grep 'apparmor=\"DENIED\"')"
+        else ok "AppArmor refused nothing since the start"; fi
+    fi
+else
+    warn "neither SELinux nor AppArmor runs on this system (inside WSL there is none), so programs are limited only by their users"
+fi
+
 section "Hosted sites may use only their own PHP"
 VH=/etc/sentora/configs/apache/httpd-vhosts.conf
 if $(sp apache_modules_cmd) 2> /dev/null | grep -q lua_module && grep -q "LuaHookFixups" "$VH" 2> /dev/null && grep -q "SENTORA_STATUS_BLOCK" "$VH" 2> /dev/null; then ok "Apache request guard in place (sentora-guard.lua)"
