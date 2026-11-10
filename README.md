@@ -128,9 +128,9 @@ The installers ask the same questions and set up the same panel. On Debian every
 | Extra PHP versions (Sentora's builds) | 8.2, 8.3, 8.4, and 7.1 for moved sites | 8.2, 8.3, 8.5, and 7.1 for moved sites (7.1 without imap: Debian has no c-client) | 8.2, 8.4, 8.5, and 7.1 for moved sites (without imap) |
 | Database server | MySQL 8.4 | MariaDB 11.8 (the panel calls it MySQL; its users log in with `mysql_native_password`, MariaDB's normal method) | MariaDB 10.11 (as on Debian) |
 | Apache, Postfix, Dovecot, BIND, ProFTPD | Ubuntu's | Debian's (Apache 2.4, Postfix 3.10, Dovecot 2.4, BIND 9.20, ProFTPD 1.3.8) | AlmaLinux's and EPEL's (Apache 2.4, Postfix 3.8, Dovecot 2.3, BIND 9.18, ProFTPD 1.3.9) |
-| SOGo (groupware, ActiveSync) | yes | yes | not available (webmail is Roundcube) |
+| SOGo (groupware, ActiveSync) | yes | yes | yes (Sentora's own build) |
 | Security updates | unattended-upgrades | unattended-upgrades | dnf-automatic |
-| Mandatory access control | AppArmor (switched off) | AppArmor (switched off) | SELinux, on (enforcing), with Sentora's labels |
+| Mandatory access control | AppArmor, on (BIND, MySQL, ProFTPD and ClamAV confined, with Sentora's paths) | AppArmor, on (BIND and ClamAV confined, with Sentora's paths) | SELinux, on (enforcing), with Sentora's labels |
 
 The commands, paths, services and users that differ are settings in the panel's database (hidden from Sentora Config), set by each installer: the panel's code names no distribution.
 
