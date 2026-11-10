@@ -90,6 +90,11 @@ ui_info() { printf '         %s%s%s\n' "$C_DIM" "$1" "$C_RESET" >&3; }
 ui_repeat() { local i out=''; for ((i = 0; i < $2; i++)); do out+="$1"; done; printf '%s' "$out"; }
 
 UI_STEP=0; UI_TOTAL=1; UI_TITLE=""; UI_STEP_START=0; UI_START=$(date +%s); UI_TICKER=""; UI_STEP_WARN=0; UI_WARNS=0
+# The step whose progress bar may be drawn: a ticker stops by itself as soon as this is not its own step
+# any more, or this script is gone, so a stray one (started where its number was lost) can never draw
+# over a question or the shell after the script ends
+UI_TICKFILE=$(mktemp /tmp/sentora-ui-step.XXXXXX 2> /dev/null || echo /dev/null)
+UI_MAINPID=$$
 ui_draw() { # spinner-frame
     local cols width pct filled elapsed room title times
     cols=$(ui_cols)
@@ -105,9 +110,11 @@ ui_draw() { # spinner-frame
         "$pct" "$UI_STEP" "$UI_TOTAL" "$C_CYAN" "$1" "$C_RESET" "$room" "$title" "$C_DIM" "$times" "$C_RESET" >&3
 }
 ui_ticker_stop() {
+    [ "$UI_TICKFILE" != /dev/null ] && echo 0 > "$UI_TICKFILE" 2> /dev/null
     if [ -n "$UI_TICKER" ]; then
         kill "$UI_TICKER" 2> /dev/null
         local _; for _ in 1 2 3 4 5 6 7 8 9 10; do kill -0 "$UI_TICKER" 2> /dev/null || break; sleep 0.05; done
+        kill -0 "$UI_TICKER" 2> /dev/null && kill -9 "$UI_TICKER" 2> /dev/null
         UI_TICKER=""
         [ $UI_TTY -eq 1 ] && printf '\r\e[K' >&3
     fi
@@ -117,7 +124,7 @@ ui_ticker_start() {
         # (its own traps: the script's EXIT trap removes the download folder, and must not run here; and
         # when stopped before those take effect, the EXIT trap itself removes nothing outside the main
         # script ($BASHPID differs): a restart at the wrong moment deleted the download folder)
-        ( trap - EXIT; trap 'exit 0' TERM; i=0; while true; do ui_draw "${UI_SPIN[$(( i % ${#UI_SPIN[@]} ))]}"; i=$(( i + 1 )); sleep 0.25; done ) 9>&- &
+        ( trap - EXIT; trap 'exit 0' TERM; i=0; [ "$UI_TICKFILE" != /dev/null ] && echo "$UI_STEP" > "$UI_TICKFILE"; while { [ "$UI_TICKFILE" = /dev/null ] || [ "$(cat "$UI_TICKFILE" 2> /dev/null)" = "$UI_STEP" ]; } && kill -0 "$UI_MAINPID" 2> /dev/null; do ui_draw "${UI_SPIN[$(( i % ${#UI_SPIN[@]} ))]}"; i=$(( i + 1 )); sleep 0.25; done ) 9>&- &
         UI_TICKER=$!
         disown "$UI_TICKER" 2> /dev/null
     fi
@@ -220,7 +227,7 @@ die()  {
     echo >&3
     exit 1
 }
-trap 'ui_ticker_stop' EXIT
+trap 'ui_ticker_stop; [ "$BASHPID" = "$$" ] && [ "$UI_TICKFILE" != /dev/null ] && rm -f "$UI_TICKFILE"' EXIT
 
 [ "$(id -u)" -eq 0 ] || die "run this as root"
 exec 9> /run/sentora-update.lock
@@ -343,7 +350,7 @@ if [ "$MODE" = rollback ]; then
     UI_TOTAL=4
     ui_step "Unpacking the backup"
     need rsync rsync
-    TMP=$(mktemp -d); trap 'ui_ticker_stop; [ "$BASHPID" = "$$" ] && rm -rf "$TMP"' EXIT
+    TMP=$(mktemp -d); trap 'ui_ticker_stop; [ "$BASHPID" = "$$" ] && [ "$UI_TICKFILE" != /dev/null ] && rm -f "$UI_TICKFILE"; [ "$BASHPID" = "$$" ] && rm -rf "$TMP"' EXIT
     tar -xzf "$RESTORE" -C "$TMP" || die "could not unpack $RESTORE"
     [ -f "$TMP/panel/index.php" ] || die "$RESTORE is not a panel backup"
     ui_step "Restoring the panel files"
@@ -460,7 +467,7 @@ if [ "$MODE" = check ]; then
         exit 0
     fi
     ui_info "GitHub lists no checksum: downloading the core to compare"
-    TMP=$(mktemp -d); trap 'ui_ticker_stop; [ "$BASHPID" = "$$" ] && rm -rf "$TMP"' EXIT
+    TMP=$(mktemp -d); trap 'ui_ticker_stop; [ "$BASHPID" = "$$" ] && [ "$UI_TICKFILE" != /dev/null ] && rm -f "$UI_TICKFILE"; [ "$BASHPID" = "$$" ] && rm -rf "$TMP"' EXIT
     fetch "$DL" "$TMP/$ZIP" || die "could not download $DL: $FETCH_ERR"
     if [ "$(sha256sum "$TMP/$ZIP" | cut -d' ' -f1)" = "$LAST" ]; then
         ui_ok "Up to date: installed ${INSTALLED:-?}"; echo >&3; exit 0
@@ -475,7 +482,7 @@ ui_banner "Updating the panel in $PANEL from ${URL:-$REPO, release $TAG}"
 ui_log_start "$MODE" "$FROM"
 st_init update
 UI_TOTAL=9
-TMP=$(mktemp -d); trap 'ui_ticker_stop; [ "$BASHPID" = "$$" ] && rm -rf "$TMP"' EXIT
+TMP=$(mktemp -d); trap 'ui_ticker_stop; [ "$BASHPID" = "$$" ] && [ "$UI_TICKFILE" != /dev/null ] && rm -f "$UI_TICKFILE"; [ "$BASHPID" = "$$" ] && rm -rf "$TMP"' EXIT
 
 ui_step "Checking the release"
 need rsync rsync; need unzip unzip
