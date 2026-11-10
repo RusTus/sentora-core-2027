@@ -56,6 +56,8 @@ class sys_platform
         // the database server
         'db_service' => array('mysql', 'The database server\'s service'),
         'db_conf_file' => array('/etc/mysql/mysql.conf.d/mysqld.cnf', 'The database server\'s settings file (its [mysqld] section)'),
+        'db_client' => array('mysql', 'The database server\'s command-line client (mysql, or mariadb where mysql is only an old name)'),
+        'spamassassin_dbi_driver' => array('mysql', 'The Perl database driver SpamAssassin reads its per-mailbox settings with (mysql: DBD::mysql, MariaDB: DBD::MariaDB)'),
         'db_socket' => array('/var/run/mysqld/mysqld.sock', 'The database server\'s socket'),
         // BIND
         'bind_group' => array('bind', 'BIND\'s Linux group'),

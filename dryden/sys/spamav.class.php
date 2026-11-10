@@ -399,7 +399,8 @@ class sys_spamav
             $c .= "blocklist_from " . $p . "\n";
         }
         // per-mailbox settings: sensitivity, allowed and blocked senders (only these: see SyncUserPrefs)
-        $c .= "user_scores_dsn DBI:mysql:" . self::SA_DB . ":localhost\nuser_scores_sql_username sentora_spamav\nuser_scores_sql_password " . $dbPass . "\n"
+        // (the Perl driver of this system: Sentora's settings, sys_platform; database=...;host=... suits both)
+        $c .= "user_scores_dsn DBI:" . sys_platform::Get('spamassassin_dbi_driver') . ":database=" . self::SA_DB . ";host=localhost\nuser_scores_sql_username sentora_spamav\nuser_scores_sql_password " . $dbPass . "\n"
             . "user_scores_sql_custom_query SELECT preference, value FROM userpref WHERE username = _USERNAME_ OR username = '@GLOBAL' ORDER BY username ASC\n";
         return $c;
     }

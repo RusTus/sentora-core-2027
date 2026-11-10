@@ -45,7 +45,9 @@ need() { # need VAR "step it comes from": skip when an earlier step did not get 
 }
 
 [ "$(id -u)" -eq 0 ] || { echo "Run this as root."; exit 2; }
-for t in curl php mysql setpriv; do command -v "$t" > /dev/null || { echo "$t is needed"; exit 2; }; done
+# (the database client of this system: Sentora's setting db_client)
+DBC=$(sp db_client); DBC=${DBC:-mysql}
+for t in curl php "$DBC" setpriv; do command -v "$t" > /dev/null || { echo "$t is needed"; exit 2; }; done
 mkdir -p "$(dirname "$LOG")"; : > "$LOG"
 
 # --- what the test uses -----------------------------------------------------------------
@@ -53,7 +55,7 @@ val() { grep -o "\$$1 = '[^']*'" "$PANEL/cnf/db.php" | head -1 | cut -d"'" -f2; 
 MYCNF=$(mktemp); chmod 600 "$MYCNF"
 H=$(val host); printf '[client]\nuser=%s\npassword=%s\n' "$(val user)" "$(val pass)" > "$MYCNF"
 case "$H" in *:*) printf 'host=%s\nport=%s\n' "${H%%:*}" "${H##*:}" >> "$MYCNF" ;; localhost|"") ;; *) echo "host=$H" >> "$MYCNF" ;; esac
-q() { mysql --defaults-extra-file="$MYCNF" -N -B -e "$1" sentora_core 2> /dev/null; }
+q() { "$DBC" --defaults-extra-file="$MYCNF" -N -B -e "$1" sentora_core 2> /dev/null; }
 FQDN=$(q "SELECT so_value_tx FROM x_settings WHERE so_name_vc='sentora_domain'")
 HOSTED=$(q "SELECT so_value_tx FROM x_settings WHERE so_name_vc='hosted_dir'"); HOSTED=${HOSTED%/}
 RND=$(head -c 4 /dev/urandom | od -An -tx1 | tr -d ' \n')
@@ -329,7 +331,7 @@ s_mysql_login() {
     need MYPW "Create a database and MySQL user" || return $?
     local c="$TMP/my.cnf"; printf '[client]\nuser=%s\npassword=%s\n' "$MYUSER" "$MYPW" > "$c"; chmod 600 "$c"
     case "$H" in *:*) printf 'host=%s\nport=%s\n' "${H%%:*}" "${H##*:}" >> "$c" ;; esac
-    local r; r=$(mysql --defaults-extra-file="$c" -N -B "$DBNAME" -e "CREATE TABLE smoke (id INT PRIMARY KEY, v VARCHAR(20)); INSERT INTO smoke VALUES (1,'$RND'); SELECT v FROM smoke" 2>&1)
+    local r; r=$("$DBC" --defaults-extra-file="$c" -N -B "$DBNAME" -e "CREATE TABLE smoke (id INT PRIMARY KEY, v VARCHAR(20)); INSERT INTO smoke VALUES (1,'$RND'); SELECT v FROM smoke" 2>&1)
     [ "$r" = "$RND" ] || { WHY="MySQL login with the shown password: $(echo "$r" | tail -1 | cut -c1-100)"; return 1; }
 }
 show_pw() { # module action field -> the password Show password returns
