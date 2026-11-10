@@ -70,9 +70,11 @@ function MailboxesPurgeDeleted()
             }
             // SOGo keeps the user's calendars, contacts and preferences in its own database, by
             // address: a new mailbox with this address would open them. Its own tool removes them.
-            $sogoTool = trim((string) shell_exec('command -v sogo-tool 2>/dev/null'));
-            if ($sogoTool !== '' && function_exists('posix_getpwnam') && posix_getpwnam('sogo') !== false) {
-                exec('runuser -u sogo -- ' . escapeshellarg($sogoTool) . ' remove ' . escapeshellarg($addr) . ' 2>&1', $sogoOut, $sogoRc);
+            // (its tool and user on this Linux system: Sentora's settings, sys_platform)
+            $sogoTool = rtrim(sys_platform::Get('sogo_tool_dir'), '/') . '/sogo-tool';
+            $sogoUser = sys_platform::Get('sogo_user');
+            if (is_executable($sogoTool) && function_exists('posix_getpwnam') && posix_getpwnam($sogoUser) !== false) {
+                exec('runuser -u ' . escapeshellarg($sogoUser) . ' -- ' . escapeshellarg($sogoTool) . ' remove ' . escapeshellarg($addr) . ' 2>&1', $sogoOut, $sogoRc);
                 if ($sogoRc !== 0) {
                     echo fs_filehandler::NewLine() . "Mailboxes: SOGo could not remove the data of " . $addr . ": " . substr(implode(' ', (array) $sogoOut), 0, 300) . fs_filehandler::NewLine();
                 }

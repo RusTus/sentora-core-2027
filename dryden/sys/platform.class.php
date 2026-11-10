@@ -91,6 +91,8 @@ class sys_platform
         // SOGo
         'sogo_conf' => array('/etc/sogo/sogo.conf', 'SOGo\'s settings file'),
         'sogo_service' => array('sogo', 'SOGo\'s service'),
+        'sogo_user' => array('sogo', 'SOGo\'s Linux user (its jobs run as it)'),
+        'sogo_tool_dir' => array('/usr/sbin', 'The folder of SOGo\'s tools (sogo-tool, sogo-ealarms-notify, sogo-backup)'),
         // cron: the folder of users' crontabs
         'crontab_dir' => array('/var/spool/cron/crontabs', 'The folder of the users\' crontabs'),
         'cron_service' => array('cron', 'The cron service (and its process name)'),

@@ -171,7 +171,7 @@ function SentoraApplySOGoSettings()
     if ($new !== $old) {
         file_put_contents($conf . '.new', $new);
         chmod($conf . '.new', 0640);
-        @chgrp($conf . '.new', 'sogo');
+        @chgrp($conf . '.new', sys_platform::Get('sogo_user'));
         rename($conf . '.new', $conf);
         $restart = true;
         echo "sogo.conf updated." . fs_filehandler::NewLine();
@@ -193,15 +193,18 @@ function SentoraApplySOGoSettings()
 
     // SOGo's own jobs: session expiry, email reminders, nightly backup
     $minutes = SentoraSOGoInt('sogo_session_minutes', 60, 0, 10080);
+    // (SOGo's user and the folder of its tools on this Linux system: Sentora's settings, sys_platform)
+    $sogoUser = sys_platform::Get('sogo_user');
+    $sogoTools = rtrim(sys_platform::Get('sogo_tool_dir'), '/');
     $cron = "# SOGo jobs, from Admin > Mail Config (written by the Sentora daemon)\n";
     if ($minutes > 0) {
-        $cron .= "* * * * *\tsogo\t/usr/sbin/sogo-tool expire-sessions " . $minutes . " > /dev/null 2>&1\n";
+        $cron .= "* * * * *\t" . $sogoUser . "\t" . $sogoTools . "/sogo-tool expire-sessions " . $minutes . " > /dev/null 2>&1\n";
     }
     if ($settings['SOGoEnableEMailAlarms'] === 'YES') {
-        $cron .= "* * * * *\tsogo\t/usr/sbin/sogo-ealarms-notify > /dev/null 2>&1\n";
+        $cron .= "* * * * *\t" . $sogoUser . "\t" . $sogoTools . "/sogo-ealarms-notify > /dev/null 2>&1\n";
     }
     if (SentoraSOGoBool('sogo_backup', true) === 'YES') {
-        $cron .= "30 0 * * *\tsogo\t/usr/sbin/sogo-backup > /dev/null 2>&1\n";
+        $cron .= "30 0 * * *\t" . $sogoUser . "\t" . $sogoTools . "/sogo-backup > /dev/null 2>&1\n";
     }
     $cronFile = '/etc/cron.d/sentora-sogo';
     if (!is_file($cronFile) || file_get_contents($cronFile) !== $cron) {

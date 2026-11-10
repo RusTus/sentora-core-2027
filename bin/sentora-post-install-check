@@ -177,7 +177,7 @@ perm "$CONF/dovecot2/dovecot-mysql.conf" 640 root mail
 perm "$CONF/phpmyadmin/config.inc.php" 640 root sentora
 for f in "$CONF"/postfix/mysql-*.cf; do [ -e "$f" ] && perm "$f" 640 root postfix; done
 for f in "$CONF"/roundcube/*.inc.php; do [ -e "$f" ] && perm "$f" 640 root sentora; done
-SOGO_CONF=$(sp sogo_conf); [ -e "$SOGO_CONF" ] && perm "$SOGO_CONF" 640 root sogo
+SOGO_CONF=$(sp sogo_conf); [ -e "$SOGO_CONF" ] && perm "$SOGO_CONF" 640 root "$(sp sogo_user)"
 MCFG=$PANEL/etc/apps/matomo/config/config.ini.php
 if [ -e "$MCFG" ]; then
     # Matomo may rewrite its own config: what matters is that only the panel can reach it

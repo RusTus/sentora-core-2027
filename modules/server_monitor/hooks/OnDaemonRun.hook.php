@@ -166,7 +166,7 @@ function SentoraServerAlerts()
         'ProFTPD' => array($smOpt('ftp_service', 'proftpd'), 'proftpd'), 'BIND' => array($smOpt('bind_service', 'named'), 'named'), 'fail2ban' => array('fail2ban', 'fail2ban-server'),
         'cron' => array($smCron, $smCron));
     if (is_file(sys_platform::Get('sogo_bin'))) {
-        $services['SOGo'] = array('sogo', 'sogod');
+        $services['SOGo'] = array(sys_platform::Get('sogo_service'), 'sogod');
         $services['memcached'] = array('memcached', 'memcached');
     }
     foreach ($services as $label => $s) {
