@@ -25,6 +25,62 @@ if (is_file($saInstalling) && time() - (int) filemtime($saInstalling) < 7200) {
     SentoraServerAlerts();
 }
 echo "END Server alerts" . fs_filehandler::NewLine();
+SentoraProcstatEnsure();
+
+/**
+ * Keep the process-list service (bin/sentora-procstat, run by systemd as root) installed and running:
+ * Server Monitor reads its list, so it sees every process even where the system hides other
+ * programs' processes from the panel (SELinux). Root only; a change of the unit is applied at once.
+ *
+ * @return void
+ */
+function SentoraProcstatEnsure()
+{
+    if (!function_exists('posix_geteuid') || posix_geteuid() !== 0) {
+        return;
+    }
+    $pw = posix_getpwnam(sys_accountphp::PANEL_USER);
+    $gr = $pw ? posix_getgrgid((int) $pw['gid']) : false;
+    $root = rtrim((string) ctrl_options::GetSystemOption('sentora_root'), '/');
+    $unitDir = rtrim(sys_platform::Get('systemd_unit_dir'), '/');
+    $php = PHP_BINARY;
+    if ($gr === false || $root === '' || $unitDir === '' || !is_dir($unitDir) || !is_file($root . '/bin/sentora-procstat') || !is_executable($php)) {
+        return;
+    }
+    $dir = sys_statedir::DIR . '/monitor';
+    if (is_link($dir)) {
+        return;
+    }
+    if (!is_dir($dir)) {
+        @mkdir($dir, 0750);
+    }
+    @chown($dir, 0);
+    @chgrp($dir, (int) $gr['gid']);
+    @chmod($dir, 0750);
+    $unit = "# Written by the Sentora daemon (Server Monitor): changes here are replaced\n"
+        . "[Unit]\nDescription=Sentora: the process list for Server Monitor\nAfter=local-fs.target\n\n"
+        . "[Service]\nType=simple\nExecStart=" . $php . " " . $root . "/bin/sentora-procstat " . $dir . "/procs.json " . $gr['name'] . " 3\n"
+        . "Nice=10\nRestart=always\nRestartSec=10\n"
+        // it only reads /proc and writes its one folder
+        . "ProtectSystem=strict\nReadWritePaths=" . $dir . "\nProtectHome=yes\nPrivateTmp=yes\nNoNewPrivileges=yes\nPrivateNetwork=yes\n\n"
+        . "[Install]\nWantedBy=multi-user.target\n";
+    $file = $unitDir . '/sentora-procstat.service';
+    $changed = (string) @file_get_contents($file) !== $unit;
+    if ($changed) {
+        if (@file_put_contents($file, $unit) === false) {
+            echo "Server Monitor: could not write " . $file . fs_filehandler::NewLine();
+            return;
+        }
+        @chmod($file, 0644);
+        exec('systemctl daemon-reload 2>&1');
+    }
+    exec('systemctl is-enabled --quiet sentora-procstat 2>/dev/null', $o, $en);
+    exec('systemctl is-active --quiet sentora-procstat 2>/dev/null', $o, $act);
+    if ($en !== 0 || $act !== 0 || $changed) {
+        exec('systemctl enable sentora-procstat > /dev/null 2>&1; systemctl ' . ($changed && $act === 0 ? 'restart' : 'start') . ' sentora-procstat 2>&1', $o2, $rc);
+        echo "Server Monitor: process-list service " . ($rc === 0 ? 'started' : 'did NOT start (systemctl status sentora-procstat)') . fs_filehandler::NewLine();
+    }
+}
 
 /**
  * Read a Sentora Config setting, adding it with its default when it does not exist.

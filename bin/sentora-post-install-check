@@ -70,6 +70,7 @@ svc "ProFTPD" proftpd proftpd
 BIND_SN=$(sp bind_service); svc "BIND" "${BIND_SN:-named}" named
 svc "fail2ban" fail2ban fail2ban-server
 CRON_SN=$(sp cron_service); svc "cron (the Sentora daemon)" "$CRON_SN" "$CRON_SN"
+svc "Server Monitor process list (sentora-procstat)" sentora-procstat php
 if [ -x "$(sp sogo_bin)" ]; then svc "SOGo" "$(sp sogo_service)" sogod; svc "memcached (SOGo)" memcached memcached; fi
 # the backup, restore and update tools copy files with rsync
 command -v rsync > /dev/null 2>&1 && ok "rsync (backups, restore, updates)" || fail "rsync is not installed ($PKG rsync): restore, updates and off-server backup need it"

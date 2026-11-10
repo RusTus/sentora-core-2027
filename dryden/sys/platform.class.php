@@ -94,6 +94,8 @@ class sys_platform
         // cron: the folder of users' crontabs
         'crontab_dir' => array('/var/spool/cron/crontabs', 'The folder of the users\' crontabs'),
         'cron_service' => array('cron', 'The cron service (and its process name)'),
+        // systemd: where the panel's own services (sentora-procstat) are written
+        'systemd_unit_dir' => array('/etc/systemd/system', 'The folder of local systemd services'),
         // the package tool, named in messages
         'package_install' => array('apt-get -qq -y install', 'The command that installs a package (the tools run it as root)'),
         'php_ext_package' => array('php{v}-{e}', 'The package of a PHP extension ({v}: PHP version, {e}: the extension)'),

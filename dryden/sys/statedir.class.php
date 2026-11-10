@@ -19,7 +19,7 @@
  * @package Sentora
  * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
  *
- * Written by RusTus, 2026-11-09
+ * Written by RusTus, 2026-11-10
  */
 class sys_statedir
 {
@@ -29,7 +29,7 @@ class sys_statedir
     const LOGS = array('sentora-auth.log', 'phpmyadmin-auth.log', 'twofactor.log', 'password-reveal.log', 'shadowing.log', 'panel-update.log');
 
     /** Subfolders only root jobs write into. */
-    const ROOT_DIRS = array('accounts', 'clientftp', 'goaccess', 'matomo', 'sitehealth');
+    const ROOT_DIRS = array('accounts', 'clientftp', 'goaccess', 'matomo', 'sitehealth', 'monitor');
 
     /**
      * Make the folder safe (see the class comment). Root only; does nothing for anyone else.

@@ -7,7 +7,7 @@
  *
  * Process names only (never command lines: those can hold passwords).
  *
- * Written by RusTus, 2026-11-09
+ * Written by RusTus, 2026-11-10
  */
 chdir(dirname(__FILE__) . '/../../../');
 require_once 'dryden/loader.inc.php';
@@ -112,7 +112,17 @@ if (!count($out['fs']) && @disk_total_space('/') > 0) {
 // Processes: name, owner, CPU ticks and memory, for the busiest-processes table
 $users = array();
 $out['procs'] = array();
-foreach ((array) glob('/proc/[0-9]*', GLOB_ONLYDIR) as $dir) {
+// the root service's list (sentora-procstat) while it is fresh: it sees every process, also where the
+// system hides other programs' processes from the panel; otherwise /proc as the panel sees it
+$smList = json_decode(sm_read(sys_statedir::DIR . '/monitor/procs.json'), true);
+if (is_array($smList) && (int) ($smList['time'] ?? 0) >= time() - 15 && is_array($smList['procs'] ?? null)) {
+    foreach ($smList['procs'] as $p) {
+        if (is_array($p) && count($p) === 5) {
+            $out['procs'][] = array((int) $p[0], (string) $p[1], (string) $p[2], (int) $p[3], (int) $p[4]);
+        }
+    }
+}
+foreach ($out['procs'] ? array() : (array) glob('/proc/[0-9]*', GLOB_ONLYDIR) as $dir) {
     $stat = sm_read($dir . '/stat');
     $l = strrpos($stat, ')');
     if ($l === false) {

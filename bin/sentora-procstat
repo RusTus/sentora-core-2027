@@ -1,0 +1,70 @@
+<?php
+/**
+ * sentora-procstat: the list of this server's processes for Server Monitor (run by systemd as root,
+ * service sentora-procstat; the daemon installs it and keeps it running).
+ *
+ * The panel runs as its own user, and where the system keeps processes apart (SELinux on AlmaLinux)
+ * it sees only its own. Root sees them all: every few seconds this writes their name, owner, CPU
+ * time and memory (no command lines, no environment) to a file only the panel's group can read.
+ * Server Monitor uses it while it is fresh, and reads /proc itself otherwise.
+ *
+ * Usage: php sentora-procstat <output file> <group that may read it> [seconds between, 2 to 60]
+ *
+ * @package Sentora
+ * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
+ *
+ * Written by RusTus, 2026-11-10
+ */
+if (PHP_SAPI !== 'cli' || !function_exists('posix_geteuid') || posix_geteuid() !== 0 || $argc < 3) {
+    fwrite(STDERR, "usage (as root): php sentora-procstat <output file> <group> [seconds]\n");
+    exit(1);
+}
+$out = (string) $argv[1];
+$group = (string) $argv[2];
+$every = max(2, min(60, (int) ($argv[3] ?? 3)));
+$dir = dirname($out);
+if (!is_dir($dir) || is_link($dir) || is_link($out)) {
+    fwrite(STDERR, "sentora-procstat: $dir is not a folder (or a link is in the way)\n");
+    exit(1);
+}
+$gr = posix_getgrnam($group);
+if ($gr === false) {
+    fwrite(STDERR, "sentora-procstat: no group $group\n");
+    exit(1);
+}
+$gid = (int) $gr['gid'];
+$users = array();
+while (true) {
+    $procs = array();
+    foreach ((array) glob('/proc/[0-9]*', GLOB_ONLYDIR) as $p) {
+        $stat = (string) @file_get_contents($p . '/stat');
+        $l = strrpos($stat, ')');
+        $o = strpos($stat, '(');
+        if ($l === false || $o === false) {
+            continue;
+        }
+        $f = explode(' ', substr($stat, $l + 2));
+        $rss = (int) ($f[21] ?? 0) * 4096;
+        if ($rss === 0) {
+            continue; // kernel threads
+        }
+        $uid = @fileowner($p);
+        if ($uid === false) {
+            continue; // gone meanwhile
+        }
+        if (!isset($users[$uid])) {
+            $pw = posix_getpwuid($uid);
+            $users[$uid] = $pw ? $pw['name'] : (string) $uid;
+        }
+        $procs[] = array((int) basename($p), substr($stat, $o + 1, $l - $o - 1), $users[$uid], (int) $f[11] + (int) $f[12], $rss);
+    }
+    // written beside, then renamed: the panel never reads half a file
+    $tmp = $out . '.new';
+    if (!is_link($tmp) && @file_put_contents($tmp, json_encode(array('time' => time(), 'procs' => $procs)), LOCK_EX) !== false) {
+        @chmod($tmp, 0640);
+        @chown($tmp, 0);
+        @chgrp($tmp, $gid);
+        @rename($tmp, $out);
+    }
+    sleep($every);
+}
