@@ -10,7 +10,7 @@
  * account's email address) and "Alert disk use percent" (85). Every alert is also
  * written to /var/sentora/logs/alerts.log.
  *
- * Written by RusTus, 2026-11-09
+ * Written by RusTus, 2026-11-10
  */
 global $zdbh; // hooks are included inside a function
 // Sentora Config > Two-factor login: disabled | enabled | enabled-forced (was true | false)
@@ -124,9 +124,10 @@ function SentoraServerAlerts()
             $now['service:' . $s[0]] = $label . ' is not running (systemctl status ' . $s[0] . ').';
         }
     }
-    if (is_executable('/usr/sbin/postqueue')) {
+    $pq = sys_platform::Get('postqueue_bin');
+    if ($pq !== '' && is_executable($pq)) {
         $queued = 0;
-        exec('/usr/sbin/postqueue -j 2>/dev/null', $lines);
+        exec(escapeshellarg($pq) . ' -j 2>/dev/null', $lines);
         $queued = count(array_filter((array) $lines, 'strlen'));
         if ($queued > 100) {
             $now['mailqueue'] = $queued . ' messages are waiting in the outgoing mail queue (often a site sending spam: mailq shows them).';

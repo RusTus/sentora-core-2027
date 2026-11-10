@@ -5,7 +5,7 @@
  * SpamAssassin, ClamAV, Postfix and Dovecot, and reads the mail log into the activity
  * that users see. See dryden/sys/spamav.class.php for how mail flows.
  *
- * Written by RusTus, 2026-11-09
+ * Written by RusTus, 2026-11-10
  */
 global $zdbh; // hooks are included inside a function
 if (!is_file(sys_platform::Get('spamd_bin')) && !is_file(sys_platform::Get('clamd_bin'))) {
@@ -147,16 +147,22 @@ $svSpamd = $svP('spamd_service');
 $svSpamMilter = $svP('spamass_milter_service');
 $svRestart = array();
 if (is_file(sys_platform::Get('clamd_bin'))) {
-    @mkdir('/var/spool/postfix/clamav', 0750, true);
-    @chown('/var/spool/postfix/clamav', $svP('clamav_milter_user'));
-    @chgrp('/var/spool/postfix/clamav', 'postfix');
-    @mkdir('/var/log/clamav', 0775, true);
-    @chown('/var/log/clamav', $svP('clamav_user'));
-    // the signature updater writes its own log there, as its own user (clamupdate on AlmaLinux)
-    if (!is_file('/var/log/clamav/freshclam.log')) {
-        @touch('/var/log/clamav/freshclam.log');
+    // the mail connection's socket folder: its user's, Postfix's group may reach the socket
+    $d = dirname($svP('clamav_milter_socket'));
+    if (!is_dir($d)) {
+        @mkdir($d, 0750, true);
     }
-    @chown('/var/log/clamav/freshclam.log', $svP('freshclam_user'));
+    @chown($d, $svP('clamav_milter_user'));
+    @chgrp($d, 'postfix');
+    $d = $svP('clamav_log_dir');
+    @mkdir($d, 0775, true);
+    @chown($d, $svP('clamav_user'));
+    // the signature updater writes its own log there, as its own user (made in the folder, so it
+    // gets the folder's labels where the system has them)
+    if (!is_file($d . '/freshclam.log')) {
+        @touch($d . '/freshclam.log');
+    }
+    @chown($d . '/freshclam.log', $svP('freshclam_user'));
     if ($svWrite($svP('clamd_conf'), sys_spamav::ClamdConf())) { $svRestart[$svClamd] = true; }
     if ($svWrite($svP('clamav_milter_conf'), sys_spamav::MilterConf())) { $svRestart[$svClamMilter] = true; }
     if ($svWrite($svP('freshclam_conf'), sys_spamav::FreshclamConf())) { $svRestart[$svFresh] = true; }
@@ -183,7 +189,7 @@ if (is_file(sys_platform::Get('spamd_bin'))) {
 }
 // scanners on or off as set; ClamAV waits for its first signatures
 $svJustStarted = array();
-$svHaveSigs = (bool) glob('/var/lib/clamav/{daily,main}.{cvd,cld}', GLOB_BRACE);
+$svHaveSigs = (bool) glob(sys_platform::Get('clamav_db_dir') . '/{daily,main}.{cvd,cld}', GLOB_BRACE);
 $svWant = array($svFresh => $clamOn, $svClamd => $clamOn && $svHaveSigs, $svClamMilter => $clamOn && $svHaveSigs, $svSpamd => $saOn, $svSpamMilter => $saOn);
 $svIsClam = array($svFresh => true, $svClamd => true, $svClamMilter => true);
 foreach ($svWant as $unit => $want) {
@@ -225,8 +231,8 @@ foreach ($svWant as $unit => $want) {
 
 // --- 5. Postfix: the milters of the scanners that are on ----------------------------------------
 $svMilters = array();
-if ($saOn) { $svMilters[] = 'unix:/var/spool/postfix/spamass/spamass.sock'; }
-if ($clamOn && $svHaveSigs) { $svMilters[] = 'unix:/var/spool/postfix/clamav/clamav-milter.ctl'; }
+if ($saOn) { $svMilters[] = 'unix:' . sys_platform::Get('spamass_milter_socket'); }
+if ($clamOn && $svHaveSigs) { $svMilters[] = 'unix:' . sys_platform::Get('clamav_milter_socket'); }
 $svPostfix = array('smtpd_milters' => implode(', ', $svMilters), 'milter_default_action' => 'accept', 'milter_protocol' => '6',
     'milter_mail_macros' => 'i {auth_type} {auth_authen} {auth_author} {mail_addr} {mail_host} {mail_mailer}');
 $svPfChanged = false;
@@ -320,7 +326,7 @@ foreach (array_keys($svWant) as $unit) {
 }
 $svStatus['have_sigs'] = $svHaveSigs;
 foreach (array('daily', 'main', 'bytecode') as $db) {
-    $f = glob('/var/lib/clamav/' . $db . '.c[vl]d');
+    $f = glob(sys_platform::Get('clamav_db_dir') . '/' . $db . '.c[vl]d');
     if ($f) {
         list(, $out) = $sv('sigtool --info ' . escapeshellarg($f[0]));
         $svStatus['sigs'][$db] = array('version' => preg_match('/Version: (\d+)/', $out, $m) ? $m[1] : '?',

@@ -7,7 +7,7 @@
  * @package Sentora
  * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
  *
- * Written by RusTus, 2026-11-09
+ * Written by RusTus, 2026-11-10
  */
 
 /**
@@ -58,6 +58,7 @@ class sys_platform
         // the programs whose presence says a service is installed
         'spamd_bin' => array('/usr/sbin/spamd', 'SpamAssassin\'s program'),
         'clamd_bin' => array('/usr/sbin/clamd', 'ClamAV\'s program'),
+        'postqueue_bin' => array('/usr/sbin/postqueue', 'Postfix\'s mail queue program (the server monitor counts the waiting mail)'),
         'sogo_bin' => array('/usr/sbin/sogod', 'SOGo\'s program'),
         // mail: ClamAV
         'clamav_user' => array('clamav', 'ClamAV\'s Linux user'),
@@ -67,6 +68,9 @@ class sys_platform
         'clamav_milter_conf' => array('/etc/clamav/clamav-milter.conf', 'ClamAV mail connection\'s settings file'),
         'clamav_milter_pid' => array('/run/clamav/clamav-milter.pid', 'ClamAV mail connection\'s PID file'),
         'clamav_milter_service' => array('clamav-milter', 'ClamAV mail connection\'s service'),
+        'clamav_milter_socket' => array('/var/spool/postfix/clamav/clamav-milter.ctl', 'ClamAV mail connection\'s socket (Postfix connects to it; its folder is made for that user and the postfix group)'),
+        'clamav_log_dir' => array('/var/log/clamav', 'ClamAV\'s log folder (clamav.log, freshclam.log)'),
+        'clamav_db_dir' => array('/var/lib/clamav', 'ClamAV\'s virus signature folder'),
         'freshclam_conf' => array('/etc/clamav/freshclam.conf', 'The virus signature updater\'s settings file'),
         'freshclam_service' => array('clamav-freshclam', 'The virus signature updater\'s service'),
         'freshclam_user' => array('clamav', 'The virus signature updater\'s Linux user (owns the signatures)'),
@@ -81,6 +85,7 @@ class sys_platform
         'spamass_milter_user' => array('spamass-milter', 'SpamAssassin mail connection\'s Linux user'),
         'spamass_milter_defaults_file' => array('/etc/default/spamass-milter', 'SpamAssassin mail connection\'s start options file'),
         'spamass_milter_service' => array('spamass-milter', 'SpamAssassin mail connection\'s service'),
+        'spamass_milter_socket' => array('/var/spool/postfix/spamass/spamass.sock', 'SpamAssassin mail connection\'s socket (Postfix connects to it; its folder is made for that user and the postfix group)'),
         'spamass_milter_skip_auth_flag' => array('-I', 'Its option that skips mail from logged-in senders (Debian\'s -I, upstream -a)'),
         'spamass_milter_defaults_template' => array("OPTIONS=\"{options}\"\nSOCKET=\"{socket}\"\nSOCKETOWNER=\"{user}:postfix\"\nSOCKETMODE=\"0660\"", 'That file\'s contents ({options}, {socket}, {user})'),
         // SOGo

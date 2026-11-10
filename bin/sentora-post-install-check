@@ -79,7 +79,7 @@ if [ -x "$(sp spamd_bin)" ] || [ -x "$(sp clamd_bin)" ]; then
     CL_ON=$(q "SELECT so_value_tx FROM sentora_core.x_settings WHERE so_name_vc = 'clam_enabled'")
     if [ -x "$(sp spamd_bin)" ] && [ "$SA_ON" != "false" ]; then svc "SpamAssassin" "$(sp spamd_service)" spamd; svc "SpamAssassin mail connection (spamass-milter)" "$(sp spamass_milter_service)" spamass-milter; fi
     if [ -x "$(sp clamd_bin)" ] && [ "$CL_ON" = "true" ]; then
-        if ls /var/lib/clamav/daily.c?d /var/lib/clamav/main.c?d > /dev/null 2>&1; then
+        if CLDB=$(sp clamav_db_dir); ls "${CLDB:-/var/lib/clamav}"/daily.c?d "${CLDB:-/var/lib/clamav}"/main.c?d > /dev/null 2>&1; then
             svc "ClamAV" "$(sp clamd_service)" clamd; svc "ClamAV mail connection (clamav-milter)" "$(sp clamav_milter_service)" clamav-milter
         else
             warn "ClamAV is waiting for its first virus signatures (systemctl status $(sp freshclam_service))"

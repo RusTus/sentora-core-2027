@@ -6,7 +6,7 @@
  * @package Sentora
  * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
  *
- * Written by RusTus, 2026-11-09
+ * Written by RusTus, 2026-11-10
  */
 
 /**
@@ -336,8 +336,8 @@ class sys_spamav
             . "MaxFileSize " . (int) self::Get('clam_max_file_size') . "M\nMaxScanSize " . (int) self::Get('clam_max_scan_size') . "M\nStreamMaxLength " . (int) self::Get('clam_max_scan_size') . "M\n"
             . "MaxRecursion " . (int) self::Get('clam_max_recursion') . "\nMaxFiles " . (int) self::Get('clam_max_files') . "\nMaxThreads " . (int) self::Get('clam_threads') . "\n"
             . "ReadTimeout 180\nCommandReadTimeout 30\nSendBufTimeout 200\nMaxQueue 100\nIdleTimeout 30\nSelfCheck 3600\nForeground false\n"
-            . "LogSyslog true\nLogFacility LOG_LOCAL6\nLogTime true\nLogFile /var/log/clamav/clamav.log\nLogFileMaxSize 0\nLogRotate true\nExtendedDetectionInfo true\n"
-            . "DatabaseDirectory /var/lib/clamav\nOfficialDatabaseOnly false\nBytecode true\nBytecodeSecurity TrustSigned\nBytecodeTimeout 60000\n";
+            . "LogSyslog true\nLogFacility LOG_LOCAL6\nLogTime true\nLogFile " . sys_platform::Get('clamav_log_dir') . "/clamav.log\nLogFileMaxSize 0\nLogRotate true\nExtendedDetectionInfo true\n"
+            . "DatabaseDirectory " . sys_platform::Get('clamav_db_dir') . "\nOfficialDatabaseOnly false\nBytecode true\nBytecodeSecurity TrustSigned\nBytecodeTimeout 60000\n";
     }
 
     /**
@@ -348,7 +348,7 @@ class sys_spamav
     static function MilterConf()
     {
         return "# Written by Sentora (Admin > SpamAV Admin): changes here are replaced\n"
-            . "MilterSocket /var/spool/postfix/clamav/clamav-milter.ctl\nFixStaleSocket true\nMilterSocketGroup postfix\nMilterSocketMode 660\nUser " . sys_platform::Get('clamav_milter_user') . "\n"
+            . "MilterSocket " . sys_platform::Get('clamav_milter_socket') . "\nFixStaleSocket true\nMilterSocketGroup postfix\nMilterSocketMode 660\nUser " . sys_platform::Get('clamav_milter_user') . "\n"
             . "ClamdSocket unix:" . sys_platform::Get('clamd_socket') . "\nReadTimeout 120\nForeground false\nPidFile " . sys_platform::Get('clamav_milter_pid') . "\nTemporaryDirectory /tmp\n"
             . "OnClean Accept\nOnInfected " . self::Get('clam_on_infected') . "\nOnFail " . self::Get('clam_on_fail') . "\n"
             . "RejectMsg Rejected: virus %v found in the message\nAddHeader " . (self::On('clam_add_header') ? 'Replace' : 'No') . "\nReportHostname " . (gethostname() ?: 'localhost') . "\n"
@@ -365,8 +365,8 @@ class sys_spamav
     static function FreshclamConf()
     {
         return "# Written by Sentora (Admin > SpamAV Admin): changes here are replaced\n"
-            . "DatabaseOwner " . sys_platform::Get('freshclam_user') . "\nUpdateLogFile /var/log/clamav/freshclam.log\nLogVerbose false\nLogSyslog false\nLogFileMaxSize 0\nLogRotate true\nLogTime true\n"
-            . "Foreground false\nDebug false\nMaxAttempts 5\nDatabaseDirectory /var/lib/clamav\nDNSDatabaseInfo current.cvd.clamav.net\n"
+            . "DatabaseOwner " . sys_platform::Get('freshclam_user') . "\nUpdateLogFile " . sys_platform::Get('clamav_log_dir') . "/freshclam.log\nLogVerbose false\nLogSyslog false\nLogFileMaxSize 0\nLogRotate true\nLogTime true\n"
+            . "Foreground false\nDebug false\nMaxAttempts 5\nDatabaseDirectory " . sys_platform::Get('clamav_db_dir') . "\nDNSDatabaseInfo current.cvd.clamav.net\n"
             . "ConnectTimeout 30\nReceiveTimeout 0\nTestDatabases yes\nScriptedUpdates yes\nCompressLocalDatabase no\nBytecode true\n"
             . "NotifyClamd " . sys_platform::Get('clamd_conf') . "\nChecks " . (int) self::Get('clam_db_checks') . "\nDatabaseMirror database.clamav.net\n";
     }
@@ -428,7 +428,7 @@ class sys_spamav
             $opt .= " -r " . (int) ceil($r); // the start script splits OPTIONS on spaces: the default message (Blocked by SpamAssassin) is kept
         }
         return "# Written by Sentora (Admin > SpamAV Admin)\n" . sys_platform::Get('spamass_milter_defaults_template', array(
-            'options' => $opt . " -- -s " . ((int) self::Get('sa_max_size') * 1024), 'socket' => '/var/spool/postfix/spamass/spamass.sock',
+            'options' => $opt . " -- -s " . ((int) self::Get('sa_max_size') * 1024), 'socket' => sys_platform::Get('spamass_milter_socket'),
             'user' => sys_platform::Get('spamass_milter_user'))) . "\n";
     }
 
