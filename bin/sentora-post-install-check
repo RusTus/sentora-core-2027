@@ -154,6 +154,23 @@ else
     warn "ss not found, ports not checked"
 fi
 
+section "ModSecurity (switched on by the Web Hardening add-on)"
+MS_MOD=$(sp modsec_module); MS_CONF=$(sp modsec_conf_dir)
+MS_INC="$(dirname "$(sp apache_vhost)")/httpd.conf"
+CRS_V=$PANEL/etc/modsecurity/coreruleset/VERSION
+if [ -f "$MS_MOD" ]; then ok "ModSecurity installed ($MS_MOD)"
+else warn "ModSecurity not installed ($MS_MOD missing; sentora-update installs it)"; fi
+if [ -f "$CRS_V" ] && [ -f "$PANEL/etc/modsecurity/coreruleset/rules/REQUEST-901-INITIALIZATION.conf" ]; then ok "its rules: $(head -1 "$CRS_V" | cut -d' ' -f1-3)"
+else fail "the OWASP rules are missing from $PANEL/etc/modsecurity/coreruleset (sentora-update puts them back)"; fi
+if grep -qF "IncludeOptional $MS_CONF/*.conf" "$MS_INC" 2> /dev/null; then ok "Apache includes $MS_CONF"
+else warn "Sentora's httpd.conf does not include $MS_CONF (sentora-update adds it)"; fi
+MS_LOADED=$($(sp apache_modules_cmd) 2> /dev/null | grep -c security2_module)
+if ls "$MS_CONF"/*.conf > /dev/null 2>&1; then
+    if [ "${MS_LOADED:-0}" -gt 0 ]; then ok "ModSecurity switched on (Web Hardening)"
+    else fail "Web Hardening's ModSecurity settings are in $MS_CONF but Apache has not loaded them (reload Apache; the add-on's page says why)"; fi
+elif [ "${MS_LOADED:-0}" -gt 0 ]; then warn "ModSecurity is loaded by the system's own settings, not Sentora's (switch that off: $(sp modsec_off_cmd); then reload Apache)"
+else ok "ModSecurity switched off until the Web Hardening add-on switches it on"; fi
+
 section "Hosted sites may use only their own PHP"
 VH=/etc/sentora/configs/apache/httpd-vhosts.conf
 if $(sp apache_modules_cmd) 2> /dev/null | grep -q lua_module && grep -q "LuaHookFixups" "$VH" 2> /dev/null && grep -q "SENTORA_STATUS_BLOCK" "$VH" 2> /dev/null; then ok "Apache request guard in place (sentora-guard.lua)"

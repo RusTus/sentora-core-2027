@@ -40,6 +40,14 @@ class sys_platform
         'apache_module_includes' => array("Include /etc/apache2/mods-enabled/*.load\nInclude /etc/apache2/mods-enabled/*.conf", 'The lines that load Apache\'s modules, for testing a configuration on its own'),
         'apache_enable_module' => array('a2enmod -q {m}', 'Command that switches an Apache module on (empty: the modules are on once installed)'),
         'apache_log_dir' => array('/var/log/apache2', 'Apache\'s own log folder'),
+        // ModSecurity (Apache's web application firewall): installed by the installers, switched off;
+        // the Web Hardening add-on switches it on with the rules in etc/modsecurity/coreruleset
+        'modsec_package' => array('--no-install-recommends libapache2-mod-security2', 'The package of ModSecurity for Apache (without the system\'s own rule set)'),
+        'modsec_module' => array('/usr/lib/apache2/modules/mod_security2.so', 'ModSecurity\'s Apache module file'),
+        'modsec_unique_id_module' => array('/usr/lib/apache2/modules/mod_unique_id.so', 'Apache\'s unique_id module file (ModSecurity\'s audit log uses it)'),
+        'modsec_data_dir' => array('/var/cache/modsecurity', 'ModSecurity\'s data folder (Apache may write in it)'),
+        'modsec_conf_dir' => array('/etc/sentora/configs/apache/modsecurity.d', 'The folder whose .conf files Apache includes for ModSecurity (Sentora\'s httpd.conf includes it)'),
+        'modsec_off_cmd' => array('a2dismod -q -f security2', 'Command that stops the system\'s own ModSecurity settings from loading (Sentora loads it itself when it is switched on)'),
         // the system PHP (the panel's, and the sites' default) and its PHP-FPM
         'php_fpm_pool_dir' => array('/etc/php/{v}/fpm/pool.d/', 'The system PHP-FPM\'s pool folder'),
         'php_fpm_service' => array('php{v}-fpm', 'The system PHP-FPM\'s service'),

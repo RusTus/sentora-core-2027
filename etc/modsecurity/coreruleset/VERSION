@@ -1,0 +1,2 @@
+OWASP CRS 4.25.2 (git commit b9818c3718bc75b99403aed6c4b23773004c5412), from https://github.com/coreruleset/coreruleset
+Updated with .github/scripts/update-crs.sh; used by the Web Hardening add-on (ModSecurity).

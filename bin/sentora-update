@@ -737,6 +737,35 @@ if [ -d "$PANEL/modules/spamav_admin" ] && { [ ! -x "$(sp spamd_bin)" ] || [ ! -
         warn "could not install SpamAssassin and ClamAV (see /var/sentora/logs/update-spamav-install.log)"
     fi
 fi
+# --- ModSecurity (the installers install it switched off; the Web Hardening add-on switches it on
+# with the rules in etc/modsecurity/coreruleset): servers installed before get the package, kept
+# off, and the line in Sentora's httpd.conf that includes the add-on's settings
+MS_MOD=$(sp modsec_module)
+if [ -n "$MS_MOD" ] && [ ! -f "$MS_MOD" ]; then
+    MS_PKG=$(sp modsec_package)
+    # shellcheck disable=SC2086
+    if [ -n "$MS_PKG" ] && DEBIAN_FRONTEND=noninteractive $PKG $MS_PKG > /var/sentora/logs/update-modsec-install.log 2>&1 && [ -f "$MS_MOD" ]; then
+        # (off: the daemon's Apache reload below unloads what the package may have switched on)
+        sh -c "$(sp modsec_off_cmd)" >> /var/sentora/logs/update-modsec-install.log 2>&1
+        say "ModSecurity installed, switched off (Web Hardening in Repo Browser switches it on)"
+    else
+        warn "ModSecurity did not install: $PKG $MS_PKG (see /var/sentora/logs/update-modsec-install.log)"
+    fi
+fi
+MS_CONF=$(sp modsec_conf_dir)
+HTTPD_INC="$(dirname "$(sp apache_vhost)")/httpd.conf"
+if [ -n "$MS_CONF" ] && [ -f "$HTTPD_INC" ]; then
+    mkdir -p "$MS_CONF" && chmod 755 "$MS_CONF"
+    if ! grep -qF "IncludeOptional $MS_CONF/*.conf" "$HTTPD_INC"; then
+        # before the sites (ModSecurity's settings apply to all of them)
+        if grep -q '^Include .*httpd-vhosts\.conf' "$HTTPD_INC"; then
+            sed -i "/^Include .*httpd-vhosts\.conf/i # ModSecurity, when the Web Hardening add-on switches it on (empty otherwise)\nIncludeOptional $MS_CONF/*.conf\n" "$HTTPD_INC"
+        else
+            printf '\n# ModSecurity, when the Web Hardening add-on switches it on (empty otherwise)\nIncludeOptional %s/*.conf\n' "$MS_CONF" >> "$HTTPD_INC"
+        fi
+        say "Apache: includes $MS_CONF (ModSecurity, switched on by the Web Hardening add-on)"
+    fi
+fi
 RC_AFTER=$(ver "$PANEL/etc/apps/webmail/program/include/iniset.php" "RCMAIL_VERSION', '[^']*'")
 MT_AFTER=$(ver "$PANEL/etc/apps/matomo/core/Version.php" "VERSION = '[^']*'")
 if [ -n "$MT_AFTER" ] && [ "$MT_BEFORE" != "$MT_AFTER" ] && [ -f "$PANEL/etc/apps/matomo/config/config.ini.php" ]; then
