@@ -350,14 +350,15 @@ if command -v dpkg > /dev/null 2>&1 && dpkg -l unattended-upgrades 2> /dev/null 
         warn "unattended-upgrades has not run yet (it runs once a day)"
     fi
     [ -f /var/run/reboot-required ] && warn "a restart is needed to finish updates ($(tr '\n' ' ' < /var/run/reboot-required.pkgs 2> /dev/null | cut -c1-80))"
-elif command -v dnf > /dev/null 2>&1 && rpm -q dnf-automatic > /dev/null 2>&1; then
-    # dnf-automatic (AlmaLinux and the other Red Hat-family systems)
-    if grep -Eq '^\s*apply_updates\s*=\s*(yes|true|1)' /etc/dnf/automatic.conf 2> /dev/null; then ok "dnf-automatic installs updates"
-    else fail "dnf-automatic is installed but does not install updates (apply_updates in /etc/dnf/automatic.conf)"; fi
+elif DA_PKG=$(sp dnf_automatic_package); DA_TIMER=$(sp dnf_automatic_timer); DA_PKG=${DA_PKG:-dnf-automatic}; DA_TIMER=${DA_TIMER:-dnf-automatic.timer}
+        command -v dnf > /dev/null 2>&1 && rpm -q "$DA_PKG" > /dev/null 2>&1; then
+    # dnf's automatic updates (the Red Hat-family systems; package and timer from the settings)
+    if grep -Eq '^\s*apply_updates\s*=\s*(yes|true|1)' /etc/dnf/automatic.conf 2> /dev/null; then ok "dnf automatic updates install updates ($DA_PKG)"
+    else fail "$DA_PKG is installed but does not install updates (apply_updates in /etc/dnf/automatic.conf)"; fi
     if [ $SYSTEMD -eq 1 ]; then
-        systemctl is-active --quiet dnf-automatic.timer && ok "the daily update timer is active" || fail "dnf-automatic.timer is not active (systemctl enable --now dnf-automatic.timer)"
+        systemctl is-active --quiet "$DA_TIMER" && ok "the daily update timer is active" || fail "$DA_TIMER is not active (systemctl enable --now $DA_TIMER)"
     fi
-    [ -n "$(systemctl show -p LastTriggerUSec --value dnf-automatic.timer 2> /dev/null | grep -v '^n/a$')" ] || warn "dnf-automatic has not run yet (it runs once a day)"
+    [ -n "$(systemctl show -p LastTriggerUSec --value "$DA_TIMER" 2> /dev/null | grep -v '^n/a$')" ] || warn "the automatic updates have not run yet (they run once a day)"
 else
     fail "no automatic security updates are installed (unattended-upgrades or dnf-automatic): security updates are not installed automatically"
 fi

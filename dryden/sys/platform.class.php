@@ -107,6 +107,9 @@ class sys_platform
         // systemd: where the panel's own services (sentora-procstat) are written
         'systemd_unit_dir' => array('/etc/systemd/system', 'The folder of local systemd services'),
         // the package tool, named in messages
+        // automatic security updates on dnf systems: the package and its timer
+        'dnf_automatic_package' => array('dnf-automatic', 'The package of dnf\'s automatic updates (dnf systems)'),
+        'dnf_automatic_timer' => array('dnf-automatic.timer', 'Its daily timer'),
         'package_install' => array('apt-get -qq -y install', 'The command that installs a package (the tools run it as root)'),
         'php_ext_package' => array('php{v}-{e}', 'The package of a PHP extension ({v}: PHP version, {e}: the extension)'),
         // the extra PHP versions (Sentora's builds): which bundles fit this system, and their libraries
