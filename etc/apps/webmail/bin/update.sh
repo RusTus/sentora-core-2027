@@ -276,6 +276,7 @@ if ($RCI->configured) {
             if ($composer_bin = find_composer()) {
                 echo 'Executing ' . $composer_bin . " to update dependencies...\n";
                 echo system("{$composer_bin} update -d " . escapeshellarg(INSTALL_PATH) . ' --no-dev', $exit_code);
+                $success &= $exit_code == 0;
             }
             if ($exit_code != 0) {
                 echo "-----------------------------------------------------------------------------\n";
@@ -293,6 +294,8 @@ if ($RCI->configured) {
     if ($success) {
         echo "This instance of Roundcube is up-to-date.\n";
         echo "Have fun!\n";
+    } else {
+        exit(1);
     }
 } else {
     echo "This instance of Roundcube is not yet configured!\n";
@@ -317,13 +320,13 @@ function repo_key($repo)
 function find_composer()
 {
     if (is_file(INSTALL_PATH . 'composer.phar')) {
-        return 'php composer.phar';
+        return \PHP_BINARY . ' composer.phar';
     }
 
     foreach (['composer', 'composer.phar'] as $check_file) {
         $which = trim(rcube::exec("which {$check_file}"));
         if (!empty($which)) {
-            return $which;
+            return \PHP_BINARY . " {$which}";
         }
     }
 
