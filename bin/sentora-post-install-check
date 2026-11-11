@@ -462,8 +462,12 @@ srv=$(echo "$hdr" | awk -F': ' 'tolower($1) == "server" {print $2; exit}')
 if [ -z "$hdr" ]; then warn "Apache did not answer on http://127.0.0.1/"
 elif echo "$srv" | grep -q '[0-9]'; then warn "Apache tells its version to everyone ($srv): ServerTokens Prod"
 else ok "Apache does not tell its version"; fi
-code=$(curl -s -m 10 -o /dev/null -w '%{http_code}' -X TRACE http://127.0.0.1/ 2> /dev/null)
-case "$code" in 405|403|501) ok "TRACE requests refused ($code)" ;; 000|'') ;; *) warn "TRACE requests are answered ($code): TraceEnable Off" ;; esac
+# TRACE is a risk only when Apache echoes the request back (a refusal or a redirect echoes nothing)
+TR=$(curl -s -m 10 -X TRACE -H 'X-Sentora-Trace: echo-test' -w '\n%{http_code}' http://127.0.0.1/ 2> /dev/null)
+code=$(printf '%s' "$TR" | tail -1)
+if [ "$code" = 000 ] || [ -z "$code" ]; then :
+elif [ "$code" = 200 ] && printf '%s' "$TR" | grep -qi 'X-Sentora-Trace: echo-test'; then warn "TRACE requests are echoed back: TraceEnable Off in Apache's settings"
+else ok "TRACE requests are not echoed ($code)"; fi
 phdr=$(curl -sk -m 10 -I https://127.0.0.1/ 2> /dev/null)
 if [ -z "$phdr" ]; then :
 elif echo "$phdr" | grep -qi '^x-powered-by:.*php'; then warn "the panel tells its PHP version (X-Powered-By): expose_php = Off"

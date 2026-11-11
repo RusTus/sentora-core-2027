@@ -494,7 +494,7 @@ Every 5 minutes the daemon checks the server and emails the alert address (Sento
 
 One email when a problem starts, a reminder every 24 hours, one when it is resolved; each is also written to `/var/sentora/logs/alerts.log`.
 
-To look yourself: **Server Monitor** (CPU, load, memory, network, disks, busiest processes and services, live), **Apache Status** (requests, workers, slowest requests), **System Log Viewer** (every server log, live, grouped: PHP, panel, panel security, domains, FTP, DNS, Apache, mail, MySQL, system) and **Service Status** (which services answer, and the daemon's last and next run).
+To look yourself: **Server Monitor** (CPU, load, memory, network, disks, busiest processes and services, live, and the Sentora hardening score with what to fix), **Apache Status** (requests, workers, slowest requests), **System Log Viewer** (every server log, live, grouped: PHP, panel, panel security, domains, FTP, DNS, Apache, mail, MySQL, system) and **Service Status** (which services answer, and the daemon's last and next run).
 
 ## Site Health
 
