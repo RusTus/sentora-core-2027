@@ -437,6 +437,12 @@ fi
 # --- 10. the Sentora daemon -----------------------------------------------------------
 section "Sentora daemon"
 DL=/var/sentora/logs/daemon-last-run.log
+# a run that is busy right now is still writing its report: wait for it (up to 2 minutes) before reading it
+if [ -f /var/lib/sentora/daemon.lock ] && command -v flock > /dev/null 2>&1 \
+        && ! flock -n /var/lib/sentora/daemon.lock true 2> /dev/null; then
+    echo "  (a daemon run is busy: waiting for it to finish)"
+    flock -w 120 /var/lib/sentora/daemon.lock true 2> /dev/null
+fi
 if [ -f "$DL" ]; then
     age=$(( ($(date +%s) - $(stat -c %Y "$DL")) / 60 ))
     if [ $age -le 15 ]; then ok "last run $age minute(s) ago"; else fail "last run $age minutes ago (it runs every 5 minutes: check cron)"; fi
