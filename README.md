@@ -140,7 +140,7 @@ A ready-made image, `ghcr.io/rustus/sentora2027` (Debian 13 inside), built and t
 docker run -d --name sentora --hostname panel.example.com \
   -e SENTORA_EMAIL=you@example.com -e TZ=America/Chicago \
   --restart unless-stopped --cgroupns=private --security-opt writable-cgroups=true \
-  --tmpfs /run --tmpfs /run/lock --cap-add NET_ADMIN \
+  --tmpfs /run --tmpfs /run/lock --cap-add NET_ADMIN -v sentora-backup:/backup \
   -p 80:80 -p 443:443 -p 21:21 -p 61000-61099:61000-61099 -p 25:25 -p 465:465 -p 587:587 \
   -p 110:110 -p 143:143 -p 993:993 -p 995:995 -p 4190:4190 \
   ghcr.io/rustus/sentora2027
@@ -166,7 +166,11 @@ docker exec sentora cat /root/passwords.txt
 docker exec sentora sentora-post-install-check
 ```
 
-Treat the container as the server: Sentora's settings are spread over the whole system, so its websites, mail and databases live in the container, not in separate volumes. It keeps everything through restarts and host reboots; `docker rm` deletes it all. Update it inside (`docker exec -it sentora sentora-update`; Debian's security updates install themselves), and back it up with the panel's backup, ideally to another server (Admin > Backup Config > Off-server backup). The post-install check warns that AppArmor is off: inside a container the host's Docker profile confines it instead, and Sentora's own AppArmor rules do not apply. For hosting other people's websites, a plain Linux server keeps every guard in place.
+Treat the container as the server: Sentora's settings are spread over the whole system, so its websites, mail and databases live in the container, not in separate volumes. It keeps everything through restarts and host reboots; `docker rm` deletes it. Update it inside (`docker exec -it sentora sentora-update`; Debian's security updates install themselves).
+
+**Backups survive the container.** With `-v sentora-backup:/backup`, the first start switches on the nightly full backup into that volume (Admin > Backup Config > Off-server backup, with no server and the folder `/backup`): every account's files, every database, the mailboxes, the panel's settings and key, dated, 14 nights kept. The volume stays on the host when the container is removed. A new container started with the same `--hostname` and volume says so in its log; restore everything from it in Admin > Backup Config > Restore (or `docker exec sentora sentora-panel-restore --list`, then `--full <name> <date> --yes`). The volume holds the keys to everything: keep the host's copy as safe as the server. The off-server backup has one destination: to keep the copies on another machine instead, set that machine there (SSH).
+
+The post-install check warns that AppArmor is off: inside a container the host's Docker profile confines it instead, and Sentora's own AppArmor rules do not apply. For hosting other people's websites, a plain Linux server keeps every guard in place.
 
 ### What differs between the systems
 
