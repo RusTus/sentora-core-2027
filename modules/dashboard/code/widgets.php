@@ -596,7 +596,7 @@ class dashboard_widgets
         };
         $out = '';
         if ($admin) {
-            // the scanners, from the daemon's last check
+            // the scanners, from the daemon's last check (under this system's own service names)
             $st = @json_decode((string) @file_get_contents(sys_spamav::STATUS), true);
             $u = is_array($st) && isset($st['units']) ? $st['units'] : array();
             $line = function ($label, $on, $units) use ($u) {
@@ -610,11 +610,11 @@ class dashboard_widgets
                 return '<tr><th>' . self::t($label) . '</th><td>' . ($up ? ui_status::Ok('Running') . ' ' . self::t('running') : ui_status::Bad('Not running') . ' ' . self::t('not running')) . '</td></tr>';
             };
             $clam = sys_spamav::On('clam_enabled');
-            $out .= '<table class="dw-usage">' . $line('SpamAssassin', sys_spamav::On('sa_enabled'), array('spamd', 'spamass-milter'));
+            $out .= '<table class="dw-usage">' . $line('SpamAssassin', sys_spamav::On('sa_enabled'), array(sys_platform::Get('spamd_service'), sys_platform::Get('spamass_milter_service')));
             if ($clam && is_array($st) && empty($st['have_sigs'])) {
                 $out .= '<tr><th>ClamAV</th><td>' . ui_status::Warn('Waiting') . ' ' . self::t('waiting for its first signatures') . '</td></tr>';
             } else {
-                $out .= $line('ClamAV', $clam, array('clamav-daemon', 'clamav-milter'));
+                $out .= $line('ClamAV', $clam, array(sys_platform::Get('clamd_service'), sys_platform::Get('clamav_milter_service')));
             }
             if (is_array($st) && isset($st['sigs']['daily'])) {
                 $out .= '<tr><th>' . self::t('Signatures') . '</th><td>' . self::h($st['sigs']['daily']['version'] . ' (' . $st['sigs']['daily']['built'] . ')') . '</td></tr>';

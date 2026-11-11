@@ -407,10 +407,15 @@ class module_controller extends ctrl_module
             $up = !empty($u[$unit]);
             return '<li><span class="sa-dot ' . ($up ? 'up' : 'down') . '"></span>' . self::h(self::t($label)) . ' <code>' . self::h($unit) . '</code><em class="' . ($up ? '' : 'bad') . '">' . self::h(self::t($up ? 'running' : 'not running')) . '</em></li>';
         };
+        // each service under this system's own name (the daemon records them so: clamd@scan on some systems)
+        $n = array();
+        foreach (array('clamd_service', 'clamav_milter_service', 'freshclam_service', 'spamd_service', 'spamass_milter_service') as $k) {
+            $n[$k] = sys_platform::Get($k);
+        }
         $clam = sys_spamav::On('clam_enabled');
         $sa = sys_spamav::On('sa_enabled');
-        $clamUp = !$clam || (!empty($u['clamav-daemon']) && !empty($u['clamav-milter']));
-        $saUp = !$sa || (!empty($u['spamd']) && !empty($u['spamass-milter']));
+        $clamUp = !$clam || (!empty($u[$n['clamd_service']]) && !empty($u[$n['clamav_milter_service']]));
+        $saUp = !$sa || (!empty($u[$n['spamd_service']]) && !empty($u[$n['spamass_milter_service']]));
         $state = function ($on, $up) {
             return !$on ? '<span class="sa-pill off">' . self::h(self::t('Off')) . '</span>'
                 : ($up ? '<span class="sa-pill on">' . self::h(self::t('Working')) . '</span>' : '<span class="sa-pill bad">' . self::h(self::t('Needs attention')) . '</span>');
@@ -431,14 +436,14 @@ class module_controller extends ctrl_module
 
         $out = '<div class="sa-scanner"><div class="sa-sc-head"><svg class="sa-ico-lg sa-ico-clam" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><circle cx="12" cy="11" r="3"/><path d="M12 6v2M12 14v2M7 11h2M15 11h2"/></svg>'
             . '<div><h4>' . self::h(self::t('Virus scanning')) . '</h4><span>ClamAV ' . self::h($s['versions']['clamav'] ?? '') . '</span></div>' . $state($clam, $clamUp) . '</div>'
-            . '<ul class="sa-svcs">' . $svc('clamav-daemon', 'Scanner', $clam) . $svc('clamav-milter', 'Mail connection', $clam) . $svc('clamav-freshclam', 'Signature updates', $clam) . '</ul>'
+            . '<ul class="sa-svcs">' . $svc($n['clamd_service'], 'Scanner', $clam) . $svc($n['clamav_milter_service'], 'Mail connection', $clam) . $svc($n['freshclam_service'], 'Signature updates', $clam) . '</ul>'
             . '<div class="sa-facts"><span>' . self::h(self::t('Signatures')) . '</span>' . $sig . '</div>'
             . ($lowmem ? '<div class="sa-warn">' . self::h(self::t('This server has less than 2 GB of memory; ClamAV may not have enough.')) . '</div>' : '')
             . '<div class="sa-sc-foot">' . self::JobButton('signatures', 'Update signatures now', '<path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/>') . '</div></div>';
 
         $out .= '<div class="sa-scanner"><div class="sa-sc-head"><svg class="sa-ico-lg sa-ico-spam" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16v16H4z"/><path d="m4 7 8 6 8-6"/><path d="M3 21 21 3"/></svg>'
             . '<div><h4>' . self::h(self::t('Spam filtering')) . '</h4><span>SpamAssassin ' . self::h($s['versions']['spamassassin'] ?? '') . '</span></div>' . $state($sa, $saUp) . '</div>'
-            . '<ul class="sa-svcs">' . $svc('spamd', 'Spam checker', $sa) . $svc('spamass-milter', 'Mail connection', $sa) . '</ul>'
+            . '<ul class="sa-svcs">' . $svc($n['spamd_service'], 'Spam checker', $sa) . $svc($n['spamass_milter_service'], 'Mail connection', $sa) . '</ul>'
             . '<div class="sa-facts"><span>' . self::h(self::t('Rules updated')) . '</span><div>' . (!empty($s['rules_updated']) ? self::h(date('Y-m-d H:i', (int) $s['rules_updated'])) : '-') . '</div></div>'
             . '<div class="sa-facts"><span>' . self::h(self::t('Postfix scans with')) . '</span><div>' . self::h($scanWith) . '</div></div>'
             . '<div class="sa-sc-foot">' . self::JobButton('rules', 'Update rules now', '<path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/>') . '</div></div>';
