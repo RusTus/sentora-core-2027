@@ -1,0 +1,81 @@
+#!/bin/bash
+# sentora-zsudo-setup: build zsudo (the panel's fixed list of root actions, bin/zsudo.c) and the root
+# service that runs what it queues. Run as root by the installers and by sentora-update; safe to
+# run again. Usage: sentora-zsudo-setup [panel user, default sentora]
+#
+#   /var/lib/sentora/zsudo/new, /queue  the queue: only the panel's user (and root) may write there
+#   sentora-zsudo.path                  systemd watches the queue and starts the service below
+#   sentora-zsudo.service               root runs "zsudo --run-queue": each request is checked
+#                                       against the fixed list again, then removed; only an allowed
+#                                       action's fixed command line runs
+#
+# zsudo itself is root:<panel user> 0750 and not set-uid: nothing the web server can start becomes
+# root. The service is started through /bin/sh (a system program), the way systemd starts any local
+# service, so SELinux runs it as an ordinary system service and nothing in SELinux is widened.
+# The new zsudo is only put in place once the service runs, so a failure keeps the old one working.
+set -u
+PANEL=/etc/sentora/panel
+PANEL_USER=${1:-sentora}
+ZDIR=/var/lib/sentora/zsudo
+say() { echo "zsudo: $*"; }
+[ "$(id -u)" = 0 ] || { say "run me as root"; exit 1; }
+id "$PANEL_USER" > /dev/null 2>&1 || { say "no user $PANEL_USER"; exit 1; }
+[ -f "$PANEL/bin/zsudo.c" ] || { say "no $PANEL/bin/zsudo.c"; exit 1; }
+command -v cc > /dev/null 2>&1 || { say "no C compiler: install one, then run this again"; exit 1; }
+UNITDIR=$("$PANEL/bin/setso" --get systemd_unit_dir 2> /dev/null | tr -d '[:space:]')
+[ -n "$UNITDIR" ] && [ -d "$UNITDIR" ] || UNITDIR=/etc/systemd/system
+
+TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
+if ! cc -O2 -o "$TMP/zsudo" "$PANEL/bin/zsudo.c" > "$TMP/cc.log" 2>&1; then
+    say "did not compile; the one in place is kept:"; tail -5 "$TMP/cc.log"; exit 1
+fi
+
+# the queue (no links: a folder of the panel's user's own, inside root's /var/lib/sentora)
+mkdir -p /var/lib/sentora
+for d in "$ZDIR" "$ZDIR/new" "$ZDIR/queue"; do
+    [ -L "$d" ] && rm -f "$d"
+    install -d -o "$PANEL_USER" -g "$PANEL_USER" -m 0700 "$d" || { say "could not make $d"; exit 1; }
+done
+
+# the service and its watcher
+PATH_UNIT="# Written by sentora-zsudo-setup (the Sentora panel): changes here are replaced
+[Unit]
+Description=Sentora: watch the queue of root actions the panel asked for (zsudo)
+
+[Path]
+DirectoryNotEmpty=$ZDIR/queue
+
+[Install]
+WantedBy=multi-user.target
+"
+SERVICE_UNIT="# Written by sentora-zsudo-setup (the Sentora panel): changes here are replaced
+[Unit]
+Description=Sentora: run the root actions the panel asked for (zsudo --run-queue)
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c 'exec $PANEL/bin/zsudo --run-queue'
+# (a panel update runs from here and takes a minute or two)
+TimeoutStartSec=infinity
+"
+changed=0
+write_unit() { # file content
+    if [ "$(cat "$1" 2> /dev/null)" != "$(printf '%s' "$2")" ]; then
+        printf '%s' "$2" > "$1.new" && chmod 644 "$1.new" && mv -f "$1.new" "$1" && changed=1
+    fi
+}
+write_unit "$UNITDIR/sentora-zsudo.path" "$PATH_UNIT"
+write_unit "$UNITDIR/sentora-zsudo.service" "$SERVICE_UNIT"
+[ $changed -eq 1 ] && systemctl daemon-reload
+# (only the watcher is started or restarted here: the service may be the one running this, as part
+# of a panel update started from the panel)
+systemctl enable sentora-zsudo.path > /dev/null 2>&1
+if [ $changed -eq 1 ]; then systemctl restart sentora-zsudo.path; else systemctl start sentora-zsudo.path; fi
+if ! systemctl is-active --quiet sentora-zsudo.path; then
+    say "the queue watcher did not start (systemctl status sentora-zsudo.path); the zsudo in place is kept"
+    exit 1
+fi
+
+install -o root -g "$PANEL_USER" -m 0750 "$TMP/zsudo" "$PANEL/bin/zsudo" || { say "could not install zsudo"; exit 1; }
+sha256sum "$PANEL/bin/zsudo.c" | cut -d' ' -f1 > /etc/sentora/zsudo.sha256
+say "built (not set-uid), queue $ZDIR/queue, service sentora-zsudo (watched by sentora-zsudo.path)"

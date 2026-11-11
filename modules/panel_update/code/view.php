@@ -134,7 +134,7 @@ class panel_update_view
                     . '<div><b>' . self::t('Starting') . '</b><span>' . self::t('The server starts the job within a few seconds.') . '</span></div></div></div>');
             }
             return array('live' => false, 'html' => '<div class="pu-box pu-run"><div class="pu-end fail">' . self::Icon('fail', 'pu-ico-lg')
-                . '<div><b>' . self::t('The job did not start') . '</b><span>' . self::t('Nothing was changed. Check that the at service runs (systemctl status atd), or run sentora-update from the server\'s console.') . '</span></div></div></div>');
+                . '<div><b>' . self::t('The job did not start') . '</b><span>' . self::t('Nothing was changed. Check that the queue of root actions runs (systemctl status sentora-zsudo.path), or run sentora-update from the server\'s console.') . '</span></div></div></div>');
         }
         if (!$run) {
             return array('live' => false, 'html' => '');

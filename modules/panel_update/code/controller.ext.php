@@ -68,7 +68,7 @@ class module_controller extends ctrl_module
         if ($rc === 2) {
             self::Flash('fail', 'This server\'s zsudo does not know this action yet. Run sentora-update once on the server\'s console, as root: it builds the new zsudo, and then this works from here.', 'sentora-update');
         } else {
-            self::Flash('fail', 'The server did not take the job (zsudo answered %s). Nothing was changed. Check that the at service runs (systemctl status atd), or use the console.', '', (string) (int) $rc);
+            self::Flash('fail', 'The server did not take the job (zsudo answered %s). Nothing was changed. Check that the queue of root actions runs (systemctl status sentora-zsudo.path), or use the console.', '', (string) (int) $rc);
         }
     }
 

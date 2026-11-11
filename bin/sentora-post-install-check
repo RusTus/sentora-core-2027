@@ -238,7 +238,17 @@ if [ -e "$MCFG" ]; then
     if [ $(( 8#$(stat -c '%a' "$MCFG") & 7 )) -eq 0 ] || [ $(( 8#$(stat -c '%a' "$(dirname "$MCFG")") & 1 )) -eq 0 ]; then ok "$MCFG (only the panel can read it)"
     else fail "$MCFG can be read by every user"; fi
 fi
-perm "$PANEL/bin/zsudo" 4750 root sentora
+# zsudo: the panel's fixed list of root actions; not set-uid, root runs what it queues (sentora-zsudo-setup)
+if [ -u "$PANEL/bin/zsudo" ]; then
+    warn "zsudo is still the older set-uid kind (handing jobs to at, which SELinux refuses to the panel): run sentora-update"
+else
+    perm "$PANEL/bin/zsudo" 750 root sentora
+    if systemctl is-active --quiet sentora-zsudo.path 2> /dev/null; then ok "the queue of root actions is watched (sentora-zsudo.path)"
+    else fail "sentora-zsudo.path does not run: the panel's root actions (Panel Update, Apache and BIND reloads) wait (bash $PANEL/bin/sentora-zsudo-setup)"; fi
+    q=$(stat -c '%a %U' /var/lib/sentora/zsudo/queue 2> /dev/null)
+    if [ "$q" = "700 sentora" ]; then ok "the queue is the panel's alone (700 sentora)"
+    else fail "/var/lib/sentora/zsudo/queue is ${q:-missing}, expected 700 sentora (bash $PANEL/bin/sentora-zsudo-setup)"; fi
+fi
 NAMED_CONF="$(sp bind_dir)"; NAMED_CONF="${NAMED_CONF%/}/named.conf"; BIND_GROUP=$(sp bind_group)
 if [ -e "$NAMED_CONF" ]; then
     got=$(stat -c '%a %U %G' "$NAMED_CONF")

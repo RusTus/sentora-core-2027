@@ -257,10 +257,15 @@ fix_permissions() {
     chown -R root:root "$PANEL"
     find "$PANEL" -type d -exec chmod 755 {} +
     find "$PANEL" -type f -exec chmod 644 {} +
-    for b in zppy setso setzadmin sentora-notice sentora-update sentora-update-check sentora-post-install-check sentora-restore sentora-smoke-test sentora-offsite-backup sentora-panel-restore sentora-web-probe sentora-ftp-kick sentora-php-install sentora-change-domain sentora-migrate-import sentora-migrate-export sentora-matomo-setup; do
+    for b in zppy setso setzadmin sentora-notice sentora-update sentora-update-check sentora-post-install-check sentora-restore sentora-smoke-test sentora-offsite-backup sentora-panel-restore sentora-web-probe sentora-ftp-kick sentora-php-install sentora-change-domain sentora-migrate-import sentora-migrate-export sentora-matomo-setup sentora-zsudo-setup; do
         [ -f "$PANEL/bin/$b" ] && chmod 755 "$PANEL/bin/$b"
     done
-    [ -f "$PANEL/bin/zsudo" ] && { chown root:"$PANEL_USER" "$PANEL/bin/zsudo"; chmod 4750 "$PANEL/bin/zsudo"; }
+    # zsudo: not set-uid once its queue service runs (sentora-zsudo-setup); an older zsudo, not yet
+    # replaced, still needs set-uid to work
+    if [ -f "$PANEL/bin/zsudo" ]; then
+        chown root:"$PANEL_USER" "$PANEL/bin/zsudo"
+        if systemctl is-active --quiet sentora-zsudo.path 2> /dev/null; then chmod 750 "$PANEL/bin/zsudo"; else chmod 4750 "$PANEL/bin/zsudo"; fi
+    fi
     chown -R "$PANEL_USER:$HTTP_GROUP" "$PANEL/etc/tmp"
     chown root:"$PANEL_USER" "$PANEL/cnf/db.php" "$PANEL/cnf/security.php"
     chmod 640 "$PANEL/cnf/db.php" "$PANEL/cnf/security.php"
@@ -274,7 +279,7 @@ fix_permissions() {
     # BIND's main file holds the rndc key: root and BIND only (installers before 2027.5 left it 644)
     local nc; nc="$(sp bind_dir)"; nc="${nc%/}/named.conf"
     [ -f "$nc" ] && { chown root:"$(sp bind_group)" "$nc"; chmod 640 "$nc"; }
-    for b in sentora-notice sentora-update sentora-update-check sentora-post-install-check sentora-restore sentora-smoke-test sentora-offsite-backup sentora-panel-restore sentora-web-probe sentora-php-install sentora-change-domain sentora-migrate-import sentora-migrate-export sentora-matomo-setup; do
+    for b in sentora-notice sentora-update sentora-update-check sentora-post-install-check sentora-restore sentora-smoke-test sentora-offsite-backup sentora-panel-restore sentora-web-probe sentora-php-install sentora-change-domain sentora-migrate-import sentora-migrate-export sentora-matomo-setup sentora-zsudo-setup; do
         [ -f "$PANEL/bin/$b" ] && ln -sf "$PANEL/bin/$b" "/usr/local/sbin/$b"
     done
 }
@@ -682,20 +687,19 @@ NEWMODS=$( cd "$PANEL" && php -r '
 ' "$SRC_MODULES" 2>&1 ) || warn "could not register new modules"
 while IFS= read -r l; do [ -n "$l" ] && say "${l#  }"; done <<< "$NEWMODS"
 ui_step "Updating services and bundled apps"
-# zsudo (the panel's fixed list of root actions): its source comes with the core; build it again
-# when that source changed, so an update brings new actions (Panel Update, ftp-kick) to this server
-if [ -f "$PANEL/bin/zsudo.c" ]; then
+# zsudo (the panel's fixed list of root actions) and the root service that runs what it queues
+# (sentora-zsudo-setup): set up again when zsudo's source changed, so an update brings new actions
+# to this server, and once on servers from before the queue (zsudo set-uid, handing jobs to at)
+if [ -f "$PANEL/bin/zsudo.c" ] && [ -f "$PANEL/bin/sentora-zsudo-setup" ]; then
     ZS_NEW=$(sha256sum "$PANEL/bin/zsudo.c" | cut -d' ' -f1)
-    if [ "$ZS_NEW" != "$(cat /etc/sentora/zsudo.sha256 2> /dev/null)" ] || [ ! -u "$PANEL/bin/zsudo" ]; then
-        if ! command -v cc > /dev/null 2>&1; then
-            warn "zsudo was not rebuilt: no C compiler (install a C compiler, then run sentora-update --force)"
-        elif cc -O2 -o "$TMP/zsudo" "$PANEL/bin/zsudo.c" > /dev/null 2>&1 \
-            && install -o root -g "$PANEL_USER" -m 4750 "$TMP/zsudo" "$PANEL/bin/zsudo"; then
-            echo "$ZS_NEW" > /etc/sentora/zsudo.sha256
-            say "zsudo rebuilt from the new source"
+    if [ "$ZS_NEW" != "$(cat /etc/sentora/zsudo.sha256 2> /dev/null)" ] || [ -u "$PANEL/bin/zsudo" ] \
+            || ! systemctl is-active --quiet sentora-zsudo.path 2> /dev/null; then
+        if out=$(bash "$PANEL/bin/sentora-zsudo-setup" "$PANEL_USER" 2>&1); then
+            say "zsudo rebuilt; root actions run through its queue (sentora-zsudo)"
         else
-            warn "zsudo did not compile: the old one is kept (see $LOG)"
+            warn "zsudo was not set up again, the one in place is kept: $(echo "$out" | tail -2 | tr '\n' ' ')"
         fi
+        echo "$out" >> "$LOG"
     fi
 fi
 # --- LDAP for the server's own PHP (sites that log users in against Active Directory, such as

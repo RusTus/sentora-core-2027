@@ -529,7 +529,7 @@ class module_controller extends ctrl_module
         } elseif (self::$done === 'daemonnow-old') {
             $out .= ui_sysmessage::shout(ui_language::translate('This server\'s zsudo does not know this action yet. Run sentora-update once on the server\'s console, as root: it builds the new zsudo, and then this works from here.'), 'zannounceerror');
         } elseif (self::$done === 'daemonnow-fail') {
-            $out .= ui_sysmessage::shout(ui_language::translate('The daemon could not be started from here (check that the at service runs: systemctl status atd). It still runs within 5 minutes.'), 'zannounceerror');
+            $out .= ui_sysmessage::shout(ui_language::translate('The daemon could not be started from here (check that the queue of root actions runs: systemctl status sentora-zsudo.path). It still runs within 5 minutes.'), 'zannounceerror');
         }
         return $out === '' ? null : $out;
     }
