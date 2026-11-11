@@ -1,6 +1,6 @@
 # Sentora-2027
 
-An open-source web hosting control panel for **Ubuntu 26.04**, **Debian 13**, **AlmaLinux 10**, **Rocky Linux 10**, **Red Hat Enterprise Linux 10** and **Fedora 45**, and for **Windows 11 / Windows Server 2025** through WSL. Rebuilt from Sentora 2.0.2 for PHP 8.5, MySQL 8.4 and Apache 2.4 (on Debian, the RHEL family and Fedora: their own PHP and MariaDB), with SELinux or AppArmor on, on every Linux system.
+An open-source web hosting control panel for **Ubuntu 26.04**, **Debian 13**, **AlmaLinux 10**, **Rocky Linux 10**, **Red Hat Enterprise Linux 10** and **Fedora 45**, for **Windows 11 / Windows Server 2025** through WSL, and as a **Docker image**. Rebuilt from Sentora 2.0.2 for PHP 8.5, MySQL 8.4 and Apache 2.4 (on Debian, the RHEL family and Fedora: their own PHP and MariaDB), with SELinux or AppArmor on, on every Linux system.
 
 **Website:** [sentorareloaded2027.github.io](https://sentorareloaded2027.github.io): screenshots, the install command for every system, and the Windows setup.
 
@@ -14,6 +14,7 @@ An open-source web hosting control panel for **Ubuntu 26.04**, **Debian 13**, **
 ![RHEL](https://img.shields.io/badge/RHEL-10-EE0000?logo=redhat&logoColor=white)
 ![Fedora](https://img.shields.io/badge/Fedora-45-51A2DA?logo=fedora&logoColor=white)
 ![Windows](https://img.shields.io/badge/Windows-11_%2F_Server_2025-0078D4?logo=windows&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-ghcr.io%2Frustus%2Fsentora2027-2496ED?logo=docker&logoColor=white)
 ![PHP](https://img.shields.io/badge/PHP-8.5-777BB4?logo=php&logoColor=white)
 ![MySQL](https://img.shields.io/badge/MySQL-8.4-4479A1?logo=mysql&logoColor=white)
 ![License](https://img.shields.io/badge/license-GPLv3-blue)
@@ -93,6 +94,7 @@ The installer, the service settings and the PHP bundles come from the companion 
 
 - A clean install of Ubuntu 26.04 LTS, Debian 13, AlmaLinux 10, Rocky Linux 10, Red Hat Enterprise Linux 10 (registered) or Fedora 45 (amd64), with no other control panel, web or mail server. A minimal install with only the SSH server is enough.
 - Or Windows 11 (22H2 or newer) or Windows Server 2025 with virtualization switched on, for Sentora in WSL (see [On Windows](#on-windows)).
+- Or a Linux host with Docker, for the ready-made image (see [In Docker](#in-docker)).
 - Root access, and access from the server to github.com and api.github.com.
 - A correct clock: the installer checks it and stops if it is more than 2 minutes off.
 - A fully qualified host name for the panel (for example `panel.example.com`), ideally with an A record pointing at the server, and the server's IP address.
@@ -129,6 +131,42 @@ powershell -ExecutionPolicy Bypass -File .\sentora2027-wsl.ps1
 ```
 
 SELinux and AppArmor do not run inside WSL, and Windows updates restart the PC (and Sentora with it): for production hosting a Linux server is the better home.
+
+### In Docker
+
+A ready-made image, `ghcr.io/rustus/sentora2027` (Debian 13 inside), built and tested by GitHub on every release and published only when it passes. Nothing of Sentora is in the image itself: **the first time a container starts, it installs Sentora** with the Debian 13 installer, so every container gets its own passwords, keys and certificate. It runs without `--privileged`. On a Linux host with Docker (tested with Docker 29), as root:
+
+```bash
+docker run -d --name sentora --hostname panel.example.com \
+  -e SENTORA_EMAIL=you@example.com -e TZ=America/Chicago \
+  --restart unless-stopped --cgroupns=private --security-opt writable-cgroups=true \
+  --tmpfs /run --tmpfs /run/lock --cap-add NET_ADMIN \
+  -p 80:80 -p 443:443 -p 21:21 -p 61000-61099:61000-61099 -p 25:25 -p 465:465 -p 587:587 \
+  -p 110:110 -p 143:143 -p 993:993 -p 995:995 -p 4190:4190 \
+  ghcr.io/rustus/sentora2027
+```
+
+- `--hostname` is the panel's address (its DNS A record pointing at the host), `SENTORA_EMAIL` gets the server's alerts, `TZ` is the time zone (UTC when left out). `SENTORA_IP` sets the server's IP address (`public`, the default, finds it); `ADMIN_NAME`, `ADMIN_PHONE` and the other `ADMIN_*` fill zadmin's profile, which can also be done later in the panel.
+- `--cgroupns=private --security-opt writable-cgroups=true` let systemd inside manage its services: the container gets its own branch of the host's cgroups and can write only there. `--cap-add NET_ADMIN` lets fail2ban ban addresses, in the container's own network only.
+- FTP's passive ports are **61000-61099** in a container (Sentora's usual 60000-65535 overlaps the ports the host uses for its own connections, so Docker often can't publish it). Add `-p 53:53/tcp -p 53:53/udp` when this server is the DNS server for its domains and nothing on the host has port 53.
+
+Then:
+
+```bash
+docker logs -f sentora
+```
+
+shows each step of the install (about 5 minutes on GitHub's machines) and ends with `Sentora is installed`. Passwords never reach the log; they are in the container, readable by root only:
+
+```bash
+docker exec sentora cat /root/passwords.txt
+```
+
+```bash
+docker exec sentora sentora-post-install-check
+```
+
+Treat the container as the server: Sentora's settings are spread over the whole system, so its websites, mail and databases live in the container, not in separate volumes. It keeps everything through restarts and host reboots; `docker rm` deletes it all. Update it inside (`docker exec -it sentora sentora-update`; Debian's security updates install themselves), and back it up with the panel's backup, ideally to another server (Admin > Backup Config > Off-server backup). The post-install check warns that AppArmor is off: inside a container the host's Docker profile confines it instead, and Sentora's own AppArmor rules do not apply. For hosting other people's websites, a plain Linux server keeps every guard in place.
 
 ### What differs between the systems
 
