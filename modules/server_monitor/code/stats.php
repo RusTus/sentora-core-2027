@@ -92,7 +92,8 @@ $out['fs'] = array();
 $seen = array();
 foreach (explode("\n", sm_read('/proc/mounts')) as $line) {
     $v = explode(' ', $line);
-    if (count($v) < 3 || !in_array($v[2], array('ext4', 'ext3', 'xfs', 'btrfs', 'zfs', 'f2fs', 'vfat'), true) || isset($seen[$v[0]])) {
+    if (count($v) < 4 || !in_array($v[2], array('ext4', 'ext3', 'xfs', 'btrfs', 'zfs', 'f2fs', 'vfat'), true) || isset($seen[$v[0]])
+        || preg_match('/(^|,)ro(,|$)/', $v[3])) {   // (read-only disks, such as WSL's kernel headers, can not fill up)
         continue;
     }
     $mount = str_replace('\040', ' ', $v[1]);

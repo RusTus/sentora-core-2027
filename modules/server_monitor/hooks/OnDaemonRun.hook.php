@@ -133,7 +133,11 @@ function SentoraServerAlerts()
     $seen = array();
     foreach ((array) @file('/proc/mounts', FILE_IGNORE_NEW_LINES) as $line) {
         $f = explode(' ', $line);
-        if (count($f) < 3 || !in_array($f[2], array('ext4', 'ext3', 'xfs', 'btrfs', 'zfs', 'f2fs'), true) || isset($seen[$f[0]])) {
+        if (count($f) < 4 || !in_array($f[2], array('ext4', 'ext3', 'xfs', 'btrfs', 'zfs', 'f2fs'), true) || isset($seen[$f[0]])) {
+            continue;
+        }
+        // a read-only disk can not fill up (WSL mounts the Windows kernel's headers that way, always 100% full)
+        if (preg_match('/(^|,)ro(,|$)/', $f[3])) {
             continue;
         }
         $seen[$f[0]] = true;
