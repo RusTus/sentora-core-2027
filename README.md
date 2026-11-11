@@ -2,6 +2,10 @@
 
 An open-source web hosting control panel for **Ubuntu 26.04**, **Debian 13** and **AlmaLinux 10**, rebuilt from Sentora 2.0.2 for PHP 8.5, MySQL 8.4 and Apache 2.4 (on Debian and AlmaLinux: their own PHP and MariaDB).
 
+**Website:** [sentorareloaded2027.github.io](https://sentorareloaded2027.github.io): screenshots, the install command for every system, and the Windows setup.
+
+[![Website](https://img.shields.io/badge/website-sentorareloaded2027.github.io-1f7fae)](https://sentorareloaded2027.github.io)
+
 ![Release](https://img.shields.io/badge/release-Sentora--2027-2b6cb0)
 ![Ubuntu](https://img.shields.io/badge/Ubuntu-26.04-E95420?logo=ubuntu&logoColor=white)
 ![Debian](https://img.shields.io/badge/Debian-13-A81D33?logo=debian&logoColor=white)
