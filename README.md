@@ -1,6 +1,6 @@
 # Sentora-2027
 
-An open-source web hosting control panel for **Ubuntu 26.04**, **Debian 13** and **AlmaLinux 10**, rebuilt from Sentora 2.0.2 for PHP 8.5, MySQL 8.4 and Apache 2.4 (on Debian and AlmaLinux: their own PHP and MariaDB).
+An open-source web hosting control panel for **Ubuntu 26.04**, **Debian 13**, **AlmaLinux 10**, **Rocky Linux 10**, **Red Hat Enterprise Linux 10** and **Fedora 45**, and for **Windows 11 / Windows Server 2025** through WSL. Rebuilt from Sentora 2.0.2 for PHP 8.5, MySQL 8.4 and Apache 2.4 (on Debian, the RHEL family and Fedora: their own PHP and MariaDB), with SELinux or AppArmor on, on every Linux system.
 
 **Website:** [sentorareloaded2027.github.io](https://sentorareloaded2027.github.io): screenshots, the install command for every system, and the Windows setup.
 
@@ -10,6 +10,10 @@ An open-source web hosting control panel for **Ubuntu 26.04**, **Debian 13** and
 ![Ubuntu](https://img.shields.io/badge/Ubuntu-26.04-E95420?logo=ubuntu&logoColor=white)
 ![Debian](https://img.shields.io/badge/Debian-13-A81D33?logo=debian&logoColor=white)
 ![AlmaLinux](https://img.shields.io/badge/AlmaLinux-10-0F4266?logo=almalinux&logoColor=white)
+![Rocky Linux](https://img.shields.io/badge/Rocky_Linux-10-10B981?logo=rockylinux&logoColor=white)
+![RHEL](https://img.shields.io/badge/RHEL-10-EE0000?logo=redhat&logoColor=white)
+![Fedora](https://img.shields.io/badge/Fedora-45-51A2DA?logo=fedora&logoColor=white)
+![Windows](https://img.shields.io/badge/Windows-11_%2F_Server_2025-0078D4?logo=windows&logoColor=white)
 ![PHP](https://img.shields.io/badge/PHP-8.5-777BB4?logo=php&logoColor=white)
 ![MySQL](https://img.shields.io/badge/MySQL-8.4-4479A1?logo=mysql&logoColor=white)
 ![License](https://img.shields.io/badge/license-GPLv3-blue)
@@ -19,7 +23,7 @@ Sentora-2027 runs a web hosting server from the browser: websites, domains and D
 This README is the whole guide: how to install and update the server, how to use every part of the panel as its administrator, and how it works behind the scenes. The [change log](CHANGELOG.md) lists every change in detail.
 
 > [!IMPORTANT]
-> Sentora-2027 needs a **fresh Ubuntu 26.04, Debian 13 or AlmaLinux 10 server**. It can't upgrade an existing Sentora or ZPanel server, and the installer stops if it finds one. Websites move over from an old Sentora server with two commands (see [Moving websites from an old Sentora server](#moving-websites-from-an-old-sentora-server)).
+> Sentora-2027 needs a **fresh server** (Ubuntu 26.04, Debian 13, AlmaLinux 10, Rocky Linux 10, RHEL 10 or Fedora 45), or a Windows 11 / Windows Server 2025 PC for WSL. It can't upgrade an existing Sentora or ZPanel server, and the installer stops if it finds one. Websites move over from an old Sentora server with two commands (see [Moving websites from an old Sentora server](#moving-websites-from-an-old-sentora-server)).
 
 ## Contents
 
@@ -87,54 +91,58 @@ The installer, the service settings and the PHP bundles come from the companion 
 
 ## Requirements
 
-- A clean install of Ubuntu 26.04 LTS, Debian 13 or AlmaLinux 10 / Rocky Linux 10 (amd64), with no other control panel, web or mail server. A minimal install with only the SSH server is enough.
+- A clean install of Ubuntu 26.04 LTS, Debian 13, AlmaLinux 10, Rocky Linux 10, Red Hat Enterprise Linux 10 (registered) or Fedora 45 (amd64), with no other control panel, web or mail server. A minimal install with only the SSH server is enough.
+- Or Windows 11 (22H2 or newer) or Windows Server 2025 with virtualization switched on, for Sentora in WSL (see [On Windows](#on-windows)).
 - Root access, and access from the server to github.com and api.github.com.
 - A correct clock: the installer checks it and stops if it is more than 2 minutes off.
 - A fully qualified host name for the panel (for example `panel.example.com`), ideally with an A record pointing at the server, and the server's IP address.
 
 ## Installing
 
-On the new server, as root:
+On the new server, as root. One command for every supported system: it finds out which Linux this is, downloads that system's installer, checks it against the SHA-256 GitHub lists for it, and runs it (`--check` only downloads and checks):
 
 ```bash
-wget -O sentora2027-ub26.04 https://github.com/RusTus/sentora-installers-2027/releases/download/current/sentora2027-ub26.04
+wget -O sentora2027-install https://github.com/RusTus/sentora-installers-2027/releases/download/current/sentora2027-install
 ```
 
 ```bash
-bash sentora2027-ub26.04
+bash sentora2027-install
 ```
 
-On Debian 13 the installer is `sentora2027-deb13` (a minimal Debian has no wget yet: `apt-get update && apt-get install -y wget` first):
+(A minimal Debian has no wget yet: `apt-get update && apt-get install -y wget` first; on the RHEL family and Fedora, `dnf install -y wget`. `curl -fLo sentora2027-install <the same address>` works too.)
 
-```bash
-wget -O sentora2027-deb13 https://github.com/RusTus/sentora-installers-2027/releases/download/current/sentora2027-deb13
+Each system's own installer can also be run directly: `sentora2027-ub26.04`, `sentora2027-deb13`, `sentora2027-alma10` (AlmaLinux, Rocky Linux and RHEL 10) and `sentora2027-fedora` (Fedora 45), all on the same release. On Red Hat Enterprise Linux the server must be registered (`subscription-manager register`; Red Hat's free developer subscription works): the installer switches on CodeReady Builder and adds EPEL.
+
+### On Windows
+
+On Windows 11 (22H2 or newer) or Windows Server 2025, Sentora runs in **WSL, the Windows Subsystem for Linux** (Windows' own built-in way to run Linux), with its own Debian 13 or Ubuntu 26.04 inside. Either way below installs WSL if needed, the same Linux installer inside it, Sentora's ports in the Windows firewall, a startup task (Sentora runs whenever Windows runs, also with nobody logged in), a **Sentora Panel** shortcut on every desktop, a tray icon (green while the panel answers; one click opens it) and Sentora Status / Backup / Uninstall. The Windows administrator decides whether Windows Defender leaves Sentora's disk image alone.
+
+- **Sentora2027Setup.exe**: [download it from the release](https://github.com/RusTus/sentora-installers-2027/releases/download/current/Sentora2027Setup.exe) and double-click it. It registers **Sentora 2027** in Settings > Apps and the Start menu; a newer setup updates it in place, and uninstalling there removes everything (backups stay). It is not signed, so SmartScreen shows "Windows protected your PC" once: More info > Run anyway.
+- **Or PowerShell**, as administrator:
+
+```powershell
+Invoke-WebRequest -OutFile sentora2027-wsl.ps1 https://github.com/RusTus/sentora-installers-2027/releases/download/current/sentora2027-wsl.ps1
 ```
 
-```bash
-bash sentora2027-deb13
+```powershell
+powershell -ExecutionPolicy Bypass -File .\sentora2027-wsl.ps1
 ```
 
-On AlmaLinux 10 (or Rocky Linux 10) the installer is `sentora2027-alma10` (`dnf install -y wget` first):
+SELinux and AppArmor do not run inside WSL, and Windows updates restart the PC (and Sentora with it): for production hosting a Linux server is the better home.
 
-```bash
-wget -O sentora2027-alma10 https://github.com/RusTus/sentora-installers-2027/releases/download/current/sentora2027-alma10
-```
+### What differs between the systems
 
-```bash
-bash sentora2027-alma10
-```
+The installers ask the same questions and set up the same panel. On Debian, the RHEL family and Fedora every service comes from the system's own packages, so its package manager and daily security updates keep them current:
 
-The installers ask the same questions and set up the same panel. On Debian every service comes from Debian's own packages, so apt and Debian's daily security updates keep them current:
-
-| | Ubuntu 26.04 | Debian 13 | AlmaLinux 10 |
-| --- | --- | --- | --- |
-| PHP (the panel's, and the sites' default) | 8.5 | 8.4 | 8.3 |
-| Extra PHP versions (Sentora's builds) | 8.2, 8.3, 8.4, and 7.1 for moved sites | 8.2, 8.3, 8.5, and 7.1 for moved sites (7.1 without imap: Debian has no c-client) | 8.2, 8.4, 8.5, and 7.1 for moved sites (without imap) |
-| Database server | MySQL 8.4 | MariaDB 11.8 (the panel calls it MySQL; its users log in with `mysql_native_password`, MariaDB's normal method) | MariaDB 10.11 (as on Debian) |
-| Apache, Postfix, Dovecot, BIND, ProFTPD | Ubuntu's | Debian's (Apache 2.4, Postfix 3.10, Dovecot 2.4, BIND 9.20, ProFTPD 1.3.8) | AlmaLinux's and EPEL's (Apache 2.4, Postfix 3.8, Dovecot 2.3, BIND 9.18, ProFTPD 1.3.9) |
-| SOGo (groupware, ActiveSync) | yes | yes | yes (Sentora's own build) |
-| Security updates | unattended-upgrades | unattended-upgrades | dnf-automatic |
-| Mandatory access control | AppArmor, on (BIND, MySQL, ProFTPD and ClamAV confined, with Sentora's paths) | AppArmor, on (BIND and ClamAV confined, with Sentora's paths) | SELinux, on (enforcing), with Sentora's labels |
+| | Ubuntu 26.04 | Debian 13 | AlmaLinux / Rocky / RHEL 10 | Fedora 45 |
+| --- | --- | --- | --- | --- |
+| PHP (the panel's, and the sites' default) | 8.5 | 8.4 | 8.3 | 8.5 |
+| Extra PHP versions (Sentora's builds) | 8.2, 8.3, 8.4, and 7.1 for moved sites | 8.2, 8.3, 8.5, and 7.1 for moved sites (7.1 without imap: Debian has no c-client) | 8.2, 8.4, 8.5, and 7.1 for moved sites (without imap) | Sentora's builds for Fedora 45 |
+| Database server | MySQL 8.4 | MariaDB 11.8 (the panel calls it MySQL; its users log in with `mysql_native_password`, MariaDB's normal method) | MariaDB 10.11 (as on Debian) | MariaDB 12 |
+| Apache, Postfix, Dovecot, BIND, ProFTPD | Ubuntu's | Debian's (Apache 2.4, Postfix 3.10, Dovecot 2.4, BIND 9.20, ProFTPD 1.3.8) | AlmaLinux's and EPEL's (Apache 2.4, Postfix 3.8, Dovecot 2.3, BIND 9.18, ProFTPD 1.3.9) | Fedora's (Apache 2.4, Dovecot 2.4, BIND 9.18, ProFTPD) |
+| SOGo (groupware, ActiveSync) | yes | yes | yes (Sentora's own build) | yes (Sentora's own build) |
+| Security updates | unattended-upgrades | unattended-upgrades | dnf-automatic | dnf5-plugin-automatic |
+| Mandatory access control | AppArmor, on (BIND, MySQL, ProFTPD and ClamAV confined, with Sentora's paths) | AppArmor, on (BIND and ClamAV confined, with Sentora's paths) | SELinux, on (enforcing), with Sentora's labels | SELinux, on (enforcing), with Sentora's labels |
 
 The commands, paths, services and users that differ are settings in the panel's database (hidden from Sentora Config), set by each installer: the panel's code names no distribution.
 
@@ -195,7 +203,7 @@ It changes the name everywhere the installer put it (the panel and its Apache si
 
 ## Updating
 
-**The panel.** Ubuntu installs its own security updates every day (Apache, PHP 8.5, MySQL, Postfix and the rest). The panel and the apps bundled in it (phpMyAdmin, Roundcube, Matomo, the file manager, GoAccess's pages) are updated with `sentora-update`, as root:
+**The panel.** The system installs its own security updates every day (Apache, PHP, MySQL or MariaDB, Postfix and the rest: unattended-upgrades on Ubuntu and Debian, dnf-automatic on the RHEL family and Fedora). The panel and the apps bundled in it (phpMyAdmin, Roundcube, Matomo, the file manager, GoAccess's pages) are updated with `sentora-update`, as root:
 
 ```bash
 sentora-update --check      # is there a newer release?
@@ -518,6 +526,10 @@ For the few things that can't wait 5 minutes there is `zsudo`, a small root prog
 - **Every hour** the daemon gives files back to the account's user (files written by the panel, root or Apache) and closes the folders again.
 - **Log analysers** (GoAccess, Webalizer, Visitors) run as `sentora-stats`, which can read nothing else; root hands them the log lines.
 - **MySQL** users of one account only get that account's databases; **mail** is stored under `/var/sentora/vmail` as the `vmail` user.
+
+### SELinux and AppArmor
+
+They stay on, on every Linux system: Sentora is made to work with them, never by switching them off. On AlmaLinux, Rocky, RHEL and Fedora SELinux is enforcing, with Sentora's folders labelled by the installer and a few rules of its own (`preconf/selinux/sentora.cil` in the installers repository). On Debian and Ubuntu AppArmor confines BIND and ClamAV (and on Ubuntu MySQL and ProFTPD too), with Sentora's paths added to each profile's local file (`/etc/apparmor.d/local/<profile>`, between `# BEGIN Sentora` and `# END Sentora`); the system's own profiles are never changed or disabled. The post-install check shows which services run confined and anything refused since the start. Servers installed before release 2027.71 have AppArmor off; the check says so.
 
 ## How Apache is protected
 
