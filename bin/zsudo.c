@@ -42,6 +42,9 @@
  *                       command cron runs every 5 minutes; a press while one
  *                       it started is still busy is dropped, and its report
  *                       goes to its own log, daemon-panel-run.log)
+ *   zsudo hardening-check (no arguments: runs sentora-post-install-check and writes its report
+ *                       and the hardening score to /var/sentora/logs/hardening.json for Server
+ *                       Monitor; the daemon asks for it hourly, the Hardening card's button too)
  *   zsudo panel-rollback panel-before-update-YYYYMMDD-HHMMSS.tar.gz
  *                      (puts back one of the backups sentora-update made in
  *                       /var/sentora/backups; only a name of exactly that
@@ -125,6 +128,9 @@ static int build_cmd(int argc, char *argv[], char *cmd, size_t size)
            daemon's own lock keeps it from overlapping a cron run), and its own log never cuts into
            the report of a cron run that is writing daemon-last-run.log */
         snprintf(cmd, size, "/usr/bin/flock -n /run/sentora-daemon-now.lock /bin/sh -c '/usr/bin/php -q /etc/sentora/panel/bin/daemon.php > /var/sentora/logs/daemon-panel-run.log 2>&1'");
+    } else if (argc == 2 && strcmp(argv[1], "hardening-check") == 0) {
+        /* the post-install check, with its report for Server Monitor's Hardening card */
+        snprintf(cmd, size, "/bin/bash /etc/sentora/panel/bin/sentora-post-install-check --json /var/sentora/logs/hardening.json");
     } else if (argc == 3 && strcmp(argv[1], "panel-rollback") == 0 && backup_name(argv[2])) {
         snprintf(cmd, size, "/bin/bash /etc/sentora/panel/bin/sentora-update --from-panel --rollback /var/sentora/backups/%s", argv[2]);
     } else {

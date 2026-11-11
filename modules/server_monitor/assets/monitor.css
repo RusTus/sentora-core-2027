@@ -54,3 +54,53 @@
 .sm-table td .sm-bar { width: 70px; display: inline-block; vertical-align: middle; margin: 0 0 0 8px; }
 .sm-wide { grid-column: 1 / -1; }
 .sm-error { background: var(--sn-bad-soft, #fdecea); color: var(--sn-bad, #b3261e); border-radius: 6px; padding: 10px 14px; margin-bottom: 12px; display: none; }
+
+/* the Hardening card (assets/hardening.js) */
+.smh { background: var(--sm-card); border-radius: 8px; box-shadow: 0 1px 3px rgba(20,30,40,0.08); padding: 16px 18px; margin-bottom: 16px; border-top: 4px solid #2db87d; }
+.smh-head { display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: flex-start; justify-content: space-between; }
+.smh-head h4 { margin: 0 0 2px; font-size: 15px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; }
+.smh-head .sm-sub { max-width: 760px; }
+.smh-actions { display: flex; align-items: center; gap: 12px; }
+.smh-run { margin: 0; }
+.smh-run button { font-size: 13px; padding: 6px 14px; border: 0; border-radius: 4px; background: var(--sm-blue); color: #fff; cursor: pointer; font-weight: 600; }
+.smh-run button:hover { filter: brightness(1.1); }
+.smh-top { display: grid; grid-template-columns: 200px minmax(0, 1.4fr) minmax(0, 1fr); gap: 18px; margin: 14px 0 6px; align-items: start; }
+@media (max-width: 1000px) { .smh-top { grid-template-columns: 1fr; } }
+.smh-label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--sm-muted); margin-bottom: 6px; }
+.smh-gauge svg { display: block; width: 180px; height: 170px; margin: 0 auto; }
+.smh-arc { animation: smh-grow 1s ease-out; }
+@keyframes smh-grow { from { stroke-dasharray: 0 1000; } to { stroke-dasharray: 1000 0; } }
+.smh-score { font-size: 40px; font-weight: 800; fill: var(--sm-ink); font-variant-numeric: tabular-nums; }
+.smh-of { font-size: 12px; fill: var(--sm-muted); }
+.smh-grade { font-size: 22px; font-weight: 800; }
+.smh-counts { display: flex; justify-content: center; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+.smh-pill { display: inline-block; font-size: 12px; padding: 2px 9px; border-radius: 10px; background: var(--sm-bg); color: var(--sm-muted); }
+.smh-pill b { color: var(--sm-ink); }
+.smh-pill.smh-ok { background: rgba(45,184,125,0.14); color: #1d8a5c; }
+.smh-pill.smh-warn { background: rgba(245,166,35,0.16); color: #a56a00; }
+.smh-pill.smh-fail { background: rgba(255,104,84,0.16); color: #c0392b; }
+#smh-hist { position: relative; height: 170px; }
+.smh-svg { width: 100%; height: 150px; display: block; }
+.smh-axis { fill: var(--sm-muted); font-size: 10px; }
+.smh-dot { cursor: pointer; }
+.smh-empty { padding-top: 6px; }
+.smh-area { margin-bottom: 9px; font-size: 13px; }
+.smh-area-top { display: flex; justify-content: space-between; gap: 8px; }
+.smh-area-top b { font-variant-numeric: tabular-nums; }
+.smh-area .sm-bar { height: 9px; border-radius: 5px; }
+.smh-area .sm-bar b { transition: width 0.8s ease; }
+.smh-issues-head { display: flex; gap: 8px; margin: 14px 0 8px; }
+.smh-group { border: 1px solid var(--sm-line); border-radius: 6px; margin-bottom: 8px; overflow: hidden; }
+.smh-group-fail { border-left: 4px solid #ff6854; }
+.smh-group-warn { border-left: 4px solid #f5a623; }
+.smh-group-name { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; padding: 7px 12px; background: var(--sm-bg); }
+.smh-item { display: flex; gap: 10px; align-items: flex-start; padding: 8px 12px; border-top: 1px solid var(--sm-line); font-size: 13px; }
+.smh-badge { flex: none; font-size: 10px; font-weight: 700; text-transform: uppercase; padding: 2px 7px; border-radius: 3px; margin-top: 1px; }
+.smh-badge.smh-ok { background: rgba(45,184,125,0.14); color: #1d8a5c; }
+.smh-badge.smh-warn { background: rgba(245,166,35,0.18); color: #a56a00; }
+.smh-badge.smh-fail { background: rgba(255,104,84,0.18); color: #c0392b; }
+.smh-text { min-width: 0; overflow-wrap: anywhere; }
+.smh-fix { margin-top: 3px; font-family: Menlo, Consolas, monospace; font-size: 12px; color: var(--sm-ink); background: var(--sm-bg); border-radius: 4px; padding: 3px 7px; display: inline-block; }
+.smh-fix::before { content: "\2192  "; color: var(--sm-muted); }
+.smh-toggle { font-size: 13px; background: none; border: 1px solid var(--sm-field-line); color: var(--sm-ink); border-radius: 4px; padding: 5px 12px; cursor: pointer; margin-top: 6px; }
+.smh-passed-list { margin-top: 10px; }

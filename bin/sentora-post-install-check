@@ -12,11 +12,18 @@ sp() { php -q "$PANEL/bin/setso" --get "$1" 2> /dev/null; }
 CONF=/etc/sentora/configs
 LOG=${SENTORA_CHECK_LOG:-/var/sentora/logs/post-install-check.log}
 
+# --json <file>: also write the report for the panel (Server Monitor's Hardening card): every line
+# with its section, and the hardening score (OK 1 point, WARN half, FAIL none, out of 100)
+JSON=""
+if [ "${1:-}" = "--json" ] && [ -n "${2:-}" ]; then JSON=$2; fi
+REC=$(mktemp); chmod 600 "$REC"; trap 'rm -f "$REC"' EXIT
+CUR="General"
 OKS=0; WARNS=0; FAILS=0
-ok()   { echo "  OK    $*"; OKS=$((OKS + 1)); }
-warn() { echo "  WARN  $*"; WARNS=$((WARNS + 1)); }
-fail() { echo "  FAIL  $*"; FAILS=$((FAILS + 1)); }
-section() { echo; echo "== $*"; }
+rec() { printf '%s\t%s\t%s\n' "$1" "$CUR" "$2" | tr -d '\r' >> "$REC"; }
+ok()   { echo "  OK    $*"; OKS=$((OKS + 1)); rec ok "$*"; }
+warn() { echo "  WARN  $*"; WARNS=$((WARNS + 1)); rec warn "$*"; }
+fail() { echo "  FAIL  $*"; FAILS=$((FAILS + 1)); rec fail "$*"; }
+section() { echo; echo "== $*"; CUR=$*; }
 
 main() {
 echo "Sentora post-install check, $(date '+%Y-%m-%d %H:%M %Z') on $(hostname -f 2> /dev/null || hostname)"
@@ -374,11 +381,112 @@ tls "HTTPS: TLS 1.1 refused" 443 "-tls1_1" refused
 tls "HTTPS: old CBC cipher refused" 443 "-tls1_2 -cipher AES128-SHA" refused
 tls "SMTPS (465): anonymous cipher refused" 465 "-tls1_2 -cipher ADH-AES128-SHA:AECDH-AES128-SHA:@SECLEVEL=0" refused
 tls "IMAPS (993): old CBC cipher refused" 993 "-tls1_2 -cipher ECDHE-RSA-AES128-SHA" refused
+tls "IMAPS (993): TLS 1.1 refused" 993 "-tls1_1" refused
+tls "POP3S (995): TLS 1.1 refused" 995 "-tls1_1" refused
+tls "SMTP submission (587): TLS 1.1 refused" 587 "-starttls smtp -tls1_1" refused
+tls "FTP (21, explicit TLS): TLS 1.1 refused" 21 "-starttls ftp -tls1_1" refused
 CERT=$CONF/ssl/sentora.crt
 if [ -f "$CERT" ]; then
+    end=$(openssl x509 -in "$CERT" -noout -enddate 2> /dev/null | cut -d= -f2)
+    left=$(( ( $(date -d "$end" +%s 2> /dev/null || echo 0) - $(date +%s) ) / 86400 ))
+    if [ "$left" -lt 0 ]; then fail "the panel's certificate has expired ($end)"
+    elif [ "$left" -lt 14 ]; then fail "the panel's certificate expires in $left day(s) ($end)"
+    elif [ "$left" -lt 30 ]; then warn "the panel's certificate expires in $left days ($end)"
+    else ok "the panel's certificate is valid for $left more days"; fi
     issuer=$(openssl x509 -in "$CERT" -noout -issuer 2> /dev/null); subject=$(openssl x509 -in "$CERT" -noout -subject 2> /dev/null)
     if [ "${issuer#issuer=}" = "${subject#subject=}" ]; then warn "the certificate is self-signed: issue a Let's Encrypt one with Sencrypt once the name is in public DNS"
     else ok "certificate issued by ${issuer#issuer=}"; fi
+fi
+
+# --- 7b. system hardening (ideas from Lynis, only what a hosting server needs) -------
+section "System hardening (SSH, kernel, accounts, firewall, time)"
+if command -v sshd > /dev/null 2>&1 && SSHT=$(sshd -T 2> /dev/null) && [ -n "$SSHT" ]; then
+    sv() { echo "$SSHT" | awk -v k="$1" '$1 == k {print $2; exit}'; }
+    [ "$(sv permitemptypasswords)" = no ] && ok "SSH: no logins with an empty password" || fail "SSH allows empty passwords (PermitEmptyPasswords no in /etc/ssh/sshd_config)"
+    case "$(sv permitrootlogin)" in
+        no) ok "SSH: root may not log in" ;;
+        prohibit-password|without-password|forced-commands-only) ok "SSH: root only with a key" ;;
+        *) warn "SSH: root may log in with a password (keys are safer: PermitRootLogin prohibit-password, after adding your key)" ;;
+    esac
+    [ "$(sv passwordauthentication)" = no ] && ok "SSH: keys only, no passwords" \
+        || warn "SSH: logins with passwords are allowed (fail2ban limits guessing; keys are safer: PasswordAuthentication no)"
+    [ "$(sv x11forwarding)" = yes ] && warn "SSH: X11 forwarding is on (a server does not need it: X11Forwarding no)" || ok "SSH: X11 forwarding off"
+    t=$(sv maxauthtries); [ -n "$t" ] && [ "$t" -le 6 ] && ok "SSH: at most $t password tries per connection" || warn "SSH: ${t:-?} password tries per connection (MaxAuthTries 4)"
+else
+    warn "SSH's settings could not be read (sshd -T)"
+fi
+# the kernel's own safety switches (sysctl); in a container some come from the host
+KMISS=""
+kchk() { # name wanted(=N or >=N)
+    local v; v=$(cat "/proc/sys/${1//.//}" 2> /dev/null | awk '{print $1}')
+    [ -n "$v" ] || return 0
+    case "$2" in
+        '>='*) [ "$v" -ge "${2#>=}" ] || KMISS="$KMISS $1=$v" ;;
+        *) [ "$v" = "$2" ] || KMISS="$KMISS $1=$v" ;;
+    esac
+}
+kchk kernel.randomize_va_space 2; kchk kernel.kptr_restrict '>=1'; kchk kernel.dmesg_restrict 1
+kchk fs.protected_hardlinks 1; kchk fs.protected_symlinks 1; kchk fs.protected_fifos '>=1'; kchk fs.protected_regular '>=1'; kchk fs.suid_dumpable 0
+kchk net.ipv4.tcp_syncookies 1; kchk net.ipv4.conf.all.accept_redirects 0; kchk net.ipv4.conf.all.send_redirects 0
+kchk net.ipv4.conf.all.accept_source_route 0; kchk net.ipv6.conf.all.accept_redirects 0
+if [ -z "$KMISS" ]; then ok "the kernel's safety switches are set (address randomisation, protected links, SYN cookies, no redirects)"
+else warn "kernel safety switches not set:$KMISS (put the wanted values in /etc/sysctl.d/90-hardening.conf, then: sysctl --system)"; fi
+# accounts
+x=$(awk -F: '$3 == 0 && $1 != "root" {print $1}' /etc/passwd | tr '\n' ' ')
+[ -z "$x" ] && ok "only root has user id 0" || fail "other accounts with root's user id 0: $x"
+x=$(awk -F: '($2 == "") {print $1}' /etc/shadow 2> /dev/null | tr '\n' ' ')
+[ -z "$x" ] && ok "no account without a password" || fail "accounts with an empty password (anyone can log in as them): $x"
+# a firewall (fail2ban bans addresses; a firewall closes everything nothing should reach)
+if { command -v firewall-cmd > /dev/null 2>&1 && firewall-cmd --state 2> /dev/null | grep -qx running; } \
+        || { command -v ufw > /dev/null 2>&1 && ufw status 2> /dev/null | grep -q '^Status: active'; } \
+        || { command -v nft > /dev/null 2>&1 && nft list ruleset 2> /dev/null | grep -qE 'hook input.*policy drop'; }; then
+    ok "a firewall is active"
+else
+    warn "no firewall is active: fail2ban bans addresses that keep failing, but every other open port stays open (allow only Sentora's ports in firewalld, ufw or nftables)"
+fi
+# the clock (certificates, logs and two-factor codes need it right)
+if command -v timedatectl > /dev/null 2>&1; then
+    [ "$(timedatectl show -p NTPSynchronized --value 2> /dev/null)" = yes ] && ok "the clock is synchronised" || warn "the clock is not synchronised (timedatectl: check chrony or systemd-timesyncd)"
+fi
+# a newer kernel installed than the one running: its fixes start with a restart
+newest=$(ls -1 /lib/modules 2> /dev/null | sort -V | tail -1)
+if [ -n "$newest" ] && [ "$newest" != "$(uname -r)" ] && [ -d "/lib/modules/$(uname -r)" ]; then
+    warn "a newer kernel is installed ($newest, running $(uname -r)): restart the server when you can"
+else
+    ok "the running kernel is the newest installed"
+fi
+
+section "Service hardening (web, mail, DNS, database)"
+hdr=$(curl -s -m 10 -I http://127.0.0.1/ 2> /dev/null | tr -d '\r')
+srv=$(echo "$hdr" | awk -F': ' 'tolower($1) == "server" {print $2; exit}')
+if [ -z "$hdr" ]; then warn "Apache did not answer on http://127.0.0.1/"
+elif echo "$srv" | grep -q '[0-9]'; then warn "Apache tells its version to everyone ($srv): ServerTokens Prod"
+else ok "Apache does not tell its version"; fi
+code=$(curl -s -m 10 -o /dev/null -w '%{http_code}' -X TRACE http://127.0.0.1/ 2> /dev/null)
+case "$code" in 405|403|501) ok "TRACE requests refused ($code)" ;; 000|'') ;; *) warn "TRACE requests are answered ($code): TraceEnable Off" ;; esac
+phdr=$(curl -sk -m 10 -I https://127.0.0.1/ 2> /dev/null)
+if [ -z "$phdr" ]; then :
+elif echo "$phdr" | grep -qi '^x-powered-by:.*php'; then warn "the panel tells its PHP version (X-Powered-By): expose_php = Off"
+else ok "no PHP version in the panel's answers"; fi
+if command -v postconf > /dev/null 2>&1; then
+    rr="$(postconf -h smtpd_relay_restrictions 2> /dev/null) $(postconf -h smtpd_recipient_restrictions 2> /dev/null)"
+    echo "$rr" | grep -q reject_unauth_destination && ok "mail: not an open relay (reject_unauth_destination)" || fail "mail: no reject_unauth_destination: this server may relay mail for anyone"
+    mn=$(postconf -h mynetworks 2> /dev/null)
+    if echo "$mn" | grep -qE '(^|[ ,])0\.0\.0\.0/0|/[0-7]([ ,]|$)|/1[0-5]([ ,]|$)'; then fail "mail: mynetworks trusts a wide network ($mn): only this server should be in it"
+    else ok "mail: only this server may send without logging in"; fi
+    [ "$(postconf -h disable_vrfy_command 2> /dev/null)" = yes ] && ok "mail: VRFY off (addresses can not be probed)" || warn "mail: VRFY is on (disable_vrfy_command = yes)"
+    postconf -h smtpd_banner 2> /dev/null | grep -qE 'mail_version|Postfix [0-9]' && warn "mail: the banner tells Postfix's version" || ok "mail: the banner does not tell the version"
+fi
+NC=$(sp bind_dir); NC="${NC%/}/named.conf"
+if [ -f "$NC" ]; then
+    if command -v named-checkconf > /dev/null 2>&1 && named-checkconf -p "$NC" 2> /dev/null | grep -qE 'allow-recursion[^;]*\{[^}]*\bany\b'; then fail "DNS: BIND answers recursive questions for anyone (an open resolver, used for attacks)"
+    else ok "DNS: not an open resolver"; fi
+fi
+if [ $DB -eq 1 ]; then
+    a=$(q "SELECT COUNT(*) FROM mysql.user WHERE user = ''")
+    [ -n "$a" ] && { [ "$a" = 0 ] && ok "database: no anonymous users" || fail "database: $a anonymous user(s) (DROP USER ''@'host')"; }
+    r=$(q "SELECT GROUP_CONCAT(host) FROM mysql.user WHERE user = 'root' AND host NOT IN ('localhost', '127.0.0.1', '::1')")
+    [ -n "$a" ] && { [ -z "$r" ] || [ "$r" = NULL ] && ok "database: root only from this server" || fail "database: root may log in from $r"; }
 fi
 
 # --- 8. automatic security updates --------------------------------------------------
@@ -463,9 +571,35 @@ fi
 rm -f "$MYCNF"
 echo
 echo "Result: $OKS OK, $WARNS WARN, $FAILS FAIL"
+T=$((OKS + WARNS + FAILS))
+[ $T -gt 0 ] && echo "Sentora hardening score: $(( (OKS * 200 + WARNS * 100 + T) / (T * 2) )) / 100 (OK 1 point, WARN half, FAIL none)"
 [ $FAILS -eq 0 ] && echo "No failures." || echo "Fix the FAIL lines above; send this report for help."
 [ $FAILS -eq 0 ]
 }
 
 main 2>&1 | tee "$LOG"
-exit "${PIPESTATUS[0]}"
+RC=${PIPESTATUS[0]}
+# the report for the panel: written whole, then put in place (root:<panel user> 640)
+if [ -n "$JSON" ] && [ "$RC" != 2 ]; then
+    php -r '
+        $rows = array(); $n = array("ok" => 0, "warn" => 0, "fail" => 0);
+        foreach (file($argv[1], FILE_IGNORE_NEW_LINES) as $l) {
+            $p = explode("\t", $l, 3);
+            if (count($p) === 3 && isset($n[$p[0]])) { $n[$p[0]]++; $rows[] = array("status" => $p[0], "section" => $p[1], "text" => $p[2]); }
+        }
+        $t = array_sum($n);
+        echo json_encode(array("time" => time(), "score" => $t ? (int) round(100 * ($n["ok"] + $n["warn"] / 2) / $t) : 0,
+            "ok" => $n["ok"], "warn" => $n["warn"], "fail" => $n["fail"], "checks" => $rows), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    ' "$REC" > "$JSON.new" 2> /dev/null && chown root:sentora "$JSON.new" && chmod 640 "$JSON.new" && mv -f "$JSON.new" "$JSON"
+    rm -f "$JSON.new"
+    # its history for the score-over-time graph: the last 90 results (time, score, counts)
+    HIST="${JSON%.json}-history.json"
+    php -r '
+        $h = @json_decode((string) @file_get_contents($argv[1]), true); $h = is_array($h) ? $h : array();
+        $r = @json_decode((string) @file_get_contents($argv[2]), true);
+        if (is_array($r) && isset($r["score"])) { $h[] = array("time" => $r["time"], "score" => $r["score"], "ok" => $r["ok"], "warn" => $r["warn"], "fail" => $r["fail"]); }
+        echo json_encode(array_slice($h, -90));
+    ' "$HIST" "$JSON" > "$HIST.new" 2> /dev/null && chown root:sentora "$HIST.new" && chmod 640 "$HIST.new" && mv -f "$HIST.new" "$HIST"
+    rm -f "$HIST.new"
+fi
+exit "$RC"

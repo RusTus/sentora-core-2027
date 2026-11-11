@@ -25,6 +25,23 @@
                 <button type="button" id="sm-pause"><: Pause :></button>
             </div>
         </div>
+        <div class="smh" id="sm-hard" data-url="modules/server_monitor/code/hardening.php"
+             data-t-ok="<: OK :>" data-t-warn="<: Warning :>" data-t-fail="<: Failed :>" data-t-none="<: No report yet: the daemon asks for the first one within 5 minutes, or press Run the check now. :>"
+             data-t-checking="<: Checking now (about a minute)… :>" data-t-checked="<: Checked %s :>" data-t-passed="<: Show the %d checks that passed :>"
+             data-t-hide="<: Hide the checks that passed :>" data-t-allgood="<: Nothing to fix. :>" data-t-tofix="<: %d to fix :>" data-t-towatch="<: %d to look at :>"
+             data-t-hist="<: Score over time :>" data-t-histnone="<: The line grows with each check (hourly). :>">
+            <div class="smh-head">
+                <div><h4><: Hardening :></h4><div class="sm-sub"><: Sentora's own check of this server: services, SELinux or AppArmor, file permissions, accounts, SSH, the kernel, TLS, mail, DNS and the database. OK counts 1 point, a warning half, a failure none. :></div></div>
+                <div class="smh-actions"><span class="sm-sub" id="smh-when"></span><@ HardeningForm @></div>
+            </div>
+            <div class="smh-top">
+                <div class="smh-gauge" id="smh-gauge"></div>
+                <div class="smh-hist"><div class="smh-label"><: Score over time :></div><div id="smh-hist"></div></div>
+                <div class="smh-areas"><div class="smh-label"><: By area :></div><div id="smh-areas"></div></div>
+            </div>
+            <div id="smh-issues"></div>
+            <div id="smh-passed"></div>
+        </div>
         <div class="sm-cards">
             <div class="sm-card" style="--c:#447fb3"><div class="sm-card-label"><: CPU :></div><div class="sm-card-value" id="sm-cpu">…</div><div class="sm-card-detail" id="sm-cpu-d"></div><div id="sm-cpu-s"></div></div>
             <div class="sm-card" style="--c:#8e6bd8"><div class="sm-card-label"><: Load :></div><div class="sm-card-value" id="sm-load">…</div><div class="sm-card-detail" id="sm-load-d"></div><div id="sm-load-s"></div></div>
@@ -45,4 +62,5 @@
         </div>
     </div>
     <script src="<@ Assets @>monitor.js"></script>
+    <script src="<@ Assets @>hardening.js"></script>
 </div>

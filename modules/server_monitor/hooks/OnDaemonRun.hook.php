@@ -26,6 +26,7 @@ if (is_file($saInstalling) && time() - (int) filemtime($saInstalling) < 7200) {
 }
 echo "END Server alerts" . fs_filehandler::NewLine();
 SentoraProcstatEnsure();
+SentoraHardeningQueue();
 
 /**
  * Keep the process-list service (bin/sentora-procstat, run by systemd as root) installed and running:
@@ -325,3 +326,30 @@ function SentoraExpiringCertificates($days)
     }
     return $out;
 }
+
+/**
+ * The Hardening card's report (/var/sentora/logs/hardening.json): asks root for a new one once an hour
+ * through zsudo's queue (zsudo hardening-check runs sentora-post-install-check with its report), and
+ * not again while one is waiting (a stamp in /var/lib/sentora-update, root's folder).
+ *
+ * @return void
+ */
+function SentoraHardeningQueue()
+{
+    if (!function_exists('posix_geteuid') || posix_geteuid() !== 0) {
+        return;
+    }
+    $root = rtrim((string) ctrl_options::GetSystemOption('sentora_root'), '/');
+    $report = '/var/sentora/logs/hardening.json';
+    $stamp = '/var/lib/sentora-update/hardening-queued';
+    clearstatcache();
+    $age = is_file($report) ? time() - (int) filemtime($report) : PHP_INT_MAX;
+    $asked = is_file($stamp) ? time() - (int) filemtime($stamp) : PHP_INT_MAX;
+    if ($age < 3600 || $asked < 1800 || !is_file($root . '/bin/zsudo') || !is_dir('/var/lib/sentora-update')) {
+        return;
+    }
+    @touch($stamp);
+    exec(escapeshellarg($root . '/bin/zsudo') . ' hardening-check 2>&1', $out, $rc);
+    echo 'Server Monitor: hardening check ' . ($rc === 0 ? 'asked for (zsudo)' : 'could not be asked for: ' . implode(' ', $out)) . fs_filehandler::NewLine();
+}
+
