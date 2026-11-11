@@ -474,6 +474,16 @@ function BuildVhostConfig() {
     $line .= "################################################################" . fs_filehandler::NewLine();
     $line .= fs_filehandler::NewLine();
     $line .= SentoraRequestGuard();
+    // Apache's status page, for this server only (Apache Status reads http://127.0.0.1/server-status;
+    // the request guard keeps hosted sites from handing requests to it). Some systems' mod_status
+    // comes with this block, others only load the module: it is written here for all of them.
+    $line .= "<IfModule status_module>" . fs_filehandler::NewLine()
+        . "ExtendedStatus On" . fs_filehandler::NewLine()
+        . "<Location /server-status>" . fs_filehandler::NewLine()
+        . "SetHandler server-status" . fs_filehandler::NewLine()
+        . "Require local" . fs_filehandler::NewLine()
+        . "</Location>" . fs_filehandler::NewLine()
+        . "</IfModule>" . fs_filehandler::NewLine() . fs_filehandler::NewLine();
 
     // Listen is mandatory for each port <> 80 (80 is defined in system config)
 	//$line .= "Listen " . SentoraOneLine(ctrl_options::GetSystemOption('apache_port'));
