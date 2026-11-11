@@ -15,6 +15,9 @@ class system_logviewer_logs
     /** @var array<string, string[]> Group label => glob patterns (a file is listed under the first group that matches it). */
     static $sources = array(
         // A file is listed under the first group that matches it
+        // errors, warnings and bans from the logs the panel can not read itself (the daemon gathers
+        // them: code/problems.php), and what the panel asked root to do (zsudo's queue)
+        'Problems (mail, scanners, bans)' => array('/var/sentora/logs/problems.log', '/var/sentora/logs/problems.log.1'),
         'PHP-FPM (extra PHP versions)' => array('/var/sentora/logs/php*-fpm.log'),
         'Sentora panel' => array('/var/sentora/logs/*.log'),
         // the panel's own records: who logged in as whom (Shadowing), two-factor resets and recovery

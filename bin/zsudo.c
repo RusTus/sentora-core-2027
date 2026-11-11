@@ -170,6 +170,30 @@ static int enqueue(int argc, char *argv[])
     return 0;
 }
 
+/* A line in /var/sentora/logs/zsudo.log (what the panel asked root to do): only into a folder that
+   is root's alone, never through a link; it rolls over at 1 MB. Only fixed words reach it. */
+static void zlog(const char *what, const char *action)
+{
+    static const char dir[] = "/var/sentora/logs", file[] = "/var/sentora/logs/zsudo.log";
+    struct stat st;
+    char line[160], when[32];
+    time_t now = time(NULL);
+    int fd;
+    if (lstat(dir, &st) != 0 || !S_ISDIR(st.st_mode) || st.st_uid != 0 || (st.st_mode & 022))
+        return;
+    if (lstat(file, &st) == 0 && S_ISREG(st.st_mode) && st.st_size > 1048576)
+        rename(file, "/var/sentora/logs/zsudo.log.1");
+    fd = open(file, O_WRONLY | O_APPEND | O_CREAT | O_NOFOLLOW | O_CLOEXEC, 0644);
+    if (fd < 0)
+        return;
+    strftime(when, sizeof when, "%Y-%m-%d %H:%M:%S", localtime(&now));
+    snprintf(line, sizeof line, "%s  %s %s\n", when, what, action);
+    if (write(fd, line, strlen(line)) < 0) {
+        /* (nothing more to do) */
+    }
+    close(fd);
+}
+
 /* Run one fixed command line as root, in a clean context, and wait for it. */
 static void run_root(const char *cmd)
 {
@@ -250,6 +274,7 @@ static int run_queue(void)
             did = 1;
             if (got <= 0) {
                 fprintf(stderr, "zsudo: dropped %s (not a request)\n", name);
+                zlog("dropped", "a file in the queue that is not a request");
                 free(list[i]);
                 continue;
             }
@@ -266,9 +291,16 @@ static int run_queue(void)
             words[nw > 0 ? nw : 0] = NULL;
             if (nw > 1 && build_cmd(nw, words, cmd, sizeof cmd)) {
                 fprintf(stderr, "zsudo: running %s\n", words[1]);
+                zlog("ran", words[1]);
+                if (nw == 4) {
+                    char what[64];
+                    snprintf(what, sizeof what, "%s %s", words[2], words[3]);
+                    zlog("  service", what);
+                }
                 run_root(cmd);
             } else {
                 fprintf(stderr, "zsudo: refused a request that is not on the list\n");
+                zlog("refused", "a request that is not on the list");
             }
             free(list[i]);
         }
