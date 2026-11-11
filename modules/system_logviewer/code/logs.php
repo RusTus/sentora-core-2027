@@ -7,7 +7,7 @@
  * copied into the web root, and a file can only be opened by the id of an
  * entry in this list (never by a path from the browser).
  *
- * Written by RusTus, 2026-11-09
+ * Written by RusTus, 2026-11-11
  */
 class system_logviewer_logs
 {
