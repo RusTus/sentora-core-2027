@@ -80,6 +80,10 @@ if [ -z "$FILE" ]; then
     echo "SHA-256 matches the release."
 fi
 tar -tzf "$FILE" "opt/sentora-php/$MM/sbin/php-fpm" > /dev/null 2>&1 || { echo "$FILE is not a PHP $MM bundle. Nothing changed."; exit 1; }
+# which build this is (its SHA-256): the panel's daily check offers an update when the release's build
+# changes, even with the same PHP version (a rebuild that adds an extension, such as Snuffleupagus)
+SUM=$(sha256sum "$FILE" | cut -d' ' -f1)
+mark_build() { printf '%s\n' "$SUM" > "$P/BUNDLE-SHA256" 2> /dev/null && chmod 644 "$P/BUNDLE-SHA256"; }
 
 # the libraries the bundles link against (all part of the system; newer bundles need more, such as LDAP's)
 LIBS=$(sp php_bundle_libs)
@@ -102,6 +106,7 @@ if [ "$UPDATE" = 1 ]; then
     NEW="$WORK/opt/sentora-php/$MM"
     if cmp -s "$NEW/sbin/php-fpm" "$P/sbin/php-fpm" && cmp -s "$NEW/BUILD-INFO" "$P/BUILD-INFO" 2> /dev/null; then
         echo "PHP $MM is already this build ($OLD). Nothing changed."
+        mark_build
         exit 0
     fi
     "$NEW/sbin/php-fpm" -v > /dev/null 2>&1 || { echo "The new PHP $MM does not run on this server:"; "$NEW/sbin/php-fpm" -v 2>&1 | head -3; echo "Nothing changed."; exit 1; }
@@ -130,6 +135,7 @@ if [ "$UPDATE" = 1 ]; then
     if [ -x "$P/bin/sentora-php-addons" ]; then echo "Add-ons:"; "$P/bin/sentora-php-addons"; fi
     if [ "$WAS_ON" = 0 ] || systemctl start "$SERVICE"; then
         for d in bin sbin lib include php; do rm -rf "${P:?}/${d:?}.old"; done
+        mark_build
         echo "Updated: $OLD  ->  $("$P/sbin/php-fpm" -v | head -1)"
         [ "$WAS_ON" = 0 ] && echo "(It is switched off, as before: PHP Versions switches it on.)"
         exit 0
@@ -210,6 +216,7 @@ systemctl daemon-reload
 "$P/sbin/php-fpm" --test --fpm-config "$P/etc/php-fpm.conf" > /dev/null 2>&1 \
     || { echo "WARNING: PHP $MM's PHP-FPM rejects its settings:"; "$P/sbin/php-fpm" --test --fpm-config "$P/etc/php-fpm.conf" 2>&1 | tail -3; }
 
+mark_build
 echo "Installed: $("$P/sbin/php-fpm" -v | head -1)"
 echo "It is switched off. Switch it on in the panel: Admin > Server Admin > PHP Versions (the daemon starts it within 5 minutes)."
 [ "$MM" = "7.1" ] && echo "PHP 7.1 gets no security fixes: use it only to move old sites, and move them to PHP 8 as soon as they run."

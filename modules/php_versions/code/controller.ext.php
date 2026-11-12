@@ -295,7 +295,9 @@ class module_controller extends ctrl_module
         $asked = sys_phpbundles::Setting(sys_phpbundles::REQUEST);
         foreach ((array) $state['versions'] as $mm => $v) {
             if ($v['state'] === 'ready') {
-                $what = '<span class="pv-sup warn">' . str_replace(array('%1$s', '%2$s'), array(self::h($v['built']), self::h($v['installed'])), self::t('%1$s is ready (this server runs %2$s)')) . '</span>';
+                $what = !empty($v['rebuilt']) && $v['built'] === $v['installed']
+                    ? '<span class="pv-sup warn">' . str_replace('%s', self::h($v['built']), self::t('A new build of %s is ready (the same version, built again)')) . '</span>'
+                    : '<span class="pv-sup warn">' . str_replace(array('%1$s', '%2$s'), array(self::h($v['built']), self::h($v['installed'])), self::t('%1$s is ready (this server runs %2$s)')) . '</span>';
                 $btn = ($asked === (string) $mm)
                     ? '<span class="pv-sub">' . self::t('Updating within 5 minutes') . '</span>'
                     : '<button class="btn btn-primary btn-sm" type="submit" name="inVersion" value="' . self::h($mm) . '" data-confirm="'

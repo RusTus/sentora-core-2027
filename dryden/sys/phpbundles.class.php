@@ -169,14 +169,27 @@ class sys_phpbundles
                     }
                 }
             }
-            if ($have !== '' && $b !== '' && version_compare($b, $have, '>')) {
+            // the same version rebuilt (an extension added, such as Snuffleupagus): another build than the
+            // one installed (sentora-php-install notes its SHA-256), or, for a build installed before that
+            // note existed, a release build with Snuffleupagus where this one has none
+            $rebuilt = false;
+            if ($have !== '' && $b !== '' && $b === $have && $built !== null) {
+                $sum = isset($built[$mm]['sha256']) ? (string) $built[$mm]['sha256'] : '';
+                $mine = trim((string) @file_get_contents(sys_phpversions::BASE_DIR . $mm . '/BUNDLE-SHA256'));
+                if (preg_match('/^[0-9a-f]{64}$/', $sum) && preg_match('/^[0-9a-f]{64}$/', $mine)) {
+                    $rebuilt = $sum !== $mine;
+                } elseif (!empty($built[$mm]['snuffleupagus'])) {
+                    $rebuilt = !glob(sys_phpversions::BASE_DIR . $mm . '/lib/php/extensions/*/snuffleupagus.so');
+                }
+            }
+            if ($have !== '' && $b !== '' && (version_compare($b, $have, '>') || $rebuilt)) {
                 $st = 'ready';
             } elseif ($have !== '' && $latest !== '' && version_compare($latest, $have, '>') && ($b === '' || version_compare($latest, $b, '>'))) {
                 $st = 'waiting';
             } else {
                 $st = 'current';
             }
-            $state['versions'][$mm] = array('installed' => $have, 'built' => $b, 'latest' => $latest, 'state' => $st);
+            $state['versions'][$mm] = array('installed' => $have, 'built' => $b, 'latest' => $latest, 'state' => $st, 'rebuilt' => $rebuilt);
         }
         self::Save(self::STATE, json_encode($state));
         return self::Notice($state);
@@ -194,7 +207,9 @@ class sys_phpbundles
         $waiting = array();
         foreach ((array) $state['versions'] as $mm => $v) {
             if ($v['state'] === 'ready') {
-                $ready[] = '- PHP **' . $v['built'] . '** is ready (this server runs ' . $v['installed'] . ')';
+                $ready[] = !empty($v['rebuilt']) && $v['built'] === $v['installed']
+                    ? '- A new build of PHP **' . $v['built'] . '** is ready (the same version, built again: for example with Snuffleupagus for Web Hardening)'
+                    : '- PHP **' . $v['built'] . '** is ready (this server runs ' . $v['installed'] . ')';
             } elseif ($v['state'] === 'waiting') {
                 $waiting[] = '- PHP **' . $v['latest'] . '** is out (this server runs ' . $v['installed'] . '); its Sentora build is not ready yet';
             }
