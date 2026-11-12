@@ -34,6 +34,8 @@ class module_controller extends ctrl_module {
 
     /** @var bool|null True after a command was queued (shown by getResult()). */
     static $ok = NULL;
+    /** @var array{0: int, 1: int}|null After "Update all": modules queued, modules left out. */
+    static $updateall = NULL;
 	/** @var string|null HTML: the queued command, shown by getZppyOut(). */
 	static $zppyout1 = NULL;
 	/** @var string|null HTML: more output for getZppyOut() (not set any more). */
@@ -858,6 +860,61 @@ class module_controller extends ctrl_module {
     }
 
     /**
+     * "Update all" (the Updates tab): queue the upgrade of every module the page found an update for.
+     *
+     * The page sends the modules as "repo:::module" separated by commas; each one is checked as a
+     * single update is (a known repository, not a core module, installed, not already queued), then
+     * one list update follows. Checks the CSRF token.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return void
+     */
+    static function doUpdateAll() {
+        global $controller;
+        runtime_csfr::Protect();
+        $n = 0;
+        $skipped = 0;
+        $seen = array();
+        foreach (array_slice(explode(',', (string) $controller->GetControllerRequest('FORM', 'inUpdateAll')), 0, 200) as $full) {
+            $m = repo_browser_helper::SplitFull(trim($full));
+            if (!$m || isset($seen[$m[1]])) {
+                continue;
+            }
+            $seen[$m[1]] = true;
+            if (!repo_browser_helper::KnownRepo($m[0]) || repo_browser_helper::IsCoreModule($m[1]) || !self::IsInstalled($m[1])) {
+                $skipped++;
+                continue;
+            }
+            if (self::RunZPPYClient('upgrade ' . $m[1], false, false)) {
+                $n++;
+            } else {
+                $skipped++;
+            }
+        }
+        // (RunZPPYClient's flags would show a single module's message: this page says it for all)
+        self::$alreadyqueued = null;
+        self::$zppycommanderror = null;
+        if ($n > 0) {
+            repo_browser_helper::Enqueue(array('update'));
+        }
+        self::$updateall = array($n, $skipped);
+    }
+
+    /**
+     * Is a module (folder name) installed on this panel?
+     *
+     * @global db_driver $zdbh The panel's database connection.
+     * @param string $folder The module's folder name.
+     * @return bool
+     */
+    private static function IsInstalled($folder) {
+        global $zdbh;
+        $q = $zdbh->prepare("SELECT COUNT(*) FROM x_modules WHERE mo_folder_vc = :f");
+        $q->execute(array(':f' => (string) $folder));
+        return (int) $q->fetchColumn() > 0;
+    }
+
+    /**
      * Whether to show the remove-module confirmation (template <% if isConfirmDeleteModule %>).
      *
      * @global runtime_controller $controller The request controller.
@@ -1140,6 +1197,17 @@ class module_controller extends ctrl_module {
      * @return string|null The HTML, or null when there is nothing to show.
      */
     static function getResult() {
+        if (self::$updateall !== null) {
+            list($n, $skipped) = self::$updateall;
+            if ($n === 0) {
+                return ui_sysmessage::shout(ui_language::translate("No update was queued: each of those modules already has a change waiting, or is no longer offered by its repository."), "zannounceerror");
+            }
+            $msg = str_replace('%s', (string) $n, ui_language::translate("Queued %s module update(s): the daemon installs them one after another (this can take a few minutes). The results appear under Recent ZPPY commands."));
+            if ($skipped > 0) {
+                $msg .= ' ' . str_replace('%s', (string) $skipped, ui_language::translate("%s were left out (already waiting, or not from a repository you have)."));
+            }
+            return ui_sysmessage::shout($msg, "zannounceok");
+        }
         if (!fs_director::CheckForEmptyValue(self::$alreadyqueued)) {
             return ui_sysmessage::shout(ui_language::translate("That module or repository already has a change queued (this can take up to 5 minutes); you can queue another once it has finished (see Recent ZPPY commands)."), "zannounceerror");
         }

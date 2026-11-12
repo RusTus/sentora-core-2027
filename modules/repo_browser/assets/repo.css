@@ -66,7 +66,10 @@
 .rb-row-act .btn { min-width: 80px; }
 .rb-del:hover { color: var(--sn-bad, #b42b27) !important; border-color: var(--sn-bad-line, #f0a9a7) !important; }
 .rb-pager { display: flex; align-items: center; justify-content: center; gap: 8px; padding-top: 12px; margin-top: 4px; border-top: 1px solid var(--rb-line); font-size: 13px; color: var(--rb-muted); }
-.rb-pager[hidden], .rb-tab[hidden], .rb-checking[hidden], .rb-none[hidden] { display: none; }
+.rb-pager[hidden], .rb-tab[hidden], .rb-checking[hidden], .rb-none[hidden], .rb-all[hidden] { display: none; }
+/* "Update all", at the right of the tabs on the Updates tab */
+.rb-all { margin: 0 0 4px auto; }
+.rb-checking:not([hidden]) + .rb-all { margin-left: 8px; }
 .rb-pager b { color: var(--rb-ink); }
 
 /* repositories */

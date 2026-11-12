@@ -103,6 +103,11 @@
             <button type="button" class="rb-tab" role="tab" data-tab="update" hidden><: Updates :> <span class="rb-count"></span></button>
             <button type="button" class="rb-tab" role="tab" data-tab="notinstalled"><: Available :> <span class="rb-count"></span></button>
             <span class="rb-checking rb-sub" hidden><span class="rb-wait short"></span> <: Checking for updates :></span>
+            <form class="rb-all" action="./?module=repo_browser&amp;action=UpdateAll" method="post" data-ask="<: Update every module in this list? :>" hidden>
+                <input type="hidden" name="inUpdateAll" value="">
+                <button type="submit" class="btn btn-primary btn-sm"><: Update all :> (<span class="rb-all-n"></span>)</button>
+                <@ CSFR_Tag @>
+            </form>
         </div>
         <form action="./?module=repo_browser&amp;action=DeleteModule" method="post">
             <div class="rb-list">
@@ -348,10 +353,25 @@
                     $('.rb-tab[data-tab=update]').removeAttr('hidden');
                     row.find('.rb-state').text(rb.attr('data-update')).attr('class', 'rb-state label label-info');
                 }
+                allBtn();
                 next();
             });
         };
         if (queue.length) { checking.removeAttr('hidden'); for (var i = 0; i < 4; i++) { next(); } }
+
+        // "Update all" (on the Updates tab): every module found with an update, queued in one go
+        var all = $('.rb-all');
+        var allBtn = function () {
+            var n = rows.filter('.has-update').length;
+            all.find('.rb-all-n').text(n);
+            all.attr('hidden', n > 0 && tab === 'update' ? null : true);
+        };
+        $('.rb-tab').on('click', allBtn);
+        all.on('submit', function (e) {
+            var list = rows.filter('.has-update').map(function () { return $(this).find('.update').attr('item_id'); }).get();
+            if (!list.length || !window.confirm(all.attr('data-ask') + ' (' + list.length + ')')) { e.preventDefault(); e.stopImmediatePropagation(); return false; }
+            all.find('[name=inUpdateAll]').val(list.join(','));
+        });
     }
 
     // what other panels' administrators say about a module (loaded when asked)
