@@ -98,3 +98,83 @@ if (is_file($zdCron) && !is_link($zdCron) && fileowner($zdCron) === 0) {
         }
     }
 }
+
+/*
+ * "Keep the panel up to date" (Admin > Sentora Config > Updates; off unless the administrator turns it
+ * on). The settings are added here on servers that do not have them yet. When it is on and a newer
+ * release is published (the hourly check: sentora-update --status), the release is installed at the
+ * chosen hour once it has been out for a day (counted from when this server first saw it), by
+ * bin/sentora-autoupdate through zsudo's queue: it backs up, updates, checks the panel and goes back
+ * on a problem, and tells the administrators. A release it had to undo is not tried again by itself.
+ * Not while an update runs, nor with under 1 GB free where the panel lives.
+ */
+global $zdbh;
+foreach (array(
+    array('panel_autoupdate', 'Keep the panel up to date', 'false', 'true|false', 'Install new panel releases by themselves, every night at the chosen hour.'),
+    array('panel_autoupdate_hour', 'Update hour', '3', '0|1|2|3|4|5|6|7|8|9|10|11|12|13|14|15|16|17|18|19|20|21|22|23', 'The hour (server time) automatic updates are installed.'),
+    array('addons_autoupdate', 'Keep add-on modules up to date', 'false', 'true|false', 'Install new versions of add-on modules by themselves, at the same hour.'),
+) as $auRow) {
+    $auHas = $zdbh->prepare("SELECT COUNT(*) FROM x_settings WHERE so_name_vc = :n");
+    $auHas->execute(array(':n' => $auRow[0]));
+    if ((int) $auHas->fetchColumn() === 0) {
+        $zdbh->prepare("INSERT INTO x_settings (so_name_vc, so_cleanname_vc, so_value_tx, so_defvalues_tx, so_desc_tx, so_module_vc, so_usereditable_en)
+            VALUES (:n, :c, :v, :d, :s, 'Sentora Config', 'true')")
+            ->execute(array(':n' => $auRow[0], ':c' => $auRow[1], ':v' => $auRow[2], ':d' => $auRow[3], ':s' => $auRow[4]));
+    }
+}
+$auState = sys_statedir::DIR . '/panel-autoupdate.json';
+$auS = json_decode((string) @file_get_contents($auState), true);
+$auS = is_array($auS) ? $auS : array();
+$auSave = function () use (&$auS, $auState) {
+    @file_put_contents($auState . '.new', json_encode($auS));
+    @chmod($auState . '.new', 0600);
+    @rename($auState . '.new', $auState);
+};
+if (function_exists('posix_geteuid') && posix_geteuid() === 0 && strtolower((string) ctrl_options::GetSystemOption('panel_autoupdate')) === 'true') {
+    $auHour = (int) ctrl_options::GetSystemOption('panel_autoupdate_hour');
+    $auAvail = trim((string) @file_get_contents('/var/lib/sentora-update/available'));
+    $auSum = trim((string) @file_get_contents('/var/lib/sentora-update/available-sum'));
+    $auLast = explode(' ', trim((string) @file_get_contents('/var/lib/sentora-update/autoupdate-last')));
+    // the result of the last automatic update, once: a release it had to undo is not tried again
+    if (isset($auLast[1], $auS['tried'], $auS['tried_at']) && (int) $auLast[0] >= (int) $auS['tried_at'] && in_array($auLast[1], array('rolledback', 'failed'), true)) {
+        $auS['skip'] = $auS['tried'];
+    }
+    if (preg_match('/^\d+ available /', $auAvail) && preg_match('/^[0-9a-f]{64}$/', $auSum)) {
+        if (!isset($auS['sum']) || $auS['sum'] !== $auSum) {
+            $auS['sum'] = $auSum;
+            $auS['seen'] = time();
+        }
+        $auDue = max((int) $auS['seen'] + 86400, 0);
+        // the first chosen hour after it has been out for a day
+        $auAt = mktime($auHour, 0, 0, (int) date('n', $auDue), (int) date('j', $auDue), (int) date('Y', $auDue));
+        if ($auAt < $auDue) {
+            $auAt += 86400;
+        }
+        $auS['at'] = $auAt;
+        $auRun = trim((string) @file_get_contents('/var/lib/sentora-update/status'));
+        $auRunning = $auRun !== '' && strpos($auRun, "\ndone\t") === false && strpos($auRun, "\nfail\t") === false && time() - (int) @filemtime('/var/lib/sentora-update/status') < 1200;
+        $auFree = @disk_free_space(rtrim((string) ctrl_options::GetSystemOption('sentora_root'), '/'));
+        if (isset($auS['skip']) && $auS['skip'] === $auSum) {
+            // (undone once: waits for the administrator or the next release)
+        } elseif (time() >= $auAt && (int) date('G') === $auHour && (!isset($auS['tried']) || $auS['tried'] !== $auSum || time() - (int) $auS['tried_at'] > 86400)
+                && !$auRunning && ($auFree === false || $auFree > 1073741824)) {
+            $auZ = (string) ctrl_options::GetSystemOption('zsudo');
+            $auO = array();
+            exec(ctrl_system::OwnFiles(escapeshellcmd($auZ) . ' panel-autoupdate 2>&1'), $auO, $auRc);
+            if ($auRc === 0) {
+                $auS['tried'] = $auSum;
+                $auS['tried_at'] = time();
+                echo 'Panel Update: Keep the panel up to date: installing the new release now (bin/sentora-autoupdate).' . $zsNl;
+                ctrl_notices::Send(array('scope' => 'groups', 'targets' => array(1), 'type' => 'info', 'title' => 'The panel is updating itself',
+                    'body' => '**Keep the panel up to date** is installing the newest Sentora release now (the panel is backed up first). Another notice says how it went, in a few minutes.',
+                    'closable' => true, 'key' => 'panel-autoupdate', 'source' => 'sentora-autoupdate'));
+            } else {
+                echo 'Panel Update: Keep the panel up to date: zsudo did not take the update (' . $auRc . ': ' . implode(' ', $auO) . ').' . $zsNl;
+            }
+        }
+    }
+    $auSave();
+} elseif ($auS) {
+    // switched off: what it planned is forgotten (nothing else changes)
+    @unlink($auState);
+}

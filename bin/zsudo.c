@@ -31,6 +31,7 @@
  * Accepted:
  *   zsudo service <apache2|httpd> <reload|restart|graceful>
  *   zsudo service <named|bind9> <start|stop|reload|restart>
+ *   zsudo panel-autoupdate     ("Keep the panel up to date": bin/sentora-autoupdate)
  *   zsudo ftp-kick     (no arguments: ends the open FTP sessions of the FTP
  *                       logins switched off with their client, through the
  *                       root-owned /etc/sentora/panel/bin/sentora-ftp-kick)
@@ -123,6 +124,9 @@ static int build_cmd(int argc, char *argv[], char *cmd, size_t size)
         snprintf(cmd, size, "/bin/bash /etc/sentora/panel/bin/sentora-update --status");
     } else if (argc == 2 && strcmp(argv[1], "panel-update") == 0) {
         snprintf(cmd, size, "/bin/bash /etc/sentora/panel/bin/sentora-update --yes --from-panel");
+    } else if (argc == 2 && strcmp(argv[1], "panel-autoupdate") == 0) {
+        /* "Keep the panel up to date": update, check, go back on a problem, tell the administrators */
+        snprintf(cmd, size, "/bin/bash /etc/sentora/panel/bin/sentora-autoupdate");
     } else if (argc == 2 && strcmp(argv[1], "daemon-run") == 0) {
         /* the daemon cron runs anyway, sooner; flock -n drops a second press while one runs (the
            daemon's own lock keeps it from overlapping a cron run), and its own log never cuts into

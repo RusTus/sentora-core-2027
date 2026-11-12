@@ -15,8 +15,97 @@
 require_once dirname(__FILE__) . '/../code/repohelper.php';
 
 echo fs_filehandler::NewLine() . "START Repo Browser queued commands." . fs_filehandler::NewLine();
+RepoBrowserAutoUpdate();
 RepoBrowserRunQueue();
 echo "END Repo Browser queued commands." . fs_filehandler::NewLine();
+
+/**
+ * "Keep add-on modules up to date" (Admin > Sentora Config > Updates; off unless turned on): at the
+ * hour chosen there (panel_autoupdate_hour), queue the upgrade of every add-on module with a newer
+ * version noted by the hourly check (x_modules.mo_updatever_vc) once that version has been seen for a
+ * day; this run's queue then installs them. When they have all run, the administrators get a notice
+ * saying which were updated and which failed (key addons-autoupdate).
+ *
+ * @global db_driver $zdbh The panel's database connection.
+ * @return void
+ */
+function RepoBrowserAutoUpdate()
+{
+    global $zdbh;
+    $file = sys_statedir::DIR . '/addons-autoupdate.json';
+    if (strtolower((string) ctrl_options::GetSystemOption('addons_autoupdate')) !== 'true') {
+        @unlink($file);
+        return;
+    }
+    $st = json_decode((string) @file_get_contents($file), true);
+    $st = is_array($st) ? $st : array();
+    $st += array('seen' => array(), 'day' => '', 'batch' => array(), 'batch_at' => 0);
+    repo_browser_helper::QueueEnsure();
+    // 1. the last batch: once every upgrade in it has run, say how it went
+    if ($st['batch']) {
+        $done = array();
+        $failed = array();
+        $waiting = 0;
+        $q = $zdbh->prepare("SELECT zq_status_vc FROM x_zppy_queue WHERE zq_args_tx = :a AND zq_created_in >= :t ORDER BY zq_id_pk DESC LIMIT 1");
+        foreach ($st['batch'] as $module => $ver) {
+            $q->execute(array(':a' => json_encode(array('upgrade', (string) $module)), ':t' => (int) $st['batch_at']));
+            $status = (string) $q->fetchColumn();
+            if ($status === 'queued' || $status === 'running') {
+                $waiting++;
+            } elseif ($status === 'done') {
+                $done[] = $module . ' (' . $ver . ')';
+            } else {
+                $failed[] = $module;
+            }
+        }
+        if ($waiting === 0) {
+            $body = '**Keep add-on modules up to date** ran on ' . date('j M Y \a\t H:i', (int) $st['batch_at']) . '.'
+                . ($done ? "\n- Updated: " . implode(', ', $done) : '')
+                . ($failed ? "\n- **Not updated:** " . implode(', ', $failed) . ' (see Admin > Repo Browser > Recent ZPPY commands)' : '');
+            ctrl_notices::Send(array('scope' => 'groups', 'targets' => array(1), 'type' => $failed ? 'warning' : 'info',
+                'title' => $failed ? 'Add-on modules: some updates failed' : 'Add-on modules were updated', 'body' => $body,
+                'closable' => true, 'key' => 'addons-autoupdate', 'source' => 'repo_browser'));
+            echo 'Keep add-on modules up to date: ' . count($done) . ' updated, ' . count($failed) . ' failed.' . fs_filehandler::NewLine();
+            $st['batch'] = array();
+        }
+    }
+    // 2. newer versions, and since when each has been seen
+    $now = time();
+    $newer = array();
+    foreach ($zdbh->query("SELECT mo_folder_vc, mo_updatever_vc FROM x_modules WHERE mo_updatever_vc IS NOT NULL AND mo_updatever_vc <> ''")->fetchAll(PDO::FETCH_ASSOC) as $r) {
+        $m = (string) $r['mo_folder_vc'];
+        $v = (string) $r['mo_updatever_vc'];
+        if (repo_browser_helper::IsCoreModule($m) || !repo_browser_helper::ValidModule($m)) {
+            continue;
+        }
+        if (!isset($st['seen'][$m]) || $st['seen'][$m][0] !== $v) {
+            $st['seen'][$m] = array($v, $now);
+        }
+        $newer[$m] = $v;
+    }
+    $st['seen'] = array_intersect_key($st['seen'], $newer);
+    // 3. at the chosen hour, once a day: the ones out for a day are queued (as Update all does)
+    $today = date('Y-m-d');
+    if ((int) date('G') === (int) ctrl_options::GetSystemOption('panel_autoupdate_hour') && $st['day'] !== $today && !$st['batch']) {
+        $st['day'] = $today;
+        $add = $zdbh->prepare("INSERT INTO x_zppy_queue (zq_acc_fk, zq_args_tx, zq_created_in) VALUES (1, :c, :t)");
+        foreach ($newer as $m => $v) {
+            if ($now - (int) $st['seen'][$m][1] < 86400 || repo_browser_helper::Pending($m) !== false) {
+                continue;
+            }
+            $add->execute(array(':c' => json_encode(array('upgrade', $m)), ':t' => $now));
+            $st['batch'][$m] = $v;
+        }
+        if ($st['batch']) {
+            $add->execute(array(':c' => json_encode(array('update')), ':t' => $now));
+            $st['batch_at'] = $now;
+            echo 'Keep add-on modules up to date: queued ' . implode(', ', array_keys($st['batch'])) . '.' . fs_filehandler::NewLine();
+        }
+    }
+    @file_put_contents($file . '.new', json_encode($st));
+    @chmod($file . '.new', 0600);
+    @rename($file . '.new', $file);
+}
 
 /**
  * Run every queued zppy command as root, one at a time, and store each result in x_zppy_queue.

@@ -459,6 +459,9 @@ if [ "$MODE" = status ]; then
     else ANSWER="available ${RTAG:-$TAG} ${PUBLISHED:--} ${URL:+-}${URL:-$REPO}"; RC=100; fi
     # the answer and when, for Admin > Panel Update
     if st_dir; then printf '%s %s\n' "$(date +%s)" "$ANSWER" > "$STATUS_DIR/available.new" && chmod 644 "$STATUS_DIR/available.new" && mv -f "$STATUS_DIR/available.new" "$STATUS_DIR/available"; st_backups; fi
+    # (which release that is, by the core zip's SHA-256: "Keep the panel up to date" counts a day from
+    # when it first saw a release, and several releases can come out on the same date)
+    if st_dir; then printf '%s\n' "${WANT}" > "$STATUS_DIR/available-sum.new" && chmod 644 "$STATUS_DIR/available-sum.new" && mv -f "$STATUS_DIR/available-sum.new" "$STATUS_DIR/available-sum"; fi
     echo "$ANSWER"; exit $RC
 fi
 

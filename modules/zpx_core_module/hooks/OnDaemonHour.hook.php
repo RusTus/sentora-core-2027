@@ -45,6 +45,13 @@ function SentoraUpdateNotice()
         . 'In the panel: **Admin > Server Admin > Panel Update**, or run this as root on the server\'s console:' . "\n"
         . '- **sentora-update**' . "\n"
         . 'Either way the panel is backed up first. If the panel does not answer afterwards, go back from the server\'s console, as root: **sentora-update --rollback**';
+    // "Keep the panel up to date" (Sentora Config > Updates): when it will install itself
+    if (strtolower((string) ctrl_options::GetSystemOption('panel_autoupdate')) === 'true') {
+        $au = json_decode((string) @file_get_contents(sys_statedir::DIR . '/panel-autoupdate.json'), true);
+        $body .= "\n" . (is_array($au) && isset($au['skip'], $au['sum']) && $au['skip'] === $au['sum']
+            ? '**Keep the panel up to date** is on, but this release had to be put back once, so it waits for you.'
+            : '**Keep the panel up to date** is on: it installs itself' . (is_array($au) && !empty($au['at']) ? ' on ' . date('j M Y \\a\\t H:i', (int) $au['at']) : ' a day after it is published, at the chosen hour') . ', unless you install it sooner.');
+    }
     $id = ctrl_notices::Send(array('scope' => 'groups', 'targets' => array(1), 'type' => 'info', 'title' => 'A panel update is available',
         'body' => $body, 'closable' => 'login', 'key' => 'sentora-update', 'source' => 'sentora-update'));
     return $id ? 'An update is available (release ' . $tag . ($when !== '' ? ', ' . $when : '') . '): the administrators have a notice.'

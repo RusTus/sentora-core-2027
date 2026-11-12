@@ -1,0 +1,118 @@
+#!/bin/bash
+# sentora-autoupdate: "Keep the panel up to date" (Admin > Sentora Config > Updates), run by root.
+#
+# The Panel Update daemon hook starts it through zsudo's queue (action panel-autoupdate) at the hour
+# the administrator chose, once the newest release has been out for a day. It:
+#   1. installs the release with sentora-update (which backs the panel up first),
+#   2. checks the panel afterwards: the update finished, the login page answers, and the daemon run
+#      sentora-update makes at the end completed without a PHP error,
+#   3. goes back to the backup (sentora-update --rollback) when any of that failed,
+#   4. tells the administrators: a panel notice and an email (the alert address, or zadmin's).
+# The result is kept in /var/lib/sentora-update/autoupdate-last (for the Panel Update page).
+#
+# Run by hand only to try it: bash /etc/sentora/panel/bin/sentora-autoupdate
+#
+# Written by RusTus, 2026-11-12
+set -u
+PANEL=/etc/sentora/panel
+STATUS=/var/lib/sentora-update
+LAST=$STATUS/autoupdate-last
+BACKUPS=/var/sentora/backups
+LOG=/var/sentora/logs/autoupdate.log
+[ "$(id -u)" -eq 0 ] || { echo "Run this as root."; exit 2; }
+mkdir -p "$STATUS"
+log() { printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >> "$LOG"; }
+sp() { php -q "$PANEL/bin/setso" --get "$1" 2> /dev/null; }
+newest_backup() { ls -1t "$BACKUPS"/panel-before-update-*.tar.gz 2> /dev/null | head -1; }
+
+# tell <ok|rolledback|failed> <title> <text>: a notice for the administrators and an email
+tell() {
+    ( cd "$PANEL" && php -r '
+        require "dryden/loader.inc.php"; require "cnf/db.php"; require "inc/dbc.inc.php";
+        list(, $kind, $title, $body) = $argv;
+        ctrl_notices::Withdraw("panel-autoupdate", 0);
+        ctrl_notices::Send(array("scope" => "groups", "targets" => array(1), "type" => $kind === "ok" ? "info" : "warning",
+            "title" => $title, "body" => $body, "closable" => true, "key" => "panel-autoupdate", "source" => "sentora-autoupdate"));
+        $to = trim((string) ctrl_options::GetSystemOption("alert_email"));
+        if ($to === "") {
+            $to = (string) $zdbh->query("SELECT ac_email_vc FROM x_accounts WHERE ac_user_vc = \"zadmin\"")->fetchColumn();
+        }
+        if ($to !== "" && class_exists("sys_email")) {
+            try {
+                $m = new sys_email();
+                $m->Subject = "Sentora: " . $title . " (" . (string) ctrl_options::GetSystemOption("sentora_domain") . ")";
+                $m->Body = str_replace("**", "", $body);
+                foreach (array_filter(array_map("trim", explode(",", $to))) as $a) { $m->AddAddress($a); }
+                $m->SendEmail();
+            } catch (Exception $e) {
+            }
+        }' "$1" "$2" "$3" ) > /dev/null 2>&1
+}
+
+# does the panel answer with its login page?
+panel_answers() {
+    local fqdn port code
+    fqdn=$(sp sentora_domain); port=$(sp sentora_port); port=${port:-443}
+    for scheme in https http; do
+        code=$(curl -sk --max-time 30 -o /tmp/sentora-autoupdate-page.$$ -w '%{http_code}' --resolve "$fqdn:$port:127.0.0.1" "$scheme://$fqdn:$port/" 2> /dev/null)
+        if [ "$code" = 200 ] && grep -q 'name="inUsername"' /tmp/sentora-autoupdate-page.$$ 2> /dev/null; then
+            rm -f /tmp/sentora-autoupdate-page.$$; return 0
+        fi
+    done
+    rm -f /tmp/sentora-autoupdate-page.$$
+    return 1
+}
+
+VERSION_BEFORE=$(head -c 32 "$PANEL/VERSION" 2> /dev/null | tr -cd 'A-Za-z0-9._-')
+BACKUP_BEFORE=$(newest_backup)
+log "starting: the panel is $VERSION_BEFORE"
+printf '%s running %s\n' "$(date +%s)" "$VERSION_BEFORE" > "$LAST"
+
+bash "$PANEL/bin/sentora-update" --yes --from-panel > /dev/null 2>&1
+RC=$?
+VERSION_AFTER=$(head -c 32 "$PANEL/VERSION" 2> /dev/null | tr -cd 'A-Za-z0-9._-')
+BACKUP=$(newest_backup)
+[ "$BACKUP" = "$BACKUP_BEFORE" ] && BACKUP=""   # (no new backup: nothing was changed)
+
+WHY=""
+if [ $RC -ne 0 ]; then
+    WHY="the update stopped with an error (Admin > Panel Update shows each step)"
+elif ! grep -q "Daemon run complete" /var/sentora/logs/daemon-last-run.log 2> /dev/null; then
+    WHY="the daemon did not complete its run after the update (/var/sentora/logs/daemon-last-run.log)"
+elif grep -qE "PHP (Fatal|Parse) error" /var/sentora/logs/daemon-last-run.log 2> /dev/null; then
+    WHY="the daemon hit a PHP error after the update: $(grep -m1 -E 'PHP (Fatal|Parse) error' /var/sentora/logs/daemon-last-run.log | cut -c1-200)"
+elif ! panel_answers; then
+    WHY="the panel's login page did not answer after the update"
+fi
+
+if [ -z "$WHY" ]; then
+    if [ "$VERSION_AFTER" = "$VERSION_BEFORE" ] && [ -z "$BACKUP" ]; then
+        log "nothing to install: the panel is already up to date ($VERSION_AFTER)"
+        printf '%s same %s\n' "$(date +%s)" "$VERSION_AFTER" > "$LAST"
+        exit 0
+    fi
+    log "updated $VERSION_BEFORE -> $VERSION_AFTER, checked: the daemon ran and the panel answers (backup $BACKUP)"
+    printf '%s ok %s %s\n' "$(date +%s)" "$VERSION_AFTER" "$(basename "${BACKUP:-none}")" > "$LAST"
+    tell ok "The panel was updated to Sentora $VERSION_AFTER" \
+        "**Keep the panel up to date** installed Sentora $VERSION_AFTER on $(date '+%-d %b %Y at %H:%M') (it was $VERSION_BEFORE). The panel was backed up first, then checked: the daemon ran and the login page answers. What changed: Admin > Server Admin > Panel Update. To go back, as root on the server's console: **sentora-update --rollback ${BACKUP:-}**"
+    exit 0
+fi
+
+log "FAILED: $WHY"
+if [ -n "$BACKUP" ] && [ -f "$BACKUP" ]; then
+    log "going back to $BACKUP"
+    bash "$PANEL/bin/sentora-update" --from-panel --rollback "$BACKUP" > /dev/null 2>&1
+    RB=$?
+    if [ $RB -eq 0 ] && panel_answers; then
+        log "back on $VERSION_BEFORE: the panel answers"
+        printf '%s rolledback %s %s\n' "$(date +%s)" "$VERSION_BEFORE" "$(basename "$BACKUP")" > "$LAST"
+        tell rolledback "The automatic panel update was undone" \
+            "**Keep the panel up to date** tried to install Sentora $VERSION_AFTER on $(date '+%-d %b %Y at %H:%M'), but $WHY. The panel was put back as it was ($VERSION_BEFORE) and works again. It will not try this release again by itself: install it from Admin > Server Admin > Panel Update once it is looked at, or wait for the next release. Details: /var/sentora/logs/autoupdate.log"
+        exit 1
+    fi
+    log "the rollback did not bring the panel back (exit $RB)"
+fi
+printf '%s failed %s\n' "$(date +%s)" "$VERSION_AFTER" > "$LAST"
+tell failed "The automatic panel update failed" \
+    "**Keep the panel up to date** tried to update the panel on $(date '+%-d %b %Y at %H:%M'), but $WHY, and it could not be put back by itself. On the server's console, as root: **sentora-update --rollback** (it lists the backups; the newest is from just before this update). Details: /var/sentora/logs/autoupdate.log"
+exit 1
