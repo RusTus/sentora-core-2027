@@ -13,8 +13,8 @@
  * themselves (sentora-installers-2027 .github/scripts/platform-settings.sh, on its release):
  * { "systems": { "<php_bundle_tag>": { "<setting>": "<value>", ... } } }.
  *
- * Changed: a setting this panel knows, still at its default, whose value for this system is
- * another one. Never changed: a setting someone set to anything else (with setso), and anything
+ * Changed: a setting this panel knows, still at its default (or empty where it has a default), whose
+ * value for this system is another one. Never changed: a setting someone set to anything else (with setso), and anything
  * on a server whose system (php_bundle_tag) is not set or not in the file.
  *
  * Written by RusTus, 2026-11-12
@@ -58,7 +58,9 @@ foreach ($all['systems'][$tag] as $name => $want) {
     }
     $default = sys_platform::$settings[$name][0];
     $have = (string) ctrl_options::GetSystemOption($name);
-    if ($have === $default && $want !== $default) {
+    // (also an empty value where both the default and this system's installer have one: rows the
+    // install database of older panels made empty, such as ftp_config_file)
+    if (($have === $default || ($have === '' && $default !== '')) && $want !== $have && $want !== '') {
         echo ($dry ? 'would set ' : 'set ') . $name . "\n";
         if (!$dry) {
             ctrl_options::SetSystemOption($name, $want, false);

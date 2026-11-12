@@ -135,6 +135,10 @@ function FtpWriteAccessRules($conf = null, $reload = true)
     global $zdbh;
     if ($conf === null) {
         $conf = trim(sys_platform::Get('ftp_config_file'));
+        if ($conf === '') {
+            // (an empty row from an older panel's install database: the setting's default)
+            $conf = sys_platform::$settings['ftp_config_file'][0];
+        }
     }
     $real = @realpath($conf);
     if ($real === false || !is_file($real) || !is_writable($real)) {
