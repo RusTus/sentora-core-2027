@@ -88,211 +88,133 @@ class module_controller extends ctrl_module
     static function DisplayDNSConfig()
     {
         global $zdbh;
-        global $controller;
+        $h = function ($s) { return htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8'); };
+        $t = function ($s) use ($h) { return $h(ui_language::translate($s)); };
+        $ico = function ($d) { return '<svg class="dn-ico-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' . $d . '</svg>'; };
 
-        $line = "<style>.active {color: var(--sn-ink, #333);}</style>";
-        $line .= "<h2>" . ui_language::translate("Configure your DNS Settings") . "</h2>";
-        $line .= "<div style=\"display: block; margin-right:20px;\">";
-        $line .= "<div class=\"ui-tabs ui-widget ui-widget-content ui-corner-all\" id=\"dnsTabs\">";
-        $line .= "<ul class=\"domains nav nav-tabs\">";
-        $line .= "<li class=\"active\"><a href=\"#general\" data-toggle=\"tab\">" . ui_language::translate("General") . "</a></li>";
-        $line .= "<li><a href=\"#tools\" data-toggle=\"tab\">" . ui_language::translate("Tools") . "</a></li>";
-        $line .= "<li><a href=\"#services\" data-toggle=\"tab\">" . ui_language::translate("Services") . "</a></li>";
-        $line .= "<li><a href=\"#logs\" data-toggle=\"tab\">" . ui_language::translate("Logs") . "</a></li>";
-        $line .= "</ul>";
-
-        //Tabs Panel Wrap
-        $line .= '<div class="tab-content">';
-
-        //general
-        $line .= "<div class=\"tab-pane active\" id=\"general\">";
-        $line .= "<form action=\"./?module=dns_admin&action=UpdateDNSConfig\" method=\"post\">";
-        $line .= "<table class=\"table table-striped\">";
-        $count = 0;
-        $sql = "SELECT COUNT(*) FROM x_settings WHERE so_module_vc=:moduleName AND so_usereditable_en = 'true'";
-        $numrows = $zdbh->prepare($sql);
-        $GetModuleName = ui_module::GetModuleName();
-        $numrows->bindParam(':moduleName', $GetModuleName);
-        if ($numrows->execute()) {
-            if ($numrows->fetchColumn() <> 0) {
-                $sql = $zdbh->prepare("SELECT * FROM x_settings WHERE so_module_vc=:moduleName AND so_usereditable_en = 'true' ORDER BY so_cleanname_vc");
-                $GetModuleName = ui_module::GetModuleName();
-                $sql->bindParam(':moduleName', $GetModuleName);
-                $sql->execute();
-
-                while ($row = $sql->fetch()) {
-                    $count++;
-                    if (ctrl_options::CheckForPredefinedOptions($row['so_defvalues_tx'])) {
-                        $fieldhtml = ctrl_options::OuputSettingMenuField($row['so_name_vc'], $row['so_defvalues_tx'], $row['so_value_tx']);
-                    } else {
-                        $fieldhtml = ctrl_options::OutputSettingTextArea($row['so_name_vc'], $row['so_value_tx']);
-                    }
-                    $line .= "<tr valign=\"top\"><th nowrap=\"nowrap\">" . ui_language::translate($row['so_cleanname_vc']) . "</th><td>" . $fieldhtml . "</td><td>" . ui_language::translate($row['so_desc_tx']) . "</td></tr>";
-                }
-                $line .= "<tr><th colspan=\"3\"><button class=\"button-loader btn btn-primary\" type=\"submit\" id=\"button\" name=\"inSaveSystem\">" . ui_language::translate("Save Changes") . "</button>  <button class=\"button-loader btn btn-default\" type=\"button\" onclick=\"window.location.href='./?module=moduleadmin';return false;\">" . ui_language::translate("Cancel") . "</button></tr>";
-            }
+        // what there is: BIND, the records by type, the domains, the log
+        $up = !fs_director::CheckForEmptyValue(sys_monitoring::PortStatus(53));
+        $types = array('A' => 0, 'AAAA' => 0, 'CNAME' => 0, 'MX' => 0, 'TXT' => 0, 'SRV' => 0, 'SPF' => 0, 'NS' => 0);
+        $active = 0;
+        foreach ($zdbh->query("SELECT dn_type_vc, COUNT(*) AS n FROM x_dns WHERE dn_deleted_ts IS NULL GROUP BY dn_type_vc")->fetchAll(PDO::FETCH_ASSOC) as $r) {
+            $k = strtoupper((string) $r['dn_type_vc']);
+            $types[$k] = (isset($types[$k]) ? $types[$k] : 0) + (int) $r['n'];
+            $active += (int) $r['n'];
         }
-        $line .= "</table>";
-        $line .= "</form>";
-        $line .= "</div>";
-        //tools
-        $line .= "<div class=\"tab-pane\" id=\"tools\">";
-        $line .= "<form action=\"./?module=dns_admin&action=UpdateTools\" method=\"post\">";
-        $line .= "<table class=\"table table-striped\">";
-        $line .= "<tr>";
-        $line .= "<th>" . ui_language::translate("Reset all Records to Default") . "</th>";
-        $line .= "<td><button class=\"button-loader btn btn-primary\" type=\"submit\" id=\"button\" name=\"inResetAll\" value=\"1\">" . ui_language::translate("GO") . "</button></td>";
-        $line .= "</tr>";
-        $line .= "<tr>";
-        $line .= "<th>" . ui_language::translate("Reset Records to Default on Single Domain") . " ";
-        $line .= "<select name=\"inResetDomainID\">";
-        $line .= "<option value=\"\">--- " . ui_language::translate("Select Domain") . " ---</option>";
-        $sql = "SELECT COUNT(*) FROM x_vhosts WHERE vh_deleted_ts IS NULL";
-        if ($numrows = $zdbh->query($sql)) {
-            if ($numrows->fetchColumn() <> 0) {
-                $sql = $zdbh->prepare("SELECT * FROM x_vhosts WHERE vh_deleted_ts IS NULL");
-                $sql->execute();
-                while ($row = $sql->fetch()) {
-                    $line .= " <option value=\"" . (int) $row['vh_id_pk'] . "\">" . htmlspecialchars((string) $row['vh_name_vc'], ENT_QUOTES, 'UTF-8') . "</option>";
-                }
-            }
-        }
-        $line .= "</select>";
-        $line .= "</th>";
-        $line .= "<td><button class=\"button-loader btn btn-primary\" type=\"submit\" id=\"button\" name=\"inResetDomain\" value=\"1\">" . ui_language::translate("GO") . "</button></td>";
-        $line .= "</tr>";
-        $line .= "<tr>";
-        $line .= "<th>" . ui_language::translate("Add Default Records to Missing Domains") . "";
-        $line .= "</th>";
-        $line .= "<td><button class=\"button-loader btn btn-primary\" type=\"submit\" id=\"button\" name=\"inAddMissing\" value=\"1\">" . ui_language::translate("GO") . "</button></td>";
-        $line .= "</tr>";
-        $line .= "<tr>";
-        $line .= "<th>" . ui_language::translate("Delete Record Type from ALL Records") . " ";
-        $line .= "<select name=\"inType\" id=\"inType\">";
-        $line .= "<option value=\"A\">A</option>";
-        $line .= "<option value=\"AAAA\">AAAA</option>";
-        $line .= "<option value=\"CNAME\">CNAME</option>";
-        $line .= "<option value=\"MX\">MX</option>";
-        $line .= "<option value=\"TXT\">TXT</option>";
-        $line .= "<option value=\"SRV\">SRV</option>";
-        $line .= "<option value=\"SPF\">SPF</option>";
-        $line .= "<option value=\"NS\">NS</option>";
-        $line .= "</select>";
-        $line .= "</th>";
-        $line .= "<td><button class=\"button-loader btn btn-primary\" type=\"submit\" id=\"button\" name=\"inDeleteType\" value=\"1\">" . ui_language::translate("GO") . "</button></td>";
-        $line .= "</tr>";
-        $line .= "<tr>";
-        $line .= "<th>" . ui_language::translate("Purge Deleted Zone Records From Database") . "</th>";
-        $line .= "<td><button class=\"button-loader btn btn-primary\" type=\"submit\" id=\"button\" name=\"inPurge\" value=\"1\">" . ui_language::translate("GO") . "</button></td>";
-        $line .= "</tr>";
-        $line .= "<tr>";
-        $line .= "<th>" . ui_language::translate("Delete ALL Zone Records") . "</th>";
-        $line .= "<td><button class=\"button-loader btn btn-primary\" type=\"submit\" id=\"button\" name=\"inDeleteAll\" value=\"1\">" . ui_language::translate("GO") . "</button></td>";
-        $line .= "</tr>";
-        $line .= "<tr>";
-        $line .= "<th>" . ui_language::translate("Force Records Update on Next Daemon Run") . "</th>";
-        $line .= "<td><button class=\"button-loader btn btn-primary\" type=\"submit\" id=\"button\" name=\"inForceUpdate\" value=\"1\">" . ui_language::translate("GO") . "</button></td>";
-        $line .= "</tr>";
-        $line .= "</table>";
-        $line .= "</form>";
-        $line .= "</div>";
-        //Services
-        $line .= "<div class=\"tab-pane\" id=\"services\">";
-        $line .= "<form action=\"./?module=dns_admin&action=UpdateService\" method=\"post\">";
-        $line .= "<table class=\"none\" border=\"0\" cellpading=\"0\" cellspacing=\"0\" width=\"85%\"><tr valign=\"top\"><td width=\"100%\">";
-        $line .= "<table class=\"table table-striped\">";
-        $line .= "<tr>";
-        $line .= "<th>" . ui_language::translate("Start Service") . "</th>";
-        $line .= "<td><button class=\"button-loader btn btn-primary\" type=\"submit\" id=\"button\" name=\"inStartService\" value=\"1\">" . ui_language::translate("GO") . "</button></td>";
-        $line .= "</tr>";
-        $line .= "<tr>";
-        $line .= "<th>" . ui_language::translate("Stop Service") . "</th>";
-        $line .= "<td><button class=\"button-loader btn btn-primary\" type=\"submit\" id=\"button\" name=\"inStopService\" value=\"1\">" . ui_language::translate("GO") . "</button></td>";
-        $line .= "</tr>";
-        $line .= "<tr>";
-        $line .= "<th>" . ui_language::translate("Reload BIND") . "</th>";
-        $line .= "<td><button class=\"button-loader btn btn-primary\" type=\"submit\" id=\"button\" name=\"inReloadService\" value=\"1\">" . ui_language::translate("GO") . "</button></td>";
-        $line .= "</tr>";
-        $line .= "<th>" . ui_language::translate("Service Port Status") . "</th>";
-        if (fs_director::CheckForEmptyValue(sys_monitoring::PortStatus(53))) {
-            $line .= "<td><font color=\"red\">" . ui_language::translate("STOPPED") . "</font></td>";
-        } else {
-            $line .= "<td><font color=\"green\">" . ui_language::translate("RUNNING") . "</font></td>";
-        }
-        $line .= "</tr>";
-        $line .= "</table>";
-        $line .= "</td><td>";
-        if (fs_director::CheckForEmptyValue(sys_monitoring::PortStatus(53))) {
-            $line .= ui_status::Bad('The DNS service is not running');
-        } else {
-            $line .= ui_status::Ok('The DNS service is running');
-        }
-        $line .="</td></tr></table>";
-        $line .= "</form>";
-        $line .= "</div>";
-        //logs
+        $deleted = (int) $zdbh->query("SELECT COUNT(*) FROM x_dns WHERE dn_deleted_ts IS NOT NULL")->fetchColumn();
+        $domains = (int) $zdbh->query("SELECT COUNT(*) FROM x_vhosts WHERE vh_deleted_ts IS NULL")->fetchColumn();
+        $without = (int) $zdbh->query("SELECT COUNT(*) FROM x_vhosts v WHERE v.vh_deleted_ts IS NULL AND NOT EXISTS (SELECT 1 FROM x_dns d WHERE d.dn_vhost_fk = v.vh_id_pk AND d.dn_deleted_ts IS NULL)")->fetchColumn();
         self::ViewErrors();
+        $nErr = count((array) self::$logerror);
+        $nWarn = count((array) self::$logwarning);
+        $nLog = count((array) self::$getlog);
 
-        $line .= "<div class=\"tab-pane\" id=\"logs\">";
-        $line .= "<form action=\"./?module=dns_admin&action=Updatelogs\" method=\"post\">";
-        $line .= "<table class=\"table table-striped\">";
-        $line .= "<tr>";
-        $line .= "<th style=\"width:350px;\">" . ui_language::translate("Clear errors") . "</th>";
-        $line .= "<td><button class=\"delete btn btn-danger\" type=\"submit\" id=\"button\" name=\"inClearErrors\" value=\"1\">" . ui_language::translate("Clear") . "</button></td>";
-        $line .= "</tr>";
-        $line .= "<tr>";
-        $line .= "<th>" . ui_language::translate("Clear warnings") . "";
-        $line .= "</th>";
-        $line .= "<td><button class=\"delete btn btn-danger\" type=\"submit\" id=\"button\" name=\"inClearWarnings\" value=\"1\">" . ui_language::translate("Clear") . "</button></td>";
-        $line .= "</tr>";
-        $line .= "<tr>";
-        $line .= "<th>" . ui_language::translate("Clear logs") . "";
-        $line .= "</th>";
-        $line .= "<td><button class=\"delete btn btn-danger\" type=\"submit\" id=\"button\" name=\"inClearLogs\" value=\"1\">" . ui_language::translate("Clear") . "</button></td>";
-        $line .= "</tr>";
-        $line .= "</table>";
-        $line .= "</form>";
-        $line .= "<form name=\"launchbindlog\" action=\"modules/dns_admin/code/getbindlog.php\" target=\"bindlogwindow\" method=\"post\" onsubmit=\"window.open('', 'bindlogwindow', 'scrollbars=yes,menubar=no,height=525,width=825,resizable=no,toolbar=no,location=no,status=no')\">";
-        $line .= "<table class=\"table table-striped\">";
-        $line .= "<tr>";
-        if (count((array) self::$logerror) > 0) {
-            $logerrorcolor = "red";
-        } else {
-            $logerrorcolor = NULL;
+        $line = '<link rel="stylesheet" href="modules/dns_admin/assets/dns.css">';
+        $line .= '<div class="dn">';
+        // the tiles
+        $line .= '<div class="dn-tiles">'
+            . '<div class="dn-tile ' . ($up ? 'ok' : 'bad') . '">' . $ico($up ? '<circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/>' : '<circle cx="12" cy="12" r="9"/><path d="M15 9l-6 6M9 9l6 6"/>')
+            . '<div><b>' . $t($up ? 'Running' : 'Not answering') . '</b><span>' . $t('DNS (BIND), port 53') . '</span></div></div>'
+            . '<div class="dn-tile">' . $ico('<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>')
+            . '<div><b>' . number_format($active) . ' ' . $t('records') . '</b><span>' . str_replace(array('%1$d', '%2$d'), array($domains, $without), $t('%1$d domains, %2$d without records')) . '</span></div></div>'
+            . '<div class="dn-tile' . ($nErr ? ' bad' : ($nWarn ? ' warn' : ' ok')) . '">' . $ico('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h6"/>')
+            . '<div><b>' . str_replace('%d', (string) $nErr, $t($nErr === 1 ? '%d error' : '%d errors')) . ', ' . str_replace('%d', (string) $nWarn, $t($nWarn === 1 ? '%d warning' : '%d warnings')) . '</b><span>' . str_replace('%d', (string) $nLog, $t('BIND\'s log: %d lines')) . '</span></div></div>'
+            . '</div>';
+
+        $line .= '<div class="dn-cols"><div class="sf dn-main">';
+        $line .= '<div class="sf-tabs" role="tablist">'
+            . '<button type="button" class="sf-tab" data-pane="general">' . $t('Settings') . '</button>'
+            . '<button type="button" class="sf-tab" data-pane="tools">' . $t('Record tools') . '</button>'
+            . '<button type="button" class="sf-tab" data-pane="services">' . $t('Service') . '</button>'
+            . '<button type="button" class="sf-tab" data-pane="logs">' . $t('Log') . '</button></div>';
+
+        // Settings: the module's settings, each with its explanation
+        $line .= '<div class="sf-pane" id="general"><form action="./?module=dns_admin&amp;action=UpdateDNSConfig" method="post">';
+        $sql = $zdbh->prepare("SELECT * FROM x_settings WHERE so_module_vc = :m AND so_usereditable_en = 'true' ORDER BY so_cleanname_vc");
+        $sql->execute(array(':m' => ui_module::GetModuleName()));
+        $n = 0;
+        while ($row = $sql->fetch()) {
+            $n++;
+            $field = ctrl_options::CheckForPredefinedOptions($row['so_defvalues_tx'])
+                ? ctrl_options::OuputSettingMenuField($row['so_name_vc'], $row['so_defvalues_tx'], $row['so_value_tx'])
+                : ctrl_options::OutputSettingTextArea($row['so_name_vc'], $row['so_value_tx']);
+            $line .= '<div class="sf-row"><div class="sf-what"><label>' . $t($row['so_cleanname_vc']) . '</label><small>' . $t($row['so_desc_tx']) . '</small></div><div class="sf-ctl">' . $field . '</div></div>';
         }
-        $line .= "<th style=\"width:350px;\">" . ui_language::translate("View Errors") . " (<font color=\"" . $logerrorcolor . "\">" . count((array) self::$logerror) . "</font>)</th>";
-        $line .= "<td><button class=\"btn btn-primary\" type=\"submit\" id=\"logerror_a\" name=\"inViewErrors\" value=\"1\">" . ui_language::translate("View") . "</button></td>";
-        $line .= "</tr>";
-        $line .= "<tr>";
-        if (count((array) self::$logwarning) > 0) {
-            $logwarningcolor = "red";
-        } else {
-            $logwarningcolor = NULL;
+        $line .= ($n ? '<div class="dn-save"><button class="btn btn-primary" type="submit" name="inSaveSystem">' . $t('Save settings') . '</button><span class="sf-hint">' . $t('The zones are written again within 5 minutes.') . '</span></div>' : '<p class="sf-hint">' . $t('No settings.') . '</p>')
+            . '</form></div>';
+
+        // Record tools: the button first, then what it does
+        $opts = '<option value="">' . $t('Choose a domain') . '</option>';
+        foreach ($zdbh->query("SELECT vh_id_pk, vh_name_vc FROM x_vhosts WHERE vh_deleted_ts IS NULL ORDER BY vh_name_vc")->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $opts .= '<option value="' . (int) $row['vh_id_pk'] . '">' . $h($row['vh_name_vc']) . '</option>';
         }
-        $line .= "<th>" . ui_language::translate("View warnings") . " (<font color=\"" . $logwarningcolor . "\">" . count((array) self::$logwarning) . "</font>)</th>";
-        $line .= "<td><button class=\"btn btn-primary\" type=\"submit\" id=\"logwarning_a\" name=\"inViewWarnings\" value=\"1\">" . ui_language::translate("View") . "</button></td>";
-        $line .= "</tr>";
-        $line .= "<tr>";
-        $line .= "<th>" . ui_language::translate("View logs") . " (" . count((array) self::$getlog) . ")</th>";
-        $line .= "<td><input type=\"hidden\" name=\"inBindLog\" value=\"" . ctrl_options::GetSystemOption('bind_log') . "\" /><button class=\"btn btn-primary\" type=\"submit\" id=\"button\" name=\"inViewLogs\" value=\"1\">" . ui_language::translate("View") . "</button></td>";
-        $line .= "</tr>";
-        $line .= "</table>";
-        $line .= "</form>";
-        $line .= "</div>";
+        $typeOpts = '';
+        foreach (array_keys($types) as $ty) {
+            $typeOpts .= '<option value="' . $ty . '">' . $ty . ' (' . (int) $types[$ty] . ')</option>';
+        }
+        $tool = function ($name, $btn, $title, $what, $ctl = '', $danger = false, $confirm = '') use ($t) {
+            return '<div class="dn-act' . ($danger ? ' is-danger' : '') . '"><button class="btn ' . ($danger ? 'btn-danger' : 'btn-primary') . ' btn-sm" type="submit" name="' . $name . '" value="1"'
+                . ($confirm !== '' ? ' data-confirm="' . $t($confirm) . '"' : '') . '>' . $t($btn) . '</button>'
+                . '<div class="dn-act-what"><b>' . $t($title) . '</b><small>' . $t($what) . '</small>' . ($ctl !== '' ? '<div class="dn-act-ctl">' . $ctl . '</div>' : '') . '</div></div>';
+        };
+        $line .= '<div class="sf-pane" id="tools" hidden><form action="./?module=dns_admin&amp;action=UpdateTools" method="post"><div class="dn-acts">'
+            . $tool('inAddMissing', 'Add', 'Add default records to domains without any', 'Each domain that has no DNS records gets Sentora\'s default set (A, MX, SPF, NS and the like). Domains with records are not touched.')
+            . $tool('inResetDomain', 'Reset', 'Reset one domain to the default records', 'Its records are replaced by the default set: records added by hand to that domain are lost.', '<select class="form-control input-sm" name="inResetDomainID">' . $opts . '</select>', false, 'Replace this domain\'s records with the default set? Records added by hand are lost.')
+            . $tool('inForceUpdate', 'Write', 'Write every zone again', 'The daemon writes all zone files again and reloads BIND within 5 minutes. Nothing in the records changes.')
+            . $tool('inPurge', 'Purge', 'Remove deleted records from the database', str_replace('%d', (string) $deleted, ui_language::translate('%d deleted record(s) wait here; they are already gone from the zones.')))
+            . '<p class="dn-danger-head">' . $t('Careful: these change every domain') . '</p>'
+            . $tool('inResetAll', 'Reset all', 'Reset every domain to the default records', 'Every domain\'s records are replaced by the default set: every record added by hand is lost.', '', true, 'Replace the records of EVERY domain with the default set? Every record added by hand is lost.')
+            . $tool('inDeleteType', 'Delete', 'Delete one record type from every domain', 'Every record of the chosen type is deleted, on every domain.', '<select class="form-control input-sm" name="inType" id="inType">' . $typeOpts . '</select>', true, 'Delete every record of this type, on every domain?')
+            . $tool('inDeleteAll', 'Delete all', 'Delete every record of every domain', 'Every zone is emptied: no domain answers in DNS until records are added again.', '', true, 'Delete EVERY DNS record of EVERY domain? No domain will answer in DNS until records are added again.')
+            . '</div></form></div>';
 
+        // Service
+        $line .= '<div class="sf-pane" id="services" hidden><form action="./?module=dns_admin&amp;action=UpdateService" method="post">'
+            . '<div class="dn-svc"><span class="dn-pill ' . ($up ? 'ok' : 'bad') . '"><i></i>' . $t($up ? 'BIND is running: port 53 answers' : 'BIND is not answering on port 53') . '</span></div>'
+            . '<div class="dn-acts">'
+            . $tool('inReloadService', 'Reload', 'Reload BIND', 'BIND reads its zone files again, without stopping. Use it after a change that did not show.')
+            . $tool('inStartService', 'Start', 'Start BIND', 'Starts the DNS server when it is stopped.')
+            . $tool('inStopService', 'Stop', 'Stop BIND', 'Stops the DNS server: no domain on this server answers in DNS until it is started again.', '', true, 'Stop the DNS server? No domain on this server answers in DNS until it is started again.')
+            . '</div></form></div>';
 
+        // Log: view (a window of its own) and clear, side by side for each kind
+        $line .= '<div class="sf-pane" id="logs" hidden>'
+            . '<form id="dnLogView" name="launchbindlog" action="modules/dns_admin/code/getbindlog.php" target="bindlogwindow" method="post" onsubmit="window.open(\'\', \'bindlogwindow\', \'scrollbars=yes,menubar=no,height=525,width=825,resizable=yes,toolbar=no,location=no,status=no\')"><input type="hidden" name="inBindLog" value="' . $h(ctrl_options::GetSystemOption('bind_log')) . '"></form>'
+            . '<form id="dnLogClear" action="./?module=dns_admin&amp;action=Updatelogs" method="post"></form>'
+            . '<div class="dn-acts">';
+        foreach (array(array('Errors', 'inViewErrors', 'inClearErrors', $nErr, 'The lines where BIND could not do something (a zone it could not load, for example).'),
+                       array('Warnings', 'inViewWarnings', 'inClearWarnings', $nWarn, 'Lines BIND warns about; often harmless.'),
+                       array('The whole log', 'inViewLogs', 'inClearLogs', $nLog, 'Everything BIND wrote.')) as $l) {
+            $line .= '<div class="dn-act"><span class="dn-btns"><button class="btn btn-primary btn-sm" type="submit" form="dnLogView" name="' . $l[1] . '" value="1">' . $t('View') . '</button>'
+                . '<button class="btn btn-default btn-sm" type="submit" form="dnLogClear" name="' . $l[2] . '" value="1" data-confirm="' . $t('Clear these lines from BIND\'s log?') . '">' . $t('Clear') . '</button></span>'
+                . '<div class="dn-act-what"><b>' . $t($l[0]) . ' <span class="dn-count' . ($l[3] && $l[1] === 'inViewErrors' ? ' bad' : '') . '">' . (int) $l[3] . '</span></b><small>' . $t($l[4]) . '</small></div></div>';
+        }
+        $line .= '</div></div>';
+        $line .= '</div>';
 
-        $line .= "</div>";
-        $line .= "</div>";
-        $line .= "</div>";
-
-        //CHARTS
-        $line .= "<table class=\"none\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr><td>";
-        $line .= self::DisplayDNSUsagepChart();
-        $line .= "</td><td>";
-        $line .= self::DisplayRecordsUsagepChart();
-        $line .= "</td></tr></table>";
-
+        // the side: the records as a ring, by type
+        $colors = array('A' => '#447fb3', 'AAAA' => '#7c5cc4', 'CNAME' => '#1fa2b5', 'MX' => '#e08a1e', 'TXT' => '#2bb673', 'SRV' => '#d6457a', 'SPF' => '#8a9a5b', 'NS' => '#6b7785');
+        $total = max(1, $active);
+        $r = 52;
+        $c = 2 * M_PI * $r;
+        $off = 0.0;
+        $arcs = '';
+        $legend = '';
+        foreach ($types as $ty => $cnt) {
+            if ($cnt > 0) {
+                $len = $c * $cnt / $total;
+                $arcs .= '<circle cx="70" cy="70" r="' . $r . '" fill="none" stroke="' . (isset($colors[$ty]) ? $colors[$ty] : '#999') . '" stroke-width="16" stroke-dasharray="' . round(max(0, $len - 2), 2) . ' ' . round($c, 2) . '" stroke-dashoffset="' . round(-$off, 2) . '" transform="rotate(-90 70 70)"><title>' . $ty . ': ' . (int) $cnt . '</title></circle>';
+                $off += $len;
+            }
+            $legend .= '<li' . ($cnt ? '' : ' class="none"') . '><i style="background:' . (isset($colors[$ty]) ? $colors[$ty] : '#999') . '"></i>' . $ty . '<b>' . (int) $cnt . '</b></li>';
+        }
+        $line .= '<aside class="dn-box"><h4>' . $t('Records') . '</h4>'
+            . '<div class="dn-ring"><svg viewBox="0 0 140 140" role="img" aria-label="' . $t('Records by type') . '"><circle cx="70" cy="70" r="' . $r . '" fill="none" stroke="var(--sn-line, #e6e9ee)" stroke-width="16"/>' . $arcs . '</svg>'
+            . '<div class="dn-ring-mid"><b>' . number_format($active) . '</b><span>' . $t('records') . '</span></div></div>'
+            . '<ul class="dn-legend">' . $legend . '</ul>'
+            . ($deleted ? '<p class="dn-note">' . str_replace('%d', (string) $deleted, $t('%d deleted record(s) still in the database: Record tools > Purge removes them.')) . '</p>' : '')
+            . '</aside>';
+        $line .= '</div></div>';
         return $line;
     }
 

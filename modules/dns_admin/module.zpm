@@ -1,62 +1,33 @@
 <div class="zmodule_content panel" id="zmodule_header_<@ ModuleName @>">
     <div class="panel-heading">
         <img src="<@ ModuleIcon @>" width="35" height="35" border="0" alt="<@ ModuleName @>">
-
-        <div class="zmodule_title">
-            <@ ModuleName @>
-        </div>
-
-        <div class="zmodule_desc" id="zmodule_desc_<@ ModuleName @>"><@ ModuleDesc @></div>
-
+        <div class="zmodule_title"><@ ModuleName @></div>
+        <div class="zmodule_desc" id="zmodule_desc_<@ ModuleName @>"><: The DNS server (BIND): its settings, tools for every domain's records, and its log. :></div>
     </div>
-
     <@ Result @>
-
-
     <@ DNSConfig @>
-
 </div>
-
-<script type="text/javascript">
-    <!--
-    function show_div(id) {
-        var e = document.getElementById(id);
-        if(e.style.display == 'none')
-            e.style.display = 'block';
+<script>
+/* the tabs (the last one is remembered) and a question before the buttons that change every domain */
+(function () {
+    var tabs = document.querySelectorAll('.dn .sf-tab');
+    function show(id) {
+        var found = false;
+        Array.prototype.forEach.call(tabs, function (b) {
+            var on = b.getAttribute('data-pane') === id, pane = document.getElementById(b.getAttribute('data-pane'));
+            if (pane) { pane.hidden = !on; }
+            b.classList.toggle('active', on);
+            found = found || on;
+        });
+        if (found) { try { sessionStorage.setItem('dnsTab', id); } catch (e) {} }
+        return found;
     }
-    //-->
-</script>
-<script type="text/javascript">
-    <!--
-    function hide_div(id) {
-        var e = document.getElementById(id);
-        if(e.style.display == 'block')
-            e.style.display = 'none';
-    }
-    //-->
-</script>
-
-<script type="text/javascript">
-    /* the General / Tools tabs (no jQuery UI needed); the last tab is remembered */
-    (function () {
-        var box = document.getElementById('dnsTabs');
-        if (!box) { return; }
-        var links = box.querySelectorAll('ul.nav-tabs a[href^="#"]');
-        function show(id) {
-            for (var i = 0; i < links.length; i++) {
-                var target = document.getElementById(links[i].getAttribute('href').slice(1));
-                var on = links[i].getAttribute('href') === '#' + id;
-                if (target) { target.style.display = on ? 'block' : 'none'; }
-                links[i].parentNode.className = on ? 'active' : '';
-            }
-            try { sessionStorage.setItem('dnsTab', id); } catch (e) {}
-        }
-        for (var i = 0; i < links.length; i++) {
-            links[i].addEventListener('click', function (ev) { ev.preventDefault(); show(this.getAttribute('href').slice(1)); });
-        }
-        var start = null;
-        try { start = sessionStorage.getItem('dnsTab'); } catch (e) {}
-        if (!start || !document.getElementById(start)) { start = links.length ? links[0].getAttribute('href').slice(1) : null; }
-        if (start) { show(start); }
-    })();
+    Array.prototype.forEach.call(tabs, function (b) { b.addEventListener('click', function () { show(b.getAttribute('data-pane')); }); });
+    var start = null;
+    try { start = sessionStorage.getItem('dnsTab'); } catch (e) {}
+    if (!start || !show(start)) { show('general'); }
+    Array.prototype.forEach.call(document.querySelectorAll('.dn button[data-confirm]'), function (b) {
+        b.addEventListener('click', function (e) { if (!window.confirm(b.getAttribute('data-confirm'))) { e.preventDefault(); } });
+    });
+})();
 </script>

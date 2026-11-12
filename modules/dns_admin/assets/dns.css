@@ -1,0 +1,49 @@
+/* DNS Config in the panel's style (as Apache Config): the theme's settings form (.sf) and its shared
+   --sn-* colours, so it follows Light, Dark and Auto. */
+.dn { color: var(--sn-ink, #1f2933); background: var(--sn-soft, #f4f6f9); border-radius: 8px; padding: 18px; margin-top: 10px; }
+.dn * { box-sizing: border-box; }
+.dn-ico-lg { width: 40px; height: 40px; padding: 8px; border-radius: 10px; flex: none; background: var(--sn-accent-soft, #e3edf6); color: var(--sn-accent, #447fb3); }
+.dn-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 14px; }
+.dn-tile { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: var(--sn-card, #fff); border-radius: 6px; box-shadow: 0 1px 3px rgba(20,30,40,0.08); min-width: 0; }
+.dn-tile b { display: block; font-size: 17px; line-height: 1.2; }
+.dn-tile span { font-size: 12px; color: var(--sn-muted, #6b7785); }
+.dn-tile.ok .dn-ico-lg { background: var(--sn-ok-soft, #e3f4ea); color: var(--sn-ok, #1e8a4c); }
+.dn-tile.warn .dn-ico-lg { background: var(--sn-warn-soft, #fdf1dc); color: var(--sn-warn, #a86b00); }
+.dn-tile.bad .dn-ico-lg { background: var(--sn-bad-soft, #fbe3e2); color: var(--sn-bad, #c62f2b); }
+.dn-tile.bad b { color: var(--sn-bad, #c62f2b); }
+.dn-cols { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 14px; align-items: start; }
+.dn-main { min-width: 0; }
+.dn-save { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 14px 0; }
+.dn-acts { display: grid; gap: 8px; padding: 12px 0; }
+.dn-act { display: flex; align-items: flex-start; gap: 14px; padding: 10px 12px; border: 1px solid var(--sn-line, #e6e9ee); border-radius: 6px; }
+.dn-act > .btn { flex: none; width: 96px; white-space: nowrap; }
+.dn-btns { flex: none; }
+.dn-btns { display: flex; gap: 6px; }
+.dn-act-what { flex: 1; min-width: 0; }
+.dn-act-what b { display: block; font-size: 14px; }
+.dn-act-what small { display: block; margin-top: 2px; font-size: 12px; line-height: 1.45; color: var(--sn-muted, #6b7785); }
+.dn-act-ctl { margin-top: 6px; max-width: 360px; }
+.dn-act.is-danger { border-color: var(--sn-bad-soft, #fbe3e2); }
+.dn-danger-head { margin: 8px 0 0; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: var(--sn-bad, #c62f2b); }
+.dn-count { display: inline-block; min-width: 22px; padding: 0 7px; border-radius: 9px; font-size: 12px; text-align: center; background: var(--sn-line, #e6e9ee); color: var(--sn-ink, #1f2933); margin-left: 4px; }
+.dn-count.bad { background: var(--sn-bad-soft, #fbe3e2); color: var(--sn-bad, #c62f2b); }
+.dn-svc { padding: 14px 0 0; }
+.dn-pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 12px; font-size: 13px; font-weight: 600; }
+.dn-pill i { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.dn-pill.ok { background: var(--sn-ok-soft, #e3f4ea); color: var(--sn-ok, #1e8a4c); }
+.dn-pill.bad { background: var(--sn-bad-soft, #fbe3e2); color: var(--sn-bad, #c62f2b); }
+.dn-box { background: var(--sn-card, #fff); border-radius: 6px; box-shadow: 0 1px 3px rgba(20,30,40,0.08); padding: 16px 18px; position: sticky; top: 12px; }
+.dn-box h4 { margin: 0 0 12px; font-size: 15px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; }
+.dn-ring { position: relative; width: 170px; height: 170px; margin: 0 auto 12px; }
+.dn-ring svg { width: 100%; height: 100%; }
+.dn-ring-mid { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.dn-ring-mid b { font-size: 30px; line-height: 1; }
+.dn-ring-mid span { font-size: 12px; color: var(--sn-muted, #6b7785); }
+.dn-legend { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 4px 14px; font-size: 13px; }
+.dn-legend li { display: flex; align-items: center; gap: 6px; }
+.dn-legend li.none { color: var(--sn-muted, #6b7785); }
+.dn-legend i { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+.dn-legend b { margin-left: auto; }
+.dn-note { margin: 12px 0 0; font-size: 12px; color: var(--sn-warn, #a86b00); }
+@media (max-width: 1000px) { .dn-cols { grid-template-columns: 1fr; } .dn-box { position: static; } }
+@media (max-width: 640px) { .dn { padding: 12px; } .dn-tiles { grid-template-columns: 1fr; } .dn-act { flex-direction: column; } }
