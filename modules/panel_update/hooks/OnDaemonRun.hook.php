@@ -67,7 +67,7 @@ if (function_exists('posix_geteuid') && posix_geteuid() === 0 && $pfRoot !== '' 
  */
 $tlRoot = rtrim((string) ctrl_options::GetSystemOption('sentora_root'), '/');
 if (function_exists('posix_geteuid') && posix_geteuid() === 0 && $tlRoot !== '' && is_dir('/usr/local/sbin')) {
-    foreach (array('sentora-firewall') as $tlName) {
+    foreach (array('sentora-firewall', 'sentora-apparmor') as $tlName) {
         $tlFile = $tlRoot . '/bin/' . $tlName;
         if (!is_file($tlFile) || is_link($tlFile)) {
             continue;

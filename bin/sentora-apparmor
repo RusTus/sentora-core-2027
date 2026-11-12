@@ -1,0 +1,135 @@
+#!/bin/bash
+# sentora-apparmor: switch AppArmor on, with the paths Sentora uses (run as root, over SSH).
+#
+#   sentora-apparmor status        on or off, profiles in enforce mode, Sentora's paths in place
+#   sentora-apparmor on [--yes]    Sentora's paths into the profiles, AppArmor on at every start,
+#                                  the confined services restarted and checked
+#
+# For servers whose AppArmor was switched off by an older installer (new installs have it on).
+# AppArmor's profiles confine some of the programs Sentora uses (BIND; on some systems also
+# ProFTPD, MySQL, ClamAV). Sentora keeps their files in its own folders, which the system's
+# profiles do not know: Sentora's paths go into each profile's local file between "# BEGIN Sentora"
+# and "# END Sentora" (the profile itself is never changed). The paths come from the installer
+# (/etc/sentora/configs/apparmor/local), or, on a server installed before they came with it, from
+# the installers' release (platform-settings.json).
+# Then AppArmor is switched on and the services are restarted. If a service does not come back, or
+# AppArmor refuses one of them anything, it is all undone (profiles unloaded, AppArmor off at
+# start, services restarted) and what was refused is shown: nothing is left broken.
+set -uo pipefail
+PANEL=${SENTORA_PANEL:-/etc/sentora/panel}
+RULES=/etc/sentora/configs/apparmor/local
+INSTALLERS_REPO=${INSTALLERS_REPO:-RusTus/sentora-installers-2027}
+sp() { php -q "$PANEL/bin/setso" --get "$1" 2> /dev/null; }
+die() { echo "sentora-apparmor: $*" >&2; exit 1; }
+[ "$(id -u)" = 0 ] || die "run it as root"
+ACTION=${1:-status}; shift || true; YES=0; CONTAINER_OK=0
+for a in "$@"; do case "$a" in --yes) YES=1 ;; --container) CONTAINER_OK=1 ;; esac; done
+
+AADIR=$(sp apparmor_dir); AASVC=$(sp apparmor_service); AAPKG=$(sp apparmor_package)
+[ -n "$AADIR" ] || die "this system does not use AppArmor (setting apparmor_dir is empty)"
+[ -d /sys/fs/selinux ] && [ -r /sys/fs/selinux/enforce ] && die "this system uses SELinux, not AppArmor"
+kernel_on() { [ "$(cat /sys/module/apparmor/parameters/enabled 2> /dev/null)" = Y ]; }
+enforced() { grep -c '(enforce)' /sys/kernel/security/apparmor/profiles 2> /dev/null || echo 0; }
+# the services AppArmor's profiles may confine (from Sentora's settings)
+SERVICES=$(for n in bind_service ftp_service db_service clamd_service; do sp "$n"; done | grep -E '^[A-Za-z0-9@._-]+$' | awk '!s[$0]++')
+
+status() {
+    if kernel_on && [ "$(enforced)" -gt 0 ]; then echo "AppArmor is on: $(enforced) profiles in enforce mode."
+    elif kernel_on; then echo "AppArmor is off: the kernel has it, no profile is loaded (sentora-apparmor on)."
+    else echo "AppArmor is off in the kernel (a boot setting: see sentora-apparmor on)."; fi
+    local f p
+    for f in "$RULES"/*; do
+        [ -f "$f" ] || continue; p=$(basename "$f")
+        [ -f "$AADIR/$p" ] || continue
+        if grep -q '^# BEGIN Sentora' "$AADIR/local/$p" 2> /dev/null; then echo "  $p: Sentora's paths in place"; else echo "  $p: Sentora's paths missing"; fi
+    done
+}
+
+case "$ACTION" in
+status) status; exit 0 ;;
+on) ;;
+*) sed -n '2,6p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+esac
+
+if [ $CONTAINER_OK -eq 0 ] && command -v systemd-detect-virt > /dev/null 2>&1 && systemd-detect-virt --quiet --container; then
+    die "this is a container: AppArmor is the host's kernel's, switched on or off on the host"
+fi
+if ! kernel_on; then
+    echo "The kernel was started with AppArmor off (a boot setting such as apparmor=0 or security=...)."
+    echo "Remove it from GRUB_CMDLINE_LINUX in /etc/default/grub, run update-grub, restart the server,"
+    echo "then run sentora-apparmor on again. (Nothing was changed.)"
+    exit 1
+fi
+if ! command -v apparmor_parser > /dev/null 2>&1; then
+    [ -n "$AAPKG" ] || die "apparmor_parser is not installed"
+    echo "Installing $AAPKG..."
+    # shellcheck disable=SC2086
+    DEBIAN_FRONTEND=noninteractive $(sp package_install) $AAPKG > /dev/null 2>&1 || die "could not install $AAPKG"
+fi
+
+# Sentora's paths: from the installer, else from the installers' release
+if ! ls "$RULES"/* > /dev/null 2>&1; then
+    echo "Getting Sentora's AppArmor paths from the installers' release..."
+    TMPJ=$(mktemp); trap 'rm -f "$TMPJ"' EXIT
+    wget -q -T 30 -O "$TMPJ" "https://github.com/$INSTALLERS_REPO/releases/download/current/platform-settings.json" \
+        || die "could not download them (no network?): nothing was changed"
+    mkdir -p "$RULES"
+    php -r '$j = json_decode((string) file_get_contents($argv[1]), true);
+        foreach ((array) ($j["apparmor_local"] ?? array()) as $p => $t) {
+            if (preg_match("/^[A-Za-z0-9._-]{1,64}$/", (string) $p) && is_string($t)) { file_put_contents($argv[2] . "/" . $p, $t); }
+        }' "$TMPJ" "$RULES" || die "could not read them: nothing was changed"
+    ls "$RULES"/* > /dev/null 2>&1 || die "the release has none: nothing was changed"
+fi
+
+echo "AppArmor will be switched on; Sentora's paths go into these profiles first:"
+for f in "$RULES"/*; do p=$(basename "$f"); [ -f "$AADIR/$p" ] && echo "  $p"; done
+echo "Then these services are restarted and checked: $(echo "$SERVICES" | tr '\n' ' ')"
+if [ $YES -eq 0 ]; then printf 'Go ahead? (y/n) > '; read -r r; [ "$r" = y ] || [ "$r" = Y ] || { echo "Nothing changed."; exit 0; }; fi
+
+for f in "$RULES"/*; do
+    p=$(basename "$f"); [ -f "$AADIR/$p" ] || continue
+    dst="$AADIR/local/$p"
+    rm -f "$AADIR/disable/$p"
+    mkdir -p "$AADIR/local"; touch "$dst"
+    sed -i '/^# BEGIN Sentora/,/^# END Sentora/d' "$dst"
+    { echo "# BEGIN Sentora (the paths Sentora uses; written by sentora-apparmor)"; grep -v '^#' "$f"; echo "# END Sentora"; } >> "$dst"
+    # (loaded now with Sentora's paths, also where AppArmor's service loads nothing, as in a container)
+    apparmor_parser -r -W "$AADIR/$p" > /dev/null 2>&1 || echo "  $p: did not load (apparmor_parser -r $AADIR/$p shows why)"
+done
+
+WAS_ACTIVE=""
+for s in $SERVICES; do systemctl is-active --quiet "$s" 2> /dev/null && WAS_ACTIVE="$WAS_ACTIVE $s"; done
+SINCE=$(date '+%Y-%m-%d %H:%M:%S')
+systemctl enable "${AASVC:-apparmor}" > /dev/null 2>&1
+systemctl restart "${AASVC:-apparmor}" > /dev/null 2>&1 || echo "AppArmor's service did not start cleanly: checking"
+for s in $WAS_ACTIVE; do systemctl restart "$s" > /dev/null 2>&1; done
+sleep 8
+
+BAD=""
+for s in $WAS_ACTIVE; do systemctl is-active --quiet "$s" || BAD="$BAD $s (not running)"; done
+[ "$(enforced)" -gt 0 ] || BAD="$BAD (no profile loaded)"
+DENIED=$(journalctl -k --since "$SINCE" --no-pager 2> /dev/null | grep 'apparmor="DENIED"' | grep -oE 'profile="[^"]+"' | sort | uniq -c)
+# (refusals of the services Sentora runs: their profiles)
+for s in $WAS_ACTIVE; do
+    pid=$(systemctl show -p MainPID --value "$s" 2> /dev/null)
+    [ -n "$pid" ] && [ "$pid" != 0 ] || continue
+    prof=$(tr -d '\0' < "/proc/$pid/attr/current" 2> /dev/null | sed 's/ (.*//')
+    [ -n "$prof" ] && [ "$prof" != unconfined ] && echo "$DENIED" | grep -qF "profile=\"$prof\"" && BAD="$BAD $s (refused by AppArmor)"
+done
+
+if [ -n "$BAD" ]; then
+    echo "Something went wrong:$BAD"
+    [ -n "$DENIED" ] && { echo "What AppArmor refused (journalctl -k | grep apparmor=\"DENIED\"):"; echo "$DENIED" | sed 's/^/  /'; }
+    echo "Undoing: profiles unloaded, AppArmor off at start, services restarted."
+    if command -v aa-teardown > /dev/null 2>&1; then aa-teardown > /dev/null 2>&1; else systemctl stop "${AASVC:-apparmor}" > /dev/null 2>&1; fi
+    systemctl disable "${AASVC:-apparmor}" > /dev/null 2>&1
+    for s in $WAS_ACTIVE; do systemctl restart "$s" > /dev/null 2>&1; done
+    echo "AppArmor is off again. Send this output to Sentora's support so the missing path can be added."
+    exit 1
+fi
+echo "AppArmor is on: $(enforced) profiles in enforce mode, the services run and nothing was refused."
+for s in $WAS_ACTIVE; do
+    pid=$(systemctl show -p MainPID --value "$s" 2> /dev/null)
+    prof=$(tr -d '\0' < "/proc/$pid/attr/current" 2> /dev/null)
+    echo "  $s: ${prof:-?}"
+done

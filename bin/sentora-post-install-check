@@ -185,7 +185,7 @@ if [ -r /sys/fs/selinux/enforce ]; then
 elif [ "$(cat /sys/module/apparmor/parameters/enabled 2> /dev/null)" = "Y" ]; then
     AA_ENF=$(grep -c '(enforce)' /sys/kernel/security/apparmor/profiles 2> /dev/null)
     if [ "${AA_ENF:-0}" -eq 0 ]; then
-        warn "AppArmor is switched off (no profiles loaded; older Sentora installers switched it off): systemctl enable --now apparmor"
+        warn "AppArmor is switched off (no profiles loaded; older Sentora installers switched it off): sentora-apparmor on"
     else
         ok "AppArmor is on ($AA_ENF profiles in enforce mode)"
         # every running service a profile confines, once (the panel's own processes are not confined)
