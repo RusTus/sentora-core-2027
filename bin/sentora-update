@@ -733,7 +733,7 @@ if [ -f "$PANEL/bin/sentora-platform-fill" ] && [ -z "$URL" ]; then
             php -r '$j = json_decode(file_get_contents($argv[1]), true); echo is_array($j) && isset($j["selinux_cil"]) ? $j["selinux_cil"] : "";' \
                 "$TMP/platform-settings.json" > "$TMP/sentora.cil" 2> /dev/null
             if [ -s "$TMP/sentora.cil" ] && [ "$(sha256sum < "$TMP/sentora.cil")" != "$(cat /etc/sentora/selinux-cil.sha256 2> /dev/null)" ]; then
-                if out=$(semodule -i "$TMP/sentora.cil" 2>&1); then
+                if out=$(semodule -i "$TMP/sentora.cil" 2>&1 9>&-); then
                     sha256sum < "$TMP/sentora.cil" > /etc/sentora/selinux-cil.sha256
                     say "SELinux: Sentora's rules loaded again (semodule -l: sentora)"
                 else
