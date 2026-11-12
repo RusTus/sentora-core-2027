@@ -110,9 +110,21 @@ function MatomoImportLogs()
                 . ($ok !== null ? ", " . $ok . " recorded in Matomo" : "")
                 . ($ign !== null ? ", " . $ign . " left out (bots, static files and the like)" : "") . ".");
         } else {
-            // (a Python error ends with its own line: "SomeError: why"; that is what tells the cause)
+            // The cause: Matomo's importer says "Fatal error: why" and then only how to
+            // restart it; a Python error ends with its own line "SomeError: why"
             $why = array_values(array_filter(array_map('trim', $out), 'strlen'));
-            MatomoReport($domain . ": import FAILED (the lines are tried again next hour): " . substr((string) end($why), 0, 400));
+            $cause = (string) end($why);
+            foreach ($why as $i => $l) {
+                if (strpos($l, 'Fatal error:') === 0) {
+                    $cause = $l;
+                    for ($j = $i + 1; $j < count($why) && strpos($why[$j], 'You can restart') !== 0; $j++) {
+                        $cause .= ' ' . $why[$j];
+                    }
+                    break;
+                }
+            }
+            MatomoReport($domain . ": import FAILED (the lines are tried again next hour): " . substr(preg_replace('/token_auth=[0-9a-f]+/i', 'token_auth=...', $cause), 0, 400)
+                . " (the importer's whole answer: " . MatomoKeepError($domain, $out) . ")");
         }
         $out = array();
     }
@@ -125,6 +137,27 @@ function MatomoImportLogs()
     // Build the reports (also for domains using the tracking code)
     list($rc, $o) = matomo_helper::Console(array('core:archive', '--url=' . matomo_helper::Url(), '--accept-invalid-ssl-certificate'));
     MatomoReport("reports " . ($rc === 0 ? 'built' : 'FAILED: ' . substr($o, -300)) . ".");
+}
+
+/**
+ * Keep the importer's whole answer of a failed import in
+ * /var/sentora/logs/matomo-import-error.log (only the newest one, root and the
+ * panel's group may read it), so the cause can be read in full.
+ *
+ * @param string $domain The domain whose import failed.
+ * @param array $out The importer's output lines.
+ * @return string The file's path.
+ */
+function MatomoKeepError($domain, $out)
+{
+    $file = rtrim((string) ctrl_options::GetSystemOption('log_dir'), '/') . '/matomo-import-error.log';
+    $text = date('Y-m-d H:i') . '  ' . $domain . "\n" . implode("\n", array_slice((array) $out, -200)) . "\n";
+    // Never a token in a log
+    @file_put_contents($file, preg_replace('/(token_auth[=:\'" ]+)[0-9a-f]{16,}/i', '$1...', $text));
+    @chown($file, 'root');
+    @chgrp($file, 'sentora');
+    @chmod($file, 0640);
+    return $file;
 }
 
 /**
