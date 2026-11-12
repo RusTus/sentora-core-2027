@@ -126,7 +126,7 @@ function FtpHashStoredPasswords()
  * "proftpd -t" and reloads ProFTPD. When the check fails, the previous rules are put back.
  *
  * @global db_driver $zdbh The panel's database connection.
- * @param string|null $conf Optional. ProFTPD's configuration file (null: the ftp_config_file setting, else /etc/proftpd/proftpd.conf). Default null.
+ * @param string|null $conf Optional. ProFTPD's configuration file (null: the setting ftp_config_file). Default null.
  * @param bool $reload Optional. Reload ProFTPD after a change. Default true.
  * @return bool|null True when changed and in use, false when the check failed, null when nothing changed (or no ProFTPD).
  */
@@ -134,10 +134,7 @@ function FtpWriteAccessRules($conf = null, $reload = true)
 {
     global $zdbh;
     if ($conf === null) {
-        $conf = trim((string) ctrl_options::GetSystemOption('ftp_config_file'));
-        if ($conf === '') {
-            $conf = '/etc/proftpd/proftpd.conf';
-        }
+        $conf = trim(sys_platform::Get('ftp_config_file'));
     }
     $real = @realpath($conf);
     if ($real === false || !is_file($real) || !is_writable($real)) {

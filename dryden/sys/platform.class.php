@@ -69,6 +69,7 @@ class sys_platform
         'spamd_bin' => array('/usr/sbin/spamd', 'SpamAssassin\'s program'),
         'clamd_bin' => array('/usr/sbin/clamd', 'ClamAV\'s program'),
         'postqueue_bin' => array('/usr/sbin/postqueue', 'Postfix\'s mail queue program (the server monitor counts the waiting mail)'),
+        'ftp_config_file' => array('/etc/proftpd/proftpd.conf', 'ProFTPD\'s settings file (the FTP access rules, and the firewall reads its passive ports there)'),
         'firewall_kind' => array('', 'The firewall sentora-firewall drives: ufw or firewalld (empty: none)'),
         'firewall_cmd' => array('', 'The firewall\'s command (/usr/sbin/ufw, /usr/bin/firewall-cmd)'),
         'firewall_service' => array('', 'The firewall\'s service'),

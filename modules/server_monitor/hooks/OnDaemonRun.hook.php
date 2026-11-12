@@ -374,7 +374,12 @@ function SentoraKernelSwitches()
     $nl = fs_filehandler::NewLine();
     $dir = rtrim(sys_platform::Get('sysctl_dir'), '/');
     $bin = sys_platform::Get('sysctl_bin');
-    if (!function_exists('posix_geteuid') || posix_geteuid() !== 0 || $dir === '' || !is_dir($dir) || is_link($dir)) {
+    if (!function_exists('posix_geteuid') || posix_geteuid() !== 0 || $dir === '' || $dir[0] !== '/' || is_link($dir)) {
+        return;
+    }
+    // (a minimal system may have none yet: its defaults are elsewhere, systemd reads this folder at boot)
+    if (!is_dir($dir) && (!is_dir(dirname($dir)) || !@mkdir($dir, 0755))) {
+        echo 'Kernel safety switches: ' . $dir . ' could not be made.' . fs_filehandler::NewLine();
         return;
     }
     $want = "# Sentora: the kernel's safety switches (written by the daemon; to change one, set it in a\n"
