@@ -40,7 +40,7 @@ class sys_phpext
     static function Catalog()
     {
         return array(
-            'apcu' => array('A fast store in memory for a site\'s own data (object cache).', 'WordPress, Nextcloud and many frameworks use it as a cache when it is there.', 'Each PHP process of an account shares it with that account only; give it memory with apcu.shm_size (for example 64M).'),
+            'apcu' => array('A fast store in memory for a site\'s own data (object cache).', 'WordPress, Nextcloud and many frameworks use it as a cache when it is there.', 'Each PHP process of an account shares it with that account only; give it memory with apc.shm_size (for example 64M). (Its settings start with apc., not apcu.)'),
             'redis' => array('Talks to a Redis server (a cache or a session store).', 'Caching plugins (Redis Object Cache), Nextcloud, Laravel queues.', 'Needs a Redis server to talk to; on its own it does nothing. Some builds of it need igbinary (and msgpack) switched on too: if it is refused, switch those on with it.'),
             'memcached' => array('Talks to a Memcached server (a cache).', 'Older caching plugins and frameworks.', 'Needs a Memcached server to talk to. Some builds need igbinary or msgpack switched on with it.'),
             'imagick' => array('Image work with ImageMagick: resize, crop, PDFs, many formats.', 'WordPress uses it for better thumbnails; galleries and shops.', 'Large images use a lot of memory; keep memory_limit in mind.'),
@@ -147,6 +147,18 @@ class sys_phpext
     }
 
     /**
+     * The name prefixes of an extension's settings (most use their own name; APCu uses apc.).
+     *
+     * @param string $ext
+     * @return string[]
+     */
+    static function Prefixes($ext)
+    {
+        $more = array('apcu' => array('apc.'));
+        return array_merge(array($ext . '.'), isset($more[$ext]) ? $more[$ext] : array());
+    }
+
+    /**
      * Read an extension's settings: "name = value" lines whose names start with "<extension>.".
      * Paths and anything that names a file are refused (a setting must never point PHP at a file
      * to run or load, or at a folder shared between accounts).
@@ -170,8 +182,12 @@ class sys_phpext
             }
             $name = strtolower($m[1]);
             $value = trim($m[2], " \t\"'");
-            if (strpos($name, $ext . '.') !== 0) {
-                $bad[] = sprintf('Line %d: only settings of %s (starting with %s.) go here.', $n + 1, $ext, $ext);
+            $mine = false;
+            foreach (self::Prefixes($ext) as $pre) {
+                $mine = $mine || strpos($name, $pre) === 0;
+            }
+            if (!$mine) {
+                $bad[] = sprintf('Line %d: only settings of %s (starting with %s) go here.', $n + 1, $ext, implode(' or ', self::Prefixes($ext)));
                 continue;
             }
             if (preg_match('/(preload|file_cache|restrict_api|lockfile|error_log|log_file|_path$|_dir$|_file$|mmap_file_mask|socket)/', $name)) {

@@ -434,8 +434,8 @@ class module_controller extends ctrl_module
                     : '<label class="sf-switch" title="' . self::t('Switched on for this version') . '"><input type="checkbox" name="' . self::ExtField('on', $v, $e) . '" value="1"' . ($on ? ' checked' : '') . '><span class="sf-toggle"></span></label>';
                 $row = '<div class="pv-ext-row"><div class="pv-ext-main"><div><b>' . self::h($e) . '</b> ' . $state . '</div>' . $help($e)
                     . '<details' . ($iniText !== '' ? ' open' : '') . '><summary>' . self::t('Its own settings') . '</summary>'
-                    . '<textarea class="form-control sf-code" rows="3" spellcheck="false" name="' . self::ExtField('ini', $v, $e) . '" placeholder="' . self::h($e) . '.setting = value">' . self::h($iniText) . '</textarea>'
-                    . '<span class="pv-sub">' . str_replace('%s', self::h($e . '.'), self::t('One a line: name = value (the names start with %s). Settings that name a file or folder can not be set here.')) . '</span></details></div>' . $switch . '</div>';
+                    . '<textarea class="form-control sf-code" rows="3" spellcheck="false" name="' . self::ExtField('ini', $v, $e) . '" placeholder="' . self::h(sys_phpext::Prefixes($e)[count(sys_phpext::Prefixes($e)) - 1]) . 'setting = value">' . self::h($iniText) . '</textarea>'
+                    . '<span class="pv-sub">' . str_replace('%s', self::h(implode(' / ', sys_phpext::Prefixes($e))), self::t('One a line: name = value (the names start with %s). Settings that name a file or folder can not be set here.')) . '</span></details></div>' . $switch . '</div>';
                 if ($system) {
                     $row .= '<input type="hidden" name="' . self::ExtField('on', $v, $e) . '" value="1">';
                 }
