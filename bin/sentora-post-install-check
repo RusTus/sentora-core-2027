@@ -441,7 +441,8 @@ x=$(awk -F: '($2 == "") {print $1}' /etc/shadow 2> /dev/null | tr '\n' ' ')
 if { command -v firewall-cmd > /dev/null 2>&1 && firewall-cmd --state 2> /dev/null | grep -qx running; } \
         || { command -v ufw > /dev/null 2>&1 && ufw status 2> /dev/null | grep -q '^Status: active'; } \
         || { command -v nft > /dev/null 2>&1 && nft list ruleset 2> /dev/null | grep -qE 'hook input.*policy drop'; }; then
-    ok "a firewall is active"
+    FWP=$(bash "$PANEL/bin/sentora-firewall" ports 2> /dev/null | tr -s ' ' | sed 's/ $//')
+    ok "a firewall is active${FWP:+: open to the world: $FWP}"
 elif command -v systemd-detect-virt > /dev/null 2>&1 && systemd-detect-virt --quiet --container; then
     ok "no firewall in this container: the host's firewall decides what reaches it"
 else

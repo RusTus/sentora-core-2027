@@ -2,6 +2,7 @@
 # sentora-firewall: the server's firewall, open only for what Sentora serves (run as root).
 #
 #   sentora-firewall status            what is open, and Sentora's ports that are not
+#   sentora-firewall ports             one line: what is open now (exit 1 when the firewall is off)
 #   sentora-firewall on [--yes]        switch it on: Sentora's ports open, every other port closed
 #   sentora-firewall off [--yes]       switch it off (fail2ban's bans stay)
 #   sentora-firewall allow <port>[/tcp|/udp]    open another port (e.g. a range: 8000-8010/tcp)
@@ -115,6 +116,15 @@ in_container() { command -v systemd-detect-virt > /dev/null 2>&1 && systemd-dete
 ask() { [ $YES -eq 1 ] && return 0; printf '%s (y/n) > ' "$1"; read -r r; [ "$r" = y ] || [ "$r" = Y ]; }
 
 case "$ACTION" in
+ports)
+    # (one line: what is open now, for sentora-post-install-check and Server Monitor's card)
+    is_on || exit 1
+    case "$KIND" in
+        ufw) "$CMD" status 2> /dev/null | awk 'NR > 4 && $2 ~ /ALLOW/ && $1 !~ /\(v6\)/ {print $1}' | sort -u | tr '\n' ' ' ;;
+        firewalld) Z=$("$CMD" --get-default-zone); echo "$("$CMD" --zone="$Z" --list-services) $("$CMD" --zone="$Z" --list-ports)" ;;
+    esac
+    echo
+    ;;
 status)
     if is_on; then echo "The firewall ($KIND) is on."; else echo "The firewall ($KIND) is off."; fi
     [ -x "$CMD" ] || exit 0
