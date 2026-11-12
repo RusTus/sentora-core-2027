@@ -138,7 +138,7 @@ function MatomoImportLogs()
     }
     // Build the reports (also for domains using the tracking code)
     list($rc, $o) = matomo_helper::Console(array('core:archive', '--url=' . matomo_helper::Url(), '--accept-invalid-ssl-certificate'));
-    MatomoReport("reports " . ($rc === 0 ? 'built' : 'FAILED: ' . substr($o, -300)) . ".");
+    MatomoReport("reports " . ($rc === 0 ? 'built' : 'FAILED: ' . substr($o, -300) . ' (its whole answer: ' . MatomoKeepError('reports', explode("\n", (string) $o)) . ')') . ".");
 }
 
 /**
@@ -154,8 +154,10 @@ function MatomoKeepError($domain, $out)
 {
     $file = rtrim((string) ctrl_options::GetSystemOption('log_dir'), '/') . '/matomo-import-error.log';
     $text = date('Y-m-d H:i') . '  ' . $domain . "\n" . implode("\n", array_slice((array) $out, -200)) . "\n";
-    // Never a token in a log
-    @file_put_contents($file, preg_replace('/(token_auth[=:\'" ]+)[0-9a-f]{16,}/i', '$1...', $text));
+    // Never a token in a log; the failures of one run together (the first one replaces the last run's)
+    static $started = false;
+    @file_put_contents($file, preg_replace('/(token_auth[=:\'" ]+)[0-9a-f]{16,}/i', '$1...', $text), $started ? FILE_APPEND : 0);
+    $started = true;
     @chown($file, 'root');
     @chgrp($file, 'sentora');
     @chmod($file, 0640);
