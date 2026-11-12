@@ -751,7 +751,7 @@ class sys_accountphp
     static function SyncCron($wanted)
     {
         global $zdbh;
-        $php = '/usr/bin/php' . self::DefaultVersion();
+        $php = sys_platform::Get('php_cli', array('v' => self::DefaultVersion()));
         $limits = self::CronSettings();
         // a job runs with the PHP version of the domain its script is in (sites set to an
         // extra version in PHP Versions), else the system PHP

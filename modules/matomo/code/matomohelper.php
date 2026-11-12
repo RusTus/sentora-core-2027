@@ -183,7 +183,7 @@ class matomo_helper
      */
     static function Console($args)
     {
-        $cmd = 'cd ' . escapeshellarg(self::APP_DIR) . ' && setpriv --reuid=sentora --regid=sentora --init-groups --reset-env /usr/bin/php' . sys_phpversions::DefaultVersion() . ' console';
+        $cmd = 'cd ' . escapeshellarg(self::APP_DIR) . ' && setpriv --reuid=sentora --regid=sentora --init-groups --reset-env ' . escapeshellarg(sys_platform::Get('php_cli', array('v' => sys_phpversions::DefaultVersion()))) . ' console';
         foreach ($args as $a) {
             $cmd .= ' ' . escapeshellarg($a);
         }

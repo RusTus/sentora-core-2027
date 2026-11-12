@@ -480,6 +480,11 @@ if command -v postconf > /dev/null 2>&1; then
     else ok "mail: only this server may send without logging in"; fi
     [ "$(postconf -h disable_vrfy_command 2> /dev/null)" = yes ] && ok "mail: VRFY off (addresses can not be probed)" || warn "mail: VRFY is on (disable_vrfy_command = yes)"
     postconf -h smtpd_banner 2> /dev/null | grep -qE 'mail_version|Postfix [0-9]' && warn "mail: the banner tells Postfix's version" || ok "mail: the banner does not tell the version"
+    # every table type main.cf names must be one this Postfix can read (AlmaLinux 10 and Fedora have no hash or btree)
+    PF_TYPES=" $(postconf -m 2> /dev/null | tr '\n' ' ')"
+    PF_BAD=$(postconf -n 2> /dev/null | grep -oE '(^|[ ,=])(hash|btree|dbm|sdbm|lmdb|cdb):' | grep -oE '[a-z]+' | sort -u | while read -r t; do case "$PF_TYPES" in *" $t "*) ;; *) printf ' %s' "$t" ;; esac; done)
+    if [ -n "$PF_BAD" ]; then fail "mail: main.cf names table types this Postfix can not read:$PF_BAD (the daemon moves them to $(postconf -h default_database_type 2> /dev/null); run it: php -q $PANEL/bin/daemon.php)"
+    else ok "mail: Postfix can read every table type main.cf names"; fi
 fi
 NC=$(sp bind_dir); NC="${NC%/}/named.conf"
 if [ -f "$NC" ]; then
@@ -561,6 +566,8 @@ if [ -f "$DL" ]; then
     grep -q "Daemon run complete" "$DL" && ok "the last run completed" || fail "the last run did not complete (see $DL)"
     w=$(grep -cE "PHP (Warning|Fatal|Deprecated|Notice)" "$DL")
     if [ "$w" = 0 ]; then ok "no PHP warnings in the last run"; else fail "$w PHP warning(s) in the last run: $(grep -m1 -E 'PHP (Warning|Fatal|Deprecated|Notice)' "$DL" | cut -c1-150)"; fi
+    f=$(grep -cE "(^| )FAILED[:. ]" "$DL")
+    if [ "$f" = 0 ]; then ok "no task failed in the last run"; else fail "$f task(s) failed in the last run: $(grep -m1 -E '(^| )FAILED[:. ]' "$DL" | cut -c1-150)"; fi
 else
     fail "$DL not found: the daemon has not run yet (wait 5 minutes)"
 fi

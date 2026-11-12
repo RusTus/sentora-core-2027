@@ -69,6 +69,8 @@ class sys_platform
         'spamd_bin' => array('/usr/sbin/spamd', 'SpamAssassin\'s program'),
         'clamd_bin' => array('/usr/sbin/clamd', 'ClamAV\'s program'),
         'postqueue_bin' => array('/usr/sbin/postqueue', 'Postfix\'s mail queue program (the server monitor counts the waiting mail)'),
+        'postfix_cmd_dir' => array('/usr/sbin', 'The folder of Postfix\'s commands (postconf, postfix, newaliases, postmap)'),
+        'php_cli' => array('/usr/bin/php{v}', 'The system PHP\'s command-line program ({v}: its version; Matomo\'s console, the clients\' cron jobs)'),
         'sogo_bin' => array('/usr/sbin/sogod', 'SOGo\'s program'),
         // mail: ClamAV
         'clamav_user' => array('clamav', 'ClamAV\'s Linux user'),

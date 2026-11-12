@@ -14,6 +14,7 @@ echo fs_filehandler::NewLine() . "START SOGo settings." . fs_filehandler::NewLin
 SentoraApplySOGoSettings();
 SentoraSOGoPasswordView();
 echo "END SOGo settings." . fs_filehandler::NewLine();
+SentoraPostfixMapTypes();
 
 /**
  * SOGo checks mailbox logins through the view sentora_postfix.sogo_users. Mailbox
@@ -223,4 +224,75 @@ function SentoraApplySOGoSettings()
     }
 }
 
-?>
+/**
+ * Postfix's lookup tables: Sentora's main.cf names hash: and btree: tables (Postfix's classic
+ * types). A Postfix built without them (AlmaLinux 10 and Fedora dropped Berkeley DB) can not
+ * read those: the aliases (also checked for every local address) and the TLS session caches
+ * fail with "unsupported dictionary type". Here, when Postfix lists a type as missing, every
+ * main.cf line naming it gets this Postfix's own default type instead (postconf -h
+ * default_database_type), the aliases are built again and Postfix reloads. Decided by what
+ * Postfix itself supports, so it fits any system; on one with both types nothing changes.
+ *
+ * @return void
+ */
+function SentoraPostfixMapTypes()
+{
+    $nl = fs_filehandler::NewLine();
+    $dir = rtrim(sys_platform::Get('postfix_cmd_dir'), '/');
+    $pc = $dir . '/postconf';
+    if ($dir === '' || !is_executable($pc)) {
+        return;
+    }
+    $types = array();
+    exec(escapeshellarg($pc) . ' -m 2>/dev/null', $types);
+    $types = array_map('trim', $types);
+    $missing = array_values(array_diff(array('hash', 'btree'), $types));
+    if (count($types) === 0 || count($missing) === 0) {
+        return;
+    }
+    $def = trim((string) shell_exec(escapeshellarg($pc) . ' -h default_database_type 2>/dev/null'));
+    $confDir = trim((string) shell_exec(escapeshellarg($pc) . ' -h config_directory 2>/dev/null'));
+    $file = realpath($confDir . '/main.cf');
+    if ($def === '' || !in_array($def, $types, true) || in_array($def, $missing, true) || $file === false || !is_file($file)) {
+        return;
+    }
+    $lines = explode("\n", (string) file_get_contents($file));
+    $changed = 0;
+    $maps = array();
+    foreach ($lines as $i => $line) {
+        if (preg_match('/^\s*#/', $line)) {
+            continue;
+        }
+        $new = preg_replace_callback('/(?<![A-Za-z0-9_])(' . implode('|', $missing) . '):(\S*)/', function ($m) use ($def, &$maps) {
+            $maps[] = rtrim($m[2], ',');
+            return $def . ':' . $m[2];
+        }, $line);
+        if ($new !== $line) {
+            $lines[$i] = $new;
+            $changed++;
+        }
+    }
+    if ($changed === 0) {
+        return;
+    }
+    if (!is_file($file . '.sentora-before-maps')) {
+        @copy($file, $file . '.sentora-before-maps');
+    }
+    if (@file_put_contents($file, implode("\n", $lines)) === false) {
+        echo 'Postfix: main.cf could not be written (' . implode(', ', $missing) . ' tables stay unreadable).' . $nl;
+        return;
+    }
+    // build the tables again in the new type: the aliases, and any other table with a source file
+    // (the TLS session caches are made by Postfix itself)
+    exec(escapeshellarg($dir . '/newaliases') . ' 2>&1', $o1);
+    $aliasDb = trim((string) shell_exec(escapeshellarg($pc) . ' -h alias_database 2>/dev/null'));
+    foreach (array_unique($maps) as $m) {
+        if ($m !== '' && $m[0] === '/' && is_file($m) && strpos($aliasDb, $m) === false && strpos($m, '_scache') === false) {
+            exec(escapeshellarg($dir . '/postmap') . ' ' . escapeshellarg($def . ':' . $m) . ' 2>&1', $o2);
+        }
+    }
+    exec(escapeshellarg($dir . '/postfix') . ' reload 2>&1', $o3, $rc);
+    echo 'Postfix: ' . $changed . ' main.cf line(s) moved from ' . implode('/', $missing) . ' tables (not in this Postfix) to ' . $def
+        . ($rc === 0 ? ', Postfix reloaded.' : ', reload failed: ' . implode(' ', array_slice($o3, -1))) . $nl;
+}
+

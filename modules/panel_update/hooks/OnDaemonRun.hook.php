@@ -34,3 +34,28 @@ if (function_exists('posix_geteuid') && posix_geteuid() === 0 && $zsRoot !== '' 
         }
     }
 }
+
+/*
+ * Once a day (and on the first run after an update): settings of this Linux system that came after
+ * this server was installed get the value this system's installer sets today, when they are still
+ * at the default (bin/sentora-platform-fill, with platform-settings.json from the installers'
+ * release). sentora-update does it too, but an update runs the OLD sentora-update, so the first
+ * update to this release relies on this.
+ */
+$pfRoot = rtrim((string) ctrl_options::GetSystemOption('sentora_root'), '/');
+$pfTool = $pfRoot . '/bin/sentora-platform-fill';
+$pfStamp = sys_statedir::DIR . '/platform-fill-checked';
+if (function_exists('posix_geteuid') && posix_geteuid() === 0 && $pfRoot !== '' && is_file($pfTool)
+        && (!is_file($pfStamp) || time() - (int) @filemtime($pfStamp) > 86400 || (int) @filemtime($pfStamp) < (int) @filemtime($pfTool))) {
+    @touch($pfStamp);
+    $pfJson = sys_phpbundles::Fetch('https://github.com/RusTus/sentora-installers-2027/releases/download/current/platform-settings.json');
+    if ($pfJson !== false && is_array(json_decode($pfJson, true))) {
+        $pfFile = sys_statedir::DIR . '/platform-settings.json';
+        @unlink($pfFile);
+        if (@file_put_contents($pfFile, $pfJson, LOCK_EX) !== false) {
+            @chmod($pfFile, 0600);
+            $pfOut = array(); exec(escapeshellarg(PHP_BINARY !== '' ? PHP_BINARY : 'php') . ' -q ' . escapeshellarg($pfTool) . ' ' . escapeshellarg($pfFile) . ' 2>&1', $pfOut, $pfRc);
+            echo 'Panel Update: ' . ($pfRc === 0 ? (string) end($pfOut) : 'this system\'s settings were not checked: ' . implode(' ', array_slice($pfOut, -1))) . $zsNl;
+        }
+    }
+}
