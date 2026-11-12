@@ -288,6 +288,21 @@ fetch "config/sentora-config.tar.gz" "$STAGE/" || die "could not fetch the confi
 tar -xzf "$STAGE/sentora-config.tar.gz" -C / etc/sentora/panel/cnf/security.php 2>> "$LOG" || say "the panel's encryption key was not in the snapshot"
 tar -tzf "$STAGE/sentora-config.tar.gz" 2> /dev/null | grep -q '^etc/letsencrypt/' && tar -xzf "$STAGE/sentora-config.tar.gz" -C / etc/letsencrypt 2>> "$LOG"
 chown root:sentora "$PANEL/cnf/security.php" 2> /dev/null; chmod 640 "$PANEL/cnf/security.php"
+# Matomo's tokens (the log importer's, and those the panel opens Matomo with for each account) are
+# kept in its restored database hashed with the salt of Matomo's settings: this server's own settings
+# take that salt (and keep their own database password). A snapshot without Matomo's settings (made
+# before 2027.77): the importer's token is dropped, so the 5-minute sync makes a new one.
+MCONF="$PANEL/etc/apps/matomo/config/config.ini.php"
+if [ -f "$MCONF" ]; then
+    OLDSALT=$(tar -xzOf "$STAGE/sentora-config.tar.gz" "${MCONF#/}" 2> /dev/null | sed -n 's/^[[:space:]]*salt[[:space:]]*=[[:space:]]*"\([0-9A-Za-z]\{16,128\}\)"[[:space:]]*$/\1/p' | head -1)
+    if [ -n "$OLDSALT" ] && grep -qE '^[[:space:]]*salt[[:space:]]*=' "$MCONF"; then
+        sed -i -E "s/^[[:space:]]*salt[[:space:]]*=.*/salt = \"$OLDSALT\"/" "$MCONF"
+        say "Matomo: its tokens work again (the salt of the restored server's Matomo)"
+    else
+        sql "UPDATE sentora_core.x_settings SET so_value_tx = '' WHERE so_name_vc = 'matomo_importer_token'" > /dev/null 2>&1
+        say "Matomo: the snapshot has no Matomo settings; its log importer gets a new token"
+    fi
+fi
 # 5. what this server keeps, back in; every website and DNS zone to be written again
 panelphp '$k = json_decode((string) file_get_contents($argv[1]), true);
     foreach ((array) $k as $n => $v) {

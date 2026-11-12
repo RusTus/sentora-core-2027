@@ -4,7 +4,7 @@
  * Matomo: every hour, imports the new lines of each domain's access log (for
  * domains that use the logs, not the tracking code) and builds the reports.
  *
- * Written by RusTus, 2026-11-09
+ * Written by RusTus, 2026-11-12
  */
 require_once dirname(__FILE__) . '/../code/matomohelper.php';
 

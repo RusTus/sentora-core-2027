@@ -22,7 +22,7 @@
 #   var/sentora/vmail/...       the mailboxes (when switched on)
 #   var/sentora/backups/...     the panel backups made by sentora-update
 #   config/sentora-config.tar.gz  /etc/sentora/configs, the panel's settings and its
-#                               encryption key, Let's Encrypt (keep the backup machine trusted)
+#                               encryption key, Let's Encrypt, Matomo's settings (keep the backup machine trusted)
 # Files that did not change are hard links to the night before, so only changes are
 # sent and stored. The oldest nights are removed.
 
@@ -132,6 +132,8 @@ chmod -R go-rwx "$OUT"
 # configuration: the panel's settings and key, the service configs, certificates
 CONF_PATHS=(etc/sentora/configs etc/sentora/panel/cnf)
 [ -d /etc/letsencrypt ] && CONF_PATHS+=(etc/letsencrypt)
+# (Matomo's settings: a restore takes its salt, which every Matomo token is hashed with)
+[ -f "$PANEL/etc/apps/matomo/config/config.ini.php" ] && CONF_PATHS+=("${PANEL#/}/etc/apps/matomo/config/config.ini.php")
 tar -czf "$OUT/config/sentora-config.tar.gz" -C / "${CONF_PATHS[@]}" 2> /dev/null || die "could not pack the configuration"
 # what the snapshot holds, for the restore
 ( cd "$PANEL" && php -r '
