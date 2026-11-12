@@ -296,7 +296,7 @@ php_reload() {
 
 finish() {
     ui_step "Running the Sentora daemon once"
-    php "$PANEL/bin/daemon.php" > /var/sentora/logs/daemon-last-run.log 2>&1 9>&- || warn "the daemon run reported an error (see /var/sentora/logs/daemon-last-run.log)"
+    : > /var/sentora/logs/daemon-last-run.log; php "$PANEL/bin/daemon.php" >> /var/sentora/logs/daemon-last-run.log 2>&1 9>&- || warn "the daemon run reported an error (see /var/sentora/logs/daemon-last-run.log)"
     say "its report: /var/sentora/logs/daemon-last-run.log"
     if [ -x "$PANEL/bin/sentora-post-install-check" ]; then
         ui_step "Checking the installation"
@@ -700,6 +700,20 @@ if [ -f "$PANEL/bin/sentora-platform-fill" ] && [ -z "$URL" ]; then
         out=$(php -q "$PANEL/bin/sentora-platform-fill" "$TMP/platform-settings.json" 2>&1) || warn "this system's settings were not checked: $(echo "$out" | tail -1)"
         echo "$out"
         grep -q '^set ' <<< "$out" && say "$(echo "$out" | tail -1)"
+        # Sentora's SELinux rules (systems with SELinux on), loaded again when the release's differ
+        # from the ones this server loaded last: a new rule reaches servers installed before it
+        if command -v semodule > /dev/null && command -v selinuxenabled > /dev/null && selinuxenabled; then
+            php -r '$j = json_decode(file_get_contents($argv[1]), true); echo is_array($j) && isset($j["selinux_cil"]) ? $j["selinux_cil"] : "";' \
+                "$TMP/platform-settings.json" > "$TMP/sentora.cil" 2> /dev/null
+            if [ -s "$TMP/sentora.cil" ] && [ "$(sha256sum < "$TMP/sentora.cil")" != "$(cat /etc/sentora/selinux-cil.sha256 2> /dev/null)" ]; then
+                if out=$(semodule -i "$TMP/sentora.cil" 2>&1); then
+                    sha256sum < "$TMP/sentora.cil" > /etc/sentora/selinux-cil.sha256
+                    say "SELinux: Sentora's rules loaded again (semodule -l: sentora)"
+                else
+                    warn "SELinux: Sentora's new rules could not be loaded, the ones in place are kept: $(echo "$out" | tail -1)"
+                fi
+            fi
+        fi
     else
         echo "platform-settings.json not on the installers' release (yet): this system's settings not checked"
     fi

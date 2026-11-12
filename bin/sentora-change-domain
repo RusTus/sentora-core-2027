@@ -138,7 +138,7 @@ fi
 
 echo "-- Apache and the services"
 setso --set apache_changed true > /dev/null
-php "$PANEL/bin/daemon.php" > /var/sentora/logs/daemon-last-run.log 2>&1 || echo "  WARNING: the daemon run reported an error (see /var/sentora/logs/daemon-last-run.log)"
+: > /var/sentora/logs/daemon-last-run.log; php "$PANEL/bin/daemon.php" >> /var/sentora/logs/daemon-last-run.log 2>&1 || echo "  WARNING: the daemon run reported an error (see /var/sentora/logs/daemon-last-run.log)"
 newaliases 2> /dev/null
 for s in postfix "$(sp dovecot_service)" "$(sp ftp_service)" "$(sp sogo_service)" "$(sp apache_sn)"; do
     [ -n "$s" ] || continue

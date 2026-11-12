@@ -82,3 +82,19 @@ if (function_exists('posix_geteuid') && posix_geteuid() === 0 && $tlRoot !== '' 
     }
 }
 
+
+// The daemon's cron line opens its report for adding (">>", after emptying it), not for overwriting
+// (">"): the programs the daemon starts inherit it, and SELinux lets Apache's helpers only add to log
+// files, so ">" made it refuse them and log each refusal. Servers installed before get the new line
+// here (installers write it since 2026-11-12); a line changed by hand is left alone.
+$zdCron = '/etc/cron.d/zdaemon';
+if (is_file($zdCron) && !is_link($zdCron) && fileowner($zdCron) === 0) {
+    $zdText = (string) file_get_contents($zdCron);
+    $zdNew = preg_replace('#^(\S+(?:\s+\S+){5}\s+)(nice -2 /usr/bin/php -q /etc/sentora/panel/bin/daemon\.php) > (/var/sentora/logs/daemon-last-run\.log) 2>&1$#m', '$1: > $3; $2 >> $3 2>&1', $zdText);
+    if (is_string($zdNew) && $zdNew !== $zdText && @file_put_contents($zdCron . '.sentora-new', $zdNew) !== false) {
+        @chmod($zdCron . '.sentora-new', 0644);
+        if (@rename($zdCron . '.sentora-new', $zdCron)) {
+            echo "Daemon cron line: its report is now opened for adding (SELinux)." . fs_filehandler::NewLine();
+        }
+    }
+}
