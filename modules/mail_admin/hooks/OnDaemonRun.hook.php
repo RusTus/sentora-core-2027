@@ -187,7 +187,7 @@ function SentoraApplySOGoSettings()
     if (!is_file($access) || file_get_contents($access) !== $want) {
         @mkdir(dirname($access), 0755, true);
         file_put_contents($access, $want);
-        exec(escapeshellcmd(sys_platform::Get('apache_ctl')) . ' -t > /dev/null 2>&1 && systemctl reload ' . escapeshellarg((string) ctrl_options::GetSystemOption('apache_sn')) . ' > /dev/null 2>&1');
+        exec(ctrl_system::OwnFiles(escapeshellcmd(sys_platform::Get('apache_ctl')) . ' -t > /dev/null 2>&1 && systemctl reload ' . escapeshellarg((string) ctrl_options::GetSystemOption('apache_sn')) . ' > /dev/null 2>&1'));
         echo "ActiveSync " . (strpos($want, 'denied') ? 'turned off' : 'turned on') . "." . fs_filehandler::NewLine();
         $changed = true;
     }

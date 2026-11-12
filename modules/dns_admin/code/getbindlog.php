@@ -36,7 +36,7 @@ if (!$user || (int) $user['usergroupid'] !== 1) {
 
 $bindlog = '/var/sentora/logs/bind/bind.log';
 $lines = array();
-if (is_file($bindlog) && !is_link($bindlog) && ($fh = @fopen($bindlog, 'rb'))) {
+if (is_file($bindlog) && !is_link($bindlog) && is_readable($bindlog) && ($fh = @fopen($bindlog, 'rb'))) {
     $size = (int) fstat($fh)['size'];
     if ($size > 2 * 1024 * 1024) {
         fseek($fh, -2 * 1024 * 1024, SEEK_END);

@@ -1564,7 +1564,7 @@ function WriteVhostConfigFile() {
 function ApacheConfigTest() {
 	// New domain log folders made above: root's and the panel's only, before Apache opens them
 	sys_accountphp::LockSharedFolders();
-	exec('apachectl configtest 2>&1', $out, $rc);
+	exec(ctrl_system::OwnFiles('apachectl configtest 2>&1'), $out, $rc);
 	$text = trim(implode("\n", $out));
 	echo "   Apache vhost Config test " . (( 0 === $rc ) ? "SUCEEDED" : "FAILED") . "." . fs_filehandler::NewLine();
 	return array((int) $rc, $text);
@@ -1672,7 +1672,12 @@ function CheckApacheVhostConfig() {
 	// New domain log folders made above: root's and the panel's only, before Apache opens them
 	sys_accountphp::LockSharedFolders();
 
-		$ConfigReturnValue = ctrl_system::systemCommand($command, $args);
+		// (its output read here and printed: Apache's test runs confined and may not write the daemon's log)
+		$ConfigOut = array();
+		exec(ctrl_system::OwnFiles(escapeshellcmd($command) . ' ' . escapeshellarg($args) . ' 2>&1'), $ConfigOut, $ConfigReturnValue);
+		foreach ($ConfigOut as $ConfigLine) {
+			echo $ConfigLine . fs_filehandler::NewLine();
+		}
 	}
 	
 	echo "   Apache vhost Config test " . (( 0 === $ConfigReturnValue ) ? "SUCEEDED" : "FAILED") . "." . fs_filehandler::NewLine();

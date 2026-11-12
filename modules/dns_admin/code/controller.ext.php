@@ -716,7 +716,7 @@ class module_controller extends ctrl_module
         $bindlog = ctrl_options::GetSystemOption('bind_log');
         if (is_writable($bindlog)) {
             $log = $bindlog;
-            if (file_exists($bindlog)) {
+            if (is_readable($bindlog)) {
                 $handle = @fopen($log, "r");
                 $getlog = array();
                 if ($handle) {
@@ -752,7 +752,7 @@ class module_controller extends ctrl_module
         $bindlog = ctrl_options::GetSystemOption('bind_log');
         if (is_writable($bindlog)) {
             $log = $bindlog;
-            if (file_exists($bindlog)) {
+            if (is_readable($bindlog)) {
                 $handle = @fopen($log, "r");
                 $getlog = array();
                 if ($handle) {
@@ -788,7 +788,7 @@ class module_controller extends ctrl_module
         $bindlog = ctrl_options::GetSystemOption('bind_log');
         if (is_writable($bindlog)) {
             $log = $bindlog;
-            if (file_exists($bindlog)) {
+            if (is_writable($bindlog)) {
                 $fp = fopen($log, 'w');
                 fwrite($fp, '');
                 fclose($fp);
@@ -1218,7 +1218,7 @@ class module_controller extends ctrl_module
         $logerror = array();
         $logwarning = array();
         $getlog = array();
-        if (file_exists($bindlog)) {
+        if (is_readable($bindlog)) {
             $handle = @fopen($bindlog, "r");
             $getlog = array();
             if ($handle) {

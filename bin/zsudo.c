@@ -127,7 +127,8 @@ static int build_cmd(int argc, char *argv[], char *cmd, size_t size)
         /* the daemon cron runs anyway, sooner; flock -n drops a second press while one runs (the
            daemon's own lock keeps it from overlapping a cron run), and its own log never cuts into
            the report of a cron run that is writing daemon-last-run.log */
-        snprintf(cmd, size, "/usr/bin/flock -n /run/sentora-daemon-now.lock /bin/sh -c '/usr/bin/php -q /etc/sentora/panel/bin/daemon.php > /var/sentora/logs/daemon-panel-run.log 2>&1'");
+        /* (-o: flock keeps the lock itself; the daemon and what it starts do not inherit the lock file) */
+        snprintf(cmd, size, "/usr/bin/flock -n -o /run/sentora-daemon-now.lock /bin/sh -c '/usr/bin/php -q /etc/sentora/panel/bin/daemon.php > /var/sentora/logs/daemon-panel-run.log 2>&1'");
     } else if (argc == 2 && strcmp(argv[1], "hardening-check") == 0) {
         /* the post-install check, with its report for Server Monitor's Hardening card */
         snprintf(cmd, size, "/bin/bash /etc/sentora/panel/bin/sentora-post-install-check --json /var/sentora/logs/hardening.json");

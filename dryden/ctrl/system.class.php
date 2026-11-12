@@ -13,7 +13,7 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  *
- * Updated by RusTus, 2026-11-06
+ * Updated by RusTus, 2026-11-12
  */
 class ctrl_system
 {
@@ -34,8 +34,26 @@ class ctrl_system
         } else {
             $escapedCommand .= ' ' . escapeshellarg($args);
         }
-        system($escapedCommand, $systemReturnValue);
+        system(self::OwnFiles($escapedCommand), $systemReturnValue);
         return $systemReturnValue;
+    }
+
+    /**
+     * A shell command that runs with only its standard input, output and error open.
+     *
+     * The daemon holds files open (its own script, the run lock) that every program it starts would
+     * otherwise inherit; a confined program (SELinux) is then refused them and the refusal is logged,
+     * though the program never meant to touch them. On Windows the command is returned unchanged.
+     *
+     * @param string $cmd A complete, already escaped shell command.
+     * @return string
+     */
+    static function OwnFiles($cmd)
+    {
+        if (DIRECTORY_SEPARATOR === '\\' || !is_dir('/proc/self/fd')) {
+            return $cmd;
+        }
+        return '/bin/bash -c ' . escapeshellarg('for f in /proc/$$/fd/*; do n=${f##*/}; [ "$n" -gt 2 ] 2>/dev/null && eval "exec $n<&-"; done; ' . $cmd);
     }
 
 }

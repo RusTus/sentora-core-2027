@@ -45,6 +45,12 @@ class system_logviewer_logs
         foreach (self::$sources as $group => $patterns) {
             foreach ($patterns as $pattern) {
                 $pattern = str_replace('{apache_log_dir}', rtrim(sys_platform::Get('apache_log_dir'), '/'), $pattern);
+                // A folder the panel may not list (SELinux keeps BIND's and the FTP server's logs from
+                // the web server) is not tried: access() is asked first, which SELinux does not log
+                $dir = dirname($pattern);
+                if (strpbrk(basename($pattern), '*?[') !== false && strpbrk($dir, '*?[') === false && !is_readable($dir)) {
+                    continue;
+                }
                 foreach ((array) glob($pattern) as $path) {
                     // Only real files; a symlink can not point the viewer somewhere else
                     if (!is_file($path) || is_link($path)) {

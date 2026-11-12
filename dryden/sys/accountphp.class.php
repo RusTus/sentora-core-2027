@@ -249,7 +249,7 @@ class sys_accountphp
      */
     private static function Run($cmd)
     {
-        exec($cmd . ' 2>&1', $out, $rc);
+        exec(ctrl_system::OwnFiles($cmd . ' 2>&1'), $out, $rc);
         return $rc === 0;
     }
 

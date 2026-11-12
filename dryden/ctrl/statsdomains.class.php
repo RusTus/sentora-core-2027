@@ -87,7 +87,7 @@ class ctrl_statsdomains
     static function EnsureStatsUser()
     {
         if (posix_getpwnam(self::STATS_USER) === false) {
-            exec('useradd --system --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin ' . escapeshellarg(self::STATS_USER) . ' 2>&1');
+            exec(ctrl_system::OwnFiles('useradd --system --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin ' . escapeshellarg(self::STATS_USER) . ' 2>&1'));
         }
         return posix_getpwnam(self::STATS_USER) !== false;
     }
