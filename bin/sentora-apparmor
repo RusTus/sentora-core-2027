@@ -29,7 +29,7 @@ AADIR=$(sp apparmor_dir); AASVC=$(sp apparmor_service); AAPKG=$(sp apparmor_pack
 [ -n "$AADIR" ] || die "this system does not use AppArmor (setting apparmor_dir is empty)"
 [ -d /sys/fs/selinux ] && [ -r /sys/fs/selinux/enforce ] && die "this system uses SELinux, not AppArmor"
 kernel_on() { [ "$(cat /sys/module/apparmor/parameters/enabled 2> /dev/null)" = Y ]; }
-enforced() { grep -c '(enforce)' /sys/kernel/security/apparmor/profiles 2> /dev/null || echo 0; }
+enforced() { local n; n=$(grep -c '(enforce)' /sys/kernel/security/apparmor/profiles 2> /dev/null); echo "${n:-0}"; }
 # the services AppArmor's profiles may confine (from Sentora's settings)
 SERVICES=$(for n in bind_service ftp_service db_service clamd_service; do sp "$n"; done | grep -E '^[A-Za-z0-9@._-]+$' | awk '!s[$0]++')
 
@@ -94,14 +94,20 @@ for f in "$RULES"/*; do
     sed -i '/^# BEGIN Sentora/,/^# END Sentora/d' "$dst"
     { echo "# BEGIN Sentora (the paths Sentora uses; written by sentora-apparmor)"; grep -v '^#' "$f"; echo "# END Sentora"; } >> "$dst"
     # (loaded now with Sentora's paths, also where AppArmor's service loads nothing, as in a container)
-    apparmor_parser -r -W "$AADIR/$p" > /dev/null 2>&1 || echo "  $p: did not load (apparmor_parser -r $AADIR/$p shows why)"
+    # (in a container --container loads them as the install test does: the container's parser settings
+    # and cache are made for its own kernel features, not the host's)
+    if [ $CONTAINER_OK -eq 1 ]; then aa_load=(apparmor_parser --config-file /dev/null -r -K); else aa_load=(apparmor_parser -r -W); fi
+    "${aa_load[@]}" "$AADIR/$p" > /dev/null 2>&1 || echo "  $p: did not load (apparmor_parser -r $AADIR/$p shows why)"
 done
 
 WAS_ACTIVE=""
 for s in $SERVICES; do systemctl is-active --quiet "$s" 2> /dev/null && WAS_ACTIVE="$WAS_ACTIVE $s"; done
 SINCE=$(date '+%Y-%m-%d %H:%M:%S')
-systemctl enable "${AASVC:-apparmor}" > /dev/null 2>&1
-systemctl restart "${AASVC:-apparmor}" > /dev/null 2>&1 || echo "AppArmor's service did not start cleanly: checking"
+# (AppArmor's service loads every profile at each start; in a container it is the host's job)
+if [ $CONTAINER_OK -eq 0 ]; then
+    systemctl enable "${AASVC:-apparmor}" > /dev/null 2>&1
+    systemctl restart "${AASVC:-apparmor}" > /dev/null 2>&1 || echo "AppArmor's service did not start cleanly: checking"
+fi
 for s in $WAS_ACTIVE; do systemctl restart "$s" > /dev/null 2>&1; done
 sleep 8
 
@@ -120,9 +126,14 @@ done
 if [ -n "$BAD" ]; then
     echo "Something went wrong:$BAD"
     [ -n "$DENIED" ] && { echo "What AppArmor refused (journalctl -k | grep apparmor=\"DENIED\"):"; echo "$DENIED" | sed 's/^/  /'; }
-    echo "Undoing: profiles unloaded, AppArmor off at start, services restarted."
-    if command -v aa-teardown > /dev/null 2>&1; then aa-teardown > /dev/null 2>&1; else systemctl stop "${AASVC:-apparmor}" > /dev/null 2>&1; fi
-    systemctl disable "${AASVC:-apparmor}" > /dev/null 2>&1
+    if [ $CONTAINER_OK -eq 1 ]; then
+        echo "Undoing: Sentora's profiles unloaded (the host's other profiles are left), services restarted."
+        for f in "$RULES"/*; do p=$(basename "$f"); [ -f "$AADIR/$p" ] && apparmor_parser --config-file /dev/null -R "$AADIR/$p" > /dev/null 2>&1; done
+    else
+        echo "Undoing: profiles unloaded, AppArmor off at start, services restarted."
+        if command -v aa-teardown > /dev/null 2>&1; then aa-teardown > /dev/null 2>&1; else systemctl stop "${AASVC:-apparmor}" > /dev/null 2>&1; fi
+        systemctl disable "${AASVC:-apparmor}" > /dev/null 2>&1
+    fi
     for s in $WAS_ACTIVE; do systemctl restart "$s" > /dev/null 2>&1; done
     echo "AppArmor is off again. Send this output to Sentora's support so the missing path can be added."
     exit 1

@@ -712,6 +712,8 @@ All run as root. Most are in `/usr/local/sbin`; `setso`, `setzadmin` and `zppy` 
 | `sentora-post-install-check` | OK, WARN or FAIL for services, fail2ban, ports, permissions, isolation, stored passwords, TLS, updates, alerts and the daemon; report in `/var/sentora/logs/post-install-check.log` | No |
 | `sentora-smoke-test [--keep]` | Uses the server like a client in 26 steps (FTPS, website, mail, SOGo, MySQL, Show password, backup and restore, isolation) with a temporary client, then removes it | Only the temporary client |
 | `sentora-update` | Updates the panel (see [Updating](#updating)); `--check`, `--rollback [file]`, `--force`, `--yes` | Yes |
+| `sentora-firewall [status\|on\|off\|allow\|deny]` | The firewall (ufw or firewalld), open only for Sentora's ports: web and the panel's own ports, mail, DNS, FTP with its passive range, and SSH on the ports sshd uses (never locks you out). `on` lists the public ports it will close first; Sentora's own ports can not be closed. New installs have it on | Yes |
+| `sentora-apparmor [status\|on]` | Debian and Ubuntu: AppArmor on for a server an older installer left without it. Sentora's paths go into the profiles first, the services are restarted and checked, and everything is undone if one does not come back | Yes |
 | `sentora-update-check` | Bundled apps behind their latest release, and Ubuntu updates waiting | No |
 | `sentora-php-install <version>` | Adds an extra PHP version, or updates one the server has | Yes |
 | `sentora-change-domain <name>` | Moves the panel to another host name | Yes |
