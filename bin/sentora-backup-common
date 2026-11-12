@@ -4,21 +4,22 @@
 # sentora-panel-restore, as root.
 # shellcheck disable=SC2034  # the variables are used by the scripts that load this
 
-KEY=/root/.ssh/sentora_offsite
+KEY=${SENTORA_OFFSITE_KEY:-/root/.ssh/sentora_offsite}  # (the overrides here are for testing)
 STATE=/var/lib/sentora/offsite-backup.json
 PANEL=/etc/sentora/panel
 LOCAL=/var/sentora/backups
 
 # --- the settings, from the panel (the password decrypted with the panel's key) -----------
-OB_ENABLED=false; OB_SERVER=""; OB_PORT=22; OB_USER=""; OB_PASSWORD=""; OB_PATH=""; OB_KEEP=14; OB_MAIL=true
+OB_ENABLED=false; OB_SERVER=""; OB_PORT=22; OB_USER=""; OB_PASSWORD=""; OB_PATH=""; OB_KEEP=14; OB_MAIL=true; OB_HOSTKEY=""
+if [ -n "${SENTORA_OFFSITE_SETTINGS:-}" ]; then SETTINGS=$(cat "$SENTORA_OFFSITE_SETTINGS"); else
 SETTINGS=$(cd "$PANEL" 2> /dev/null && php -r '
     chdir("/etc/sentora/panel"); require "dryden/loader.inc.php"; require "cnf/db.php"; require "inc/dbc.inc.php";
-    foreach (array("enabled", "server", "port", "user", "password", "path", "time", "keep", "mail") as $k) {
+    foreach (array("enabled", "server", "port", "user", "password", "path", "time", "keep", "mail", "hostkey") as $k) {
         $v = ctrl_options::GetSystemOption("offsite_" . $k);
         if ($v === false || $v === null) { continue; }
         if ($k === "password" && $v !== "") { $p = ctrl_secret::Decrypt($v); $v = ($p === false) ? "" : $p; }
         echo "OB_" . strtoupper($k) . "=" . escapeshellarg((string) $v) . "\n";
-    }' 2> /dev/null)
+    }' 2> /dev/null); fi
 eval "$SETTINGS"
 [[ "$OB_KEEP" =~ ^[0-9]+$ ]] && [ "$OB_KEEP" -ge 1 ] || OB_KEEP=14
 [[ "$OB_PORT" =~ ^[0-9]+$ ]] || OB_PORT=22
@@ -33,6 +34,13 @@ if [ -n "$OB_PASSWORD" ]; then
 else
     SSH="ssh -i $KEY -p $OB_PORT -o BatchMode=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=accept-new"
 fi
+# the backup machine's SSH key: checked against the fingerprint set in the panel (a Sentora backup
+# server shows it when installed), kept in a file of its own; without one, the first key seen is kept
+KNOWN=${SENTORA_OFFSITE_KNOWN:-/root/.ssh/sentora_offsite_known_hosts}
+[[ "$OB_HOSTKEY" =~ ^SHA256:[A-Za-z0-9+/]{43}$ ]] || OB_HOSTKEY=""
+if [ -n "$OB_HOSTKEY" ]; then
+    SSH="${SSH/StrictHostKeyChecking=accept-new/StrictHostKeyChecking=yes -o UserKnownHostsFile=$KNOWN}"
+fi
 SSH=${SENTORA_OFFSITE_SSH:-$SSH}
 
 remote() { case "$TARGET" in *:*) return 0 ;; *) return 1 ;; esac; }
@@ -40,6 +48,61 @@ rhost() { echo "${TARGET%%:*}"; }
 rpath() { if remote; then echo "${TARGET#*:}"; else echo "$TARGET"; fi; }
 run_there() { # a command on the backup machine (or here, for a local folder)
     if remote; then $SSH "$(rhost)" "$1"; else (cd / && bash -c "$1"); fi
+}
+
+# The backup machine's key, checked against the fingerprint from the panel: kept in $KNOWN once it
+# matches; a server answering with another key is refused (it is not the backup server). Prints why.
+pin_hostkey() {
+    remote && [ -n "$OB_HOSTKEY" ] || return 0
+    local host=${OB_SERVER} entry tmp
+    [ "$OB_PORT" = 22 ] && entry=$host || entry="[$host]:$OB_PORT"
+    if [ -f "$KNOWN" ] && ssh-keygen -F "$entry" -f "$KNOWN" 2> /dev/null | grep -v '^#' | ssh-keygen -lf - 2> /dev/null | grep -qF "$OB_HOSTKEY"; then
+        return 0
+    fi
+    tmp=$(mktemp)
+    ssh-keyscan -p "$OB_PORT" -T 15 "$host" 2> /dev/null > "$tmp"
+    if ! ssh-keygen -lf "$tmp" 2> /dev/null | grep -qF "$OB_HOSTKEY"; then
+        rm -f "$tmp"
+        echo "the backup server's SSH key is not the one set in the panel ($OB_HOSTKEY): another server answered at $host, or the fingerprint was mistyped"
+        return 1
+    fi
+    mkdir -p "$(dirname "$KNOWN")"; chmod 700 "$(dirname "$KNOWN")"
+    # only the key that matched, for this server
+    while IFS= read -r line; do
+        [ -n "$line" ] && [ "${line:0:1}" != "#" ] || continue
+        if printf '%s\n' "$line" | ssh-keygen -lf - 2> /dev/null | grep -qF "$OB_HOSTKEY"; then
+            { [ -f "$KNOWN" ] && ssh-keygen -R "$entry" -f "$KNOWN" > /dev/null 2>&1; printf '%s\n' "$line" >> "$KNOWN"; }
+        fi
+    done < "$tmp"
+    rm -f "$tmp" "$KNOWN.old"; chmod 600 "$KNOWN"
+    return 0
+}
+
+# A Sentora backup server (sentora2027-backup-server) lets the panel's key run only its gate: the
+# steps below then go through the gate's fixed commands; any other machine gets them as shell commands.
+GATE=""
+is_gate() {
+    if [ -z "$GATE" ]; then
+        GATE=no
+        remote && $SSH "$(rhost)" sentora-backup hello 2> /dev/null | grep -q '^sentora-backup 1 ' && GATE=yes
+    fi
+    [ "$GATE" = yes ]
+}
+there_ready() {  # dir: made, writable, rsync there -> prints ready
+    if is_gate; then $SSH "$(rhost)" sentora-backup ready "$1"; else run_there "mkdir -p '$1' && test -w '$1' && command -v rsync > /dev/null && echo ready"; fi
+}
+there_begin() {  # dir date
+    if is_gate; then $SSH "$(rhost)" sentora-backup begin "$1" "$2"; else run_there "mkdir -p '$1/$2.partial'"; fi
+}
+there_latest() { # dir: true when <dir>/latest is there
+    if is_gate; then [ "$($SSH "$(rhost)" sentora-backup latest "$1" 2> /dev/null)" = yes ]; else run_there "test -d '$1/latest'"; fi
+}
+there_finish() { # dir date keep
+    if is_gate; then $SSH "$(rhost)" sentora-backup finish "$1" "$2" "$3"
+    else run_there "cd '$1' && rm -rf '$2' && mv '$2.partial' '$2' && ln -sfn '$2' latest && ls -1d 20??-??-?? | sort | head -n -$3 | xargs -r rm -rf"; fi
+}
+there_count() {  # dir: how many nights
+    if is_gate; then $SSH "$(rhost)" sentora-backup count "$1"; else run_there "ls -1d '$1'/20??-??-?? | wc -l"; fi
 }
 
 # this Linux system's package command (Sentora's settings: setso --get package_install)

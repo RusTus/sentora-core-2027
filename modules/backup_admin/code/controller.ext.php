@@ -314,7 +314,7 @@ class module_controller extends ctrl_module
     {
         return array('offsite_enabled' => 'false', 'offsite_server' => '', 'offsite_port' => '22', 'offsite_user' => 'sentora-backup',
             'offsite_password' => '', 'offsite_path' => '/srv/sentora-backups', 'offsite_time' => '02:30', 'offsite_keep' => '14',
-            'offsite_mail' => 'true', 'offsite_request' => '');
+            'offsite_mail' => 'true', 'offsite_request' => '', 'offsite_hostkey' => '', 'offsite_pubkey' => '');
     }
 
     /**
@@ -372,6 +372,9 @@ class module_controller extends ctrl_module
         $port = $get('inOffsitePort') === '' ? '22' : $get('inOffsitePort');
         $user = $get('inOffsiteUser');
         $path = rtrim($get('inOffsitePath'), '/');
+        // ("/" alone: a Sentora backup server, where this panel's folder is the top)
+        $path = ($path === '' && $get('inOffsitePath') !== '') ? '/' : $path;
+        $hostkey = preg_replace('/\s+/', '', $get('inOffsiteHostkey'));
         $time = $get('inOffsiteTime');
         $keep = $get('inOffsiteKeep');
         $mail = $get('inOffsiteMail') === '1' ? 'true' : 'false';
@@ -388,6 +391,9 @@ class module_controller extends ctrl_module
         if (!preg_match('#^/[A-Za-z0-9._/-]{0,250}$#', $path) || strpos($path, '..') !== false) {
             $e[] = 'The folder is a full path like /srv/sentora-backups (letters, digits, dots, dashes, underscores).';
         }
+        if ($hostkey !== '' && !preg_match('#^SHA256:[A-Za-z0-9+/]{43}$#', $hostkey)) {
+            $e[] = 'The backup server\'s key is its fingerprint, like SHA256:followed by 43 letters and digits (the backup server shows it when installed).';
+        }
         if (!preg_match('/^([01][0-9]|2[0-3]):[0-5][0-9]$/', $time)) {
             $e[] = 'The time is HH:MM, for example 02:30.';
         }
@@ -402,7 +408,7 @@ class module_controller extends ctrl_module
             return;
         }
         foreach (array('offsite_enabled' => $enabled, 'offsite_server' => $server, 'offsite_port' => $port, 'offsite_user' => $user,
-            'offsite_path' => $path, 'offsite_time' => $time, 'offsite_keep' => (string) (int) $keep, 'offsite_mail' => $mail) as $k => $v) {
+            'offsite_path' => $path, 'offsite_time' => $time, 'offsite_keep' => (string) (int) $keep, 'offsite_mail' => $mail, 'offsite_hostkey' => $hostkey) as $k => $v) {
             self::SetOffsite($k, $v);
         }
         // the password: changed only when a new one is typed, cleared only on request
@@ -486,12 +492,34 @@ class module_controller extends ctrl_module
             . '<label class="bk-field"><span>' . self::t('Password') . '</span><input class="form-control" type="password" name="inOffsitePassword" value="" maxlength="256" autocomplete="new-password" placeholder="' . ($hasPw ? self::t('stored: leave empty to keep it') : self::t('none: the SSH key is used')) . '">'
                 . ($hasPw ? '<span class="bk-check"><input type="checkbox" name="inOffsiteClearPassword" value="1"> ' . self::t('Remove the password and use the SSH key') . '</span>' : '')
                 . '<small>' . self::t('Stored encrypted, never shown again. Without a password the SSH key /root/.ssh/sentora_offsite is used (more secure; sentora-offsite-backup --setup makes it).') . '</small></label>'
-            . $field('Folder', '<input class="form-control" type="text" name="inOffsitePath" value="' . self::h($o['offsite_path']) . '" maxlength="251">', 'Where the copies go; each server gets its own folder in it, with one folder per night.')
+            . $field('Folder', '<input class="form-control" type="text" name="inOffsitePath" value="' . self::h($o['offsite_path']) . '" maxlength="251">', 'Where the copies go; each server gets its own folder in it, with one folder per night. On a Sentora backup server: / (this panel\'s own folder there).')
+            . $field('Backup server\'s key', '<input class="form-control" type="text" name="inOffsiteHostkey" value="' . self::h($o['offsite_hostkey']) . '" placeholder="SHA256:..." maxlength="60" autocomplete="off" spellcheck="false">', 'Its SSH key\'s fingerprint (a Sentora backup server shows it when installed): every copy then checks it is talking to that server and no other. Empty: the first key it sees is trusted.')
             . '<label class="bk-field"><span>' . self::t('Time') . '</span><input class="form-control" type="time" name="inOffsiteTime" value="' . self::h($o['offsite_time']) . '"><small>' . sprintf(self::t('Every day at this time (server time, %s).'), self::h(date('T'))) . '</small></label>'
             . $field('Nights kept', '<input class="form-control" type="text" name="inOffsiteKeep" value="' . self::h($o['offsite_keep']) . '" inputmode="numeric" maxlength="3">', 'Older nights are removed from the backup machine.')
             . '<label class="bk-switch bk-wide"><input type="checkbox" name="inOffsiteMail" value="1"' . ($o['offsite_mail'] === 'true' ? ' checked' : '') . '><span class="bk-toggle" aria-hidden="true"></span>'
             . '<span><b>' . self::t('Include the mailboxes') . '</b><small>' . self::t('Copied incrementally: only new mail is sent each night.') . '</small></span></label>'
             . '<div class="bk-form-foot bk-wide"><button class="btn btn-primary" type="submit">' . self::t('Save settings') . '</button></div></form>';
+    }
+
+    /**
+     * How to make another server this panel's backup server (template <@ OffsiteServer @>): the
+     * one-line install command, carrying this panel's backup key (its public half).
+     *
+     * @return string The HTML.
+     */
+    static function getOffsiteServer()
+    {
+        $o = self::Offsite();
+        $pub = (string) $o['offsite_pubkey'];
+        if (!preg_match('/^ssh-ed25519 [A-Za-z0-9+\/]{40,100}={0,3}( [A-Za-z0-9@._-]{1,100})?$/', $pub)) {
+            return '<p class="bk-muted">' . self::t('This panel\'s backup key is made by the daemon within 5 minutes; the command to install a Sentora backup server then shows here.') . '</p>';
+        }
+        $cmd = 'curl -fsSL https://raw.githubusercontent.com/RusTus/sentora-installers-2027/master2027/backup/sentora2027-backup-server -o sentora2027-backup-server && sudo bash sentora2027-backup-server --key ' . escapeshellarg($pub);
+        return '<ol class="bk-steps">'
+            . '<li>' . self::t('On a server of its own (Ubuntu 26.04, Debian 13, AlmaLinux, Rocky Linux or Red Hat Enterprise Linux 10, or Fedora 45; not this panel\'s server), log in, become root and run:') . '</li>'
+            . '</ol><pre class="bk-cmd" tabindex="0">' . self::h($cmd) . '</pre>'
+            . '<ol class="bk-steps" start="2"><li>' . self::t('It ends with what to enter above: its address as Server, sentora-backup as Username (no password), / as Folder, and its key\'s fingerprint as Backup server\'s key. Save, then press Test connection.') . '</li></ol>'
+            . '<p class="bk-muted">' . self::t('This panel\'s key may only copy into its own folder there and read it back: no shell, nothing else. Several panels can share one backup server, each in its own folder.') . '</p>';
     }
 
     /**

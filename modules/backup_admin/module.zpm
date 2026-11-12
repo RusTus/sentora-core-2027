@@ -46,6 +46,11 @@
                     <aside class="bk-ftp-status"><h5><: Status :></h5><@ OffsiteStatus @></aside>
                 </div>
             </div>
+            <div class="bk-panel">
+                <div class="bk-panel-head"><div><h4><: A Sentora backup server :></h4>
+                    <p><: Another server made the backup machine with one command, the same way as a Docker Hosting node. :></p></div></div>
+                <@ OffsiteServer @>
+            </div>
         </section>
 
         <!-- Restore -->

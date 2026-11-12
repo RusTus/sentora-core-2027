@@ -11,7 +11,7 @@
 global $zdbh; // hooks are included inside a function
 $obDefaults = array('offsite_enabled' => 'false', 'offsite_server' => '', 'offsite_port' => '22', 'offsite_user' => 'sentora-backup',
     'offsite_password' => '', 'offsite_path' => '/srv/sentora-backups', 'offsite_time' => '02:30', 'offsite_keep' => '14',
-    'offsite_mail' => 'true', 'offsite_request' => '');
+    'offsite_mail' => 'true', 'offsite_request' => '', 'offsite_hostkey' => '', 'offsite_pubkey' => '');
 $obHave = $zdbh->query("SELECT so_name_vc, so_value_tx FROM x_settings WHERE so_name_vc LIKE 'offsite\\_%'")->fetchAll(PDO::FETCH_KEY_PAIR);
 foreach ($obDefaults as $obName => $obValue) {
     if (!array_key_exists($obName, $obHave)) {
@@ -23,6 +23,19 @@ foreach ($obDefaults as $obName => $obValue) {
 }
 // the settings belong to Backup Config (a test build had them under Sentora Config)
 $zdbh->exec("UPDATE x_settings SET so_module_vc = 'Backup Config', so_desc_tx = 'Off-server backup (set in Admin > Backup Config)' WHERE so_name_vc LIKE 'offsite\\_%' AND so_module_vc <> 'Backup Config'");
+// this panel's backup key (root's SSH key for the backup machine): made when missing, its public half
+// kept in the settings for the page (the command that installs a Sentora backup server carries it)
+$obKey = '/root/.ssh/sentora_offsite';
+if (!is_file($obKey) && function_exists('posix_getuid') && posix_getuid() === 0) {
+    @mkdir('/root/.ssh', 0700, true);
+    $obHost = trim((string) @php_uname('n'));
+    exec('ssh-keygen -q -t ed25519 -N "" -C ' . escapeshellarg('sentora-offsite@' . preg_replace('/[^A-Za-z0-9._-]/', '', $obHost)) . ' -f ' . escapeshellarg($obKey) . ' 2>&1', $obOut, $obRc);
+    echo "Off-server backup: this panel's backup key " . ($obRc === 0 ? 'made' : 'could not be made') . fs_filehandler::NewLine();
+}
+$obPub = is_file($obKey . '.pub') ? trim((string) @file_get_contents($obKey . '.pub')) : '';
+if ($obPub !== '' && preg_match('/^ssh-ed25519 [A-Za-z0-9+\/]{40,100}={0,3}( [A-Za-z0-9@._-]{1,100})?$/', $obPub) && $obPub !== (string) $obHave['offsite_pubkey']) {
+    $zdbh->prepare("UPDATE x_settings SET so_value_tx = :v WHERE so_name_vc = 'offsite_pubkey'")->execute(array(':v' => $obPub));
+}
 $obBin = rtrim((string) ctrl_options::GetSystemOption('sentora_root'), '/') . '/bin/sentora-offsite-backup';
 $obCron = '/etc/cron.d/sentora-offsite-backup';
 if (is_file($obBin) && is_dir('/etc/cron.d')) {

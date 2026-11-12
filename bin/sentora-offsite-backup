@@ -82,21 +82,24 @@ command -v rsync > /dev/null || { $SENTORA_PKG rsync > /dev/null || die "rsync i
 if [ -n "$OB_PASSWORD" ] && ! command -v sshpass > /dev/null; then
     $SENTORA_PKG sshpass > /dev/null 2>&1 || die "sshpass (for the password) is missing and could not be installed"
 fi
-BASE="$(rpath)/$HOST"
+BASE="$(rpath)/$HOST"; BASE=${BASE//\/\//\/}
 
 if [ "${1:-}" = "--check" ]; then
     if remote && [ -z "$OB_PASSWORD" ] && [ -z "${SENTORA_OFFSITE_SSH:-}" ] && [ ! -f "$KEY" ]; then
         out="no password set and no SSH key: set a password, or run sentora-offsite-backup --setup"
+    elif remote && ! out=$(pin_hostkey); then
+        :
     elif remote; then
-        out=$($SSH "$(rhost)" "mkdir -p '$BASE' && test -w '$BASE' && command -v rsync > /dev/null && echo ready" 2>&1)
+        out=$(there_ready "$BASE" 2>&1)
+        is_gate && out="$out"$'\n'"(a Sentora backup server: this panel may only copy into its own folder there)"
     else
         out=$(mkdir -p "$BASE" 2>&1 && test -w "$BASE" && echo ready)
     fi
     if echo "$out" | grep -q '^ready$'; then
-        msg="$TARGET is reachable and writable ($BASE); copies keep $KEEP nights$( [ "$MAIL" = yes ] && echo ', with mailboxes')"
+        msg="$TARGET is reachable and writable ($BASE); copies keep $KEEP nights$( [ "$MAIL" = yes ] && echo ', with mailboxes')$(is_gate && echo '; a Sentora backup server')$([ -n "$OB_HOSTKEY" ] && echo ', its key checked')"
         echo "OK: $msg"; state_set check_time "$(date +%s)" check_ok 1 check_message "$msg"; exit 0
     fi
-    msg=$(echo "$out" | grep -v '^ready$' | tr '\n' ' ' | sed 's/  */ /g' | head -c 250)
+    msg=$(echo "$out" | grep -v '^ready$' | grep -v '^(a Sentora backup server' | tr '\n' ' ' | sed 's/  */ /g' | head -c 250)
     [ -n "$msg" ] || msg="the backup machine did not answer as expected (is rsync installed there?)"
     echo "FAILED: $msg"; state_set check_time "$(date +%s)" check_ok 0 check_message "$msg"; exit 1
 fi
@@ -105,6 +108,7 @@ exec 9> /run/sentora-offsite-backup.lock
 flock -n 9 || { echo "Another copy is running."; exit 1; }
 START=$(date +%s); TODAY=${SENTORA_OFFSITE_DATE:-$(date +%Y-%m-%d)}  # the override is for testing
 say "Off-server backup to $TARGET/$HOST/$TODAY"
+if remote; then why=$(pin_hostkey) || die "$why"; fi
 
 # --- what to copy, gathered in one staging folder of links ----------------------------
 STAGE=$(mktemp -d /var/lib/sentora/offsite-stage.XXXXXX); trap 'rm -rf "$STAGE" "$MYCNF"' EXIT
@@ -166,8 +170,8 @@ LIST="$STAGE/sources"
 } > "$LIST"
 
 # --- a dated snapshot: unchanged files are hard links to the last one -------------------------
-run_there "mkdir -p '$BASE/$TODAY.partial'" || die "could not make $BASE/$TODAY.partial on the backup machine"
-LINK=""; run_there "test -d '$BASE/latest'" && LINK="--link-dest=$BASE/latest/"
+there_begin "$BASE" "$TODAY" || die "could not make $BASE/$TODAY.partial on the backup machine"
+LINK=""; there_latest "$BASE" && LINK="--link-dest=$BASE/latest/"
 RS=(rsync -aHR --delete --numeric-ids --partial --exclude=/var/sentora/hostdata/*/tmp/)
 [ -n "$LINK" ] && RS+=("$LINK")
 if remote; then RS+=(-e "$SSH"); DEST="$(rhost):$BASE/$TODAY.partial/"; else DEST="$BASE/$TODAY.partial/"; fi
@@ -178,10 +182,9 @@ mapfile -t SRC < "$LIST"
 rc=$?
 # 24: files vanished while copying (a mailbox changed): not a failure
 if [ $rc -ne 0 ] && [ $rc -ne 24 ]; then die "rsync failed (code $rc): $(tail -2 "$STAGE/rsync.out" | tr '\n' ' ' | head -c 250)"; fi
-run_there "cd '$BASE' && rm -rf '$TODAY' && mv '$TODAY.partial' '$TODAY' && ln -sfn '$TODAY' latest && ls -1d 20??-??-?? | sort | head -n -$KEEP | xargs -r rm -rf" \
-    || die "the copy was made but could not be finished on the backup machine"
+there_finish "$BASE" "$TODAY" "$KEEP" || die "the copy was made but could not be finished on the backup machine"
 
 SIZE=$(du -sh "$LOCAL" 2> /dev/null | cut -f1)
-N=$(run_there "ls -1d '$BASE'/20??-??-?? | wc -l")
+N=$(there_count "$BASE")
 say "OK: $TODAY copied in $(( $(date +%s) - START )) s ($N night(s) kept on the backup machine, local backups $SIZE)"
 state ok "copied $TODAY to $TARGET"

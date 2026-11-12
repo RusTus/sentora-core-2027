@@ -43,6 +43,7 @@ die() { echo "$(date '+%Y-%m-%d %H:%M:%S')  FAILED: $*" | tee -a "$LOG"; rstate 
 command -v rsync > /dev/null || $SENTORA_PKG rsync > /dev/null 2>&1 || die "rsync is not installed"
 if [ -n "$OB_PASSWORD" ] && ! command -v sshpass > /dev/null; then $SENTORA_PKG sshpass > /dev/null 2>&1 || die "sshpass is not installed"; fi
 BASE=$(rpath)
+if remote && [ "${1:-}" != --list ]; then why=$(pin_hostkey) || die "$why"; fi
 
 # MySQL as the panel's root user (from the panel's database settings)
 val() { grep -o "\$$1 = '[^']*'" "$PANEL/cnf/db.php" | head -1 | cut -d"'" -f2; }
@@ -73,6 +74,8 @@ fetch() { # snapshot-path local-dir [rsync options...]
 if [ "${1:-}" = "--list" ]; then
     rstate listing 1
     # one call: every <server>/<date> folder and its manifest (shell only on the other side)
+    if remote; then why=$(pin_hostkey) || { rstate listing 0; php -r 'echo json_encode(array("time" => time(), "error" => substr($argv[1], 0, 250), "snapshots" => array()));' "$why" > "$CATALOG"; chmod 644 "$CATALOG"; exit 1; }; fi
+    if is_gate; then LISTING=$($SSH "$(rhost)" sentora-backup list "$BASE" 2>&1); else
     LISTING=$(run_there "cd '$BASE' 2> /dev/null || exit 3
         for h in */; do h=\${h%/}; [ -L \"\$h\" ] && continue
             for d in \"\$h\"/20??-??-??; do [ -d \"\$d\" ] || continue
@@ -80,7 +83,7 @@ if [ "${1:-}" = "--list" ]; then
                 if [ -f \"\$d/manifest.json\" ]; then cat \"\$d/manifest.json\"; else echo '{\"format\":1}'; fi
                 echo; echo '@@END'
             done
-        done" 2>&1)
+        done" 2>&1); fi
     rc=$?
     [ $rc -eq 3 ] && { rstate listing 0; echo '{"time":'"$(date +%s)"',"error":"the backup folder does not exist yet","snapshots":[]}' > "$CATALOG"; chmod 644 "$CATALOG"; exit 1; }
     [ $rc -ne 0 ] && { rstate listing 0; php -r 'echo json_encode(array("time" => time(), "error" => substr($argv[1], 0, 250), "snapshots" => array()));' "$LISTING" > "$CATALOG"; chmod 644 "$CATALOG"; exit 1; }
