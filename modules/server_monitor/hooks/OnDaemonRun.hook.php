@@ -10,7 +10,7 @@
  * account's email address) and "Alert disk use percent" (85). Every alert is also
  * written to /var/sentora/logs/alerts.log.
  *
- * Written by RusTus, 2026-11-11
+ * Written by RusTus, 2026-11-12
  */
 global $zdbh; // hooks are included inside a function
 // Sentora Config > Two-factor login: disabled | enabled | enabled-forced (was true | false)
