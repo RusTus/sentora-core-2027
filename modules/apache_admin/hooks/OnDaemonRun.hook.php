@@ -18,6 +18,15 @@ echo fs_filehandler::NewLine() . "START Apache Config Hook." . fs_filehandler::N
 if (ui_module::CheckModuleEnabled('Apache Config')) {
     // Account users, PHP pools, FTP owners and cron jobs: every run (cheap when
     // nothing changed), so a new account, cron job or FTP login is ready within 5 minutes
+    // (first today's PHP defaults, only where still at PHP's old ones: sys_phpdefaults)
+    foreach (sys_phpdefaults::Apply() as $phpDefaultsLine) {
+        echo $phpDefaultsLine . fs_filehandler::NewLine();
+    }
+    // TLS lines older versions stored with each domain's certificate: today's (sys_tls)
+    if (($tlsDomains = sys_tls::Upgrade()) > 0) {
+        echo $tlsDomains . " domain(s): TLS settings brought to today's" . fs_filehandler::NewLine();
+        $GLOBALS['zdbh']->exec("UPDATE x_settings SET so_value_tx = 'true' WHERE so_name_vc = 'apache_changed'");
+    }
     sys_accountphp::Sync();
     // The server's address changed (a new IP): the panel's IP alias and setting follow it
     try {
@@ -272,9 +281,7 @@ function BuildBrandingVhosts($serveremail) {
 			$line .= "    Require all granted" . $nl;
 			$line .= "</Directory>" . $nl;
 			$line .= "SSLEngine On" . $nl;
-			$line .= "SSLProtocol all -SSLv3 -TLSv1 -TLSv1.1" . $nl;
-			$line .= "SSLHonorCipherOrder on" . $nl;
-			$line .= "SSLCipherSuite \"ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384\"" . $nl;
+			$line .= sys_tls::Lines();
 			$line .= "SSLCertificateFile " . $a['cert'] . $nl;
 			$line .= "SSLCertificateKeyFile " . $a['key'] . $nl;
 			$line .= "<IfModule mod_headers.c>" . $nl;
@@ -290,6 +297,24 @@ function BuildBrandingVhosts($serveremail) {
 		$line .= "# END BRANDING: " . $host . $nl . $nl;
 	}
 	return $line;
+}
+
+/**
+ * Compression for a domain: Brotli for browsers that take it (smaller), else gzip, for text,
+ * data, SVG and font files (images, video and archives are compressed already). In each
+ * domain's own settings: a domain-level list replaces a server-wide one rather than adding to
+ * it. A domain's extra directives come after it, so they can change it (SetEnv no-brotli, or
+ * no-gzip, switches one off).
+ *
+ * @return string Apache configuration lines.
+ */
+function SentoraCompression() {
+    $nl = fs_filehandler::NewLine();
+    $types = 'text/html text/plain text/xml text/css text/javascript application/javascript application/json application/ld+json'
+        . ' application/xml application/rss+xml application/atom+xml application/manifest+json image/svg+xml image/x-icon'
+        . ' font/ttf font/otf application/vnd.ms-fontobject';
+    return '<IfModule brotli_module>' . $nl . '    AddOutputFilterByType BROTLI_COMPRESS ' . $types . $nl . '</IfModule>' . $nl
+        . '<IfModule deflate_module>' . $nl . '    AddOutputFilterByType DEFLATE ' . $types . $nl . '</IfModule>' . $nl;
 }
 
 /**
@@ -349,7 +374,14 @@ function BuildVhostPhpHandler($rowvhost, $vhostuser) {
         // The domain's own folder and the account's temp folder (not the shared /var/sentora/temp)
         $openBasedir = $home . "public_html" . $rowvhost['vh_directory_vc'] . '/' . ctrl_options::GetSystemOption('openbase_seperator') . $home . 'tmp/';
     }
-    return sys_accountphp::ApacheHandler($vhostuser['userid'], $vhostuser['username'], $version, $openBasedir);
+    // A domain with PHP settings of its own (Apache Admin) runs in its own pool, once
+    // sys_accountphp::Sync() has made it (PHP-FPM accepted it)
+    $domainId = 0;
+    if (sys_domainphp::Settings($rowvhost) && isset($rowvhost['vh_id_pk'])
+        && is_file(sys_accountphp::PoolDir($version) . sys_accountphp::PoolName($vhostuser['userid'], (int) $rowvhost['vh_id_pk']) . '.conf')) {
+        $domainId = (int) $rowvhost['vh_id_pk'];
+    }
+    return sys_accountphp::ApacheHandler($vhostuser['userid'], $vhostuser['username'], $version, $openBasedir, $domainId);
 }
 
 /**
@@ -1134,7 +1166,7 @@ function BuildVhostConfig() {
 				$line .= BuildVhostPhpHandler($rowvhost, $vhostuser) . fs_filehandler::NewLine();
 		
 				// Enable Gzip until we set this as an option , we might commenbt this too and allow manual switch
-				$line .= "AddOutputFilterByType DEFLATE text/html text/plain text/xml text/css text/javascript application/javascript" . fs_filehandler::NewLine();
+				$line .= SentoraCompression();
 				
 				// Get Package php and cgi enabled options
 				$rows = $zdbh->prepare("SELECT * FROM x_packages WHERE pk_id_pk=:packageid AND pk_deleted_ts IS NULL");
@@ -1256,7 +1288,7 @@ function BuildVhostConfig() {
 				$line .= BuildVhostPhpHandler($rowvhost, $vhostuser) . fs_filehandler::NewLine();
 		
 				// Enable Gzip until we set this as an option , we might commenbt this too and allow manual switch
-				$line .= "AddOutputFilterByType DEFLATE text/html text/plain text/xml text/css text/javascript application/javascript" . fs_filehandler::NewLine();
+				$line .= SentoraCompression();
 				// Get Package php and cgi enabled options
 				$rows = $zdbh->prepare("SELECT * FROM x_packages WHERE pk_id_pk=:packageid AND pk_deleted_ts IS NULL");
 				$rows->bindParam(':packageid', $vhostuser['packageid']);

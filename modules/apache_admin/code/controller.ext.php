@@ -142,6 +142,7 @@ class module_controller extends ctrl_module
         static $rows = null;
         if ($rows === null) {
             sys_symlinks::EnsureColumn();
+            sys_domainphp::EnsureColumn();
             $rows = $zdbh->query("SELECT v.*, a.ac_user_vc AS owner FROM x_vhosts v LEFT JOIN x_accounts a ON a.ac_id_pk = v.vh_acc_fk WHERE v.vh_deleted_ts IS NULL ORDER BY v.vh_name_vc")->fetchAll(PDO::FETCH_ASSOC);
             foreach ($rows as &$r) {
                 $o = array();
@@ -171,6 +172,9 @@ class module_controller extends ctrl_module
                 }
                 if (trim((string) $r['vh_custom_tx']) !== '') {
                     $o[] = array('Extra directives', '');
+                }
+                if (($n = count(sys_domainphp::Settings($r))) > 0) {
+                    $o[] = array('PHP settings: %s', (string) $n);
                 }
                 $r['overrides'] = $o;
             }
@@ -431,7 +435,7 @@ class module_controller extends ctrl_module
             return '';
         }
         $f = self::$errors ? $controller->GetAllControllerRequests('FORM') : array();
-        $val = function ($k) use ($r, $f) { return array_key_exists($k, $f) ? (string) $f[$k] : (string) $r[$k]; };
+        $val = function ($k) use ($r, $f) { return array_key_exists($k, $f) ? (string) $f[$k] : (string) ($r[$k] ?? ''); };
         $chk = function ($k) use ($r, $f) { return ($f ? !empty($f[$k]) : (int) ($r[$k] ?? 0) === 1) ? ' checked' : ''; };
         $err = function ($k) use ($r) {
             if (isset(self::$errors[$k])) {
@@ -446,10 +450,14 @@ class module_controller extends ctrl_module
             }
             return '';
         };
-        $row = function ($k, $label, $help, $ctl, $wide = false) use ($err) {
+        $row = function ($k, $label, $help, $ctl, $wide = false, $fill = null) use ($err) {
             $e = $err($k);
+            $help = $help !== '' ? self::t($help) : '';
+            if ($fill !== null) {
+                $help = str_replace('%s', self::h($fill), $help);
+            }
             return '<div class="sf-row' . ($e !== '' ? ' is-bad' : '') . ($wide ? ' is-wide' : '') . '"><div class="sf-what"><label for="' . $k . '">' . self::t($label) . '</label>'
-                . ($help !== '' ? '<small>' . self::t($help) . '</small>' : '') . $e . '</div><div class="sf-ctl">' . $ctl . '</div></div>';
+                . ($help !== '' ? '<small>' . $help . '</small>' : '') . $e . '</div><div class="sf-ctl">' . $ctl . '</div></div>';
         };
         $sw = function ($k) use ($chk) { return '<label class="sf-switch"><input type="checkbox" name="' . $k . '" id="' . $k . '" value="1"' . $chk($k) . '><span class="sf-toggle"></span></label>'; };
         $num = function ($k) use ($val) { return '<input class="form-control" type="number" name="' . $k . '" id="' . $k . '" min="1" max="65535" value="' . self::h($val($k)) . '" style="max-width:160px">'; };
@@ -464,6 +472,7 @@ class module_controller extends ctrl_module
             . $row('vh_ssl_port_in', 'SSL port', 'Empty: 443.', $num('vh_ssl_port_in'))
             . $row('vh_ssl_tx', 'SSL settings', 'The certificate lines Sencrypt writes; change them only if you know why.', $code('vh_ssl_tx'), true)
             . $row('vh_custom_tx', 'Extra directives', 'Apache directives added to this domain\'s configuration.', $code('vh_custom_tx'), true)
+            . $row(sys_domainphp::COLUMN, 'PHP settings', 'One a line, as in php.ini: name = value (for example upload_max_filesize = 128M). They replace the server\'s values for this domain only; the site\'s own .user.ini can still change them. Empty: the server\'s values. Allowed: %s.', $code(sys_domainphp::COLUMN), true, implode(', ', array_keys(sys_domainphp::Allowed())))
             . '</section>';
     }
 
@@ -547,6 +556,12 @@ class module_controller extends ctrl_module
         if (!$symlinks && sys_symlinks::Offending((string) ($f['vh_custom_tx'] ?? ''))) {
             self::$errors['vh_custom_tx'] = 'A line here would switch FollowSymLinks on: switch on "Allow FollowSymLinks" above for this domain, or remove the line.';
         }
+        // PHP settings: only the allowed names, each with a value it takes
+        $phpIni = rtrim(str_replace("\r\n", "\n", (string) ($f[sys_domainphp::COLUMN] ?? '')));
+        list(, $phpBad) = sys_domainphp::Parse($phpIni);
+        if ($phpBad) {
+            self::$errors[sys_domainphp::COLUMN] = array('Not allowed: %s', implode(' ', $phpBad));
+        }
         // Apache's own check: a line it refuses (or SSL it can not start with) would hold up
         // every later change, or stop Apache
         foreach (array('vh_custom_tx' => false, 'vh_ssl_tx' => true) as $k => $isSsl) {
@@ -562,6 +577,9 @@ class module_controller extends ctrl_module
             WHERE vh_id_pk = ? AND vh_deleted_ts IS NULL")->execute(array(
             !empty($f['vh_enabled_in']) ? 1 : 0, !empty($f['vh_obasedir_in']) ? 1 : 0, $text('vh_ssl_tx'), $sport, $cport, !empty($f['vh_portforward_in']) ? 1 : null,
             $ip === '' ? null : $ip, $text('vh_custom_tx'), (int) $r['vh_id_pk']));
+        if (sys_domainphp::EnsureColumn()) {
+            $zdbh->prepare("UPDATE x_vhosts SET " . sys_domainphp::COLUMN . " = ? WHERE vh_id_pk = ? AND vh_deleted_ts IS NULL")->execute(array($phpIni === '' ? null : $phpIni, (int) $r['vh_id_pk']));
+        }
         if (sys_symlinks::EnsureColumn()) {
             $zdbh->prepare("UPDATE x_vhosts SET " . sys_symlinks::COLUMN . " = ? WHERE vh_id_pk = ? AND vh_deleted_ts IS NULL")->execute(array($symlinks, (int) $r['vh_id_pk']));
         }

@@ -60,8 +60,11 @@ function sentora_guard(r)
         local id = account and cache.ids[account]
         -- the system PHP's sockets: a plain prefix compare (the folder name is not a pattern)
         local prefix = "proxy:unix:" .. cache.sockdir
-        local sock = (handler:sub(1, #prefix) == prefix and handler:sub(#prefix + 1):match("^web(%d+)%.sock|"))
+        -- (web<id>-d<domain>: a domain of that account with PHP settings of its own)
+        local rest = handler:sub(1, #prefix) == prefix and handler:sub(#prefix + 1) or ""
+        local sock = rest:match("^web(%d+)%.sock|") or rest:match("^web(%d+)%-d%d+%.sock|")
             or handler:match("^proxy:unix:/run/sentora%-php/web(%d+)%-%d+%.%d+%.sock|")
+            or handler:match("^proxy:unix:/run/sentora%-php/web(%d+)%-d%d+%-%d+%.%d+%.sock|")
             or handler:match("^proxy:unix:/run/sentora%-php/web(%d+)%.sock|")
         if not id or sock ~= id then
             r:warn("Sentora: refused PHP handler '" .. handler .. "' for account " .. tostring(account) .. ": " .. (r.uri or ""))

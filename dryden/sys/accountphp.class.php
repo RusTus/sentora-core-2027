@@ -104,15 +104,30 @@ class sys_accountphp
      *
      * @param int|string $accountId The account ID.
      * @param string $version PHP version, e.g. '8.3'.
+     * @param int $domainId A domain with PHP settings of its own (sys_domainphp): its pool's socket; 0: the account's.
      * @return string Full socket path.
      */
-    static function Socket($accountId, $version)
+    static function Socket($accountId, $version, $domainId = 0)
     {
         // (each extra version its own: they all shared web<id>.sock, so an account with sites on two
         // extra versions, 8.2 and 7.1, had two pools on one socket and only the first one started)
+        $name = self::PoolName($accountId, $domainId);
         return ($version === self::DefaultVersion())
-            ? rtrim(sys_platform::Get('php_fpm_socket_dir'), '/') . '/' . self::UserName($accountId) . '.sock'
-            : sys_phpversions::SOCKET_DIR . self::UserName($accountId) . '-' . $version . '.sock';
+            ? rtrim(sys_platform::Get('php_fpm_socket_dir'), '/') . '/' . $name . '.sock'
+            : sys_phpversions::SOCKET_DIR . $name . '-' . $version . '.sock';
+    }
+
+    /**
+     * The name of a pool (and of its file and socket): web<account>, or web<account>-d<domain> for
+     * a domain with PHP settings of its own.
+     *
+     * @param int|string $accountId
+     * @param int $domainId
+     * @return string
+     */
+    static function PoolName($accountId, $domainId = 0)
+    {
+        return self::UserName($accountId) . ((int) $domainId > 0 ? '-d' . (int) $domainId : '');
     }
 
     /**
@@ -138,7 +153,7 @@ class sys_accountphp
      * @param string $openBasedir The domain's open_basedir, or '' for the account's folder.
      * @return string Apache configuration lines, each ending in a new line.
      */
-    static function ApacheHandler($accountId, $username, $version, $openBasedir)
+    static function ApacheHandler($accountId, $username, $version, $openBasedir, $domainId = 0)
     {
         $tmp = self::HomeDir($username) . 'tmp/';
         // Always sent, also when the domain has no limit of its own (then the account's folder, as
@@ -150,9 +165,9 @@ class sys_accountphp
         $admin[] = 'session.save_path=' . $tmp;
         $admin[] = 'sys_temp_dir=' . $tmp;
         $nl = fs_filehandler::NewLine();
-        $line = '# PHP ' . $version . ' (PHP-FPM, runs as ' . self::UserName($accountId) . ')' . $nl;
+        $line = '# PHP ' . $version . ' (PHP-FPM, runs as ' . self::UserName($accountId) . ((int) $domainId > 0 ? ', with this domain\'s own PHP settings' : '') . ')' . $nl;
         $line .= '<FilesMatch "\\.(php|phtml|php3)$">' . $nl;
-        $line .= '    SetHandler "proxy:unix:' . self::Socket($accountId, $version) . '|fcgi://localhost/"' . $nl;
+        $line .= '    SetHandler "proxy:unix:' . self::Socket($accountId, $version, $domainId) . '|fcgi://localhost/"' . $nl;
         $line .= '</FilesMatch>' . $nl;
         $line .= 'ProxyFCGISetEnvIf "true" PHP_ADMIN_VALUE "' . implode('\n', $admin) . '"' . $nl;
         $line .= self::ApacheGuard($accountId);
@@ -181,7 +196,7 @@ class sys_accountphp
         // written as before where the system's folder is /run/php)
         $sysDir = rtrim(sys_platform::Get('php_fpm_socket_dir'), '/');
         $dirs = ($sysDir === '/run/php') ? '/run/(php|sentora-php)/' : '(' . preg_quote($sysDir, '#') . '|/run/sentora-php)/';
-        $notOwn = '"%{HANDLER} !~ m#^proxy:unix:' . $dirs . 'web' . (int) $accountId . '(-[0-9]+\\.[0-9]+)?\\.sock\\|#"';
+        $notOwn = '"%{HANDLER} !~ m#^proxy:unix:' . $dirs . 'web' . (int) $accountId . '(-d[0-9]+)?(-[0-9]+\\.[0-9]+)?\\.sock\\|#"';
         return '<Location "/">' . $nl
             . '    # only this account\'s own PHP pools (see sys_accountphp::ApacheGuard)' . $nl
             . '    ProxyFCGISetEnvIf ' . $notOwn . ' !PHP_ADMIN_VALUE' . $nl
@@ -213,7 +228,7 @@ class sys_accountphp
      * @param string $version PHP version, e.g. '8.3'.
      * @return string Contents of the pool .conf file.
      */
-    static function PoolConfig($accountId, $username, $version)
+    static function PoolConfig($accountId, $username, $version, $domainId = 0, array $settings = array())
     {
         $user = self::UserName($accountId);
         $home = self::HomeDir($username);
@@ -222,10 +237,10 @@ class sys_accountphp
             $children = 10;
         }
         return "; Sentora account " . $username . " (written by the Sentora daemon)\n"
-            . "[" . $user . "]\n"
+            . "[" . self::PoolName($accountId, $domainId) . "]\n"
             . "user = " . $user . "\n"
             . "group = " . $user . "\n"
-            . "listen = " . self::Socket($accountId, $version) . "\n"
+            . "listen = " . self::Socket($accountId, $version, $domainId) . "\n"
             . "listen.owner = " . self::WebGroup() . "\n"
             . "listen.group = " . self::WebGroup() . "\n"
             . "listen.mode = 0660\n"
@@ -238,7 +253,8 @@ class sys_accountphp
             . "php_admin_value[open_basedir] = " . $home . "\n"
             . "php_admin_value[upload_tmp_dir] = " . $home . "tmp/\n"
             . "php_admin_value[session.save_path] = " . $home . "tmp/\n"
-            . "php_admin_value[sys_temp_dir] = " . $home . "tmp/\n";
+            . "php_admin_value[sys_temp_dir] = " . $home . "tmp/\n"
+            . ($settings ? "; This domain's own PHP settings (Apache Admin)\n" . sys_domainphp::PoolLines($settings) : '');
     }
 
     /**
@@ -553,6 +569,8 @@ class sys_accountphp
         $wanted = self::Wanted();
         $versions = array_unique(array_merge(array(self::DefaultVersion()), sys_phpversions::Enabled()));
         $reload = array();
+        // Domains with PHP settings of their own (Apache Admin): a pool each
+        $domains = sys_domainphp::Domains();
         // Domain folders the panel could not make yet (an account set up in the last
         // few minutes): made here, then given the account's owner and access lists
         global $zdbh;
@@ -596,10 +614,35 @@ class sys_accountphp
                     file_put_contents($file, $conf);
                     $reload[$version] = true;
                 }
+                foreach (isset($domains[$id]) ? $domains[$id] : array() as $did => $d) {
+                    if ($d['version'] !== $version) {
+                        continue;
+                    }
+                    $dfile = $dir . self::PoolName($id, $did) . '.conf';
+                    $dconf = self::PoolConfig($id, $acc['username'], $version, $did, $d['settings']);
+                    $keep[$dfile] = true;
+                    if (!is_file($dfile) || file_get_contents($dfile) !== $dconf) {
+                        $old = is_file($dfile) ? (string) file_get_contents($dfile) : null;
+                        file_put_contents($dfile, $dconf);
+                        // PHP-FPM must accept it, or none of this version's pools would start
+                        if (!sys_domainphp::FpmTest($version)) {
+                            if ($old === null) {
+                                @unlink($dfile);
+                                unset($keep[$dfile]);
+                            } else {
+                                file_put_contents($dfile, $old);
+                            }
+                            echo $acc['username'] . ": PHP " . $version . " refused the PHP settings of domain " . $did . " (Apache Admin): left as before" . fs_filehandler::NewLine();
+                            continue;
+                        }
+                        $reload[$version] = true;
+                    }
+                }
             }
-            // Pools of deleted accounts, or versions an account no longer uses
+            // Pools of deleted accounts, versions an account no longer uses, and domains
+            // no longer with PHP settings of their own
             foreach ((array) glob($dir . 'web*.conf') as $file) {
-                if (preg_match('#/web[0-9]+\.conf$#', $file) && !isset($keep[$file])) {
+                if (preg_match('#/web[0-9]+(-d[0-9]+)?\.conf$#', $file) && !isset($keep[$file])) {
                     @unlink($file);
                     $reload[$version] = true;
                 }

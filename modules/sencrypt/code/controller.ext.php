@@ -743,9 +743,7 @@ class module_controller extends ctrl_module {
 			$line = "# Made from Sencrypt - " . $sub_module . " - start" . fs_filehandler::NewLine();
 			$line .= fs_filehandler::NewLine();
 			$line .= 'SSLEngine On' . fs_filehandler::NewLine();
-			$line .= "SSLProtocol all -SSLv3 -TLSv1 -TLSv1.1" . fs_filehandler::NewLine();
-			$line .= "SSLHonorCipherOrder on" . fs_filehandler::NewLine();
-			$line .= "SSLCipherSuite \"ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384\"" . fs_filehandler::NewLine();
+			$line .= sys_tls::Lines();
 			$line .= "SSLCertificateFile " . ctrl_options::GetSystemOption('hosted_dir') . $currentuser['username'] . "/ssl/sencrypt/" . $sub_module . "/" . $domain . "/cert.pem" . fs_filehandler::NewLine();
 			$line .= "SSLCertificateKeyFile " . ctrl_options::GetSystemOption('hosted_dir') . $currentuser['username'] . "/ssl/sencrypt/" . $sub_module . "/" . $domain . "/private.pem" . fs_filehandler::NewLine();
 
@@ -793,9 +791,7 @@ class module_controller extends ctrl_module {
 			$line = "# Made from Sencrypt - " . $sub_module . " - start" . fs_filehandler::NewLine();
 			$line .= fs_filehandler::NewLine();
 			$line .= 'SSLEngine On' . fs_filehandler::NewLine();
-			$line .= "SSLProtocol all -SSLv3 -TLSv1 -TLSv1.1" . fs_filehandler::NewLine();
-			$line .= "SSLHonorCipherOrder on" . fs_filehandler::NewLine();
-			$line .= "SSLCipherSuite \"ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384\"" . fs_filehandler::NewLine();
+			$line .= sys_tls::Lines();
 			$line .= "SSLCertificateFile " . ctrl_options::GetSystemOption('hosted_dir') . $currentuser['username'] . "/ssl/sencrypt/" . $sub_module . "/" . $domain . "/cert.pem" . fs_filehandler::NewLine();
 			$line .= "SSLCertificateKeyFile " . ctrl_options::GetSystemOption('hosted_dir') . $currentuser['username'] . "/ssl/sencrypt/" . $sub_module . "/" . $domain . "/private.pem" . fs_filehandler::NewLine();
 
@@ -827,9 +823,7 @@ class module_controller extends ctrl_module {
 			$line = "# Made from Sencrypt - " . $sub_module . " - start" . fs_filehandler::NewLine();
 			$line .= fs_filehandler::NewLine();
 			$line .= 'SSLEngine On' . fs_filehandler::NewLine();
-			$line .= "SSLProtocol all -SSLv3 -TLSv1 -TLSv1.1" . fs_filehandler::NewLine();
-			$line .= "SSLHonorCipherOrder on" . fs_filehandler::NewLine();
-			$line .= "SSLCipherSuite \"ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384\"" . fs_filehandler::NewLine();			
+			$line .= sys_tls::Lines();
 			$line .= "SSLCertificateFile " . ctrl_options::GetSystemOption('hosted_dir') . $currentuser['username'] . "/ssl/sencrypt/" . $sub_module . "/" . $domain . "/cert.pem" . fs_filehandler::NewLine();
 			$line .= "SSLCertificateKeyFile " . ctrl_options::GetSystemOption('hosted_dir') . $currentuser['username'] . "/ssl/sencrypt/" . $sub_module . "/" . $domain . "/private.pem" . fs_filehandler::NewLine();
 			
@@ -863,6 +857,8 @@ class module_controller extends ctrl_module {
 				// For Sentora 2.0
 				$new = NULL;
 				
+				// (stored lines from older versions are today's first, so the block written above matches)
+				sys_tls::Upgrade();
 				$sql = $zdbh->prepare("UPDATE x_vhosts SET vh_ssl_tx = replace(vh_ssl_tx, :data, :new), vh_ssl_port_in=:port, vh_custom_port_in=:customport WHERE vh_name_vc = :domain");
 				//$sql = $zdbh->prepare("UPDATE x_vhosts SET vh_ssl_tx = replace(vh_ssl_tx, :data, :new), vh_ssl_port_in=:port, vh_custom_port_in=:customport, vh_portforward_in=:portforward WHERE vh_name_vc = :domain");
 				$sql->bindParam(':data', $line);
@@ -880,9 +876,7 @@ class module_controller extends ctrl_module {
 				$ssline = "# Made from Sencrypt - " . $sub_module . " - start" . fs_filehandler::NewLine();
 				$ssline .= fs_filehandler::NewLine();
 				$ssline .= 'SSLEngine On' . fs_filehandler::NewLine();
-				$ssline .= "SSLProtocol all -SSLv3 -TLSv1 -TLSv1.1" . fs_filehandler::NewLine();	
-				$ssline .= "SSLHonorCipherOrder on" . fs_filehandler::NewLine();
-				$ssline .= "SSLCipherSuite \"ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384\"" . fs_filehandler::NewLine();				
+				$ssline .= sys_tls::Lines();
 				$ssline .= "SSLCertificateFile " . ctrl_options::GetSystemOption('hosted_dir') . $currentuser['username'] . "/ssl/sencrypt/" . $sub_module . "/" . $domain . "/cert.pem" . fs_filehandler::NewLine();
 				$ssline .= "SSLCertificateKeyFile " . ctrl_options::GetSystemOption('hosted_dir') . $currentuser['username'] . "/ssl/sencrypt/" . $sub_module . "/" . $domain . "/private.pem" . fs_filehandler::NewLine();
 				$ssline .= "# Made from Sencrypt - " . $sub_module . " - end" . fs_filehandler::NewLine();
@@ -904,6 +898,8 @@ class module_controller extends ctrl_module {
 					// For Sentora 2.0
 					$new = NULL;
 					
+					// (stored lines from older versions are today's first, so the block written above matches)
+					sys_tls::Upgrade();
 					$sql = $zdbh->prepare("UPDATE x_vhosts SET vh_ssl_tx = replace(vh_ssl_tx, :data, :new), vh_ssl_port_in=:port WHERE vh_name_vc = :domain");
 					$sql->bindParam(':data', $ssline);
 					$sql->bindParam(':new', $new);
@@ -999,9 +995,7 @@ class module_controller extends ctrl_module {
 				$line = "# Made from Sencrypt - third_party - start" . fs_filehandler::NewLine();
 				$line  .= fs_filehandler::NewLine();
 				$line .= 'SSLEngine On' . fs_filehandler::NewLine();
-				$line .= "SSLProtocol all -SSLv3 -TLSv1 -TLSv1.1" . fs_filehandler::NewLine();		
-				$line .= "SSLHonorCipherOrder on" . fs_filehandler::NewLine();
-				$line .= "SSLCipherSuite \"ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384\"" . fs_filehandler::NewLine();				
+				$line .= sys_tls::Lines();
 				$line .= "SSLCertificateFile " . ctrl_options::GetSystemOption('hosted_dir') . $currentuser['username'] . "/ssl/sencrypt/third_party/" . $domain . "/cert.pem" . fs_filehandler::NewLine();
 				$line .= "SSLCertificateKeyFile " . ctrl_options::GetSystemOption('hosted_dir') . $currentuser['username'] . "/ssl/sencrypt/third_party/" . $domain . "/private.pem" . fs_filehandler::NewLine();
 				$line .= "SSLCACertificateFile " . ctrl_options::GetSystemOption('hosted_dir') . $currentuser['username'] . "/ssl/sencrypt/third_party/" . $domain . "/intermediate.crt". fs_filehandler::NewLine();
@@ -1054,9 +1048,7 @@ class module_controller extends ctrl_module {
 				$line = "# Made from Sencrypt - third_party - start" . fs_filehandler::NewLine();
 				$line .= fs_filehandler::NewLine();
                 $line .= 'SSLEngine On' . fs_filehandler::NewLine();
-				$line .= "SSLProtocol all -SSLv3 -TLSv1 -TLSv1.1" . fs_filehandler::NewLine();	
-				$line .= "SSLHonorCipherOrder on" . fs_filehandler::NewLine();
-				$line .= "SSLCipherSuite \"ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384\"" . fs_filehandler::NewLine();			
+				$line .= sys_tls::Lines();
 				$line .= "SSLCertificateFile " . ctrl_options::GetSystemOption('hosted_dir') . $currentuser['username'] . "/ssl/sencrypt/third_party/" . $domain . "/cert.pem" . fs_filehandler::NewLine();
 				$line .= "SSLCertificateKeyFile " . ctrl_options::GetSystemOption('hosted_dir') . $currentuser['username'] . "/ssl/sencrypt/third_party/" . $domain . "/private.pem" . fs_filehandler::NewLine();
 				$line .= "SSLCACertificateFile " . ctrl_options::GetSystemOption('hosted_dir') . $currentuser['username'] . "/ssl/sencrypt/third_party/" . $domain . "/intermediate.crt". fs_filehandler::NewLine();
@@ -1187,9 +1179,7 @@ class module_controller extends ctrl_module {
 			$line = "# Made from Sencrypt - third_party - start" . fs_filehandler::NewLine();
 			$line .= fs_filehandler::NewLine();
 			$line .= 'SSLEngine On' . fs_filehandler::NewLine();
-			$line .= "SSLProtocol all -SSLv3 -TLSv1 -TLSv1.1" . fs_filehandler::NewLine();
-			$line .= "SSLHonorCipherOrder on" . fs_filehandler::NewLine();
-			$line .= "SSLCipherSuite \"ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384\"" . fs_filehandler::NewLine();			
+			$line .= sys_tls::Lines();
 			$line .= "SSLCertificateFile " . ctrl_options::GetSystemOption('hosted_dir') . $currentuser['username'] . "/ssl/sencrypt/third_party/" . $domain . "/cert.pem" . fs_filehandler::NewLine();
 			$line .= "SSLCertificateKeyFile " . ctrl_options::GetSystemOption('hosted_dir') . $currentuser['username'] . "/ssl/sencrypt/third_party/" . $domain . "/private.pem" . fs_filehandler::NewLine();
 			$line .= "# Made from Sencrypt - third_party - end" . fs_filehandler::NewLine();					
@@ -1245,9 +1235,7 @@ class module_controller extends ctrl_module {
 			$line = "# Made from Sencrypt - third_party - start" . fs_filehandler::NewLine();
 			$line .= fs_filehandler::NewLine();
 			$line .= 'SSLEngine On' . fs_filehandler::NewLine();
-			$line .= "SSLProtocol all -SSLv3 -TLSv1 -TLSv1.1" . fs_filehandler::NewLine();	
-			$line .= "SSLHonorCipherOrder on" . fs_filehandler::NewLine();
-			$line .= "SSLCipherSuite \"ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384\"" . fs_filehandler::NewLine();
+			$line .= sys_tls::Lines();
 			$line .= "SSLCertificateFile " . ctrl_options::GetSystemOption('hosted_dir') . $currentuser['username'] . "/ssl/sencrypt/third_party/" . $domain . "/cert.pem" . fs_filehandler::NewLine();
 			$line .= "SSLCertificateKeyFile " . ctrl_options::GetSystemOption('hosted_dir') . $currentuser['username'] . "/ssl/sencrypt/third_party/" . $domain . "/private.pem" . fs_filehandler::NewLine();
 			$line .= "# Made from Sencrypt - third_party - end" . fs_filehandler::NewLine();
@@ -1640,9 +1628,7 @@ class module_controller extends ctrl_module {
 			$line = "# Made from Sencrypt - " . $sub_module . " - start" . fs_filehandler::NewLine();
 			$line .= fs_filehandler::NewLine();
 			$line .= 'SSLEngine On' . fs_filehandler::NewLine();
-			$line .= "SSLProtocol all -SSLv3 -TLSv1 -TLSv1.1" . fs_filehandler::NewLine();
-			$line .= "SSLHonorCipherOrder on" . fs_filehandler::NewLine();
-			$line .= "SSLCipherSuite \"ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384\"" . fs_filehandler::NewLine();			
+			$line .= sys_tls::Lines();
 			$line .= "SSLCertificateFile " . $certlocation . "/cert.pem" . fs_filehandler::NewLine();
 			$line .= "SSLCertificateKeyFile " . $certlocation . "/private.pem" . fs_filehandler::NewLine();
 			$line .= "SSLCACertificateFile " . $certlocation . "/chain.pem" . fs_filehandler::NewLine();
@@ -1806,9 +1792,7 @@ class module_controller extends ctrl_module {
 			$line = "# Made from Sencrypt - " . $sub_module . " - start" . fs_filehandler::NewLine();
 			$line .= fs_filehandler::NewLine();
 			$line .= 'SSLEngine On' . fs_filehandler::NewLine();
-			$line .= "SSLProtocol all -SSLv3 -TLSv1 -TLSv1.1" . fs_filehandler::NewLine();
-			$line .= "SSLHonorCipherOrder on" . fs_filehandler::NewLine();
-			$line .= "SSLCipherSuite \"ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384\"" . fs_filehandler::NewLine();			
+			$line .= sys_tls::Lines();
 			$line .= "SSLCertificateFile " . $certlocation . "cert.pem" . fs_filehandler::NewLine();
 			$line .= "SSLCertificateKeyFile " . $certlocation . "private.pem" . fs_filehandler::NewLine();
 			$line .= "SSLCACertificateFile " . $certlocation . "chain.pem" . fs_filehandler::NewLine();
@@ -1915,9 +1899,7 @@ class module_controller extends ctrl_module {
 		$line .= "SSLCertificateFile " . ctrl_options::GetSystemOption('hosted_dir') . $currentuser['username'] . "/ssl/sencrypt/letsencrypt/" . $domain . "/cert.pem" . fs_filehandler::NewLine();
 		$line .= "SSLCertificateKeyFile " . ctrl_options::GetSystemOption('hosted_dir') . $currentuser['username'] . "/ssl/sencrypt/letsencrypt/" . $domain . "/private.pem" . fs_filehandler::NewLine();
 		$line .= "SSLCACertificateFile " . ctrl_options::GetSystemOption('hosted_dir') . $currentuser['username'] . "/ssl/sencrypt/letsencrypt/" . $domain . "/chain.pem" . fs_filehandler::NewLine();
-		$line .= "SSLProtocol All -SSLv2 -SSLv3 -TLSv1 -TLSv1.1" . fs_filehandler::NewLine();
-		$line .= "SSLHonorCipherOrder on" . fs_filehandler::NewLine();
-		$line .= "SSLCipherSuite \"EECDH+ECDSA+AESGCM EECDH+aRSA+AESGCM EECDH+ECDSA+SHA384 EECDH+ECDSA+SHA256 EECDH+aRSA+SHA384 EECDH+aRSA+SHA256 EECDH+AESGCM EECDH EDH+AESGCM EDH+aRSA HIGH !MEDIUM !LOW !aNULL !eNULL !LOW !RC4 !MD5 !EXP !PSK !SRP !DSS\"" . fs_filehandler::NewLine();
+		$line .= sys_tls::Lines();
 		$line .= "# Lets Encrypt end" . fs_filehandler::NewLine();
 
 		//$sql = $zdbh->prepare("UPDATE x_vhosts SET vh_ssl_tx = replace(vh_ssl_tx, :data, :new), vh_ssl_port_in=:port WHERE vh_name_vc = :domain");
@@ -1932,6 +1914,8 @@ class module_controller extends ctrl_module {
 			
 		} else {
 			# For Sentora 2.0
+			// (stored lines from older versions are today's first, so the block written above matches)
+			sys_tls::Upgrade();
 			$sql = $zdbh->prepare("UPDATE x_vhosts SET vh_ssl_tx = replace(vh_ssl_tx, :data, :new), vh_ssl_port_in=:port WHERE vh_name_vc = :domain");
 			
 		}
@@ -2004,9 +1988,7 @@ class module_controller extends ctrl_module {
 		$line = "# Made from Sencrypt - " . $sub_module . " - start" . fs_filehandler::NewLine();
 		$line .= fs_filehandler::NewLine();
 		$line .= 'SSLEngine On' . fs_filehandler::NewLine();
-		$line .= "SSLProtocol All -SSLv3 -TLSv1 -TLSv1.1" . fs_filehandler::NewLine();
-		$line .= "SSLHonorCipherOrder on" . fs_filehandler::NewLine();
-		$line .= "SSLCipherSuite \"ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384\"" . fs_filehandler::NewLine();		
+		$line .= sys_tls::Lines();
 		$line .= "SSLCertificateFile " . $certlocation . $panelDomain . "/cert.pem" . fs_filehandler::NewLine();
 		$line .= "SSLCertificateKeyFile " . $certlocation . $panelDomain . "/private.pem" . fs_filehandler::NewLine();
 		$line .= "SSLCACertificateFile " . $certlocation . $panelDomain . "/chain.pem" . fs_filehandler::NewLine();
