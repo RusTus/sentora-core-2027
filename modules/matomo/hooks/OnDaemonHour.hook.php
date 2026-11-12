@@ -84,6 +84,8 @@ function MatomoImportLogs()
         file_put_contents($part, $chunk);
         chown($part, 'sentora');
         chmod($part, 0600);
+        // The importer sends the visits in batches of 50 (its own 200 made a request of
+        // over 128 KB, refused with 413 "Request Entity Too Large" on the owner's panel).
         // The importer sends the lines to Matomo on this server: the panel's name is
         // pointed at 127.0.0.1 inside the importer, so it works whether or not the
         // server itself can resolve that name in DNS
@@ -93,7 +95,7 @@ function MatomoImportLogs()
             . "socket.getaddrinfo=lambda h,*a,**k: _g('127.0.0.1' if h==_h else h,*a,**k)\n"
             . "t=open(" . var_export($tokFile, true) . ").read().strip()\n"
             . "sys.argv=['import_logs.py','--url=" . matomo_helper::Url() . "','--token-auth='+t,'--idsite=" . (int) $s['ms_idsite_in'] . "',"
-            . "'--recorders=2','--enable-http-errors','--enable-http-redirects','--accept-invalid-ssl-certificate'," . var_export($part, true) . "]\n"
+            . "'--recorders=2','--recorder-max-payload-size=50','--enable-http-errors','--enable-http-redirects','--accept-invalid-ssl-certificate'," . var_export($part, true) . "]\n"
             . "runpy.run_path(" . var_export(matomo_helper::APP_DIR . 'misc/log-analytics/import_logs.py', true) . ", run_name='__main__')\n";
         exec('setpriv --reuid=sentora --regid=sentora --init-groups --reset-env /usr/bin/python3 -c ' . escapeshellarg($py) . ' 2>&1', $out, $rc);
         @unlink($part);
