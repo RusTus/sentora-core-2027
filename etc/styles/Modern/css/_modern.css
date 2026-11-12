@@ -108,6 +108,14 @@ i.theme-icon-sm { display: inline-block; width: 16px; height: 16px; margin: 0 6p
 .zmodule_header { background-color: var(--ml-card); color: var(--ml-ink); border-bottom: 1px solid var(--ml-line); }
 .breadcrumb { background: var(--ml-card); box-shadow: var(--ml-shadow); }
 .breadcrumb > .active { color: var(--ml-muted); }
+/* the module's own name opens its main page; Refresh (at the right) loads this page again */
+.breadcrumb > .active > a { font-weight: 600; }
+.breadcrumb > li.sn-crumb-refresh { float: right; margin-top: -2px; }
+.breadcrumb > li.active:after, .breadcrumb > li.sn-crumb-refresh:after { display: none; }
+.sn-crumb-refresh > a { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border: 1px solid var(--ml-line, #dde3ea); border-radius: 6px; font-size: 12px; text-decoration: none; }
+.sn-crumb-refresh > a:hover { text-decoration: none; background: var(--ml-hover, rgba(0,0,0,.04)); }
+.sn-crumb-refresh > a:active svg { transform: rotate(90deg); }
+@media (max-width: 480px) { .sn-crumb-refresh span { display: none; } }
 .breadcrumb > li, .navbar-inverse .nav > li > a, .module-box-title h4 { text-shadow: none; }
 .well { background: var(--ml-hover); border-color: var(--ml-line); box-shadow: none; }
 .table > thead > tr > th, .table > tbody > tr > th, .table > tfoot > tr > th,

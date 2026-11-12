@@ -13,7 +13,7 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  *
- * Updated by RusTus, 2026-11-07
+ * Updated by RusTus, 2026-11-12
  */
 /**
  * Template tag <# ui_tpl_breadcrumbs #>: the breadcrumb trail.
@@ -24,7 +24,9 @@ class ui_tpl_breadcrumbs {
      * Builds the Home > category > module breadcrumb for the current module page. The settings
      * pages opened from Module Admin (Apache Config, DNS Config and the like) have no menu
      * category of their own: theirs is Home > Module Admin's category > Module Admin > the page,
-     * so there is a way back. Names are translated and escaped.
+     * so there is a way back. Names are translated and escaped. The module's own name opens its main
+     * page (as the menu does), and a Refresh button at the right loads the page again as a plain
+     * visit (without the action of a form that was just sent, so nothing is done twice).
      *
      * @global db_driver $zdbh The panel's database connection.
      * @global runtime_controller $controller The request controller (reads the module URL parameter).
@@ -57,7 +59,15 @@ class ui_tpl_breadcrumbs {
         foreach ($crumbs as $c) {
             $line .= '<li><a href="' . $h($c[1]) . '">' . $c[0] . '</a></li>';
         }
-        return $line . '<li class="active">' . $t($row['mo_name_vc']) . '</li></ul>';
+        $line .= '<li class="active"><a href="./?module=' . rawurlencode($module) . '">' . $t($row['mo_name_vc']) . '</a></li>';
+        // (this page again, by its address: every parameter but "action", which would send a form again)
+        $q = array();
+        parse_str((string) parse_url((string) ($_SERVER['REQUEST_URI'] ?? ''), PHP_URL_QUERY), $q);
+        unset($q['action']);
+        $again = './?' . http_build_query($q, '', '&', PHP_QUERY_RFC3986);
+        return $line . '<li class="sn-crumb-refresh"><a href="' . $h($again) . '" title="' . $t('Load this page again (to see whether queued work has finished)') . '">'
+            . '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 4v5h-5"/></svg>'
+            . '<span>' . $t('Refresh') . '</span></a></li></ul>';
     }
 
     /**
