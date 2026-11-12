@@ -19,6 +19,15 @@ require_once dirname(__FILE__) . '/controller.ext.php';
 
 session_start();
 ctrl_auth::CheckSessionAccounts();   // (a switched-off or deleted account's session ends here)
+// (the widgets read the logged-in account the way a panel page does, through the request controller:
+// one that knows only this session, with nothing posted or asked for, so no module or action runs)
+$controller = new runtime_controller();
+Closure::bind(function () {
+    $this->vars_get = array(array());
+    $this->vars_post = array(array());
+    $this->vars_session = array($_SESSION);
+    $this->vars_cookie = array(array());
+}, $controller, 'runtime_controller')();
 
 header('Content-Type: text/html; charset=utf-8');
 header('Cache-Control: no-store');

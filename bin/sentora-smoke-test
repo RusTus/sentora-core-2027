@@ -128,7 +128,7 @@ s_rail() {
     need LOGGED_IN "Log in to the panel as the client" || return $?
     # the widget rail on the right of every page (modules/dashboard/code/rail.php), asked as a page does
     local c; c=$(pcurl -o "$TMP/rail.html" -w '%{http_code}' -H 'X-Requested-With: sentora-rail' "https://$FQDN/modules/dashboard/code/rail.php")
-    [ "$c" = 200 ] || { WHY="the widget rail answered $c"; return 1; }
+    [ "$c" = 200 ] || { WHY="the widget rail answered $c: $(grep -h 'rail.php' /var/sentora/logs/sentora-php.log 2> /dev/null | tail -1 | cut -c1-200)"; return 1; }
     grep -q 'class="dw-card dw-mini"' "$TMP/rail.html" || { WHY="the widget rail has no widgets: $(head -c 150 "$TMP/rail.html")"; return 1; }
     grep -qiE 'Fatal error|Warning:|Notice:' "$TMP/rail.html" && { WHY="the widget rail shows a PHP error"; return 1; }
     # (asked by anything but a panel page: refused)
