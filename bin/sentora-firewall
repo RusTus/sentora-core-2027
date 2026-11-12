@@ -8,7 +8,8 @@
 #   sentora-firewall deny <port>[/tcp|/udp]     close a port opened with allow
 #
 # Sentora's ports: SSH (every port sshd listens on, and the port of the session running this,
-# so it never locks you out), web (80, 443), mail (25, 465, 587, 110, 995, 143, 993, 4190), DNS
+# so it never locks you out), web (80, 443, and the panel's own ports when they were moved:
+# settings apache_port and sentora_port), mail (25, 465, 587, 110, 995, 143, 993, 4190), DNS
 # (53 TCP and UDP), FTP (21 and its passive ports from ProFTPD's PassivePorts). Ports that only
 # this server uses (MySQL, memcached, BIND's control port, SOGo) are never opened.
 # Which firewall: the settings firewall_kind (ufw or firewalld), firewall_cmd, firewall_service
@@ -48,6 +49,9 @@ sentora_ports() {
         if [ -n "${SSH_CONNECTION:-}" ]; then echo "$(echo "$SSH_CONNECTION" | awk '{print $4}')/tcp"; fi
         echo 22/tcp
         for p in 80 443 25 465 587 110 995 143 993 4190 21 53; do echo "$p/tcp"; done
+        # the panel's own ports, when they were moved (settings apache_port and sentora_port; a
+        # client's own site port is the client's business, not the firewall's)
+        for p in "$(sp apache_port)" "$(sp sentora_port)"; do [[ "$p" =~ ^[0-9]{1,5}$ ]] && echo "$p/tcp"; done
         echo 53/udp
         # FTP's passive data ports
         local ftpconf; ftpconf=$(sp ftp_config_file)
@@ -161,6 +165,7 @@ allow|deny)
     [ "$KIND" = firewalld ] && ZONE=$("$CMD" --get-default-zone)
     if [ "$ACTION" = allow ]; then fw_allow "$PP" || die "could not open $PP"
     else
+        # (Sentora's own ports, web and the panel's included, can not be closed: the panel must stay reachable)
         sentora_ports | grep -qx "$PP" && die "$PP is one of Sentora's own ports: it stays open"
         fw_deny "$PP" || die "could not close $PP"
     fi
