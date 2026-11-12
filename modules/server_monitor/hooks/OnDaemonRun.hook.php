@@ -188,7 +188,10 @@ function SentoraServerAlerts()
     $pq = sys_platform::Get('postqueue_bin');
     if ($pq !== '' && is_executable($pq)) {
         $queued = 0;
-        exec(escapeshellarg($pq) . ' -j 2>/dev/null', $lines);
+        // (PHP leaves its own open files to the programs it starts; postqueue runs in its own SELinux
+        // domain, which may not read them and logs a refusal each run: close them first)
+        exec('/bin/bash -c \'for f in /proc/$$/fd/*; do n=${f##*/}; [ "$n" -gt 2 ] 2>/dev/null && eval "exec $n<&-"; done; exec "$0" -j\' '
+            . escapeshellarg($pq) . ' 2>/dev/null', $lines);
         $queued = count(array_filter((array) $lines, 'strlen'));
         if ($queued > 100) {
             $now['mailqueue'] = $queued . ' messages are waiting in the outgoing mail queue (often a site sending spam: mailq shows them).';

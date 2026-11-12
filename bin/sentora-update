@@ -43,6 +43,9 @@ KEEP=5
 # sentora-core-2027.zip and SHA256SUMS.
 REPO="RusTus/sentora-core-2027"
 TAG="current"
+# the installers' repository: its current release has platform-settings.json, the values each
+# installer gives the settings of its Linux system (see sentora-platform-fill below)
+INSTALLERS_REPO="RusTus/sentora-installers-2027"
 URL=""
 GITHUB="https://github.com"
 API="https://api.github.com"
@@ -687,6 +690,18 @@ NEWMODS=$( cd "$PANEL" && php -r '
 ' "$SRC_MODULES" 2>&1 ) || warn "could not register new modules"
 while IFS= read -r l; do [ -n "$l" ] && say "${l#  }"; done <<< "$NEWMODS"
 ui_step "Updating services and bundled apps"
+# Settings of this Linux system that came after this server was installed: they were added with
+# Debian's and Ubuntu's defaults; this system's installer may set others today (on AlmaLinux:
+# ModSecurity's package). Only settings still at their default change (sentora-platform-fill).
+if [ -f "$PANEL/bin/sentora-platform-fill" ] && [ -z "$URL" ]; then
+    if wget -q -T 20 -O "$TMP/platform-settings.json" "$GITHUB/$INSTALLERS_REPO/releases/download/current/platform-settings.json" 2> /dev/null; then
+        out=$(php -q "$PANEL/bin/sentora-platform-fill" "$TMP/platform-settings.json" 2>&1) || warn "this system's settings were not checked: $(echo "$out" | tail -1)"
+        echo "$out"
+        grep -q '^set ' <<< "$out" && say "$(echo "$out" | tail -1)"
+    else
+        echo "platform-settings.json not on the installers' release (yet): this system's settings not checked"
+    fi
+fi
 # zsudo (the panel's fixed list of root actions) and the root service that runs what it queues
 # (sentora-zsudo-setup): set up again when zsudo's source changed, so an update brings new actions
 # to this server, and once on servers from before the queue (zsudo set-uid, handing jobs to at)

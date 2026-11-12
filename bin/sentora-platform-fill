@@ -1,0 +1,69 @@
+#!/usr/bin/php
+<?php
+/**
+ * sentora-platform-fill: give this server the values its installer sets today for the settings
+ * of the Linux system (dryden/sys/platform.class.php) that an older installer did not set yet.
+ *
+ *   sentora-platform-fill <platform-settings.json>            change them (root)
+ *   sentora-platform-fill --dry-run <platform-settings.json>  only say what would change
+ *
+ * A setting added after this server was installed was put in the database with the default
+ * (Debian's and Ubuntu's value), even on a system whose installer now sets another value (on
+ * AlmaLinux: ModSecurity's package and module file). The file is made from the installers
+ * themselves (sentora-installers-2027 .github/scripts/platform-settings.sh, on its release):
+ * { "systems": { "<php_bundle_tag>": { "<setting>": "<value>", ... } } }.
+ *
+ * Changed: a setting this panel knows, still at its default, whose value for this system is
+ * another one. Never changed: a setting someone set to anything else (with setso), and anything
+ * on a server whose system (php_bundle_tag) is not set or not in the file.
+ *
+ * Written by RusTus, 2026-11-12
+ */
+$rawPath = str_replace("\\", "/", dirname(__FILE__));
+chdir(str_replace("/bin", "/", $rawPath));
+require_once 'dryden/loader.inc.php';
+require_once 'cnf/db.php';
+require_once 'inc/dbc.inc.php';
+
+if (!runtime_controller::IsCLI()) {
+    exit(1);
+}
+$args = array_slice($argv, 1);
+$dry = false;
+if (isset($args[0]) && $args[0] === '--dry-run') {
+    $dry = true;
+    array_shift($args);
+}
+if (!isset($args[0]) || !is_file($args[0]) || filesize($args[0]) > 1048576) {
+    fwrite(STDERR, "usage: sentora-platform-fill [--dry-run] <platform-settings.json>\n");
+    exit(2);
+}
+$all = json_decode((string) file_get_contents($args[0]), true);
+if (!is_array($all) || !isset($all['systems']) || !is_array($all['systems'])) {
+    fwrite(STDERR, "not a platform settings file\n");
+    exit(2);
+}
+
+sys_platform::Ensure();
+$tag = (string) ctrl_options::GetSystemOption('php_bundle_tag');
+if ($tag === '' || !isset($all['systems'][$tag]) || !is_array($all['systems'][$tag])) {
+    echo "this system's settings: nothing to fill (" . ($tag === '' ? 'system not set' : 'no list for ' . $tag) . ")\n";
+    exit(0);
+}
+$changed = 0;
+foreach ($all['systems'][$tag] as $name => $want) {
+    // only this panel's own settings of the Linux system, and only plain text values
+    if (!is_string($name) || !isset(sys_platform::$settings[$name]) || !is_string($want) || strlen($want) > 4096) {
+        continue;
+    }
+    $default = sys_platform::$settings[$name][0];
+    $have = (string) ctrl_options::GetSystemOption($name);
+    if ($have === $default && $want !== $default) {
+        echo ($dry ? 'would set ' : 'set ') . $name . "\n";
+        if (!$dry) {
+            ctrl_options::SetSystemOption($name, $want, false);
+        }
+        $changed++;
+    }
+}
+echo "this system's settings ($tag): " . ($changed ? $changed . ($dry ? ' would be' : '') . ' set to its installer\'s values' : 'all as its installer sets them') . "\n";
