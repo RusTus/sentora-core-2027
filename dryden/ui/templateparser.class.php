@@ -13,7 +13,7 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  *
- * Updated by RusTus, 2026-11-07
+ * Updated by RusTus, 2026-11-12
  */
 /**
  * Compiles the theme's master.ztml (and module templates) into PHP and runs it.
