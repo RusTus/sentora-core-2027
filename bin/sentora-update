@@ -733,6 +733,19 @@ if [ -f "$PANEL/bin/zsudo.c" ] && [ -f "$PANEL/bin/sentora-zsudo-setup" ]; then
         echo "$out" >> "$LOG"
     fi
 fi
+# --- fail2ban's blocking program: a ban blocks nobody without it (Debian's cloud image had no nft
+# while Debian's fail2ban bans with nftables; the installers add it since 2026-11-12)
+if command -v fail2ban-client > /dev/null; then
+    F2B_ACT=$(cat /etc/fail2ban/jail.conf /etc/fail2ban/jail.d/*.conf /etc/fail2ban/jail.local 2> /dev/null | sed -n 's/^banaction[[:space:]]*=[[:space:]]*\([A-Za-z0-9_-]*\).*/\1/p' | tail -1)
+    if [ "${F2B_ACT#nftables}" != "$F2B_ACT" ] && ! command -v nft > /dev/null; then
+        if DEBIAN_FRONTEND=noninteractive $PKG nftables > /dev/null 2>&1 && command -v nft > /dev/null; then
+            systemctl restart fail2ban > /dev/null 2>&1
+            say "fail2ban: nftables added, so its bans block again"
+        else
+            warn "fail2ban bans with nftables, which did not install: $PKG nftables"
+        fi
+    fi
+fi
 # --- LDAP for the server's own PHP (sites that log users in against Active Directory, such as
 # Snipe-IT; the installer adds it since 2027.11)
 PHPV_SYS=$(php -r 'echo PHP_MAJOR_VERSION . "." . PHP_MINOR_VERSION;' 2> /dev/null)

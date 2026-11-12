@@ -115,6 +115,17 @@ if command -v fail2ban-client > /dev/null && fail2ban-client ping > /dev/null 2>
     for j in $want; do
         if echo " $jails " | grep -q " $j "; then ok "jail $j"; else fail "jail $j is not active (fail2ban-client -t, then systemctl restart fail2ban)"; fi
     done
+    # the program that does the blocking must be there: without it a "ban" blocks nobody (Debian's
+    # cloud image had no nft while fail2ban banned with nftables)
+    f2b_act=$(cat /etc/fail2ban/jail.conf /etc/fail2ban/jail.d/*.conf /etc/fail2ban/jail.local 2> /dev/null | sed -n 's/^banaction[[:space:]]*=[[:space:]]*\([A-Za-z0-9_-]*\).*/\1/p' | tail -1)
+    case "$f2b_act" in
+        nftables*) f2b_bin=nft ;; iptables*) f2b_bin=iptables ;; firewallcmd*) f2b_bin=firewall-cmd ;; ufw*) f2b_bin=ufw ;; *) f2b_bin="" ;;
+    esac
+    if [ -n "$f2b_bin" ] && ! command -v "$f2b_bin" > /dev/null; then
+        fail "fail2ban bans with $f2b_act, but $f2b_bin is not installed: bans block nobody (install the $f2b_bin package, then systemctl restart fail2ban)"
+    elif [ -n "$f2b_bin" ]; then
+        ok "fail2ban blocks with $f2b_act ($f2b_bin)"
+    fi
 else
     fail "fail2ban is not answering"
 fi
