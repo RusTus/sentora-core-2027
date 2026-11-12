@@ -29,6 +29,13 @@ function MatomoSync()
 {
     global $zdbh;
     matomo_helper::Ensure();
+    if (!matomo_helper::PluginActive()) {
+        $failed = matomo_helper::SetUp();
+        echo 'Matomo: Sentora\'s plugin and settings ' . (count($failed) ? 'could NOT all be set: ' . implode('; ', $failed) : 'set (they were missing)') . '.' . fs_filehandler::NewLine();
+        if (!matomo_helper::PluginActive()) {
+            return;
+        }
+    }
     // What the panel has: domains and subdomains, plus the panel's own domain
     $wanted = array();
     $accounts = array();

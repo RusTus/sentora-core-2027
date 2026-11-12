@@ -176,10 +176,48 @@ class matomo_helper
     }
 
     /**
-     * Run a Matomo console command as the panel user.
+     * Whether Sentora's sync plugin is switched on in Matomo's config.
      *
-     * @param string[] $args The command and its arguments (each is shell-escaped).
-     * @return array{0: int, 1: string} The exit code and the output.
+     * @return bool
+     */
+    static function PluginActive()
+    {
+        $c = (string) @file_get_contents(self::APP_DIR . 'config/config.ini.php');
+        return (bool) preg_match('/^\s*Plugins\[\]\s*=\s*"SentoraSync"/m', $c);
+    }
+
+    /**
+     * Matomo's own settings the panel needs, as the setup does them (sentora-matomo-setup and the
+     * installers): Sentora's sync plugin on, framed pages (the panel shows Matomo in a frame),
+     * reports built by the hourly job, no calls home. Run when the plugin is off: servers set up
+     * by an installer whose PHP command did not exist on that system never got them.
+     *
+     * @return string[] The steps that failed (empty when all worked).
+     */
+    static function SetUp()
+    {
+        $failed = array();
+        foreach (array(
+            array('plugin:activate', 'SentoraSync'),
+            array('config:set', '--section=General', '--key=enable_framed_pages', '--value=1'),
+            array('config:set', '--section=General', '--key=enable_browser_archiving_triggering', '--value=0'),
+            array('config:set', '--section=General', '--key=enable_load_data_infile', '--value=0'),
+            array('config:set', '--section=General', '--key=enable_internet_features', '--value=0'),
+            array('plugin:deactivate', 'ProfessionalServices', 'Marketplace', 'Tour', 'Feedback'),
+        ) as $step) {
+            list($rc, $out) = self::Console($step);
+            if ($rc !== 0 && $step[0] !== 'plugin:deactivate') {
+                $failed[] = implode(' ', $step);
+            }
+        }
+        return $failed;
+    }
+
+    /**
+     * Run Matomo's console as the panel user (with the system PHP: setting php_cli).
+     *
+     * @param string[] $args The command and its arguments.
+     * @return array{0: int, 1: string} Exit code and output.
      */
     static function Console($args)
     {
