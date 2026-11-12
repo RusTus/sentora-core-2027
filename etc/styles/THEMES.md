@@ -12,7 +12,7 @@ gives the theme's own copy of a file when it has one, else the shared one.
 
 | Path | Needed | What it is |
 | --- | --- | --- |
-| `master.ztml` | yes | The page around every module (top bar, sidebar, content) |
+| `master.ztml` | yes | The page around every module (top bar, sidebar, content, and the widget rail: copy Modern's `sn-rail-tab` button, `sn-rail` aside, `dashboard.css` link and `rail.js` script) |
 | `login.ztml` | yes | The login page (shown in the administrator's theme and variation; `$loginCss` holds the variation name) |
 | `css/<name>.css` | yes, at least one | One file per **variation**. Theme Manager offers them as a choice when there is more than one, in this order: `default`, `light`, `dark`, the rest by name, `auto` last. The label is the file name ("high_contrast" shows as "High contrast"). |
 | `css/_<name>.css` | no | A part the variations `@import`; never offered as a variation |

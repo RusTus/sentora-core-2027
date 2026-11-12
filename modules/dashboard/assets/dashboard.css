@@ -118,3 +118,53 @@ body.dw-drag-on, body.dw-drag-on * { cursor: grabbing !important; user-select: n
 .dw-sh li span { font-size: 12px; color: var(--dw-muted); }
 .dw-sh li.is-bad span { color: var(--dw-bad); } .dw-sh li.is-warn span { color: var(--dw-warn); }
 .dw-sh-more { font-size: 12px; margin: -4px 0 8px; }
+
+/* --- the widget rail (assets/rail.js, code/rail.php): the dashboard's widgets, small, on the
+   right of every panel page; the tab hides it to the right and brings it back ------------------ */
+.dw.dw-rail { position: fixed; top: 60px; right: 0; bottom: 0; z-index: 1020; width: 300px; margin: 0; padding: 12px 12px 18px;
+    border-radius: 0; border-left: 1px solid var(--dw-line); overflow-y: auto; overscroll-behavior: contain;
+    transform: translateX(100%); visibility: hidden; transition: transform .22s ease, visibility 0s linear .22s; }
+body.sn-rail-open .dw.dw-rail { transform: none; visibility: visible; transition: transform .22s ease; }
+.dw-rail-head { display: flex; align-items: center; justify-content: space-between; margin: 0 2px 10px;
+    font-size: 12px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; color: var(--dw-muted); }
+.dw-rail .sn-rail-list { display: flex; flex-direction: column; gap: 10px; }
+.dw-rail .dw-card.dw-mini > header { padding: 9px 11px 5px; }
+.dw-rail .dw-card.dw-mini h4 { font-size: 12px; gap: 6px; }
+.dw-rail .dw-card.dw-mini .dw-ico { width: 15px; height: 15px; }
+.dw-rail .dw-card.dw-mini .dw-body { padding: 2px 11px 11px; font-size: 12px; overflow-x: auto; }
+.dw-rail .dw-card.dw-mini .dw-body table { font-size: 12px; }
+.dw-rail .dw-card.dw-mini .dw-body .btn { padding: 3px 8px; font-size: 12px; }
+.dw-rail-empty { margin: 6px 2px; color: var(--dw-muted); font-size: 13px; }
+.dw-rail-arrange { display: block; margin: 12px 2px 0; font-size: 12px; }
+.dw-rail[aria-busy="true"] .sn-rail-list:empty::before { content: ''; display: block; height: 120px; border-radius: 6px;
+    background: linear-gradient(90deg, var(--dw-card) 25%, var(--dw-hover) 50%, var(--dw-card) 75%); background-size: 200% 100%;
+    animation: dw-rail-wait 1.2s linear infinite; }
+@keyframes dw-rail-wait { to { background-position: -200% 0; } }
+
+/* the tab on the rail's edge (a slim handle with an arrow; it moves with the rail) */
+.sn-rail-tab { position: fixed; top: 50%; right: 0; z-index: 1021; width: 20px; height: 64px; margin-top: -32px; padding: 0;
+    display: flex; align-items: center; justify-content: center; cursor: pointer;
+    color: var(--sn-muted, #6b7785); background: var(--sn-card, #ffffff); border: 1px solid var(--sn-line, #e6e9ee); border-right: 0;
+    border-radius: 8px 0 0 8px; box-shadow: -2px 0 6px rgba(20,30,40,0.08); transition: right .22s ease, color .15s; }
+.sn-rail-tab:hover, .sn-rail-tab:focus-visible { color: var(--sn-accent, #447fb3); outline: none; }
+.sn-rail-tab svg { width: 14px; height: 14px; transition: transform .22s ease; }
+body.sn-rail-open .sn-rail-tab { right: 300px; }
+body.sn-rail-open .sn-rail-tab svg { transform: rotate(180deg); }
+
+/* a wide screen: the page makes room for the open rail */
+@media (min-width: 1200px) {
+    body.sn-rail-open .wrap.container { padding-right: 320px; transition: padding-right .22s ease; }
+}
+/* a narrow screen: the rail slides over the page */
+@media (max-width: 1199px) {
+    .dw.dw-rail { top: 0 !important; z-index: 1040; }
+    .sn-rail-tab { z-index: 1041; }
+    body.sn-rail-open .dw.dw-rail { box-shadow: -8px 0 24px rgba(20,30,40,0.18); }
+}
+@media (max-width: 480px) {
+    .dw.dw-rail { width: 88vw; }
+    body.sn-rail-open .sn-rail-tab { right: 88vw; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .dw.dw-rail, .sn-rail-tab, .sn-rail-tab svg, body.sn-rail-open .wrap.container { transition: none !important; }
+}

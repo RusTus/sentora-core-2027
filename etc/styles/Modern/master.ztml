@@ -9,6 +9,7 @@
         <!-- Stylesheets -->
         <link href="etc/styles/_shared/global-css/bootstrap.min.css" rel="stylesheet">
         <link href="<# ui_tpl_csspath #>" rel="stylesheet" type="text/css">
+        <link href="modules/dashboard/assets/dashboard.css" rel="stylesheet" type="text/css">
 
         <script src="etc/styles/_shared/js/jquery.js"></script>
         <script src="etc/styles/_shared/js/jquery.cookie.js"></script>
@@ -259,6 +260,16 @@
             </div>
             <div id="footer" ><# ui_tpl_brandfooter #></div>
         </div><!-- END CONTAINER -->
+
+        <!-- BEGIN WIDGET RAIL: the account's dashboard widgets, small, on the right (modules/dashboard/assets/rail.js) -->
+        <button type="button" class="sn-rail-tab" id="sn-rail-tab" aria-controls="sn-rail" aria-expanded="false" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
+        <aside class="dw dw-rail" id="sn-rail" aria-label="<: Your widgets :>" aria-hidden="true" hidden data-url="modules/dashboard/code/rail.php"
+            data-show="<: Show your widgets :>" data-hide="<: Hide your widgets :>" data-failed="<: The widgets could not be loaded; reload the page. :>">
+            <div class="dw-rail-head"><: Your widgets :></div>
+            <div class="sn-rail-list"></div>
+        </aside>
+        <script src="modules/dashboard/assets/rail.js" defer></script>
+        <!-- END WIDGET RAIL -->
 
         <!-- Javascript
         ================================================== -->

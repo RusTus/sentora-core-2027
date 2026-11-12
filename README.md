@@ -511,6 +511,8 @@ Every hour the daemon asks each live domain and sub-domain for its home page fro
 
 Every login lands on the **Dashboard**, where each account arranges its own widgets (getting started, usage, domains, security, backups, spam and viruses, and for administrators the server). **Widget Admin** decides which widgets each group may use and which new dashboards start with, resets every dashboard, and takes new widgets as a `.zip` (`widget.xml`, `widget.php`, optional `widget.css`; the format is in `etc/dashboard-widgets/README.md`). A widget's code runs inside the panel, so upload only widgets you trust. Switching the Dashboard off in Module Admin sends logins to the home page.
 
+The same widgets also sit in the **widget rail** on the right of every panel page, small and one above the other. The tab on its edge hides it to the right and brings it back, and the browser remembers which. On a wide screen the page makes room for it; on a narrow screen (a phone) it starts hidden and slides over the page. It loads after the page and refreshes every two minutes while it is open, so a closed rail costs nothing. It is not shown on the Dashboard itself.
+
 ## Add-on modules
 
 **Repo Browser** lists module repositories (the Sentora-2027 add-on repository by default) and installs, updates and removes their modules; the daemon does it as root within 5 minutes. Every download is checked against the repository's `SHA256SUMS`. A module with the name of a core module is never installed over it.
@@ -710,7 +712,7 @@ All run as root. Most are in `/usr/local/sbin`; `setso`, `setzadmin` and `zppy` 
 | Command | What it does | Changes anything? |
 | --- | --- | --- |
 | `sentora-post-install-check` | OK, WARN or FAIL for services, fail2ban, ports, permissions, isolation, stored passwords, TLS, updates, alerts and the daemon; report in `/var/sentora/logs/post-install-check.log` | No |
-| `sentora-smoke-test [--keep]` | Uses the server like a client in 26 steps (FTPS, website, mail, SOGo, MySQL, Show password, backup and restore, isolation) with a temporary client, then removes it | Only the temporary client |
+| `sentora-smoke-test [--keep]` | Uses the server like a client in 27 steps (the widget rail, FTPS, website, mail, SOGo, MySQL, Show password, backup and restore, isolation) with a temporary client, then removes it | Only the temporary client |
 | `sentora-update` | Updates the panel (see [Updating](#updating)); `--check`, `--rollback [file]`, `--force`, `--yes` | Yes |
 | `sentora-firewall [status\|on\|off\|allow\|deny]` | The firewall (ufw or firewalld), open only for Sentora's ports: web and the panel's own ports, mail, DNS, FTP with its passive range, and SSH on the ports sshd uses (never locks you out). `on` lists the public ports it will close first; Sentora's own ports can not be closed. New installs have it on | Yes |
 | `sentora-apparmor [status\|on]` | Debian and Ubuntu: AppArmor on for a server an older installer left without it. Sentora's paths go into the profiles first, the services are restarted and checked, and everything is undone if one does not come back | Yes |

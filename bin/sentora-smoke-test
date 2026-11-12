@@ -124,6 +124,19 @@ s_login() {
     # shellcheck disable=SC2034  # read by need() through ${!v}
     LOGGED_IN=1
 }
+s_rail() {
+    need LOGGED_IN "Log in to the panel as the client" || return $?
+    # the widget rail on the right of every page (modules/dashboard/code/rail.php), asked as a page does
+    local c; c=$(pcurl -o "$TMP/rail.html" -w '%{http_code}' -H 'X-Requested-With: sentora-rail' "https://$FQDN/modules/dashboard/code/rail.php")
+    [ "$c" = 200 ] || { WHY="the widget rail answered $c"; return 1; }
+    grep -q 'class="dw-card dw-mini"' "$TMP/rail.html" || { WHY="the widget rail has no widgets: $(head -c 150 "$TMP/rail.html")"; return 1; }
+    grep -qiE 'Fatal error|Warning:|Notice:' "$TMP/rail.html" && { WHY="the widget rail shows a PHP error"; return 1; }
+    # (asked by anything but a panel page: refused)
+    c=$(pcurl -o /dev/null -w '%{http_code}' "https://$FQDN/modules/dashboard/code/rail.php")
+    [ "$c" = 403 ] || { WHY="the widget rail answered $c to a request without the panel's header"; return 1; }
+    pcurl -o "$TMP/p.html" "https://$FQDN/?module=domains"
+    grep -q 'id="sn-rail"' "$TMP/p.html" || { WHY="the page has no widget rail"; return 1; }
+}
 s_domain() {
     need LOGGED_IN "Log in to the panel as the client" || return $?
     pcurl -o "$TMP/p.html" -d "inDomain=$DOM&inDestination=&inAutoHome=1&csfr_token=$(token domains)" "https://$FQDN/?module=domains&action=CreateDomain"
@@ -391,6 +404,7 @@ trap 'echo; out "  Interrupted: removing what the test made"; KEEP=0; cleanup; e
 step "Panel answers over HTTPS" s_panel
 step "Create a test client (panel code)" s_client
 step "Log in to the panel as the client" s_login
+step "The widget rail shows the client's widgets" s_rail
 step "Add a domain" s_domain
 step "Daemon run completes without warnings" s_daemon
 step "Account user, folder and PHP pool" s_account
