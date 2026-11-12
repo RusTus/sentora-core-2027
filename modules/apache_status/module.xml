@@ -4,7 +4,7 @@
     <version>200</version>
     <defaultcat>Server Admin</defaultcat>
     <desc>See what Apache is doing right now: requests, traffic, response time, workers and connections as they change, every request in progress (sortable and searchable), the busiest URLs, hosts and clients, and the worker scoreboard.</desc>
-    <authorname>Sentora for Ubuntu 26.04 (from the ZPanel module by RusTus)</authorname>
+    <authorname>Sentora-2027 (from the ZPanel module by RusTus)</authorname>
     <authoremail></authoremail>
     <authorurl></authorurl>
     <updateurl></updateurl>

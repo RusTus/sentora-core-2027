@@ -4,7 +4,7 @@
     <version>200</version>
     <defaultcat>Server Admin</defaultcat>
     <desc>Live server dashboard: CPU per core, load, memory and swap, network and disk traffic, disk space, the busiest processes and whether Sentora's services are running.</desc>
-    <authorname>Sentora for Ubuntu 26.04</authorname>
+    <authorname>Sentora-2027</authorname>
     <authoremail></authoremail>
     <authorurl></authorurl>
     <updateurl></updateurl>

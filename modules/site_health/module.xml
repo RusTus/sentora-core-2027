@@ -4,7 +4,7 @@
     <version>200</version>
     <defaultcat>Domain Management</defaultcat>
     <desc>Whether each of your websites works, and what needs attention: checked every hour from this server, with the certificate, the PHP version, PHP errors and error pages.</desc>
-    <authorname>Sentora for Ubuntu 26.04</authorname>
+    <authorname>Sentora-2027</authorname>
     <authoremail></authoremail>
     <authorurl></authorurl>
     <updateurl></updateurl>

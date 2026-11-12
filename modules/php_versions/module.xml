@@ -4,7 +4,7 @@
     <version>200</version>
     <defaultcat>Admin</defaultcat>
     <desc>Enable or disable the extra PHP versions that domains and subdomains can choose. The panel always runs on the default PHP.</desc>
-    <authorname>Sentora for Ubuntu 26.04</authorname>
+    <authorname>Sentora-2027</authorname>
     <authoremail></authoremail>
     <authorurl></authorurl>
     <updateurl></updateurl>

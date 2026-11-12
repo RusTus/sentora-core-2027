@@ -4,7 +4,7 @@
     <version>200</version>
     <defaultcat>Server Admin</defaultcat>
     <desc>Follow the server's log files live in the browser: the panel, Apache, mail, FTP, DNS, PHP and every hosted domain.</desc>
-    <authorname>Sentora for Ubuntu 26.04 (from the ZPanel module by RusTus)</authorname>
+    <authorname>Sentora-2027 (from the ZPanel module by RusTus)</authorname>
     <authoremail></authoremail>
     <authorurl></authorurl>
     <updateurl></updateurl>

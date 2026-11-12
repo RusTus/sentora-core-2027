@@ -4,7 +4,7 @@
     <version>200</version>
     <defaultcat>Advanced</defaultcat>
     <desc>Keys for programs that manage your clients through the panel's API (a billing system, your own order form): one per program, limited to the addresses you choose, revocable on its own, with a log of what each one did.</desc>
-    <authorname>Sentora for Ubuntu 26.04</authorname>
+    <authorname>Sentora-2027</authorname>
     <authoremail></authoremail>
     <authorurl></authorurl>
     <updateurl></updateurl>
