@@ -260,7 +260,7 @@ fix_permissions() {
     chown -R root:root "$PANEL"
     find "$PANEL" -type d -exec chmod 755 {} +
     find "$PANEL" -type f -exec chmod 644 {} +
-    for b in zppy setso setzadmin sentora-notice sentora-update sentora-update-check sentora-post-install-check sentora-restore sentora-smoke-test sentora-offsite-backup sentora-panel-restore sentora-web-probe sentora-ftp-kick sentora-php-install sentora-change-domain sentora-migrate-import sentora-migrate-export sentora-matomo-setup sentora-zsudo-setup; do
+    for b in zppy setso setzadmin sentora-notice sentora-update sentora-update-check sentora-post-install-check sentora-restore sentora-smoke-test sentora-offsite-backup sentora-panel-restore sentora-web-probe sentora-ftp-kick sentora-php-install sentora-change-domain sentora-migrate-import sentora-migrate-export sentora-matomo-setup sentora-zsudo-setup sentora-firewall; do
         [ -f "$PANEL/bin/$b" ] && chmod 755 "$PANEL/bin/$b"
     done
     # zsudo: not set-uid once its queue service runs (sentora-zsudo-setup); an older zsudo, not yet
@@ -282,14 +282,16 @@ fix_permissions() {
     # BIND's main file holds the rndc key: root and BIND only (installers before 2027.5 left it 644)
     local nc; nc="$(sp bind_dir)"; nc="${nc%/}/named.conf"
     [ -f "$nc" ] && { chown root:"$(sp bind_group)" "$nc"; chmod 640 "$nc"; }
-    for b in sentora-notice sentora-update sentora-update-check sentora-post-install-check sentora-restore sentora-smoke-test sentora-offsite-backup sentora-panel-restore sentora-web-probe sentora-php-install sentora-change-domain sentora-migrate-import sentora-migrate-export sentora-matomo-setup sentora-zsudo-setup; do
+    for b in sentora-notice sentora-update sentora-update-check sentora-post-install-check sentora-restore sentora-smoke-test sentora-offsite-backup sentora-panel-restore sentora-web-probe sentora-php-install sentora-change-domain sentora-migrate-import sentora-migrate-export sentora-matomo-setup sentora-zsudo-setup sentora-firewall; do
         [ -f "$PANEL/bin/$b" ] && ln -sf "$PANEL/bin/$b" "/usr/local/sbin/$b"
     done
 }
 
 php_reload() {
     local v; v=$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;' 2> /dev/null)
-    systemctl reload "php$v-fpm" 2> /dev/null || systemctl restart "php$v-fpm" 2> /dev/null || true
+    # (the system PHP-FPM's service: php8.4-fpm on Debian, php-fpm on AlmaLinux: setting php_fpm_service)
+    local svc; svc=$(sp php_fpm_service); svc=${svc//\{v\}/$v}; svc=${svc:-php$v-fpm}
+    systemctl reload "$svc" 2> /dev/null || systemctl restart "$svc" 2> /dev/null || true
 }
 
 finish() {

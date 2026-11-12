@@ -430,7 +430,8 @@ kchk fs.protected_hardlinks 1; kchk fs.protected_symlinks 1; kchk fs.protected_f
 kchk net.ipv4.tcp_syncookies 1; kchk net.ipv4.conf.all.accept_redirects 0; kchk net.ipv4.conf.all.send_redirects 0
 kchk net.ipv4.conf.all.accept_source_route 0; kchk net.ipv6.conf.all.accept_redirects 0
 if [ -z "$KMISS" ]; then ok "the kernel's safety switches are set (address randomisation, protected links, SYN cookies, no redirects)"
-else warn "kernel safety switches not set:$KMISS (put the wanted values in /etc/sysctl.d/90-hardening.conf, then: sysctl --system)"; fi
+elif [ -f "$(sp sysctl_dir)/90-sentora-hardening.conf" ]; then warn "kernel safety switches not set:$KMISS (Sentora's $(sp sysctl_dir)/90-sentora-hardening.conf sets them: a file that sorts later sets them back, or this is a container, whose host decides)"
+else warn "kernel safety switches not set:$KMISS (the daemon writes $(sp sysctl_dir)/90-sentora-hardening.conf within 5 minutes)"; fi
 # accounts
 x=$(awk -F: '$3 == 0 && $1 != "root" {print $1}' /etc/passwd | tr '\n' ' ')
 [ -z "$x" ] && ok "only root has user id 0" || fail "other accounts with root's user id 0: $x"
@@ -441,8 +442,10 @@ if { command -v firewall-cmd > /dev/null 2>&1 && firewall-cmd --state 2> /dev/nu
         || { command -v ufw > /dev/null 2>&1 && ufw status 2> /dev/null | grep -q '^Status: active'; } \
         || { command -v nft > /dev/null 2>&1 && nft list ruleset 2> /dev/null | grep -qE 'hook input.*policy drop'; }; then
     ok "a firewall is active"
+elif command -v systemd-detect-virt > /dev/null 2>&1 && systemd-detect-virt --quiet --container; then
+    ok "no firewall in this container: the host's firewall decides what reaches it"
 else
-    warn "no firewall is active: fail2ban bans addresses that keep failing, but every other open port stays open (allow only Sentora's ports in firewalld, ufw or nftables)"
+    warn "no firewall is active: fail2ban bans addresses that keep failing, but every other open port stays open (switch it on, only Sentora's ports open: sentora-firewall on)"
 fi
 # the clock (certificates, logs and two-factor codes need it right)
 if command -v timedatectl > /dev/null 2>&1; then

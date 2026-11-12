@@ -27,6 +27,7 @@ if (is_file($saInstalling) && time() - (int) filemtime($saInstalling) < 7200) {
 echo "END Server alerts" . fs_filehandler::NewLine();
 SentoraProcstatEnsure();
 SentoraHardeningQueue();
+SentoraKernelSwitches();
 
 /**
  * Keep the process-list service (bin/sentora-procstat, run by systemd as root) installed and running:
@@ -354,5 +355,51 @@ function SentoraHardeningQueue()
     @touch($stamp);
     exec(escapeshellarg($root . '/bin/zsudo') . ' hardening-check 2>&1', $out, $rc);
     echo 'Server Monitor: hardening check ' . ($rc === 0 ? 'asked for (zsudo)' : 'could not be asked for: ' . implode(' ', $out)) . fs_filehandler::NewLine();
+}
+
+/**
+ * The kernel's safety switches (the hardening check's "kernel safety switches" line): written once
+ * into the system's kernel settings folder as 90-sentora-hardening.conf, applied at once and at
+ * every boot. Each one closes a door Sentora does not use: kernel addresses and the kernel log
+ * hidden from ordinary users, no core dumps of set-uid programs, links and files in shared folders
+ * (/tmp) only followed or opened by their owner, SYN floods answered with cookies, no ICMP
+ * redirects or source routing (a server is not a router). An administrator who wants another
+ * value puts it in a file that sorts later (99-local.conf): that one wins, and this file is only
+ * written again when Sentora's own values change.
+ *
+ * @return void
+ */
+function SentoraKernelSwitches()
+{
+    $nl = fs_filehandler::NewLine();
+    $dir = rtrim(sys_platform::Get('sysctl_dir'), '/');
+    $bin = sys_platform::Get('sysctl_bin');
+    if (!function_exists('posix_geteuid') || posix_geteuid() !== 0 || $dir === '' || !is_dir($dir) || is_link($dir)) {
+        return;
+    }
+    $want = "# Sentora: the kernel's safety switches (written by the daemon; to change one, set it in a\n"
+        . "# file that sorts later, e.g. 99-local.conf, which wins over this one)\n"
+        . "kernel.randomize_va_space = 2\nkernel.kptr_restrict = 1\nkernel.dmesg_restrict = 1\n"
+        . "fs.protected_hardlinks = 1\nfs.protected_symlinks = 1\nfs.protected_fifos = 1\nfs.protected_regular = 1\nfs.suid_dumpable = 0\n"
+        . "net.ipv4.tcp_syncookies = 1\n"
+        . "net.ipv4.conf.all.accept_redirects = 0\nnet.ipv4.conf.default.accept_redirects = 0\n"
+        . "net.ipv4.conf.all.send_redirects = 0\nnet.ipv4.conf.default.send_redirects = 0\n"
+        . "net.ipv4.conf.all.accept_source_route = 0\nnet.ipv4.conf.default.accept_source_route = 0\n"
+        . "net.ipv6.conf.all.accept_redirects = 0\nnet.ipv6.conf.default.accept_redirects = 0\n";
+    $file = $dir . '/90-sentora-hardening.conf';
+    if (is_link($file) || (is_file($file) && (string) @file_get_contents($file) === $want)) {
+        return;
+    }
+    if (@file_put_contents($file, $want) === false) {
+        return;
+    }
+    @chmod($file, 0644);
+    // (in a container the kernel's own switches may be read-only: they then come with the host's
+    // settings; the file still applies wherever it can)
+    $out = array();
+    if ($bin !== '' && is_executable($bin)) {
+        exec(escapeshellarg($bin) . ' -q -p ' . escapeshellarg($file) . ' 2>&1', $out, $rc);
+    }
+    echo 'Kernel safety switches written to ' . $file . (isset($rc) && $rc === 0 ? ' and applied.' : ' (some could not be applied here: they apply at the next boot where the system allows them).') . $nl;
 }
 

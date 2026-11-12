@@ -59,3 +59,26 @@ if (function_exists('posix_geteuid') && posix_geteuid() === 0 && $pfRoot !== '' 
         }
     }
 }
+
+/*
+ * The panel's command-line tools: runnable and in root's PATH (/usr/local/sbin). sentora-update
+ * does this for the tools it knows, but an update runs the OLD sentora-update, which does not know
+ * the tools that came with the new release.
+ */
+$tlRoot = rtrim((string) ctrl_options::GetSystemOption('sentora_root'), '/');
+if (function_exists('posix_geteuid') && posix_geteuid() === 0 && $tlRoot !== '' && is_dir('/usr/local/sbin')) {
+    foreach (array('sentora-firewall') as $tlName) {
+        $tlFile = $tlRoot . '/bin/' . $tlName;
+        if (!is_file($tlFile) || is_link($tlFile)) {
+            continue;
+        }
+        if ((fileperms($tlFile) & 0777) !== 0755) {
+            @chmod($tlFile, 0755);
+        }
+        $tlLink = '/usr/local/sbin/' . $tlName;
+        if (!is_link($tlLink) && !file_exists($tlLink)) {
+            @symlink($tlFile, $tlLink);
+        }
+    }
+}
+
