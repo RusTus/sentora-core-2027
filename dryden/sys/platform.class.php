@@ -126,6 +126,7 @@ class sys_platform
         'dnf_automatic_timer' => array('dnf-automatic.timer', 'Its daily timer'),
         'package_install' => array('apt-get -qq -y install', 'The command that installs a package (the tools run it as root)'),
         'php_ext_package' => array('php{v}-{e}', 'The package of a PHP extension ({v}: PHP version, {e}: the extension)'),
+        'php_pecl_package' => array('php{v}-{e}', 'The package of a PHP add-on extension from PECL, such as apcu or redis ({v}: PHP version, {e}: the extension)'),
         // the extra PHP versions (Sentora's builds): which bundles fit this system, and their libraries
         // (empty: worked out as before, for servers installed before these settings)
         'php_bundle_tag' => array('', 'The system part of the PHP bundles\' names (sentora-php-<version>-<this>-amd64.tar.gz)'),

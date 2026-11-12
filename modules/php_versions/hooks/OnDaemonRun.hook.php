@@ -16,3 +16,10 @@ $pvOut = sys_phpbundles::DaemonRun();
 if ($pvOut !== '') {
     echo fs_filehandler::NewLine() . "START PHP updates" . fs_filehandler::NewLine() . trim($pvOut) . fs_filehandler::NewLine() . "END PHP updates" . fs_filehandler::NewLine();
 }
+
+// The extensions of each PHP version (PHP Versions > Extensions): what each has, for the page, and
+// the administrator's switches and settings, tried with PHP first (sys_phpext)
+$pvExt = sys_phpext::DaemonRun();
+if ($pvExt) {
+    echo fs_filehandler::NewLine() . "START PHP extensions" . fs_filehandler::NewLine() . implode(fs_filehandler::NewLine(), $pvExt) . fs_filehandler::NewLine() . "END PHP extensions" . fs_filehandler::NewLine();
+}

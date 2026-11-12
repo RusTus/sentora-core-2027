@@ -47,6 +47,18 @@
     .pv-old-why.ok { color: var(--sn-ok, #1e8a4c); }
     .pv-old-fail { color: var(--sn-bad, #c62f2b); font-weight: 600; }
     .pv-old-list { font-family: monospace; font-size: 12px; overflow-wrap: anywhere; }
+    .pv-ext-ver { margin-top: 10px; border: 1px solid var(--sn-line, #e6e9ee); border-radius: 6px; padding: 8px 12px; }
+    .pv-ext-ver > summary { cursor: pointer; font-size: 14px; }
+    .pv-ext-rows { display: grid; gap: 6px; margin-top: 8px; }
+    .pv-ext-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 8px 10px; border: 1px solid var(--sn-line, #e6e9ee); border-radius: 6px; }
+    .pv-ext-main { flex: 1 1 auto; min-width: 0; }
+    .pv-ext-help { font-size: 12px; line-height: 1.45; margin: 4px 0; color: var(--sn-ink, #1f2933); }
+    .pv-ext-help .pv-sub { display: block; }
+    .pv-ext-row details summary { cursor: pointer; font-size: 12px; color: var(--sn-accent, #447fb3); }
+    .pv-ext-row textarea { margin: 6px 0 4px; font-family: monospace; font-size: 12px; }
+    .pv-ext-save { margin-top: 12px; text-align: right; }
+    .pv-ext-group { margin: 12px 0 0; font-weight: 700; font-size: 13px; }
+    @media (max-width: 640px) { .pv-ext-row { flex-direction: column; } .pv-ext-save .btn { width: 100%; } }
     </style>
     <form class="pv" action="./?module=php_versions&amp;action=SaveVersions" method="post">
         <div class="pv-cards"><@ VersionCards @></div>
@@ -59,6 +71,7 @@
         <@ CSFR_Tag @>
     </form>
     <@ BundleUpdates @>
+    <@ Extensions @>
     <@ OldLogins @>
 </div>
 <script>

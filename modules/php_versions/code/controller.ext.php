@@ -341,6 +341,174 @@ class module_controller extends ctrl_module
     }
 
     /**
+     * The form field name for a version and an extension ("8.4", "apcu" -> "pe_8_4__apcu").
+     *
+     * @param string $kind on or ini
+     * @param string $v
+     * @param string $ext
+     * @return string
+     */
+    static function ExtField($kind, $v, $ext)
+    {
+        return 'pe' . $kind . '_' . str_replace('.', '_', $v) . '__' . $ext;
+    }
+
+    /**
+     * The extensions of every PHP version (<@ Extensions @>): what is built in, the add-ons with a
+     * switch and their own settings, what the system PHP can add from its packages, and what is
+     * never offered, each with what it is for and what to watch out for.
+     *
+     * @return string The HTML.
+     */
+    static function getExtensions()
+    {
+        $inv = sys_phpext::Inventory();
+        $wanted = sys_phpext::Wanted();
+        $cat = sys_phpext::Catalog();
+        $intro = '<h4>' . self::t('Extensions') . '</h4>'
+            . '<p class="pv-sub">' . self::t('Extensions add abilities to PHP: a cache in memory, image work, other databases. Each PHP version has its own. A change here applies to every site on that version (and to the panel, for the default version). The daemon tries PHP with the change first and keeps the old setup if PHP refuses it; changes are used within 5 minutes.') . '</p>'
+            . '<p class="pv-sub">' . self::t('Settings for one website only (upload size, memory, time limits) are in Apache Config: pick the domain, then its PHP settings box.') . '</p>';
+        if (!$inv) {
+            return '<div class="pv-old is-clean pv-ext">' . $intro . '<p class="pv-sub">' . self::t('Not looked at yet: the daemon lists each version\'s extensions within 5 minutes.') . '</p></div>';
+        }
+        $help = function ($e) use ($cat) {
+            if (!isset($cat[$e]) || isset($cat[$e]['never'])) {
+                return '';
+            }
+            $c = $cat[$e];
+            return '<div class="pv-ext-help"><span>' . self::t($c[0]) . '</span>'
+                . ($c[1] !== '' ? ' <span class="pv-sub">' . self::t('When') . ': ' . self::t($c[1]) . '</span>' : '')
+                . ($c[2] !== '' ? ' <span class="pv-sub">' . self::t('Careful') . ': ' . self::t($c[2]) . '</span>' : '') . '</div>';
+        };
+        $out = '';
+        foreach ($inv as $v => $i) {
+            $v = (string) $v;
+            $loaded = (array) $i['loaded'];
+            $files = (array) $i['files'];
+            $by = (array) $i['by'];
+            $res = (array) $i['results'];
+            $w = isset($wanted[$v]) ? (array) $wanted[$v] : array();
+            $rows = '';
+            $addRows = '';
+            $sysOn = array();
+            $builtin = array();
+            $never = array();
+            $names = array_unique(array_merge($files, (array) $i['addable']));
+            sort($names);
+            foreach ($loaded as $e) {
+                if (!in_array($e, $files, true)) {
+                    $builtin[] = $e;
+                }
+            }
+            foreach ($names as $e) {
+                if (!preg_match('/^[a-z0-9_]{1,40}$/', $e)) {
+                    continue;
+                }
+                if (($why = sys_phpext::Never($e)) !== '') {
+                    $never[$e] = $why;
+                    continue;
+                }
+                if ($e === 'snuffleupagus') {
+                    continue;
+                }
+                $isLoaded = in_array($e, $loaded, true);
+                $file = isset($by[$e]) ? (string) $by[$e] : '';
+                $system = $isLoaded && $file !== '' && !sys_phpext::IsOwn($file, $e, $v);
+                $addable = in_array($e, (array) $i['addable'], true);
+                $want = isset($w[$e]) ? (array) $w[$e] : array();
+                // on from the system's own package and nothing to set for it: in the short list only
+                if ($system && !in_array($e, array('opcache', 'apcu', 'redis', 'memcached', 'imagick'), true) && empty($want['ini'])) {
+                    $sysOn[] = $e;
+                    continue;
+                }
+                $on = isset($want['on']) ? !empty($want['on']) : $isLoaded;
+                $iniText = isset($want['ini']) ? (string) $want['ini'] : '';
+                $state = $system ? '<span class="pv-sup ok">' . self::t('On (the system\'s package)') . '</span>'
+                    : ($isLoaded ? '<span class="pv-sup ok">' . self::t('On') . '</span>'
+                    : ($addable ? '<span class="pv-sup">' . self::t('Not installed: added from the system\'s package when switched on') . '</span>'
+                    : '<span class="pv-sup">' . self::t('Off') . '</span>'));
+                if (isset($res[$e]) && (int) $res[$e]['time'] > time() - 7 * 86400) {
+                    $state .= ' <span class="' . (!empty($res[$e]['ok']) ? 'pv-old-why ok' : 'pv-old-fail') . '">' . self::h($res[$e]['text']) . '</span>';
+                }
+                $switch = $system ? ''
+                    : '<label class="sf-switch" title="' . self::t('Switched on for this version') . '"><input type="checkbox" name="' . self::ExtField('on', $v, $e) . '" value="1"' . ($on ? ' checked' : '') . '><span class="sf-toggle"></span></label>';
+                $row = '<div class="pv-ext-row"><div class="pv-ext-main"><div><b>' . self::h($e) . '</b> ' . $state . '</div>' . $help($e)
+                    . '<details' . ($iniText !== '' ? ' open' : '') . '><summary>' . self::t('Its own settings') . '</summary>'
+                    . '<textarea class="form-control sf-code" rows="3" spellcheck="false" name="' . self::ExtField('ini', $v, $e) . '" placeholder="' . self::h($e) . '.setting = value">' . self::h($iniText) . '</textarea>'
+                    . '<span class="pv-sub">' . str_replace('%s', self::h($e . '.'), self::t('One a line: name = value (the names start with %s). Settings that name a file or folder can not be set here.')) . '</span></details></div>' . $switch . '</div>';
+                if ($system) {
+                    $row .= '<input type="hidden" name="' . self::ExtField('on', $v, $e) . '" value="1">';
+                }
+                if ($addable) {
+                    $addRows .= $row;
+                } else {
+                    $rows .= $row;
+                }
+            }
+            $nev = '';
+            foreach ($never as $e => $why) {
+                $nev .= '<li><b>' . self::h($e) . '</b>: ' . self::t($why) . (in_array($e, $loaded, true) ? ' <span class="pv-old-why">' . self::t('(This system\'s own package switched it on for this PHP: remove that package, or its .ini file, if no site needs it.)') . '</span>' : '') . '</li>';
+            }
+            sort($builtin);
+            $out .= '<details class="pv-ext-ver"' . (count($inv) === 1 ? ' open' : '') . '><summary><b>PHP ' . self::h($v) . '</b> <span class="pv-sub">'
+                . str_replace('%d', (string) count($loaded), self::t('%d extensions on')) . ($i['system'] ? ' · ' . self::t('default') : '') . '</span></summary>'
+                . ($rows !== '' ? '<p class="pv-ext-group">' . self::t('Add-ons') . '</p><div class="pv-ext-rows">' . $rows . '</div>' : '<p class="pv-sub">' . self::t('No add-ons to switch in this build.') . '</p>')
+                . ($addRows !== '' ? '<p class="pv-ext-group">' . self::t('Can be added from the system\'s packages') . '</p><div class="pv-ext-rows">' . $addRows . '</div>' : '')
+                . '<p class="pv-sub"><b>' . self::t('Always on') . ':</b> ' . self::h(implode(', ', array_merge($builtin, $sysOn))) . '</p>'
+                . ($nev !== '' ? '<p class="pv-sub"><b>' . self::t('Not offered') . ':</b></p><ul class="pv-sub">' . $nev . '</ul>' : '')
+                . '</details>';
+        }
+        return '<form class="pv-old is-clean pv-ext" action="./?module=php_versions&amp;action=SaveExtensions" method="post">' . $intro . $out
+            . '<div class="pv-ext-save"><button class="btn btn-primary" type="submit">' . self::t('Save extensions') . '</button></div>' . runtime_csfr::Token() . '</form>';
+    }
+
+    /**
+     * Save the extension choices (switches and settings); the daemon applies them.
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return void
+     */
+    static function doSaveExtensions()
+    {
+        global $controller;
+        runtime_csfr::Protect();
+        $f = $controller->GetAllControllerRequests('FORM');
+        $inv = sys_phpext::Inventory();
+        $old = sys_phpext::Wanted();
+        $new = array();
+        $bad = array();
+        foreach ($inv as $v => $i) {
+            $v = (string) $v;
+            $names = array_unique(array_merge((array) $i['files'], (array) $i['addable']));
+            foreach ($names as $e) {
+                if (!preg_match('/^[a-z0-9_]{1,40}$/', $e) || sys_phpext::Never($e) !== '' || $e === 'snuffleupagus') {
+                    continue;
+                }
+                $on = !empty($f[self::ExtField('on', $v, $e)]);
+                $ini = rtrim(str_replace("\r\n", "\n", (string) ($f[self::ExtField('ini', $v, $e)] ?? '')));
+                list(, $why) = sys_phpext::ParseSettings($e, $ini);
+                foreach ($why as $w) {
+                    $bad[] = 'PHP ' . $v . ', ' . $e . ': ' . $w;
+                }
+                $was = isset($old[$v][$e]) ? $old[$v][$e] : array('on' => in_array($e, (array) $i['loaded'], true), 'ini' => '');
+                $entry = array('on' => $on, 'ini' => $ini);
+                // asked again for one the system's packages did not have: try once more
+                $entry['asked'] = ($on && empty($was['on'])) ? time() : (int) ($was['asked'] ?? 0);
+                // only what differs from how PHP is now, so nothing changes behind the administrator's back
+                if ($on !== in_array($e, (array) $i['loaded'], true) || $ini !== '' || isset($old[$v][$e])) {
+                    $new[$v][$e] = $entry;
+                }
+            }
+        }
+        if ($bad) {
+            self::$old = array(self::h(implode(' ', $bad)), 'zannounceerror');
+            return;
+        }
+        sys_phpext::SaveWanted($new);
+        self::$old = array(self::t('Saved. The daemon tries PHP with the changes and uses them within 5 minutes; each extension shows how it went.'), 'zannounceok');
+    }
+
+    /**
      * The message after a save (<@ Result @>).
      *
      * @return string|null
