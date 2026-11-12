@@ -133,7 +133,8 @@ class ui_templateparser
         if (($match) && (!empty($match[1]))) {
             $i = 0;
             foreach ($match[1] as $function) {
-                $data = str_replace($match[0][$i], '<?php foreach((module_controller::get' . $function . '() ?: array()) as $key => $value){ ?>', $data);
+                $data = str_replace($match[0][$i], self::HasGetter($function) ? '<?php foreach((module_controller::get' . $function . '() ?: array()) as $key => $value){ ?>'
+                    : '<?php foreach(array() as $key => $value){ ?>', $data);
                 $i++;
             }
         }
@@ -205,7 +206,7 @@ class ui_templateparser
         if (($match) && (!empty($match[1]))) {
             $i = 0;
             foreach ($match[1] as $function) {
-                $data = str_replace($match[0][$i], '<?php if(module_controller::get' . $function . '()){ ?>', $data);
+                $data = str_replace($match[0][$i], self::HasGetter($function) ? '<?php if(module_controller::get' . $function . '()){ ?>' : '<?php if(false){ ?>', $data);
                 $i++;
             }
         }
@@ -264,9 +265,28 @@ class ui_templateparser
     }
 
     /**
-     * Compiles Sentora function each template tags into valid PHP.
+     * Whether the module's controller has getX() for a template tag (<@ X @>, <% if X %>,
+     * <% loop X %>). A missing one used to stop the whole page with a PHP fatal error.
      *
-     * <@ X @> echoes module_controller::getX(). Note: getX() is also called once here, while compiling.
+     * @param string $name The tag's name (X).
+     * @return bool
+     */
+    static private function HasGetter($name)
+    {
+        if (class_exists('module_controller', false) && method_exists('module_controller', 'get' . $name)) {
+            return true;
+        }
+        // (a module, often an add-on, whose page names a value its controller does not have: the
+        // tag shows nothing and the page still opens; the panel's PHP log says which)
+        trigger_error('Template tag "' . $name . '" has no module_controller::get' . $name . '() in module ' . (isset($_GET['module']) ? preg_replace('/[^a-z0-9_]/i', '', (string) $_GET['module']) : '?'), E_USER_WARNING);
+        return false;
+    }
+
+    /**
+     * Compiles Sentora echo template tags into valid PHP.
+     *
+     * <@ X @> echoes module_controller::getX(); a tag whose getX() the module does not have
+     * echoes nothing (see HasGetter). Note: getX() is also called once here, while compiling.
      *
      * @author Sam Mottley (smottley@zpanelcp.com)
      * @param string $value The regular expression for the tag (from $Functions).
@@ -281,6 +301,11 @@ class ui_templateparser
             $i = 0;
             foreach ($match[1] as $classes) {
                 $method_name = "get" . $classes;
+                if (!self::HasGetter($classes)) {
+                    $data = str_replace($match[0][$i], '', $data);
+                    $i++;
+                    continue;
+                }
                 $output = module_controller::$method_name();
                 $data = str_replace($match[0][$i], "<?php echo module_controller::" . $method_name . "(); ?>", $data);
                 $i++;
