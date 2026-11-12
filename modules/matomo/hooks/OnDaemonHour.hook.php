@@ -110,7 +110,9 @@ function MatomoImportLogs()
                 . ($ok !== null ? ", " . $ok . " recorded in Matomo" : "")
                 . ($ign !== null ? ", " . $ign . " left out (bots, static files and the like)" : "") . ".");
         } else {
-            MatomoReport($domain . ": import FAILED (the lines are tried again next hour): " . substr(implode(' ', array_slice($out, -3)), 0, 300));
+            // (a Python error ends with its own line: "SomeError: why"; that is what tells the cause)
+            $why = array_values(array_filter(array_map('trim', $out), 'strlen'));
+            MatomoReport($domain . ": import FAILED (the lines are tried again next hour): " . substr((string) end($why), 0, 400));
         }
         $out = array();
     }
