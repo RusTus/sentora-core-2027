@@ -253,7 +253,21 @@ function SentoraPostfixMapTypes()
     $def = trim((string) shell_exec(escapeshellarg($pc) . ' -h default_database_type 2>/dev/null'));
     $confDir = trim((string) shell_exec(escapeshellarg($pc) . ' -h config_directory 2>/dev/null'));
     $file = realpath($confDir . '/main.cf');
-    if ($def === '' || !in_array($def, $types, true) || in_array($def, $missing, true) || $file === false || !is_file($file)) {
+    // (this Postfix's own default may be one of the missing types too, as on AlmaLinux 10: then the
+    // first one it has of lmdb and cdb, the types that need no Berkeley DB)
+    $setDefault = false;
+    if ($def === '' || !in_array($def, $types, true)) {
+        $setDefault = true;
+        $def = '';
+        foreach (array('lmdb', 'cdb') as $t) {
+            if (in_array($t, $types, true)) {
+                $def = $t;
+                break;
+            }
+        }
+    }
+    if ($def === '' || $file === false || !is_file($file)) {
+        echo 'Postfix: main.cf names ' . implode('/', $missing) . ' tables, which this Postfix can not read, and it has no lmdb or cdb to use instead.' . $nl;
         return;
     }
     $lines = explode("\n", (string) file_get_contents($file));
@@ -269,6 +283,24 @@ function SentoraPostfixMapTypes()
         }, $line);
         if ($new !== $line) {
             $lines[$i] = $new;
+            $changed++;
+        }
+    }
+    // (a default that names a missing type: commands without a type, such as newaliases' tables,
+    // would fail too)
+    if ($setDefault) {
+        $found = false;
+        foreach ($lines as $i => $line) {
+            if (preg_match('/^\s*default_database_type\s*=\s*(\S*)/', $line, $dm)) {
+                $found = true;
+                if ($dm[1] !== $def) {
+                    $lines[$i] = 'default_database_type = ' . $def;
+                    $changed++;
+                }
+            }
+        }
+        if (!$found) {
+            array_splice($lines, count($lines) - (end($lines) === '' ? 1 : 0), 0, array('', '# (set by Sentora: this Postfix has no ' . implode('/', $missing) . ')', 'default_database_type = ' . $def));
             $changed++;
         }
     }

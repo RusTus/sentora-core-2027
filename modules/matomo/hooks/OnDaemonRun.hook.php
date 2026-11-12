@@ -101,7 +101,8 @@ function MatomoSync()
     $lines = explode("\n", trim($out));
     $res = json_decode((string) end($lines), true);
     if ($rc !== 0 || !is_array($res)) {
-        echo "Matomo sync FAILED: " . substr($out, 0, 500) . fs_filehandler::NewLine();
+        // (Matomo's own log prefix says nothing; the exception's message is what tells why)
+        echo "Matomo sync FAILED: " . substr(trim(preg_replace('/^ERROR\s+\[[^\]]*\]\s+\d+\s+/m', '', $out)), 0, 1500) . fs_filehandler::NewLine();
         return;
     }
     $up = $zdbh->prepare("INSERT INTO x_matomo_sites (ms_domain_vc, ms_acc_fk, ms_idsite_in, ms_deleted_in) VALUES (:d, :a, :i, 0)

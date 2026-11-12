@@ -483,7 +483,7 @@ if command -v postconf > /dev/null 2>&1; then
     # every table type main.cf names must be one this Postfix can read (AlmaLinux 10 and Fedora have no hash or btree)
     PF_TYPES=" $(postconf -m 2> /dev/null | tr '\n' ' ')"
     PF_BAD=$(postconf -n 2> /dev/null | grep -oE '(^|[ ,=])(hash|btree|dbm|sdbm|lmdb|cdb):' | grep -oE '[a-z]+' | sort -u | while read -r t; do case "$PF_TYPES" in *" $t "*) ;; *) printf ' %s' "$t" ;; esac; done)
-    if [ -n "$PF_BAD" ]; then fail "mail: main.cf names table types this Postfix can not read:$PF_BAD (the daemon moves them to $(postconf -h default_database_type 2> /dev/null); run it: php -q $PANEL/bin/daemon.php)"
+    if [ -n "$PF_BAD" ]; then fail "mail: main.cf names table types this Postfix can not read:$PF_BAD (the daemon moves them to a type it has; run it: php -q $PANEL/bin/daemon.php)"
     else ok "mail: Postfix can read every table type main.cf names"; fi
 fi
 NC=$(sp bind_dir); NC="${NC%/}/named.conf"
