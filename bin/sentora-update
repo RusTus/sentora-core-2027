@@ -287,6 +287,34 @@ fix_permissions() {
     done
 }
 
+# copy_tree <from> <to> [--delete] [path to leave alone]...: the files of <from> over <to>, with owners and
+# modes; the paths given ("/cnf/", "/bin/zsudo") are neither copied nor (with --delete) removed. --delete:
+# what <to> has and <from> does not is removed. With tar, not rsync: under SELinux, rsync started by a
+# service (the panel's Update button, Keep the panel up to date) runs confined as an rsync server and
+# may neither read the update's folder nor write the panel's; tar runs as sentora-update itself.
+copy_tree() {
+    local from="${1%/}" to="${2%/}" del=0 p; shift 2
+    local -a ex=() tex=()
+    for p in "$@"; do
+        if [ "$p" = --delete ]; then del=1; continue; fi
+        p=${p%/}; ex+=(".$p"); tex+=("--exclude=.$p")
+    done
+    ( cd "$from" && tar --anchored "${tex[@]}" -cf - . ) | ( cd "$to" && tar -xpf - ) || return 1
+    if [ $del -eq 1 ]; then
+        local keep left
+        ( cd "$to" && find . -mindepth 1 | LC_ALL=C sort ) > "$TMP/ct-to"
+        ( cd "$from" && find . -mindepth 1 | LC_ALL=C sort ) > "$TMP/ct-from"
+        LC_ALL=C comm -23 "$TMP/ct-to" "$TMP/ct-from" | LC_ALL=C sort -r | while IFS= read -r left; do
+            keep=0
+            for p in "${ex[@]}"; do
+                case "$left" in "$p"|"$p"/*) keep=1; break ;; esac
+            done
+            [ $keep -eq 1 ] || rm -rf -- "${to:?}/${left#./}"
+        done
+        rm -f "$TMP/ct-to" "$TMP/ct-from"
+    fi
+}
+
 php_reload() {
     local v; v=$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;' 2> /dev/null)
     # (the system PHP-FPM's service: php8.4-fpm on Debian, php-fpm on AlmaLinux: setting php_fpm_service)
@@ -359,7 +387,6 @@ if [ "$MODE" = rollback ]; then
     st backup "$RESTORE"
     UI_TOTAL=4
     ui_step "Unpacking the backup"
-    need rsync rsync
     TMP=$(mktemp -d); trap 'ui_ticker_stop; [ "$BASHPID" = "$$" ] && [ "$UI_TICKFILE" != /dev/null ] && rm -f "$UI_TICKFILE"; [ "$BASHPID" = "$$" ] && rm -rf "$TMP"' EXIT
     tar -xzf "$RESTORE" -C "$TMP" || die "could not unpack $RESTORE"
     [ -f "$TMP/panel/index.php" ] || die "$RESTORE is not a panel backup"
@@ -371,14 +398,14 @@ if [ "$MODE" = rollback ]; then
         m=$(basename "$d")
         [ -d "$TMP/panel/modules/$m" ] && continue
         if [ -f "$STATUS_DIR/core-modules" ] && grep -qxF "$m" "$STATUS_DIR/core-modules"; then continue; fi
-        KEEP+=("--exclude=/modules/$m/"); ADDONS="$ADDONS $m"
+        KEEP+=("/modules/$m/"); ADDONS="$ADDONS $m"
     done
     # back to exactly that state, except this server's own files (kept as they are now)
-    rsync -a --delete "${KEEP[@]}" --exclude=/cnf/ --exclude=/bin/zsudo --exclude=/etc/tmp/ --exclude=/etc/zppy-cache/ \
-        --exclude=/etc/apps/matomo/tmp/ --exclude=/etc/apps/matomo/config/config.ini.php \
-        --exclude=/etc/apps/webmail/config/config.inc.php --exclude=/etc/apps/phpmyadmin/config.inc.php \
-        --exclude=/etc/apps/webmail/plugins/managesieve/config.inc.php --exclude=/etc/apps/webmail/plugins/password/config.inc.php \
-        "$TMP/panel/" "$PANEL/" || die "the restore did not complete"
+    copy_tree "$TMP/panel/" "$PANEL/" --delete "${KEEP[@]}" /cnf/ /bin/zsudo /etc/tmp/ /etc/zppy-cache/ \
+        /etc/apps/matomo/tmp/ /etc/apps/matomo/config/config.ini.php \
+        /etc/apps/webmail/config/config.inc.php /etc/apps/phpmyadmin/config.inc.php \
+        /etc/apps/webmail/plugins/managesieve/config.inc.php /etc/apps/webmail/plugins/password/config.inc.php \
+        || die "the restore did not complete"
     # Only the files go back, not the database: modules the newer panel registered (Panel Update and
     # the like) would stay in the menu with nothing behind them ("Unable to find requested module").
     # Unregister the ones whose folder the restored panel does not have; the next update registers
@@ -498,7 +525,7 @@ UI_TOTAL=9
 TMP=$(mktemp -d); trap 'ui_ticker_stop; [ "$BASHPID" = "$$" ] && [ "$UI_TICKFILE" != /dev/null ] && rm -f "$UI_TICKFILE"; [ "$BASHPID" = "$$" ] && rm -rf "$TMP"' EXIT
 
 ui_step "Checking the release"
-need rsync rsync; need unzip unzip
+need unzip unzip
 release_lookup
 if [ -n "$KIND" ]; then
     say "newest: $KIND $RTAG of $REPO${PUBLISHED:+, published $PUBLISHED}"
@@ -571,13 +598,10 @@ for unit in /etc/systemd/system/sentora-php*-fpm.service; do
     fi
 done
 
-# rsync copies the new core (minimized Ubuntu servers may not have it)
-command -v rsync > /dev/null 2>&1 || $PKG rsync > /dev/null 2>&1 || die "rsync is not installed: $PKG rsync, then run sentora-update again"
-
 # --- copy the new core ------------------------------------------------------------------
-rsync -a --exclude=/cnf/ --exclude=/bin/zsudo --exclude=/etc/tmp/ --exclude=/etc/zppy-cache/ \
-    --exclude=/etc/apps/matomo/tmp/ --exclude=/etc/apps/matomo/config/config.ini.php \
-    "$SRC/" "$PANEL/" || die "the copy did not complete: restore with sentora-update --rollback $B"
+copy_tree "$SRC/" "$PANEL/" /cnf/ /bin/zsudo /etc/tmp/ /etc/zppy-cache/ \
+    /etc/apps/matomo/tmp/ /etc/apps/matomo/config/config.ini.php \
+    || die "the copy did not complete: restore with sentora-update --rollback $B"
 # the core's own modules, so that a rollback takes out only those and keeps add-on modules
 if st_dir; then
     ( cd "$SRC/modules" && ls -1d */ | tr -d / ) > "$STATUS_DIR/core-modules.new" 2> /dev/null \
@@ -624,7 +648,7 @@ retire_theme Kerf Modern light
 retire_theme Legacy Modern light
 
 # Modules taken out of the core: unregistered (the module and its group permissions; a
-# user's own dashboard order simply skips it), then their folders removed. rsync copies the
+# user's own dashboard order simply skips it), then their folders removed. the copy brings the
 # new core over the old one but never deletes, so without this they would stay installed.
 #   retire_module <module folder> [<bundled app folder under etc/apps>]
 retire_module() {
@@ -648,7 +672,7 @@ retire_module() {
     fi
 }
 retire_module phpsysinfo phpsysinfo
-# Folders a core module no longer has (rsync never deletes them): Apache Status's bundled
+# Folders a core module no longer has (the copy never deletes them): Apache Status's bundled
 # Pimped Apache Status, which the module's own dashboard replaced
 #   retire_dir <folder, relative to the panel>
 retire_dir() {
