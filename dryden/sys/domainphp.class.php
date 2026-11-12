@@ -67,6 +67,46 @@ class sys_domainphp
     }
 
     /**
+     * What each setting does, an example, and what to watch out for (shown under the box).
+     *
+     * @return array<string, array{0: string, 1: string, 2: string}> name => (what it does, example, careful)
+     */
+    static function Help()
+    {
+        return array(
+            'memory_limit' => array('The most memory one page may use.', '512M', 'Higher lets one busy page use more of the server\'s memory; raise it only for a site that needs it (large imports, page builders).'),
+            'upload_max_filesize' => array('The largest file one upload may be.', '128M', 'Keep post_max_size a little larger, or the upload still fails. Large uploads fill the account\'s disk quota.'),
+            'post_max_size' => array('The largest form (with its uploads) the site accepts.', '136M', 'Should be a bit more than upload_max_filesize.'),
+            'max_execution_time' => array('How many seconds a page may run before PHP stops it.', '120', 'A long value lets a stuck page hold a PHP process; better for an import or backup page than for the whole site.'),
+            'max_input_time' => array('How many seconds PHP waits for a form or upload to arrive.', '120', 'Raise it for large uploads on slow connections.'),
+            'max_input_vars' => array('How many fields one form may send.', '5000', 'Too low and big menus or shop products lose fields when saved, without an error.'),
+            'max_input_nesting_level' => array('How deep fields may be nested in a form.', '64', 'Rarely needed.'),
+            'max_file_uploads' => array('How many files one form may upload at once.', '50', 'Safe to raise for galleries.'),
+            'default_socket_timeout' => array('Seconds PHP waits for another server (an API, a feed).', '30', 'Higher makes pages wait longer when that server is slow.'),
+            'display_errors' => array('Show PHP errors on the page.', 'Off', 'On shows file paths and details to every visitor: only while fixing a problem, then Off again. Errors go to the site\'s error log either way.'),
+            'display_startup_errors' => array('Show errors PHP has while starting.', 'Off', 'As display_errors: only while fixing a problem.'),
+            'log_errors' => array('Write PHP errors to the site\'s error log.', 'On', 'Leave On: it is how you find what went wrong.'),
+            'html_errors' => array('Errors with HTML formatting.', 'Off', 'Harmless either way.'),
+            'error_reporting' => array('Which kinds of errors PHP reports.', 'E_ALL & ~E_DEPRECATED', 'Hiding warnings hides problems; it does not fix them.'),
+            'output_buffering' => array('Collect a page before sending it (On, Off or a size in bytes).', '4096', 'Old sites that send headers late may need it.'),
+            'short_open_tag' => array('Allow <? as well as <?php.', 'Off', 'Only for old code that uses <?. New code should use <?php.'),
+            'allow_url_fopen' => array('Let PHP open web addresses like files.', 'On', 'Off is safer for sites that do not need it, but many plugins (updates, feeds) do.'),
+            'zlib.output_compression' => array('PHP compresses its own pages.', 'Off', 'Leave Off: Apache already compresses (Brotli or gzip).'),
+            'default_charset' => array('The character set PHP announces.', 'UTF-8', 'Change only for an old site in another character set.'),
+            'date.timezone' => array('The time zone for dates the site shows.', 'America/Chicago', 'Harmless; use the site\'s own region.'),
+            'pcre.backtrack_limit' => array('How much work one regular expression may do.', '1000000', 'Higher can make a page hang on a bad pattern.'),
+            'pcre.recursion_limit' => array('How deep one regular expression may go.', '100000', 'Higher can crash a PHP process.'),
+            'session.gc_maxlifetime' => array('Seconds an unused login stays valid.', '7200', 'Longer keeps people logged in longer, also on shared computers.'),
+            'session.cookie_lifetime' => array('Seconds the login cookie lives (0: until the browser closes).', '0', 'Longer: the login survives closing the browser.'),
+            'session.cookie_secure' => array('Send the login cookie over HTTPS only.', 'On', 'Turn On once the site always uses HTTPS; on a site still on http:// logins stop working.'),
+            'session.cookie_httponly' => array('Keep the login cookie away from JavaScript.', 'On', 'Leave On (protects logins from injected scripts); Off only for an old script that reads it.'),
+            'session.cookie_samesite' => array('Whether other sites\' pages send the login cookie (Lax, Strict or None).', 'Lax', 'Strict can log people out when they come from a link elsewhere; None needs session.cookie_secure On and is the least safe.'),
+            'session.use_strict_mode' => array('Refuse login ids the site did not make itself.', 'On', 'Leave On (stops session fixation); Off only for an old single sign-on that sets its own ids.'),
+            'session.name' => array('The name of the login cookie.', 'MYSITE', 'Changing it logs everyone out once.'),
+        );
+    }
+
+    /**
      * Add the column to x_vhosts on a server installed before it (no settings for any domain).
      *
      * @global db_driver $zdbh The panel's database connection.

@@ -472,8 +472,28 @@ class module_controller extends ctrl_module
             . $row('vh_ssl_port_in', 'SSL port', 'Empty: 443.', $num('vh_ssl_port_in'))
             . $row('vh_ssl_tx', 'SSL settings', 'The certificate lines Sencrypt writes; change them only if you know why.', $code('vh_ssl_tx'), true)
             . $row('vh_custom_tx', 'Extra directives', 'Apache directives added to this domain\'s configuration.', $code('vh_custom_tx'), true)
-            . $row(sys_domainphp::COLUMN, 'PHP settings', 'One a line, as in php.ini: name = value (for example upload_max_filesize = 128M). They replace the server\'s values for this domain only; the site\'s own .user.ini can still change them. Empty: the server\'s values. Allowed: %s.', $code(sys_domainphp::COLUMN), true, implode(', ', array_keys(sys_domainphp::Allowed())))
+            . $row(sys_domainphp::COLUMN, 'PHP settings', 'One a line, as in php.ini: name = value (for example upload_max_filesize = 128M). They replace the server\'s values for this domain only; the site\'s own .user.ini can still change them. Empty: the server\'s values. Allowed: %s.', $code(sys_domainphp::COLUMN) . self::PhpSettingsHelp(), true, implode(', ', array_keys(sys_domainphp::Allowed())))
             . '</section>';
+    }
+
+    /**
+     * The help under the PHP settings box: what the box is for, how it works, and what each
+     * setting does, with an example and what to watch out for (opened on a click).
+     *
+     * @return string The HTML.
+     */
+    static function PhpSettingsHelp()
+    {
+        $rows = '';
+        foreach (sys_domainphp::Help() as $name => $h) {
+            $rows .= '<tr><td><code>' . self::h($name) . '</code></td><td>' . self::h(self::t($h[0])) . '</td><td><code>' . self::h($h[1]) . '</code></td><td>' . self::h(self::t($h[2])) . '</td></tr>';
+        }
+        return '<details class="aa-php-help" style="margin-top:8px"><summary>' . self::t('How this works, and what each setting does') . '</summary>'
+            . '<p>' . self::t('These settings change PHP for this domain only; the server\'s own values stay for every other site. Use them when one site needs more than the others, for example larger uploads for a photo site or more form fields for a shop.') . '</p>'
+            . '<p>' . self::t('The domain then gets its own PHP process (a pool), run by the same account user and kept in the same folders: a setting here can never reach another account. The safety settings (open_basedir, temporary folders, disabled functions, extensions) can not be set here. The site\'s own .user.ini file can still change a value for itself. Changes are used within 5 minutes; if PHP refuses them, the old settings stay and the daemon\'s report says so.') . '</p>'
+            . '<p>' . self::t('Change only what a site needs: a value that is too high lets one site use more of the server (memory, time), and showing errors to visitors gives away details about the site.') . '</p>'
+            . '<div class="table-responsive"><table class="table table-striped table-condensed"><thead><tr><th>' . self::t('Setting') . '</th><th>' . self::t('What it does') . '</th><th>' . self::t('Example') . '</th><th>' . self::t('Careful') . '</th></tr></thead><tbody>'
+            . $rows . '</tbody></table></div></details>';
     }
 
     /**
