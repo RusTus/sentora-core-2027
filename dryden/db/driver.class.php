@@ -95,6 +95,53 @@ class db_driver extends PDO {
     public function __construct($dsn, $username = null, $password = null, $driver_options = null) {
         // PHP 8 PDO throws on errors by default; Sentora handles them itself below.
         parent::__construct($dsn, $username, $password, $driver_options);
+        // its statements tell it when they change something (db_statement)
+        $this->setAttribute(PDO::ATTR_STATEMENT_CLASS, array('db_statement', array($this)));
+    }
+
+    /**
+     * @var array<string, array{0: int, 1: mixed}> What this page remembered (Remember()).
+     */
+    private $remembered = array();
+
+    /**
+     * True for a statement that only reads (SELECT, SHOW, DESCRIBE, EXPLAIN, and a WITH ... SELECT).
+     *
+     * @param string $sql
+     * @return bool
+     */
+    public static function IsRead($sql) {
+        return (bool) preg_match('/^\s*(\(\s*)*(SELECT|SHOW|DESCRIBE|DESC|EXPLAIN|WITH)\b/i', (string) $sql)
+            && !preg_match('/\b(INSERT|UPDATE|DELETE|REPLACE|INTO\s+OUTFILE|FOR\s+UPDATE)\b/i', (string) $sql);
+    }
+
+    /**
+     * Something in the database was changed (through this connection): everything remembered is read again.
+     *
+     * @return void
+     */
+    public function Changed() {
+        $this->remembered = array();
+    }
+
+    /**
+     * What a page reads again and again (all settings, the logged-in account, the permissions), read
+     * once per page: $read() is called the first time and again after anything was changed. Only for
+     * the panel's pages (a web request is short); the daemon and the command line tools always read
+     * the database, as they may wait for another program to change something.
+     *
+     * @param string $key
+     * @param callable $read
+     * @return mixed
+     */
+    public function Remember($key, $read) {
+        if (PHP_SAPI === 'cli') {
+            return $read();
+        }
+        if (!array_key_exists($key, $this->remembered)) {
+            $this->remembered[$key] = $read();
+        }
+        return $this->remembered[$key];
     }
 
     /**
@@ -146,6 +193,9 @@ class db_driver extends PDO {
     public function query(string $query, ?int $fetchMode = null, mixed ...$fetchModeArgs): PDOStatement|false {
         try {
             $result = ($fetchMode === null) ? parent::query($query) : parent::query($query, $fetchMode, ...$fetchModeArgs);
+            if (!self::IsRead($query)) {
+                $this->Changed();
+            }
             return($result);
         } catch (PDOException $e) {
             $errormessage = $this->errorInfo();
@@ -169,6 +219,7 @@ class db_driver extends PDO {
     public function exec(string $query): int|false {
         try {
             $result = parent::exec($query);
+            $this->Changed();
             return($result);
         } catch (PDOException $e) {
             $errormessage = $this->errorInfo();

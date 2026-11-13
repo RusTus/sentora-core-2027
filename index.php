@@ -29,6 +29,10 @@ session_start();
 // Every form that posts gets this session's CSRF token, added to the page as it is sent;
 // the page head also carries it for the panel's own AJAX calls
 ob_start(function ($html) {
+    // (and the panel's styles and scripts by their date, so browsers keep them: ui_assets)
+    if (class_exists('ui_assets')) {
+        $html = ui_assets::Versioned($html);
+    }
     return class_exists('runtime_csfr') ? runtime_csfr::AddToHead(runtime_csfr::AddToForms($html)) : $html;
 });
 require_once 'dryden/loader.inc.php';

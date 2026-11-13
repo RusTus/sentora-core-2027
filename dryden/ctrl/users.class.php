@@ -53,17 +53,21 @@ class ctrl_users {
         if ($uid == "") {
             $uid = ctrl_auth::CurrentUserID();
         }
-        $rows = $zdbh->prepare("
-            SELECT * FROM x_accounts
-            LEFT JOIN x_profiles ON (x_accounts.ac_id_pk=x_profiles.ud_user_fk)
-            LEFT JOIN x_groups   ON (x_accounts.ac_group_fk=x_groups.ug_id_pk)
-            LEFT JOIN x_packages ON (x_accounts.ac_package_fk=x_packages.pk_id_pk)
-            LEFT JOIN x_quotas   ON (x_accounts.ac_package_fk=x_quotas.qt_package_fk)
-            WHERE x_accounts.ac_id_pk= :uid
-          ");
-        $rows->bindParam(':uid', $uid);
-        $rows->execute();
-        $dbvals = $rows->fetch();
+        // (asked for by many parts of every page: read once per page, again after anything changed)
+        $read = function () use ($zdbh, $uid) {
+            $rows = $zdbh->prepare("
+                SELECT * FROM x_accounts
+                LEFT JOIN x_profiles ON (x_accounts.ac_id_pk=x_profiles.ud_user_fk)
+                LEFT JOIN x_groups   ON (x_accounts.ac_group_fk=x_groups.ug_id_pk)
+                LEFT JOIN x_packages ON (x_accounts.ac_package_fk=x_packages.pk_id_pk)
+                LEFT JOIN x_quotas   ON (x_accounts.ac_package_fk=x_quotas.qt_package_fk)
+                WHERE x_accounts.ac_id_pk= :uid
+              ");
+            $rows->bindValue(':uid', $uid);
+            $rows->execute();
+            return $rows->fetch();
+        };
+        $dbvals = ($zdbh instanceof db_driver) ? $zdbh->Remember('user:' . $uid, $read) : $read();
         $userdetail->addItemValue('username', $dbvals['ac_user_vc']);
         $userdetail->addItemValue('userid', $dbvals['ac_id_pk']);
         $userdetail->addItemValue('password', $dbvals['ac_pass_vc']);

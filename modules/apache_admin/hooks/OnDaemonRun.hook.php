@@ -284,11 +284,7 @@ function BuildBrandingVhosts($serveremail) {
 			$line .= sys_tls::Lines();
 			$line .= "SSLCertificateFile " . $a['cert'] . $nl;
 			$line .= "SSLCertificateKeyFile " . $a['key'] . $nl;
-			$line .= "<IfModule mod_headers.c>" . $nl;
-			$line .= '    <LocationMatch "^/(etc/styles|modules/[^/]+/assets)/">' . $nl;
-			$line .= '        Header set Cache-Control "no-cache"' . $nl;
-			$line .= "    </LocationMatch>" . $nl;
-			$line .= "</IfModule>" . $nl;
+			$line .= SentoraPanelAssets();
 			// the administrator's own settings for the panel (Apache Config), as on the main
 			// address: a limit on who may reach the panel covers these addresses too
 			$line .= sys_apachecustom::Block('global_zpcustom', ctrl_options::GetSystemOption('global_zpcustom'));
@@ -297,6 +293,31 @@ function BuildBrandingVhosts($serveremail) {
 		$line .= "# END BRANDING: " . $host . $nl . $nl;
 	}
 	return $line;
+}
+
+/**
+ * The panel's own pages, styles and scripts: compressed (as a domain's, SentoraCompression), and how
+ * the browser keeps the theme's and modules' files. The panel writes each such file's address with
+ * its date (?v=<time it was changed>, ui_assets::Versioned), so the browser keeps that copy for a year
+ * without asking again; a changed file gets a new address. Files asked for without it (a style
+ * sheet's @import) are kept but checked before each use ("not modified" when unchanged), so after an
+ * update every page has the new ones.
+ *
+ * @return string Apache configuration lines.
+ */
+function SentoraPanelAssets() {
+    $nl = fs_filehandler::NewLine();
+    return SentoraCompression()
+        . '<IfModule mod_headers.c>' . $nl
+        . '    <LocationMatch "^/(etc/styles|modules/[^/]+/assets)/">' . $nl
+        . '        <If "%{QUERY_STRING} =~ /^v=[0-9]{1,12}$/">' . $nl
+        . '            Header set Cache-Control "public, max-age=31536000, immutable"' . $nl
+        . '        </If>' . $nl
+        . '        <Else>' . $nl
+        . '            Header set Cache-Control "no-cache"' . $nl
+        . '        </Else>' . $nl
+        . '    </LocationMatch>' . $nl
+        . '</IfModule>' . $nl;
 }
 
 /**
@@ -607,14 +628,8 @@ function BuildVhostConfig() {
 	
 		$line .= "</Directory>" . fs_filehandler::NewLine();
 		$line .= fs_filehandler::NewLine();
-		// Theme and module styles, scripts and images: the browser keeps its copy but asks
-		// before each use (a quick "not modified" when unchanged), so after an update every
-		// page gets the new files, including the files a stylesheet @imports
-		$line .= "<IfModule mod_headers.c>" . fs_filehandler::NewLine();
-		$line .= '    <LocationMatch "^/(etc/styles|modules/[^/]+/assets)/">' . fs_filehandler::NewLine();
-		$line .= '        Header set Cache-Control "no-cache"' . fs_filehandler::NewLine();
-		$line .= "    </LocationMatch>" . fs_filehandler::NewLine();
-		$line .= "</IfModule>" . fs_filehandler::NewLine();
+		// the panel's styles, scripts and images: how the browser keeps them, compressed (SentoraPanelAssets)
+		$line .= SentoraPanelAssets();
 		$line .= "# Custom settings (if any exist)" . fs_filehandler::NewLine();
 	
 		// Global custom Sentora entry
@@ -701,12 +716,8 @@ function BuildVhostConfig() {
 		$line .= ctrl_options::GetSystemOption('panel_ssl_tx') . fs_filehandler::NewLine();
 		$line .= fs_filehandler::NewLine();
 
-		// Theme and module assets: revalidated on each use (see the plain-HTTP block above)
-		$line .= "<IfModule mod_headers.c>" . fs_filehandler::NewLine();
-		$line .= '    <LocationMatch "^/(etc/styles|modules/[^/]+/assets)/">' . fs_filehandler::NewLine();
-		$line .= '        Header set Cache-Control "no-cache"' . fs_filehandler::NewLine();
-		$line .= "    </LocationMatch>" . fs_filehandler::NewLine();
-		$line .= "</IfModule>" . fs_filehandler::NewLine();
+		// the panel's styles, scripts and images (SentoraPanelAssets)
+		$line .= SentoraPanelAssets();
 		$line .= "# Custom settings are loaded below this line (if any exist)" . fs_filehandler::NewLine();
 		// Global custom Sentora entry
 		$line .= sys_apachecustom::Block('global_zpcustom', ctrl_options::GetSystemOption('global_zpcustom'));

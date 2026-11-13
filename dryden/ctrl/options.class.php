@@ -26,6 +26,13 @@ class ctrl_options {
      */
     static function GetSystemOption($name) {
         global $zdbh;
+        if ($zdbh instanceof db_driver && PHP_SAPI !== 'cli') {
+            // a page reads all settings once (they were one query each, hundreds per page)
+            $all = $zdbh->Remember('x_settings', function () use ($zdbh) {
+                return $zdbh->query("SELECT so_name_vc, so_value_tx FROM x_settings")->fetchAll(PDO::FETCH_KEY_PAIR);
+            });
+            return array_key_exists((string) $name, $all) ? $all[(string) $name] : false;
+        }
         $sqlString = "SELECT so_value_tx FROM x_settings WHERE so_name_vc = :name";
         $bindArray = array(':name' => $name);
         $zdbh->bindQuery($sqlString, $bindArray);

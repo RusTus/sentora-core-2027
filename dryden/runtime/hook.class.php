@@ -30,11 +30,21 @@ class runtime_hook {
      * @return void
      */
     static function Execute($name) {
-        $hook_log = new debug_logger();
+        // A page runs some hooks dozens of times (the template engine twice for each of its tags):
+        // which modules have a file for a hook is looked up once per page. (The daemon and the
+        // command line tools look every time: a module can be installed while they run.)
+        static $found = array();
         $mod_folder = "modules/*/hooks/{" . $name . ".hook.php}";
+        if (PHP_SAPI === 'cli' || !isset($found[$name])) {
+            $found[$name] = glob($mod_folder, GLOB_BRACE) ?: array();
+        }
+        if (!$found[$name]) {
+            return;
+        }
+        $hook_log = new debug_logger();
         $hook_log->method = ctrl_options::GetSystemOption('logmode');
         $hook_log->logcode = "861";
-        foreach (glob($mod_folder, GLOB_BRACE) as $hook_file) {
+        foreach ($found[$name] as $hook_file) {
             if (file_exists($hook_file)) {
                 $hook_log->detail = "Execute hook file (" . $hook_file . ")";
                 try {

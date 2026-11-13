@@ -27,6 +27,15 @@ class ctrl_groups {
      */
     static function CheckGroupModulePermissions($groupid, $moduleid) {
         global $zdbh;
+        if ($zdbh instanceof db_driver && PHP_SAPI !== 'cli') {
+            // a page asks for every module of the menu: one query for all of this group's
+            $mods = $zdbh->Remember('x_permissions:' . (int) $groupid, function () use ($zdbh, $groupid) {
+                $q = $zdbh->prepare("SELECT pe_module_fk FROM x_permissions WHERE pe_group_fk = :g");
+                $q->execute(array(':g' => (int) $groupid));
+                return array_flip(array_map('intval', $q->fetchAll(PDO::FETCH_COLUMN)));
+            });
+            return isset($mods[(int) $moduleid]);
+        }
         $sqlString = "SELECT pe_id_pk FROM 
                     x_permissions WHERE 
                     pe_group_fk = :groupid AND 
