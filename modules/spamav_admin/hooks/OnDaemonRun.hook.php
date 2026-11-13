@@ -257,10 +257,10 @@ if (is_array($svReq) && isset($svReq['action'])) {
     $by = preg_replace('/[^A-Za-z0-9_-]/', '', (string) ($svReq['by'] ?? ''));
     // updates can take minutes: in the background, the result is read on a later run
     if ($svReq['action'] === 'signatures' && $clamOn) {
-        $sv('setsid nohup sh -c ' . escapeshellarg('systemctl stop ' . escapeshellarg($svFresh) . '; timeout 900 freshclam --quiet; r=$?; systemctl start ' . escapeshellarg($svFresh) . '; systemctl reload ' . escapeshellarg($svClamd) . ' 2>/dev/null; echo $r > /var/lib/sentora/spamav-request.rc') . ' > /var/lib/sentora/spamav-request.log 2>&1 < /dev/null &');
+        ctrl_system::Background('sh -c ' . escapeshellarg('systemctl stop ' . escapeshellarg($svFresh) . '; timeout 900 freshclam --quiet; r=$?; systemctl start ' . escapeshellarg($svFresh) . '; systemctl reload ' . escapeshellarg($svClamd) . ' 2>/dev/null; echo $r > /var/lib/sentora/spamav-request.rc') . ' > /var/lib/sentora/spamav-request.log 2>&1');
         $svStatus['last_request'] = array('time' => time(), 'by' => $by, 'what' => 'Update virus signatures', 'ok' => null, 'text' => 'Running.');
     } elseif ($svReq['action'] === 'rules' && $saOn) {
-        $sv('setsid nohup sh -c ' . escapeshellarg('timeout 900 sa-update; r=$?; [ $r -le 1 ] && systemctl reload ' . escapeshellarg($svSpamd) . '; [ $r -le 1 ] && r=0; echo $r > /var/lib/sentora/spamav-request.rc') . ' > /var/lib/sentora/spamav-request.log 2>&1 < /dev/null &');
+        ctrl_system::Background('sh -c ' . escapeshellarg('timeout 900 sa-update; r=$?; [ $r -le 1 ] && systemctl reload ' . escapeshellarg($svSpamd) . '; [ $r -le 1 ] && r=0; echo $r > /var/lib/sentora/spamav-request.rc') . ' > /var/lib/sentora/spamav-request.log 2>&1');
         $svStatus['last_request'] = array('time' => time(), 'by' => $by, 'what' => 'Update spam rules', 'ok' => null, 'text' => 'Running.');
     } elseif ($svReq['action'] === 'restart') {
         foreach ($svWant as $unit => $want) {

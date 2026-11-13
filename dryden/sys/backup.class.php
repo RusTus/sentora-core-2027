@@ -294,7 +294,7 @@ class sys_backup
         @file_put_contents($file . '.new', json_encode(array('state' => 'starting', 'started' => time())));
         @chmod($file . '.new', 0660);
         @rename($file . '.new', $file);
-        exec('setsid nohup php ' . escapeshellarg($worker) . ' ' . $accountId . ' > /dev/null 2>&1 < /dev/null &');
+        ctrl_system::Background('php ' . escapeshellarg($worker) . ' ' . (int) $accountId . ' > /dev/null 2>&1');
         return 'started';
     }
 

@@ -28,7 +28,7 @@ if (sys_clientftp::Allowed()) {
             }
         }
         if ($cfMode !== '' && is_file($cfWorker)) {
-            exec('setsid nohup php ' . escapeshellarg($cfWorker) . ' ' . (int) $cf['bf_acc_fk'] . ' ' . $cfMode . ' > /dev/null 2>&1 < /dev/null &');
+            ctrl_system::Background('php ' . escapeshellarg($cfWorker) . ' ' . (int) $cf['bf_acc_fk'] . ' ' . $cfMode . ' > /dev/null 2>&1');
             echo "Client FTP backup: " . ($cfMode === 'check' ? 'connection test' : 'upload') . " started for account " . (int) $cf['bf_acc_fk'] . fs_filehandler::NewLine();
         }
     }

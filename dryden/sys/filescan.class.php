@@ -350,7 +350,7 @@ class sys_filescan
         $start = function ($args) use ($bin) {
             $php = str_replace('{v}', '', (string) sys_platform::Get('php_cli'));
             $php = is_executable($php) ? $php : 'php';
-            exec('setsid nohup ' . escapeshellarg($php) . ' ' . escapeshellarg($bin) . ' ' . $args . ' > /var/sentora/logs/filescan-last.log 2>&1 < /dev/null &');
+            ctrl_system::Background(escapeshellarg($php) . ' ' . escapeshellarg($bin) . ' ' . $args . ' > /var/sentora/logs/filescan-last.log 2>&1');
         };
         $req = self::REQUEST;
         if (is_file($req) && !is_link($req)) {

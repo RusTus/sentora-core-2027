@@ -39,6 +39,41 @@ class ctrl_system
     }
 
     /**
+     * Start a long job in the background and return at once (a copy to the backup machine, a restore,
+     * signature updates, a scan), so it runs to its end whoever started the daemon.
+     *
+     * Started by root on a system with systemd, the job runs as a short-lived systemd job of its own
+     * (systemd-run, a unit sentora-job-...): the daemon may itself run inside a service (the panel's
+     * "Run the daemon now" and its other buttons go through zsudo's service), and systemd stops every
+     * process a service left behind when the service ends, which cut a full restore off half way
+     * (owner's panel, 2026-11-13). Elsewhere (no systemd, not root, Windows): setsid, as before. Either
+     * way the job gets only standard input, output and error (see OwnFiles()).
+     *
+     * @param string $cmd A complete, already escaped shell command with its own output redirection
+     *                    (e.g. "/path/tool --now > /dev/null 2>&1"); no trailing &, no input.
+     * @return bool True when it was started.
+     */
+    static function Background($cmd)
+    {
+        if (DIRECTORY_SEPARATOR === '\\') {
+            pclose(popen('start /B ' . $cmd, 'r'));
+            return true;
+        }
+        $run = is_executable('/usr/bin/systemd-run') ? '/usr/bin/systemd-run' : (is_executable('/bin/systemd-run') ? '/bin/systemd-run' : '');
+        if ($run !== '' && is_dir('/run/systemd/system') && function_exists('posix_geteuid') && posix_geteuid() === 0) {
+            $unit = 'sentora-job-' . date('YmdHis') . '-' . bin2hex(random_bytes(3));
+            $out = array();
+            $rc = 1;
+            exec(self::OwnFiles($run . ' --quiet --collect --no-block --unit=' . $unit . ' /bin/sh -c ' . escapeshellarg($cmd . ' < /dev/null') . ' > /dev/null 2>&1'), $out, $rc);
+            if ((int) $rc === 0) {
+                return true;
+            }
+        }
+        exec(self::OwnFiles('setsid nohup /bin/sh -c ' . escapeshellarg($cmd) . ' < /dev/null > /dev/null 2>&1 &'), $out, $rc);
+        return (int) $rc === 0;
+    }
+
+    /**
      * A shell command that runs with only its standard input, output and error open.
      *
      * The daemon holds files open (its own script, the run lock) that every program it starts would
