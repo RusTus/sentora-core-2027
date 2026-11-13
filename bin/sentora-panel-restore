@@ -60,14 +60,21 @@ valid_date() { [[ "$1" =~ ^20[0-9]{2}-[0-9]{2}-[0-9]{2}$ ]]; }
 valid_user() { [[ "$1" =~ ^[A-Za-z0-9_-]{1,64}$ ]]; }
 
 # copy a path of the snapshot (relative to it) to a local folder
+# (its progress goes to the state file for the Restore tab's bar; --no-inc-recursive: the whole list
+# first, so the percentage is of everything)
 fetch() { # snapshot-path local-dir [rsync options...]
-    local src="$SNAP/$1" dest="$2"; shift 2
+    local src="$SNAP/$1" dest="$2" rc; shift 2
     mkdir -p "$dest"
+    rstate progress_bytes 0 progress_pct 0 progress_rate ""
     if remote; then
-        "${RSYNC[@]}" -a --numeric-ids "$@" -e "$SSH" "$(rhost):$src" "$dest" >> "$LOG" 2>&1
+        "${RSYNC[@]}" -a --numeric-ids --info=progress2 --no-inc-recursive "$@" -e "$SSH" "$(rhost):$src" "$dest" 2>> "$LOG" | rsync_progress rstate
+        rc=${PIPESTATUS[0]}
     else
-        "${RSYNC[@]}" -a --numeric-ids "$@" "$src" "$dest" >> "$LOG" 2>&1
+        "${RSYNC[@]}" -a --numeric-ids --info=progress2 --no-inc-recursive "$@" "$src" "$dest" 2>> "$LOG" | rsync_progress rstate
+        rc=${PIPESTATUS[0]}
     fi
+    rstate progress_pct "$( [ "$rc" -eq 0 ] && echo 100 || echo 0)"
+    return "$rc"
 }
 
 # ======================================================================================

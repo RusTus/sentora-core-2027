@@ -1116,22 +1116,40 @@ class module_controller extends ctrl_module
         $st = self::RestoreJson(self::RESTORE_STATE);
         $req = self::RestoreJson(self::RESTORE_REQ);
         if ($req) {
-            $out .= '<div class="bk-job"><span class="bk-spinner" aria-hidden="true"></span><div><b>' . self::t($req['action'] === 'list' ? 'Reading the backups' : 'Restore') . ' ' . self::t('queued') . '</b><span class="bk-sub">' . self::t('It starts within 5 minutes. This page looks again by itself.') . '</span></div></div>';
+            $out .= '<div class="bk-job"><span class="bk-spinner" aria-hidden="true"></span><div><b>' . self::t($req['action'] === 'list' ? 'Reading the backups' : 'Restore') . ' ' . self::t('queued') . '</b><span class="bk-sub">' . self::t('It starts within 5 minutes. This page follows it by itself.') . '</span></div></div>';
         } elseif (!empty($st['running']) || !empty($st['listing'])) {
-            $out .= '<div class="bk-job"><span class="bk-spinner" aria-hidden="true"></span><div><b>' . self::h(!empty($st['listing']) ? ui_language::translate('Reading the backups') : ui_language::translate('Restoring') . ' ' . ($st['snapshot'] ?? '')) . '…</b>'
-                . '<span>' . self::h($st['step'] ?? '') . '</span><span class="bk-sub">' . self::t('This page looks again by itself. The log: /var/sentora/logs/panel-restore.log') . '</span></div></div>';
+            // the step and a bar of what is being copied, kept up to date by the script below
+            $pct = max(0, min(100, (int) ($st['progress_pct'] ?? 0)));
+            $out .= '<div class="bk-job"><span class="bk-spinner" aria-hidden="true"></span><div class="bk-job-text"><b>' . self::h(!empty($st['listing']) ? ui_language::translate('Reading the backups') : ui_language::translate('Restoring') . ' ' . ($st['snapshot'] ?? '')) . '…</b>'
+                . '<span data-bk="step">' . self::h($st['step'] ?? '') . '</span>'
+                . (empty($st['listing']) ? '<div class="bk-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' . $pct . '"><i style="width: ' . $pct . '%"></i></div><span class="bk-sub" data-bk="copied"></span>' : '')
+                . '<span class="bk-sub">' . self::t('This page follows it by itself. The log: /var/sentora/logs/panel-restore.log') . '</span></div></div>';
         } elseif (!empty($st['result'])) {
             $ok = $st['result'] === 'ok';
             $out .= '<div class="bk-state ' . ($ok ? 'ok' : 'bad') . ' bk-last">' . self::Icon($ok ? 'check' : ($st['result'] === 'partial' ? 'alert' : 'x')) . '<div><b>'
                 . self::t($ok ? 'Last restore finished' : ($st['result'] === 'partial' ? 'Last restore finished with problems' : 'Last restore failed')) . '</b><span>' . self::When($st['finished'] ?? 0) . '</span>'
                 . '<span class="bk-sub">' . self::h($st['message'] ?? '') . '</span></div></div>';
         }
-        // while a listing or a restore is queued or runs, the page looks again by itself (every 5 seconds,
-        // at most 30 minutes, so a daemon that does not run does not keep it reloading)
-        $out .= ($req || !empty($st['running']) || !empty($st['listing']))
-            ? '<script>(function () { var k = "bk-rs-reload", n = 0; try { n = +sessionStorage.getItem(k) || 0; } catch (e) {}'
-                . ' if (n < 360) { setTimeout(function () { try { sessionStorage.setItem(k, n + 1); } catch (e) {} location.reload(); }, 5000); } })();</script>'
-            : '<script>try { sessionStorage.removeItem("bk-rs-reload"); } catch (e) {}</script>';
+        // while a listing or a restore is queued or runs, the tab asks how far it is every 2 seconds in the
+        // background (code/progress.php) and moves the bar; when it is done, the page is loaded once more
+        // for the result. A queue that does not start is given up on after 10 minutes.
+        if ($req || !empty($st['running']) || !empty($st['listing'])) {
+            $out .= '<script>(function () {'
+                . ' var q = function (n) { return document.querySelector("[data-bk=\\"" + n + "\\"]"); }, bar = document.querySelector(".bk-progress"), fails = 0, t0 = Date.now(), wasQueued = ' . ($req ? 'true' : 'false') . ';'
+                . ' var size = function (b) { var u = ["B", "KB", "MB", "GB", "TB"], i = 0; while (b >= 1024 && i < 4) { b /= 1024; i++; } return (i ? b.toFixed(1) : b) + " " + u[i]; };'
+                . ' var look = function () {'
+                . '  fetch("modules/backup_admin/code/progress.php", { credentials: "same-origin", cache: "no-store" }).then(function (r) { if (!r.ok) { throw r.status; } return r.json(); }).then(function (d) {'
+                . '   fails = 0;'
+                . '   if (!d.active || (wasQueued && !d.queued)) { location.reload(); return; }'
+                . '   if (d.queued && Date.now() - t0 > 600000) { return; }'
+                . '   if (d.step && q("step")) { q("step").textContent = d.step; }'
+                . '   if (bar) { bar.firstChild.style.width = d.pct + "%"; bar.setAttribute("aria-valuenow", d.pct); }'
+                . '   if (q("copied")) { q("copied").textContent = d.bytes ? d.pct + "% · " + size(d.bytes) + (d.rate ? " · " + d.rate : "") : ""; }'
+                . '   setTimeout(look, 2000);'
+                . '  }).catch(function () { if (++fails < 5) { setTimeout(look, 4000); } });'
+                . ' };'
+                . ' setTimeout(look, 2000); })();</script>';
+        }
         $cat = self::RestoreJson(self::RESTORE_CATALOG);
         $out .= '<div class="bk-panel-head"><div><h4>' . self::t('Snapshots on the backup machine') . '</h4><p>'
             . (!empty($cat['time']) ? self::t('Last read') . ' ' . self::When($cat['time']) . (isset($cat['target']) ? ' · ' . self::t('from') . ' ' . self::h($cat['target']) : '')

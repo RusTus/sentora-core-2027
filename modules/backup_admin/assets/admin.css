@@ -13,6 +13,9 @@
 .bk-job { display: flex; align-items: center; gap: 14px; padding: 12px 14px; margin-bottom: 14px; border-radius: 6px; color: var(--sn-info, #2a5f80);
     background: var(--sn-info-soft, #e4f1f8); border: 1px solid var(--sn-info-line, #b3d5e8); }
 .bk-job b, .bk-job span { display: block; }
+.bk-job-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.bk-progress { height: 8px; margin: 8px 0 4px; border-radius: 4px; background: var(--sn-info-line, #b3d5e8); overflow: hidden; }
+.bk-progress i { display: block; height: 8px; width: 0; background: var(--sn-info, #2a5f80); transition: width .6s ease; }
 .bk-last { border: 1px solid var(--bk-line); border-radius: 6px; padding: 10px 12px; margin-bottom: 14px; }
 .bk-snaps { max-height: 320px; overflow-y: auto; border: 1px solid var(--bk-line); border-radius: 6px; }
 .bk-snaps .bk-table th { position: sticky; top: 0; background: var(--bk-card); }

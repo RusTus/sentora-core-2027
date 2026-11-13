@@ -17,6 +17,19 @@ RSYNC=(rsync)
 if command -v runcon > /dev/null 2>&1 && selinuxenabled 2> /dev/null && ctx=$(id -Z 2> /dev/null) \
         && runcon "$ctx" rsync --version > /dev/null 2>&1; then RSYNC=(runcon "$ctx" rsync); fi
 
+# rsync's own progress (--info=progress2, read on stdin) handed to a state function ($1: rstate or
+# state_set) as progress_bytes, progress_pct and progress_rate, at most every 2 seconds: Backup Config's
+# Restore tab asks for it in the background and moves its bar
+rsync_progress() {
+    local f=$1 line last=-2
+    while IFS= read -r -d $'\r' line || [ -n "$line" ]; do
+        [[ "$line" =~ ([0-9][0-9,]*)[[:space:]]+([0-9]{1,3})%[[:space:]]+([0-9.]+[kMGT]?B/s) ]] || continue
+        [ $((SECONDS - last)) -ge 2 ] || continue
+        last=$SECONDS
+        "$f" progress_bytes "${BASH_REMATCH[1]//,/}" progress_pct "${BASH_REMATCH[2]}" progress_rate "${BASH_REMATCH[3]}"
+    done
+}
+
 # --- the settings, from the panel (the password decrypted with the panel's key) -----------
 OB_ENABLED=false; OB_SERVER=""; OB_PORT=22; OB_USER=""; OB_PASSWORD=""; OB_PATH=""; OB_KEEP=14; OB_MAIL=true; OB_HOSTKEY=""
 if [ -n "${SENTORA_OFFSITE_SETTINGS:-}" ]; then SETTINGS=$(cat "$SENTORA_OFFSITE_SETTINGS"); else
