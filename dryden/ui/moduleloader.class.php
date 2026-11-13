@@ -66,11 +66,7 @@ class ui_moduleloader {
             $sql->execute();
             $has_icons = false;
             while ($row = $sql->fetch()) {
-                $checksql = "SELECT * FROM x_modules WHERE mo_category_fk = :cid AND mo_type_en = 'user' AND mo_enabled_en = 'true'";
-                $checksql = $zdbh->prepare($checksql);
-                $checksql->bindParam(':cid', $row['mc_id_pk']);
-                $checksql->execute();
-                while ($rowcheck = $checksql->fetch()) {
+                foreach (self::Modules($row['mc_id_pk']) as $rowcheck) {
                     if (ctrl_groups::CheckGroupModulePermissions($user['usergroupid'], $rowcheck['mo_id_pk'])) {
                         $has_icons = true;
                     }
@@ -84,6 +80,28 @@ class ui_moduleloader {
         } else {
             return false;
         }
+    }
+
+    /**
+     * The enabled user modules of one category, in name order, from the list read once per page
+     * (the menu asks for every category, and again for each check).
+     *
+     * @param int|string $catid
+     * @return array<int, array<int|string, mixed>> x_modules rows
+     */
+    static function Modules($catid) {
+        global $zdbh;
+        $read = function () use ($zdbh) {
+            return $zdbh->query("SELECT * FROM x_modules WHERE mo_type_en = 'user' AND mo_enabled_en = 'true' ORDER BY mo_name_vc")->fetchAll();
+        };
+        $all = ($zdbh instanceof db_driver) ? $zdbh->Remember('x_modules:user', $read) : $read();
+        $out = array();
+        foreach ($all as $row) {
+            if ((string) $row['mo_category_fk'] === (string) $catid) {
+                $out[] = $row;
+            }
+        }
+        return $out;
     }
 
     /**
@@ -103,16 +121,17 @@ class ui_moduleloader {
             $sql = "SELECT * FROM x_modules WHERE mo_category_fk = :catid AND mo_type_en = 'user' AND mo_enabled_en = 'true' ORDER BY mo_name_vc";
         }
 
-        $numrows = $zdbh->prepare($sql);
-        $numrows->bindParam(':catid', $catid);
-        $numrows->execute();
-
-        if ($numrows->fetchColumn() <> 0) {
-            $sql = $zdbh->prepare($sql);
-            $sql->bindParam(':catid', $catid);
+        // (a category's list: from the modules read once per page, in the same order)
+        $rows = ($catid == "") ? null : self::Modules($catid);
+        if ($rows === null) {
+            $numrows = $zdbh->prepare($sql);
+            $numrows->bindParam(':catid', $catid);
+            $numrows->execute();
+            $rows = $numrows->fetchColumn() <> 0 ? $zdbh->query($sql)->fetchAll() : array();
+        }
+        if ($rows) {
             $res = array();
-            $sql->execute();
-            while ($row = $sql->fetch()) {
+            foreach ($rows as $row) {
                 if (ctrl_groups::CheckGroupModulePermissions($user['usergroupid'], $row['mo_id_pk'])) {
                     array_push($res, array('mo_id_pk' => $row['mo_id_pk'],
                         'mo_category_fk' => $row['mo_category_fk'],
