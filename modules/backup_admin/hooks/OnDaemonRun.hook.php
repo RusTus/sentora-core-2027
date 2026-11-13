@@ -140,7 +140,9 @@ if (is_file($obBin) && is_dir('/etc/cron.d')) {
             @file_put_contents($obSf, json_encode($obS));
             @chmod($obSf, 0644);
         }
-        exec('setsid nohup ' . escapeshellarg($obBin) . ' ' . $obArg . ' > /dev/null 2>&1 < /dev/null &');
+        // (only stdin/out/err: the daemon's own open files are not handed on; SELinux closes them for
+        // the programs the copy starts, and reports each one)
+        exec(ctrl_system::OwnFiles('setsid nohup ' . escapeshellarg($obBin) . ' ' . $obArg . ' > /dev/null 2>&1 < /dev/null &'));
         echo "Off-server backup: " . ($obWhat === 'check' ? 'connection test' : 'backup') . " started (from the panel)" . fs_filehandler::NewLine();
     }
 }
@@ -167,7 +169,7 @@ if (is_file($rsReq) && !is_link($rsReq)) {
         }
     }
     if ($args) {
-        exec('setsid nohup ' . escapeshellarg($rsBin) . ' ' . implode(' ', array_map('escapeshellarg', $args)) . ' > /dev/null 2>&1 < /dev/null &');
+        exec(ctrl_system::OwnFiles('setsid nohup ' . escapeshellarg($rsBin) . ' ' . implode(' ', array_map('escapeshellarg', $args)) . ' > /dev/null 2>&1 < /dev/null &'));
         echo "Restore: started " . implode(' ', $args) . " (asked by " . preg_replace('/[^A-Za-z0-9_-]/', '', (string) ($r['by'] ?? '')) . ")" . fs_filehandler::NewLine();
     } else {
         echo "Restore: a request that was not valid was ignored" . fs_filehandler::NewLine();

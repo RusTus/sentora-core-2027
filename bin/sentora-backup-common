@@ -9,13 +9,17 @@ STATE=/var/lib/sentora/offsite-backup.json
 PANEL=/etc/sentora/panel
 LOCAL=/var/sentora/backups
 
-# rsync in this job's own SELinux domain: started by a service or cron (Backup Config's Back up now,
-# the nightly copy), rsync would otherwise enter rsync_t, the domain meant for an rsync server, which
-# may not start ssh nor write the job's log (the copy failed with code 14 and no message). The job is
-# root's own, as from SSH; nothing in SELinux is widened. Elsewhere (no SELinux) plain rsync.
-RSYNC=(rsync)
+# rsync and ssh-keygen in this job's own SELinux domain: started by a service or cron (Backup Config's
+# buttons, the nightly copy), they would otherwise enter their own confined domains: rsync_t (meant for
+# an rsync server: may not start ssh nor write the job's log; the copy failed with code 14 and no
+# message) and ssh_keygen_t (may not read the job's temporary file with the scanned key, so a right key
+# was reported as "not the one set"). The job is root's own, as from SSH; nothing in SELinux is widened.
+# Elsewhere (no SELinux) they run as they are.
+OWN=()
 if command -v runcon > /dev/null 2>&1 && selinuxenabled 2> /dev/null && ctx=$(id -Z 2> /dev/null) \
-        && runcon "$ctx" rsync --version > /dev/null 2>&1; then RSYNC=(runcon "$ctx" rsync); fi
+        && runcon "$ctx" true > /dev/null 2>&1; then OWN=(runcon "$ctx"); fi
+RSYNC=("${OWN[@]}" rsync)
+keygen() { "${OWN[@]}" ssh-keygen "$@"; }
 
 # rsync's own progress (--info=progress2, read on stdin) handed to a state function ($1: rstate or
 # state_set) as progress_bytes, progress_pct and progress_rate, at most every 2 seconds: Backup Config's
@@ -82,7 +86,7 @@ pin_hostkey() {
     fi
     local host=${OB_SERVER} entry tmp
     [ "$OB_PORT" = 22 ] && entry=$host || entry="[$host]:$OB_PORT"
-    if [ -f "$KNOWN" ] && ssh-keygen -F "$entry" -f "$KNOWN" 2> /dev/null | grep -v '^#' | ssh-keygen -lf - 2> /dev/null | grep -qF "$OB_HOSTKEY"; then
+    if [ -f "$KNOWN" ] && keygen -F "$entry" -f "$KNOWN" 2> /dev/null | grep -v '^#' | keygen -lf - 2> /dev/null | grep -qF "$OB_HOSTKEY"; then
         return 0
     fi
     tmp=$(mktemp)
@@ -99,7 +103,7 @@ pin_hostkey() {
         echo "the backup machine did not answer at $host port $OB_PORT (is it on, and may this server reach it? It may also refuse for a minute after many connections: try again shortly)"
         return 1
     fi
-    if ! ssh-keygen -lf "$tmp" 2> /dev/null | grep -qF "$OB_HOSTKEY"; then
+    if ! keygen -lf "$tmp" 2> /dev/null | grep -qF "$OB_HOSTKEY"; then
         rm -f "$tmp"
         echo "the backup server's SSH key is not the one set in the panel ($OB_HOSTKEY): another server answered at $host, or the fingerprint was mistyped"
         return 1
@@ -108,8 +112,8 @@ pin_hostkey() {
     # only the key that matched, for this server
     while IFS= read -r line; do
         [ -n "$line" ] && [ "${line:0:1}" != "#" ] || continue
-        if printf '%s\n' "$line" | ssh-keygen -lf - 2> /dev/null | grep -qF "$OB_HOSTKEY"; then
-            { [ -f "$KNOWN" ] && ssh-keygen -R "$entry" -f "$KNOWN" > /dev/null 2>&1; printf '%s\n' "$line" >> "$KNOWN"; }
+        if printf '%s\n' "$line" | keygen -lf - 2> /dev/null | grep -qF "$OB_HOSTKEY"; then
+            { [ -f "$KNOWN" ] && keygen -R "$entry" -f "$KNOWN" > /dev/null 2>&1; printf '%s\n' "$line" >> "$KNOWN"; }
         fi
     done < "$tmp"
     rm -f "$tmp" "$KNOWN.old"; chmod 600 "$KNOWN"

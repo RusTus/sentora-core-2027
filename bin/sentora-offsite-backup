@@ -50,7 +50,7 @@ mkdir -p "$(dirname "$LOG")" "$LOCAL"; touch "$LOG"; chmod 640 "$LOG"
 case "${1:-}" in
     --setup)
         mkdir -p /root/.ssh; chmod 700 /root/.ssh
-        [ -f "$KEY" ] || ssh-keygen -q -t ed25519 -N "" -C "sentora-offsite@$HOST" -f "$KEY"
+        [ -f "$KEY" ] || keygen -q -t ed25519 -N "" -C "sentora-offsite@$HOST" -f "$KEY"
         echo "Used when no password is set in Module Admin > Backup Config > Off-server backup."
         echo "1. On the backup machine, as root (once):"
         echo "     useradd -m -s /bin/bash sentora-backup && mkdir -p /srv/sentora-backups && chown sentora-backup /srv/sentora-backups"
