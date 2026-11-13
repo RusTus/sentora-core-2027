@@ -128,8 +128,10 @@ fi
 
 MODE="${1:-}"; SRV="${2:-}"; DATE="${3:-}"
 case "$MODE" in --account|--full) ;; *) sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;; esac
-valid_host "$SRV" || die "not a server name: $SRV"
-valid_date "$DATE" || die "not a date: $DATE"
+# (a mistyped command only says how to use it: nothing has started, so the panel's Restore tab is not told)
+usage() { echo "sentora-panel-restore: $1"; echo; sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
+valid_host "$SRV" || usage "give the server's name after $MODE (as Restore lists it), then the night: $MODE <server> <YYYY-MM-DD>"
+valid_date "$DATE" || usage "give the night as YYYY-MM-DD after the server's name"
 SNAP="$BASE/$SRV/$DATE"
 exec 9> /run/sentora-panel-restore.lock
 flock -n 9 || { echo "Another restore is running."; exit 1; }
@@ -210,7 +212,7 @@ restore_mail() { # address...
 
 # ======================================================================================
 if [ "$MODE" = "--account" ]; then
-    U="${4:-}"; valid_user "$U" || die "not a username: $U"
+    U="${4:-}"; valid_user "$U" || usage "give the account's username after the night: --account <server> <YYYY-MM-DD> <username>"
     shift 4
     FILES=no; DBS=no; MAILP=no; EXACT=no
     for p in "$@"; do case "$p" in files) FILES=yes ;; databases) DBS=yes ;; mail) MAILP=yes ;; exact) EXACT=yes ;; esac; done
