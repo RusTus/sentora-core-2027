@@ -238,9 +238,21 @@ Sentora Panel desktop shortcut, tray icon (green while port 443 answers, one cli
 - **Released 2027.70 (2026-11-10):** Fedora 45, the WSL script and ModSecurity are on the `current` release; all five
 systems passed the install test (with the ModSecurity attack test, which uses the smoke test's kept site).
 
+## Add-on sources (2026-11-13, owner's yes)
+
+Each add-on's files are in sentora-installers-2027's `addons/<name>/` (unpacked from the .zpp files of 2026-11-13, so the
+contents are exactly what panels had). `addons/build.sh <name>` builds sentora-repo/<name>.zpp: module.xml and
+module.zpm first, then every folder and file sorted by name, all dated 2026-01-01 UTC, folders 755, files 644 (755 where
+git has them executable), `zip -X`; so the same files give the same bytes on any computer (checked: two copies with
+other dates and another time zone gave the same SHA-256 for all nine). It also sets <latestversion> and the
+SHA256SUMS line (sorted by name). `addons/check.sh` compares every .zpp with its folder (diff -r of the unzipped zip),
+version and checksum; the **Add-ons** workflow (.github/workflows/addons.yml) runs it, builds all again and fails if a
+zip differs, and runs tests/docker_hosting, payment_plans and php_hardening on their folders. All nine zips were built
+again with it (same contents, same versions: panels see no update; only SHA256SUMS changed). The panel's own unzip
+(sys_archive::Unzip) gives exactly the folder; the three test suites passed on built zips (447, 218, 218).
+
 ## Planned (the owner said yes; do when no other session is changing add-ons)
 
-- **Add-on sources in git** (owner, 2026-11-13): today each add-on is only its .zpp in sentora-installers-2027/sentora-repo (git can not show or merge what changed inside). Put each add-on's folder in the installers repository (`addons/<name>/`: module.xml, module.zpm, code, assets, deploy, hooks, and its tests), a script that builds `sentora-repo/<name>.zpp` from it the way CLAUDE.md's "Publishing an add-on" does (same zip order and -X, so the bytes are the same), and a workflow that fails when a .zpp does not match its folder. Then CLAUDE.md's publishing steps and the "unzip both, merge" rule change to "edit the folder, build". Repo Browser and panels see no change.
 - **Remove the hand-over shims** `node/` and `backup/` in the installers repository once the owner's test servers use `docker-node/` and `backup-node/` (ask first).
 
 ## Waiting on the owner (do not start without asking)
