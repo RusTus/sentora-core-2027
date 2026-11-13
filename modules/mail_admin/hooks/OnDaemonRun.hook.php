@@ -15,6 +15,7 @@ SentoraApplySOGoSettings();
 SentoraSOGoPasswordView();
 echo "END SOGo settings." . fs_filehandler::NewLine();
 SentoraPostfixMapTypes();
+SentoraGlobalSieve();
 
 /**
  * SOGo checks mailbox logins through the view sentora_postfix.sogo_users. Mailbox
@@ -222,6 +223,47 @@ function SentoraApplySOGoSettings()
         exec('systemctl restart ' . escapeshellarg(sys_platform::Get('sogo_service')) . ' > /dev/null 2>&1', $out, $rc);
         echo "SOGo restarted" . ($rc === 0 ? '' : ' (FAILED, check /var/log/sogo/sogo.log)') . "." . fs_filehandler::NewLine();
     }
+}
+
+/**
+ * Sentora's mail filter for every mailbox (spam into the "Spam" folder): Dovecot's own folder holds a
+ * copy of it, kept the same as Sentora's file. The installers used to put a link there, which Dovecot's
+ * filter (Pigeonhole) refuses ("Active sieve script symlink ... is broken: Invalid/unknown path to
+ * storage"): the filter then did not run and spam stayed in the inbox. Root writes the copy without
+ * following anything in that folder (the mail user's): a new file made exclusively, moved into place.
+ *
+ * @return void
+ */
+function SentoraGlobalSieve()
+{
+    $nl = fs_filehandler::NewLine();
+    $src = '/etc/sentora/configs/dovecot2/globalfilter.sieve';
+    $dst = '/var/sentora/sieve/globalfilter.sieve';
+    $dir = dirname($dst);
+    if (!is_file($src) || is_link($src) || !is_dir($dir) || is_link($dir)) {
+        return;
+    }
+    $want = (string) file_get_contents($src);
+    if (is_file($dst) && !is_link($dst) && (string) file_get_contents($dst) === $want) {
+        return;
+    }
+    $wasLink = is_link($dst);
+    $tmp = $dir . '/.globalfilter.sieve.' . getmypid();
+    $fh = @fopen($tmp, 'x');   // (x: made new, never through an existing name or link)
+    if ($fh === false) {
+        return;
+    }
+    fwrite($fh, $want);
+    fclose($fh);
+    @chmod($tmp, 0644);
+    @chown($tmp, fileowner($dir));
+    @chgrp($tmp, filegroup($dir));
+    if (!@rename($tmp, $dst)) {
+        @unlink($tmp);
+        return;
+    }
+    @unlink($dir . '/globalfilter.svbin');   // (its compiled copy: made again by Dovecot)
+    echo 'Dovecot: the mail filter for every mailbox (spam into Spam) is ' . ($wasLink ? 'now a file (Dovecot refused the link to it, so it did not run)' : 'up to date again') . '.' . $nl;
 }
 
 /**
