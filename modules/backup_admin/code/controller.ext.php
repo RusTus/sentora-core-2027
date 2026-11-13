@@ -652,6 +652,47 @@ class module_controller extends ctrl_module
     }
 
     /**
+     * How full the place the backups go is, as a ring (as on DNS Config): this panel's copies, the
+     * rest of that disk, free; with the nights kept. From the last connection test (every 30 minutes
+     * for a backup node); '' until one has measured it.
+     *
+     * @param array<string, mixed> $st /var/lib/sentora/offsite-backup.json
+     * @return string The HTML.
+     */
+    static function SpaceChart(array $st)
+    {
+        $size = (float) ($st['space_size'] ?? 0);
+        if ($size <= 0 || self::Dest() !== self::Target()) {
+            return '';
+        }
+        $free = min($size, (float) ($st['space_free'] ?? 0));
+        $mine = min($size - $free, (float) ($st['space_used'] ?? 0));
+        $other = max(0, $size - $free - $mine);
+        $gb = function ($b) { return $b >= 1073741824 ? sprintf('%.1f GB', $b / 1073741824) : sprintf('%d MB', $b / 1048576); };
+        $full = (int) round(100 * ($size - $free) / $size);
+        $r = 52;
+        $c = 2 * M_PI * $r;
+        $off = 0.0;
+        $arcs = '';
+        $legend = '';
+        $parts = array(array('This panel\'s copies', $mine, '#447fb3'), array('Other files on that disk', $other, '#9aa5b1'), array('Free', $free, $full >= 90 ? '#f0a020' : '#2db87d'));
+        foreach ($parts as $p) {
+            $len = $c * $p[1] / $size;
+            if ($len > 0.5) {
+                $arcs .= '<circle cx="70" cy="70" r="' . $r . '" fill="none" stroke="' . $p[2] . '" stroke-width="16" stroke-dasharray="' . round(max(0.5, $len - 2), 2) . ' ' . round($c, 2) . '" stroke-dashoffset="' . round(-$off, 2) . '" transform="rotate(-90 70 70)"><title>' . self::t($p[0]) . ': ' . $gb($p[1]) . '</title></circle>';
+            }
+            $off += $len;
+            $legend .= '<li><i style="background:' . $p[2] . '"></i>' . self::t($p[0]) . '<b>' . $gb($p[1]) . '</b></li>';
+        }
+        $o = self::Offsite();
+        $nights = (int) ($st['nights'] ?? 0);
+        return '<div class="bk-space"><div class="bk-ring"><svg viewBox="0 0 140 140" role="img" aria-label="' . self::t('Disk space where the backups go') . '"><circle cx="70" cy="70" r="' . $r . '" fill="none" stroke="var(--bk-line)" stroke-width="16"/>' . $arcs . '</svg>'
+            . '<div class="bk-ring-mid"><b>' . $full . '%</b><span>' . self::t('full') . '</span></div></div>'
+            . '<ul class="bk-legend">' . $legend . '<li class="bk-legend-total">' . self::t('Disk in all') . '<b>' . $gb($size) . '</b></li>'
+            . '<li class="bk-legend-total">' . self::t('Nights kept') . '<b>' . sprintf(self::t('%1$d of %2$d'), $nights, (int) $o['offsite_keep']) . '</b></li></ul></div>';
+    }
+
+    /**
      * A Sentora backup node in use: its status as a card, green (reachable, its key checked, a copy
      * in the last day), orange (no copy for more than a day, its disk over 90% full, the last copy
      * failed) or red (it does not answer, or answers with another key), with Remove.
@@ -665,8 +706,8 @@ class module_controller extends ctrl_module
         $st = is_array($st) ? $st : array();
         $checked = isset($st['check_time']);
         $okNow = $checked && !empty($st['check_ok']);
-        $free = (int) ($st['node_free'] ?? 0);
-        $size = (int) ($st['node_size'] ?? 0);
+        $free = (int) ($st['space_free'] ?? 0);
+        $size = (int) ($st['space_size'] ?? 0);
         $full = $size > 0 ? round(100 - 100 * $free / $size) : -1;
         $lastOk = (int) ($st['last_ok'] ?? 0);
         $warn = array();
@@ -695,7 +736,7 @@ class module_controller extends ctrl_module
         $rows = array(
             array(self::t('Address'), self::h($o['offsite_server'] . ($o['offsite_port'] !== '22' ? ':' . $o['offsite_port'] : ''))),
             array(self::t('Its key'), '<code>' . self::h($o['offsite_hostkey']) . '</code>'),
-            array(self::t('Free space'), $size > 0 ? sprintf(self::t('%1$s free of %2$s (this panel\'s copies: %3$s)'), $gb($free), $gb($size), $gb((int) ($st['node_used'] ?? 0))) : self::t('not known yet')),
+            array(self::t('Free space'), $size > 0 ? sprintf(self::t('%1$s free of %2$s (this panel\'s copies: %3$s)'), $gb($free), $gb($size), $gb((int) ($st['space_used'] ?? 0))) : self::t('not known yet')),
             array(self::t('Last good copy'), self::When($lastOk)),
             array(self::t('Last checked'), $checked ? self::When((int) $st['check_time']) . (!$okNow && !empty($st['check_message']) ? '<span class="bk-sub">' . self::h($st['check_message']) . '</span>' : '') : self::t('within a few seconds')),
         );
@@ -853,6 +894,7 @@ class module_controller extends ctrl_module
             $out .= $line('x', 'bad', 'Last run failed', self::When($st['last_run'] ?? 0), (string) ($st['message'] ?? ''));
         }
         $out .= $line('archive', '', 'Last good copy', self::When(isset($st['last_ok']) ? $st['last_ok'] : 0), '');
+        $out = self::SpaceChart($st) . $out;
         // while the daemon works on something asked for here, the page looks again by itself (at most
         // 2 minutes, so a daemon that does not run does not keep it reloading)
         $reload = self::Pending() ? '<script>(function () { var k = "bk-reload", n = 0; try { n = +sessionStorage.getItem(k) || 0; } catch (e) {}'

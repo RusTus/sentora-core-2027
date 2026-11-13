@@ -99,11 +99,18 @@ if [ "${1:-}" = "--check" ]; then
         msg="$TARGET is reachable and writable ($BASE); copies keep $KEEP nights$( [ "$MAIL" = yes ] && echo ', with mailboxes')$(is_gate && echo '; a Sentora backup node')$([ -n "$OB_HOSTKEY" ] && echo ', its key checked')"
         # (gate: a Sentora backup node; add-ons such as Docker Hosting offer their own backups only then)
         g=0; remote && is_gate && g=1
-        # a Sentora backup node also says how full its disk is (its gate's "space"; an older node does not)
-        sp=''; [ "$g" = 1 ] && sp=$($SSH "$(rhost)" sentora-backup space 2> /dev/null | head -1)
+        # how full the place is, for Backup Config's chart: bytes free and in all on its disk, and
+        # this panel's copies (a Sentora backup node's gate says it with "space"; elsewhere df and du
+        # there, when the machine allows them; an older node or a restricted server: unknown)
+        if [ "$g" = 1 ]; then
+            sp=$($SSH "$(rhost)" sentora-backup space 2> /dev/null | head -1)
+        else
+            sp=$(run_there "df -PB1 '$BASE' 2> /dev/null | awk 'NR == 2 { printf \"%s %s \", \$4, \$2 }'; du -sB1 '$BASE' 2> /dev/null | cut -f1" 2> /dev/null | head -1)
+        fi
         [[ "$sp" =~ ^[0-9]+\ [0-9]+\ [0-9]+$ ]] || sp='0 0 0'
         read -r sfree ssize sused <<< "$sp"
-        echo "OK: $msg"; state_set check_time "$(date +%s)" check_ok 1 check_message "$msg" gate "$g" node_free "$sfree" node_size "$ssize" node_used "$sused"; exit 0
+        nights=$(there_count "$BASE" 2> /dev/null | head -1); [[ "$nights" =~ ^[0-9]+$ ]] || nights=0
+        echo "OK: $msg"; state_set check_time "$(date +%s)" check_ok 1 check_message "$msg" gate "$g" space_free "$sfree" space_size "$ssize" space_used "$sused" nights "$nights"; exit 0
     fi
     msg=$(echo "$out" | grep -v '^ready$' | grep -v '^(a Sentora backup node' | tr '\n' ' ' | sed 's/  */ /g' | head -c 250)
     [ -n "$msg" ] || msg="the backup machine did not answer as expected (is rsync installed there?)"
