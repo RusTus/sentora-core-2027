@@ -6,7 +6,7 @@
  *  - keeps /etc/cron.d/sentora-offsite-backup in step with the time and the switch
  *  - runs "Test connection" and "Back up now" from the page, in the background
  *
- * Written by RusTus, 2026-11-12
+ * Written by RusTus, 2026-11-13
  */
 global $zdbh; // hooks are included inside a function
 $obDefaults = array('offsite_enabled' => 'false', 'offsite_server' => '', 'offsite_port' => '22', 'offsite_user' => 'sentora-backup',
