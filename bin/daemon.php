@@ -63,6 +63,15 @@ if ($daemonLock !== false) {
     fwrite($daemonLock, getmypid() . "\n");
 }
 
+// A page's "do it now" (zsudo daemon-run) is dropped while a run a page started is still busy; the
+// page leaves this note first, and a run that finds a note left during its own run goes through the
+// regular jobs once more at its end (a note left before this run started is served by this run).
+// It only ever means one more regular run: the note's content is not read.
+$daemonAgain = '/var/lib/sentora/tmp/daemon-again';
+if (is_file($daemonAgain) && !is_link($daemonAgain)) {
+    @unlink($daemonAgain);
+}
+
 $daemonLog = new debug_logger();
 $daemonLog->method = "file";
 $daemonLog->logcode = "001";
@@ -116,6 +125,12 @@ if (time() >= ctrl_options::GetSystemOption('daemon_monthrun') + 30*24*3600) {
     runtime_hook::Execute("OnStartDaemonMonth");
     runtime_hook::Execute("OnDaemonMonth");
     runtime_hook::Execute("OnEndDaemonMonth");
+}
+if (is_file($daemonAgain) && !is_link($daemonAgain) && @unlink($daemonAgain)) {
+    echo "\nA page asked for a run while this one was busy: the regular jobs once more\n";
+    runtime_hook::Execute("OnStartDaemonRun");
+    runtime_hook::Execute("OnDaemonRun");
+    runtime_hook::Execute("OnEndDaemonRun");
 }
 echo "\nDaemon run complete! (" . date($dateformat) . ")\n";
 

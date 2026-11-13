@@ -570,6 +570,8 @@ class module_controller extends ctrl_module
         if ($zsudo === '' || !is_executable($zsudo) || !function_exists('exec')) {
             return false;
         }
+        // (a note first: when a run is already busy, it runs the regular jobs once more at its end; bin/daemon.php)
+        @touch('/var/lib/sentora/tmp/daemon-again');
         $out = array();
         $rc = 1;
         exec(escapeshellcmd($zsudo) . ' daemon-run 2>&1', $out, $rc);
@@ -897,7 +899,8 @@ class module_controller extends ctrl_module
         $out = self::SpaceChart($st) . $out;
         // while the daemon works on something asked for here, the page looks again by itself (at most
         // 2 minutes, so a daemon that does not run does not keep it reloading)
-        $reload = self::Pending() ? '<script>(function () { var k = "bk-reload", n = 0; try { n = +sessionStorage.getItem(k) || 0; } catch (e) {}'
+        $reload = self::Pending() ? '<p class="bk-muted bk-waiting">' . self::t('Waiting for the daemon: this page looks again by itself (or press Refresh).') . '</p>'
+            . '<script>(function () { var k = "bk-reload", n = 0; try { n = +sessionStorage.getItem(k) || 0; } catch (e) {}'
             . ' if (n < 24) { setTimeout(function () { try { sessionStorage.setItem(k, n + 1); } catch (e) {} location.replace("./?module=backup_admin&tab=offsite"); }, 5000); } })();</script>'
             : '<script>try { sessionStorage.removeItem("bk-reload"); } catch (e) {}</script>';
         $dest = self::Dest();
