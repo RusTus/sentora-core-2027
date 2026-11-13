@@ -296,22 +296,32 @@ function BuildBrandingVhosts($serveremail) {
 }
 
 /**
- * The panel's own pages, styles and scripts: compressed (as a domain's, SentoraCompression), and how
- * the browser keeps the theme's and modules' files. The panel writes each such file's address with
- * its date (?v=<time it was changed>, ui_assets::Versioned), so the browser keeps that copy for a year
- * without asking again; a changed file gets a new address. Files asked for without it (a style
- * sheet's @import) are kept but checked before each use ("not modified" when unchanged), so after an
- * update every page has the new ones.
+ * The panel's styles, scripts and images: compressed, and kept by the browser.
+ *
+ * Only these files are compressed: they hold no secrets. The panel's pages and answers are never
+ * compressed (also not by a system's own default, such as Debian's and Ubuntu's mod_deflate for
+ * text/html): a page holds its form token and the account's data next to text an attacker may put
+ * into it, and over HTTPS the size of a compressed answer gives such secrets away (BREACH).
+ *
+ * The panel writes each such file's address with its date (?v=<time it was changed>,
+ * ui_assets::Versioned), so the browser keeps that copy for a year without asking again; a changed
+ * file gets a new address. Only plain files get that (by their ending: never a script under
+ * assets/); files asked for without a date (a style sheet's @import) are kept but checked before each
+ * use ("not modified" when unchanged), so after an update every page has the new ones.
  *
  * @return string Apache configuration lines.
  */
 function SentoraPanelAssets() {
     $nl = fs_filehandler::NewLine();
-    return SentoraCompression()
+    $static = '\\.(?:css|js|png|jpe?g|gif|svg|webp|ico|woff2?|ttf|otf|eot)$';
+    return '<IfModule setenvif_module>' . $nl
+        . '    SetEnvIfExpr "%{REQUEST_URI} !~ m#^/(?:etc/styles|modules/[^/]+/assets)/[^?]*\\.(?:css|js|svg|ico|ttf|otf|eot)$#" no-gzip no-brotli' . $nl
+        . '</IfModule>' . $nl
+        . SentoraCompression()
         . '<IfModule mod_headers.c>' . $nl
-        . '    <LocationMatch "^/(etc/styles|modules/[^/]+/assets)/">' . $nl
+        . '    <LocationMatch "^/(etc/styles|modules/[^/]+/assets)/.+' . $static . '">' . $nl
         . '        <If "%{QUERY_STRING} =~ /^v=[0-9]{1,12}$/">' . $nl
-        . '            Header set Cache-Control "public, max-age=31536000, immutable"' . $nl
+        . '            Header set Cache-Control "max-age=31536000, immutable"' . $nl
         . '        </If>' . $nl
         . '        <Else>' . $nl
         . '            Header set Cache-Control "no-cache"' . $nl
