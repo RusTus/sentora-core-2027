@@ -24,7 +24,7 @@ foreach ($obDefaults as $obName => $obValue) {
 // the settings belong to Backup Config (a test build had them under Sentora Config)
 $zdbh->exec("UPDATE x_settings SET so_module_vc = 'Backup Config', so_desc_tx = 'Off-server backup (set in Admin > Backup Config)' WHERE so_name_vc LIKE 'offsite\\_%' AND so_module_vc <> 'Backup Config'");
 // this panel's backup key (root's SSH key for the backup machine): made when missing, its public half
-// kept in the settings for the page (the command that installs a Sentora backup server carries it)
+// kept in the settings for the page (the command that installs a Sentora backup node carries it)
 $obKey = '/root/.ssh/sentora_offsite';
 if (!is_file($obKey) && function_exists('posix_getuid') && posix_getuid() === 0) {
     @mkdir('/root/.ssh', 0700, true);

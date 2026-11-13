@@ -78,7 +78,7 @@ pin_hostkey() {
     return 0
 }
 
-# A Sentora backup server (sentora2027-backup-server) lets the panel's key run only its gate: the
+# A Sentora backup node (sentora2027-backup-node) lets the panel's key run only its gate: the
 # steps below then go through the gate's fixed commands; any other machine gets them as shell commands.
 GATE=""
 is_gate() {
