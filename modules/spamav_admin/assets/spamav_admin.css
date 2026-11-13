@@ -30,6 +30,7 @@
 .sa-pill.on { background: var(--sn-ok-soft, #e3f4ea); color: var(--sa-ok); border-color: var(--sn-ok-line, #a9dcbd); }
 .sa-pill.off { background: var(--sa-bg); color: var(--sa-muted); border-color: var(--sa-line); }
 .sa-pill.bad { background: var(--sn-bad-soft, #fdeaea); color: var(--sa-bad); border-color: var(--sn-bad-line, #f0a9a7); }
+.sa-pill.run { background: var(--sn-info-soft, #e4f1f8); color: var(--sn-info, #2a5f80); border-color: var(--sn-info-line, #b3d5e8); }
 
 /* overview: jobs and the scanners */
 .sa-jobbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
@@ -73,6 +74,7 @@
 .sa-t-spam b { color: var(--sa-warn); }
 .sa-t-virus .sa-ico-lg { color: var(--sa-bad); background: var(--sn-bad-soft, #fdeaea); }
 .sa-t-virus b { color: var(--sa-bad); }
+.sa-t-refused .sa-ico-lg { color: #7c5cc4; background: var(--sn-accent-soft, #ece6f8); }
 .sa-trend { display: flex; flex-direction: column; }
 .sa-trend-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
 .sa-trend-head h4 { margin: 0; }
@@ -87,6 +89,8 @@
 .sa-bar:hover .sa-stack { outline: 2px solid var(--sa-field-line); }
 .sa-b-spam { background: var(--sa-spam); }
 .sa-b-virus { background: var(--sa-virus); }
+.sa-b-files { background: var(--sa-accent); }
+.sa-b-full { background: #1fa2b5; }
 .sa-tops { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 14px; }
 .sa-top { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; counter-reset: top; }
 .sa-top li { position: relative; display: flex; justify-content: space-between; gap: 10px; padding: 6px 10px 6px 34px; font-size: 13px; border-radius: 5px; overflow: hidden; counter-increment: top; }
@@ -95,6 +99,40 @@
 .sa-top li > span { position: relative; z-index: 1; }
 .sa-top-name { overflow-wrap: anywhere; font-weight: 600; }
 .sa-top-n { white-space: nowrap; color: var(--sa-muted); }
+
+/* file scanning: its state, the last scan, the chart, the ring and the files found */
+.sa-fs-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.sa-fs-head h4 { margin: 0; text-transform: none; letter-spacing: 0; font-size: 16px; }
+.sa-fs-head span { font-size: 13px; color: var(--sa-muted); }
+.sa-fs-actions { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 14px; }
+.sa-fs-n { display: block; font-style: normal; font-size: 10px; font-weight: 700; color: var(--sa-bad); text-align: center; margin-bottom: 2px; }
+.sa-bar.sa-none .sa-stack { opacity: 0.5; }
+.sa-ring { position: relative; width: 150px; height: 150px; margin: 4px auto 12px; }
+.sa-ring svg { width: 100%; height: 100%; }
+.sa-ring-mid { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.sa-ring-mid b { font-size: 28px; line-height: 1; }
+.sa-ring-mid span { font-size: 12px; color: var(--sa-muted); }
+.sa-legend { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: 13px; }
+.sa-legend li { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.sa-legend li span { overflow-wrap: anywhere; }
+.sa-legend i { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+.sa-legend b { margin-left: auto; }
+.sa-fs-tops { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); }
+.sa-fs-items { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.sa-fs-item { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 12px; border: 1px solid var(--sa-line); border-radius: 6px; }
+.sa-fs-what { flex: 1; min-width: 0; }
+.sa-fs-what b { display: block; font-size: 13px; overflow-wrap: anywhere; }
+.sa-fs-what code { display: block; font-size: 12px; color: var(--sa-ink); background: none; border: 0; padding: 0; white-space: normal; overflow-wrap: anywhere; }
+.sa-fs-what small { display: block; font-size: 12px; color: var(--sa-muted); }
+.sa-fs-item .sa-pill { margin-left: 0; }
+.sa-fs-acts { display: flex; gap: 6px; }
+.sa-fs-settings { margin-top: 14px; }
+.sa-fs-sum { display: flex; align-items: center; gap: 12px; margin-top: 14px; }
+.sa-fs-sum > div { flex: 1; min-width: 0; }
+.sa-fs-sum b { display: block; font-size: 15px; }
+.sa-fs-sum span { font-size: 13px; color: var(--sa-muted); }
+.sa-fs-sum .sa-pill { margin-left: 0; }
+.sa-bad { color: var(--sa-bad); }
 
 /* settings */
 .sa-group { border: 0; margin: 18px 0 0; padding: 0; min-width: 0; }
@@ -135,7 +173,7 @@
 .sa-dirty { font-size: 13px; font-weight: 600; color: var(--sa-warn); }
 
 @media (max-width: 1100px) { .sa-row { grid-template-columns: 1fr; } }
-@media (max-width: 860px) { .sa-scanners, .sa-tops { grid-template-columns: 1fr; } }
+@media (max-width: 860px) { .sa-scanners, .sa-tops, .sa-fs-tops { grid-template-columns: 1fr; } }
 @media (max-width: 640px) { .sa { padding: 0 12px 12px; } .sa-tabs { margin: 0 -12px 14px; padding: 4px 4px 0; } .sa-tab { padding: 10px 9px 8px; font-size: 13px; } .sa-tab small { display: none; }
     .sa-card, .sa-scanner { padding: 14px 12px; } .sa-fields { grid-template-columns: 1fr; } .sa-listf { grid-row: auto; } .sa-foot { margin: 16px -12px -14px; padding: 10px 12px; }
     .sa-tile { flex-direction: column; gap: 6px; padding: 12px; } .sa-tile b { font-size: 20px; } .sa-checked { margin-left: 0; } .sa-svcs code { display: none; } }

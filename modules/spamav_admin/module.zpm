@@ -13,11 +13,13 @@
             <button type="button" class="sa-tab" role="tab" data-tab="overview"><svg class="sa-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg><: Overview :></button>
             <button type="button" class="sa-tab" role="tab" data-tab="clamav"><@ ClamState @><: Virus scanning :> <small>ClamAV</small></button>
             <button type="button" class="sa-tab" role="tab" data-tab="spamassassin"><@ SpamState @><: Spam filtering :> <small>SpamAssassin</small></button>
+            <button type="button" class="sa-tab" role="tab" data-tab="files"><@ FileState @><: File scanning :> <small>ClamAV</small></button>
         </div>
 
         <section class="sa-pane" data-pane="overview" role="tabpanel">
             <@ JobBar @>
             <div class="sa-scanners"><@ Scanners @></div>
+            <@ FileSummary @>
             <h3 class="sa-h"><: All mail on this server :></h3>
             <div class="sa-row">
                 <div class="sa-tiles"><@ Totals @></div>
@@ -33,6 +35,14 @@
             <div class="sa-card">
                 <p class="sa-intro"><: Virus scanning for all mail, incoming and (if chosen) outgoing. Viruses are always blocked for every mailbox. :></p>
                 <@ ClamForm @>
+            </div>
+        </section>
+
+        <section class="sa-pane" data-pane="files" role="tabpanel">
+            <@ FileScan @>
+            <div class="sa-card sa-fs-settings">
+                <p class="sa-intro"><: Every night ClamAV checks the files of every hosting account (websites, uploads) for known malware and web shells. Root reads the files and hands them to ClamAV's scanner: ClamAV itself gets no access to the websites. :></p>
+                <@ FileForm @>
             </div>
         </section>
 
@@ -60,7 +70,9 @@
     each(sa, '.sa-tab', function (b) { b.addEventListener('click', function () { show(b.getAttribute('data-tab')); }); });
     var start = sa.getAttribute('data-open');
     if (!start) { try { start = sessionStorage.getItem('sa-tab'); } catch (e) {} }
-    show(['overview', 'clamav', 'spamassassin'].indexOf(start) >= 0 ? start : 'overview');
+    show(['overview', 'clamav', 'spamassassin', 'files'].indexOf(start) >= 0 ? start : 'overview');
+    each(sa, '[data-goto]', function (b) { b.addEventListener('click', function () { show(b.getAttribute('data-goto')); }); });
+    each(sa, '.sa-fs-form[data-confirm]', function (f) { f.addEventListener('submit', function (e) { if (!window.confirm(f.getAttribute('data-confirm'))) { e.preventDefault(); } }); });
 
     var field = function (form, name) { return form.querySelector('[name="in_' + name + '"]'); };
     var dirty = false;
@@ -104,7 +116,7 @@
     window.addEventListener('beforeunload', function (e) { if (dirty) { e.preventDefault(); e.returnValue = sa.getAttribute('data-unsaved'); } });
     each(sa, '.sa-job-form', function (f) {
         f.addEventListener('submit', function (e) {
-            if (f.querySelector('[name=inWhat]').value === 'restart' && !window.confirm(sa.getAttribute('data-restart'))) { e.preventDefault(); return; }
+            if (f.querySelector('[name=inWhat]').value === 'restart' && !f.classList.contains('sa-fs-form') && !window.confirm(sa.getAttribute('data-restart'))) { e.preventDefault(); return; }
             dirty = false;
         });
     });

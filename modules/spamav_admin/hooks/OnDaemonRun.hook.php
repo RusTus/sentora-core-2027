@@ -386,6 +386,11 @@ if ($svEvents || $svUpdates) {
 $svDays = max(1, (int) sys_spamav::Get('spamav_keep_days'));
 $zdbh->prepare("DELETE FROM x_spamav_events WHERE ev_ts < :t")->execute(array(':t' => time() - $svDays * 86400));
 $zdbh->prepare("DELETE FROM x_spamav_daily WHERE dd_day < :d")->execute(array(':d' => date('Y-m-d', time() - $svDays * 86400)));
+// the websites' file scan (SpamAV Admin > File scanning): a request from the page, the nightly start
+$svFs = sys_filescan::Daemon();
+if ($svFs !== '') {
+    $svLog($svFs);
+}
 $svStatus['parsed'] = time();
 file_put_contents(sys_spamav::STATUS, json_encode($svStatus));
 chmod(sys_spamav::STATUS, 0644);

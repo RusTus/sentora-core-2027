@@ -71,6 +71,15 @@ class sys_spamav
             'clam_alert_encrypted' => array('clamav', 'Block password-protected archives', 'bool', 'false', 'They can not be scanned; viruses are often sent this way.', null),
             'clam_db_checks' => array('clamav', 'Signature updates per day', 'int', '12', 'How often freshclam checks for new virus signatures.', array(1, 50)),
             'clam_threads' => array('clamav', 'Scanner threads', 'int', '10', 'Messages scanned at the same time.', array(1, 50)),
+            // --- File scanning (the hosted websites; sys_filescan) ---
+            'fs_enabled' => array('filescan', 'Scan the websites every night', 'bool', 'false', 'ClamAV checks the files of every hosting account for known malware and web shells. Uses the virus scanner above (Scan mail for viruses must be on).', null),
+            'fs_hour' => array('filescan', 'Time of the scan', 'select', '3', 'At low priority, so the websites are not slowed down.', array('0' => '00:00', '1' => '01:00', '2' => '02:00', '3' => '03:00', '4' => '04:00', '5' => '05:00', '6' => '06:00', '7' => '07:00', '8' => '08:00', '9' => '09:00', '10' => '10:00', '11' => '11:00', '12' => '12:00', '13' => '13:00', '14' => '14:00', '15' => '15:00', '16' => '16:00', '17' => '17:00', '18' => '18:00', '19' => '19:00', '20' => '20:00', '21' => '21:00', '22' => '22:00', '23' => '23:00')),
+            'fs_full_day' => array('filescan', 'Every file on', 'select', '0', 'Other nights only the files changed since the last scan are checked (quick).',
+                array('every' => 'Every night', '0' => 'Sundays', '1' => 'Mondays', '2' => 'Tuesdays', '3' => 'Wednesdays', '4' => 'Thursdays', '5' => 'Fridays', '6' => 'Saturdays')),
+            'fs_max_file_size' => array('filescan', 'Largest file scanned (MB)', 'int', '25', 'Bigger files are skipped (and counted). At most "Most data scanned per message".', array(1, 500)),
+            'fs_backups' => array('filescan', 'Also scan the accounts\' backups', 'bool', 'false', 'The zip files in each account\'s backups folder (slower).', null),
+            'fs_quarantine' => array('filescan', 'Move what is found to quarantine', 'bool', 'false', 'The file is moved to a folder only root can read (never deleted): put it back or delete it below. Off: only reported.', null),
+            'fs_notify_owner' => array('filescan', 'Tell the account\'s owner', 'bool', 'true', 'A notice in their panel with the files found. Administrators are always told.', null),
             // --- SpamAssassin ---
             'sa_enabled' => array('spamassassin', 'Check mail for spam', 'bool', 'true', 'SpamAssassin scores incoming mail; mail at or above the spam score is marked as spam.', null),
             'sa_required_score' => array('spamassassin', 'Spam score', 'float', '5.0', 'Mail scoring this or more is spam. Lower catches more spam but also more good mail. Users may choose their own if allowed below.', array(1, 20)),

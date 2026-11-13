@@ -74,7 +74,7 @@ class module_controller extends ctrl_module
             return;
         }
         $section = (string) $controller->GetControllerRequest('FORM', 'inSection');
-        if (!in_array($section, array('clamav', 'spamassassin'), true)) {
+        if (!in_array($section, array('clamav', 'spamassassin', 'filescan'), true)) {
             return;
         }
         self::$section = $section;
@@ -113,7 +113,7 @@ class module_controller extends ctrl_module
         foreach ($clean as $name => $val) {
             $up->execute(array(':v' => $val, ':n' => $name));
         }
-        self::$msg[] = array('ok', ($section === 'clamav' ? 'ClamAV' : 'SpamAssassin') . ' settings saved. The daemon applies them within 5 minutes.');
+        self::$msg[] = array('ok', $section === 'filescan' ? 'File scanning settings saved.' : ($section === 'clamav' ? 'ClamAV' : 'SpamAssassin') . ' settings saved. The daemon applies them within 5 minutes.');
     }
 
     /**
@@ -193,6 +193,11 @@ class module_controller extends ctrl_module
                 array('Scanning', array('clam_enabled', 'clam_on_infected', 'clam_on_fail', 'clam_scan_outgoing', 'clam_add_header')),
                 array('What is checked', array('clam_scan_archive', 'clam_scan_pdf', 'clam_scan_ole2', 'clam_scan_html', 'clam_phishing_sigs', 'clam_phishing_urls', 'clam_heuristic', 'clam_block_macros', 'clam_alert_encrypted')),
                 array('Limits and updates', array('clam_max_file_size', 'clam_max_scan_size', 'clam_max_recursion', 'clam_max_files', 'clam_threads', 'clam_db_checks')),
+            ),
+            'filescan' => array(
+                array('The nightly scan', array('fs_enabled', 'fs_hour', 'fs_full_day')),
+                array('What is scanned', array('fs_max_file_size', 'fs_backups')),
+                array('When something is found', array('fs_quarantine', 'fs_notify_owner')),
             ),
             'spamassassin' => array(
                 array('Filtering', array('sa_enabled', 'sa_required_score', 'sa_reject_score', 'sa_subject_tag', 'sa_report_safe', 'sa_default_action', 'sa_skip_outgoing')),
@@ -297,7 +302,7 @@ class module_controller extends ctrl_module
         }
         return '<form class="sa-form" method="post" action="./?module=spamav_admin&amp;action=Save"><input type="hidden" name="inSection" value="' . $key . '">' . $out
             . '<div class="sa-foot"><span class="sa-dirty" hidden>' . self::h(self::t('Unsaved changes')) . '</span><span class="sa-hint">'
-            . self::h(self::t('The daemon applies changes within 5 minutes; only the parts that changed are restarted.')) . '</span>'
+            . self::h(self::t($key === 'filescan' ? 'Saved at once: the next scan uses them.' : 'The daemon applies changes within 5 minutes; only the parts that changed are restarted.')) . '</span>'
             . runtime_csfr::Token() . '<button class="btn btn-primary" type="submit">' . self::h(self::t('Save changes')) . '</button></div></form>';
     }
 
@@ -339,6 +344,10 @@ class module_controller extends ctrl_module
      */
     static function getOpenTab()
     {
+        global $controller;
+        if (self::$section === 'filescan' || (string) $controller->GetControllerRequest('URL', 'tab') === 'files') {
+            return 'files';
+        }
         return (string) self::$section;
     }
 
@@ -585,6 +594,249 @@ class module_controller extends ctrl_module
             . $list($viruses, 'No viruses in the last 30 days.', function ($r) { return number_format((int) $r[1]); }) . '</div>'
             . '<div class="sa-card"><h4>' . self::h(self::t('Mailboxes with the most spam')) . ' <small>' . self::h(self::t('30 days')) . '</small></h4>'
             . $list($boxes, 'No spam in the last 30 days.', function ($r) { return number_format((int) $r[1]) . ' ' . self::h(self::t('spam')) . ((int) $r[2] ? ' &middot; ' . (int) $r[2] . ' ' . self::h(self::t((int) $r[2] === 1 ? 'virus' : 'viruses')) : ''); }) . '</div>';
+    }
+
+    // --- File scanning (the hosted websites; dryden/sys/filescan.class.php) ------------------------
+
+    /**
+     * The file scanning settings form (<@ FileForm @>).
+     *
+     * @return string The HTML.
+     */
+    static function getFileForm()
+    {
+        return self::Section('filescan');
+    }
+
+    /**
+     * The file scanning buttons and the quarantine's Put back / Delete: a request the daemon (root)
+     * carries out, started at once (zsudo daemon-run, with the note that keeps it when a run is busy).
+     *
+     * @global runtime_controller $controller The request controller.
+     * @return void
+     */
+    static function doFileRequest()
+    {
+        global $controller;
+        runtime_csfr::Protect();
+        if (!self::IsAdmin()) {
+            return;
+        }
+        self::$section = 'filescan';
+        $what = (string) $controller->GetControllerRequest('FORM', 'inWhat');
+        $id = (string) $controller->GetControllerRequest('FORM', 'inId');
+        if (!in_array($what, array('scan', 'full', 'restore', 'delete'), true) || (in_array($what, array('restore', 'delete'), true) && !preg_match('/^[a-f0-9]{16}$/', $id))) {
+            return;
+        }
+        if (in_array($what, array('scan', 'full'), true) && !sys_spamav::On('clam_enabled')) {
+            self::$msg[] = array('error', 'File scanning uses the virus scanner: switch on "Scan mail for viruses" (Virus scanning) first.');
+            return;
+        }
+        file_put_contents(sys_filescan::REQUEST, json_encode(array('action' => $what, 'id' => $id, 'by' => ctrl_users::GetUserDetail()['username'], 'time' => time())));
+        $zsudo = (string) ctrl_options::GetSystemOption('zsudo');
+        if ($zsudo !== '' && is_executable($zsudo) && function_exists('exec')) {
+            @touch('/var/lib/sentora/tmp/daemon-again');
+            exec(escapeshellcmd($zsudo) . ' daemon-run > /dev/null 2>&1');
+        }
+        $m = array('scan' => 'Scan of the changed files started: the results show here when it is done.', 'full' => 'Scan of every file started: the results show here when it is done (this can take a while).',
+            'restore' => 'The file is put back where it was in a moment.', 'delete' => 'The file is deleted from the quarantine in a moment.');
+        self::$msg[] = array('ok', $m[$what]);
+    }
+
+    /**
+     * A small form button for the file scan's requests.
+     *
+     * @param string $what 'scan', 'full', 'restore' or 'delete'.
+     * @param string $label
+     * @param string $icon SVG path data.
+     * @param string $id The quarantined file (restore, delete).
+     * @param string $confirm A question asked first ('' for none).
+     * @return string The HTML.
+     */
+    static function FileButton($what, $label, $icon, $id = '', $confirm = '')
+    {
+        return '<form class="sa-job-form sa-fs-form" method="post" action="./?module=spamav_admin&amp;action=FileRequest"' . ($confirm !== '' ? ' data-confirm="' . self::h(self::t($confirm)) . '"' : '') . '>'
+            . '<input type="hidden" name="inWhat" value="' . $what . '"><input type="hidden" name="inId" value="' . self::h($id) . '">'
+            . runtime_csfr::Token() . '<button class="btn btn-default btn-sm" type="submit"><svg class="sa-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' . $icon . '</svg>'
+            . self::h(self::t($label)) . '</button></form>';
+    }
+
+    /**
+     * Bytes in words (MB, GB).
+     *
+     * @param float|int $b
+     * @return string
+     */
+    static function Size($b)
+    {
+        return $b >= 1073741824 ? sprintf('%.1f GB', $b / 1073741824) : ($b >= 1048576 ? sprintf('%.1f MB', $b / 1048576) : ($b >= 1024 ? sprintf('%d KB', $b / 1024) : sprintf('%d bytes', $b)));
+    }
+
+    /**
+     * The malware family of a signature, for the ring: "Php.Webshell.Generic-123" -> "Php.Webshell".
+     *
+     * @param string $sig
+     * @return string
+     */
+    static function Family($sig)
+    {
+        $p = explode('.', preg_replace('/-\d+(-\d+)?$/', '', (string) $sig));
+        return implode('.', array_slice($p, 0, 2));
+    }
+
+    /**
+     * The File scanning tab's results (<@ FileScan @>): its state and buttons, the last scan as tiles,
+     * the last 14 scans as bars, what was found by family as a ring, and the list of findings with Put
+     * back and Delete for the quarantined ones.
+     *
+     * @return string The HTML.
+     */
+    static function getFileScan()
+    {
+        $st = sys_filescan::State();
+        $runs = (array) $st['runs'];
+        $last = $runs ? end($runs) : null;
+        $on = sys_spamav::On('fs_enabled');
+        $clam = sys_spamav::On('clam_enabled');
+        $running = isset($st['running']) && (int) $st['running']['started'] > time() - 6 * 3600;
+        $hour = sprintf('%02d:00', (int) sys_spamav::Get('fs_hour'));
+        // the state and the buttons
+        $pill = !$clam ? '<span class="sa-pill bad">' . self::h(self::t('Needs the virus scanner')) . '</span>'
+            : ($running ? '<span class="sa-pill run">' . self::h(self::t('Scanning now')) . '</span>'
+            : ($on ? '<span class="sa-pill on">' . self::h(self::t('On')) . '</span>' : '<span class="sa-pill off">' . self::h(self::t('Off')) . '</span>'));
+        $line = !$clam ? self::t('It uses ClamAV\'s scanner: switch on "Scan mail for viruses" on the Virus scanning tab.')
+            : ($running ? sprintf(self::t('Started at %s; this page shows the results when it is done.'), date('H:i', (int) $st['running']['started']))
+            : ($on ? sprintf(self::t('Every night at %s.'), $hour) : self::t('Not scanned at night: switch it on below, or scan now.')));
+        $refresh = $running ? '<script>setTimeout(function () { location.replace("./?module=spamav_admin&tab=files"); }, 15000);</script>' : '';
+        $out = '<div class="sa-card sa-fs-head"><svg class="sa-ico-lg sa-ico-clam" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/><circle cx="11" cy="14" r="3"/><path d="m13.5 16.5 2 2"/></svg>'
+            . '<div><h4>' . self::h(self::t('Website files')) . '</h4><span>' . self::h($line) . '</span></div>' . $pill . '</div>'
+            . '<div class="sa-fs-actions">' . self::FileButton('scan', 'Scan changed files now', '<path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>')
+            . self::FileButton('full', 'Scan every file now', '<path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/>') . '</div>' . $refresh;
+        // the last scan as tiles
+        $findings = (array) $st['findings'];
+        $recent = 0;
+        $inQ = 0;
+        foreach ($findings as $f) {
+            if ((int) $f['time'] >= time() - 30 * 86400) {
+                $recent++;
+            }
+            if (($f['status'] ?? '') === 'quarantined') {
+                $inQ++;
+            }
+        }
+        $tile = function ($cls, $icon, $value, $label, $small) {
+            return '<div class="sa-tile ' . $cls . '"><svg class="sa-ico-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' . $icon . '</svg>'
+                . '<div><b>' . $value . '</b><span>' . self::h(self::t($label)) . '</span>' . ($small !== '' ? '<small>' . $small . '</small>' : '') . '</div></div>';
+        };
+        $dur = $last ? max(1, (int) $last['finished'] - (int) $last['started']) : 0;
+        $tiles = $tile('sa-t-checked', '<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/>', $last ? number_format((int) $last['files']) : '-', 'Files checked',
+                $last ? self::h(self::t($last['full'] ? 'every file' : 'changed files')) . ' &middot; ' . self::h(self::Size((int) $last['bytes'])) . ' &middot; ' . self::h($dur >= 60 ? sprintf(self::t('%d min'), round($dur / 60)) : sprintf(self::t('%d s'), $dur)) : self::h(self::t('no scan yet')))
+            . $tile('sa-t-virus', '<circle cx="12" cy="12" r="5"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5M5 5l3.5 3.5M15.5 15.5 19 19M5 19l3.5-3.5M15.5 8.5 19 5"/>', number_format($last ? (int) $last['found'] : 0), 'Found in the last scan',
+                self::h(self::t('30 days')) . ' ' . number_format($recent))
+            . $tile('sa-t-refused', '<rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>', number_format($inQ), 'In quarantine',
+                self::h(self::t(sys_spamav::On('fs_quarantine') ? 'found files are moved there' : 'quarantine is off: only reported')))
+            . $tile('sa-t-spam', '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>', $last ? self::h(date('H:i', (int) $last['started'])) : '-', 'Last scan',
+                $last ? self::h(ui_language::Date('D j M', (int) $last['started'])) . ((int) $last['skipped_big'] ? ' &middot; ' . sprintf(self::h(self::t('%d too big')), (int) $last['skipped_big']) : '')
+                    . (isset($last['stopped']) ? '<br><span class="sa-bad">' . self::h(self::t($last['stopped'])) . '</span>' : ((int) $last['errors'] ? '<br>' . sprintf(self::h(self::t('%d not scanned')), (int) $last['errors']) : '')) : '');
+        // the last 14 scans as bars (files checked; the ones that found something in red, with the number).
+        // The square root of the number of files: a scan of every file (tens of thousands) and the nightly
+        // ones (hundreds) both stay readable; the exact number is on each bar's tip
+        $show = array_slice($runs, -14);
+        $max = 1;
+        foreach ($show as $r) {
+            $max = max($max, (int) $r['files']);
+        }
+        $bars = '';
+        for ($i = 0; $i < 14; $i++) {
+            $r = $show[$i - (14 - count($show))] ?? null;
+            if ($r === null) {
+                $bars .= '<div class="sa-bar sa-none"><div class="sa-stack"></div><span>&nbsp;</span></div>';
+                continue;
+            }
+            $tip = ui_language::Date('D j M H:i', (int) $r['started']) . ': ' . number_format((int) $r['files']) . ' ' . self::t('files') . ', ' . (int) $r['found'] . ' ' . self::t('found') . ($r['full'] ? ' (' . self::t('every file') . ')' : '');
+            $bars .= '<div class="sa-bar" title="' . self::h($tip) . '"><div class="sa-stack">' . ((int) $r['found'] ? '<em class="sa-fs-n">' . (int) $r['found'] . '</em>' : '')
+                . '<i class="' . ((int) $r['found'] ? 'sa-b-virus' : ($r['full'] ? 'sa-b-full' : 'sa-b-files')) . '" style="height:' . max(3, round(sqrt((int) $r['files']) / sqrt($max) * 100, 1)) . '%"></i></div>'
+                . '<span>' . date('j', (int) $r['started']) . '</span></div>';
+        }
+        $chart = '<div class="sa-card sa-trend"><div class="sa-trend-head"><h4>' . self::h(self::t('Last 14 scans')) . '</h4><span class="sa-key"><i class="sa-b-files"></i>' . self::h(self::t('Changed files'))
+            . ' <i class="sa-b-full"></i>' . self::h(self::t('Every file')) . ' <i class="sa-b-virus"></i>' . self::h(self::t('Found something')) . '</span></div>'
+            . '<div class="sa-chart" role="img" aria-label="' . self::h(self::t('Files checked by the last 14 scans')) . '">' . $bars . '</div></div>';
+        // what was found, by family (90 days), as a ring
+        $fam = array();
+        foreach ($findings as $f) {
+            if ((int) $f['time'] >= time() - 90 * 86400) {
+                $k = self::Family($f['sig']);
+                $fam[$k] = ($fam[$k] ?? 0) + 1;
+            }
+        }
+        arsort($fam);
+        if (count($fam) > 5) {
+            $rest = array_sum(array_slice($fam, 5));
+            $fam = array_slice($fam, 0, 5, true) + array(self::t('Others') => $rest);
+        }
+        $colors = array('#d6457a', '#e08a1e', '#7c5cc4', '#1fa2b5', '#447fb3', '#8a9a5b');
+        $total = array_sum($fam);
+        $r = 52;
+        $c = 2 * M_PI * $r;
+        $off = 0.0;
+        $arcs = '';
+        $legend = '';
+        $n = 0;
+        foreach ($fam as $k => $v) {
+            $len = $c * $v / max(1, $total);
+            $arcs .= '<circle cx="70" cy="70" r="' . $r . '" fill="none" stroke="' . $colors[$n % 6] . '" stroke-width="16" stroke-dasharray="' . round(max(0.5, $len - 2), 2) . ' ' . round($c, 2) . '" stroke-dashoffset="' . round(-$off, 2) . '" transform="rotate(-90 70 70)"><title>' . self::h($k) . ': ' . $v . '</title></circle>';
+            $legend .= '<li><i style="background:' . $colors[$n % 6] . '"></i><span>' . self::h($k) . '</span><b>' . $v . '</b></li>';
+            $off += $len;
+            $n++;
+        }
+        $ring = '<div class="sa-card sa-fs-ring"><h4>' . self::h(self::t('What was found')) . ' <small>' . self::h(self::t('90 days')) . '</small></h4>'
+            . '<div class="sa-ring"><svg viewBox="0 0 140 140" role="img" aria-label="' . self::h(self::t('What was found, by kind')) . '"><circle cx="70" cy="70" r="' . $r . '" fill="none" stroke="var(--sa-line)" stroke-width="16"/>' . $arcs . '</svg>'
+            . '<div class="sa-ring-mid"><b>' . $total . '</b><span>' . self::h(self::t($total === 1 ? 'file' : 'files')) . '</span></div></div>'
+            . ($legend !== '' ? '<ul class="sa-legend">' . $legend . '</ul>' : '<p class="sa-empty">' . self::h(self::t('Nothing found: the websites look clean.')) . '</p>') . '</div>';
+        $out .= '<div class="sa-row sa-fs-row"><div class="sa-tiles">' . $tiles . '</div>' . $chart . '</div>';
+        // the findings
+        $rows = '';
+        foreach (array_slice($findings, 0, 100) as $f) {
+            $status = (string) ($f['status'] ?? 'found');
+            $pills = array('found' => array('bad', 'Found'), 'quarantined' => array('run', 'In quarantine'), 'restored' => array('off', 'Put back'), 'deleted' => array('off', 'Deleted'));
+            $p = $pills[$status] ?? $pills['found'];
+            $act = $status === 'quarantined' ? self::FileButton('restore', 'Put back', '<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/>', (string) $f['id'], 'Put this file back where it was? Only when you are sure it is not malware.')
+                . self::FileButton('delete', 'Delete', '<path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="m6 7 1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13"/>', (string) $f['id'], 'Delete this file for good?') : '';
+            $rows .= '<li class="sa-fs-item"><div class="sa-fs-what"><b>' . self::h($f['sig']) . '</b><code>' . self::h($f['path']) . '</code>'
+                . '<small>' . self::h($f['user']) . ' &middot; ' . self::h(self::Size((int) $f['size'])) . ' &middot; ' . self::h(ui_language::Date('D j M H:i', (int) $f['time'])) . '</small></div>'
+                . '<span class="sa-pill ' . $p[0] . '">' . self::h(self::t($p[1])) . '</span>' . ($act !== '' ? '<div class="sa-fs-acts">' . $act . '</div>' : '') . '</li>';
+        }
+        $list = '<div class="sa-card sa-fs-list"><h4>' . self::h(self::t('Files found')) . '</h4>'
+            . ($rows !== '' ? '<ul class="sa-fs-items">' . $rows . '</ul>' : '<p class="sa-empty">' . self::h(self::t('None so far.')) . '</p>') . '</div>';
+        return $out . '<div class="sa-tops sa-fs-tops">' . $ring . $list . '</div>';
+    }
+
+    /**
+     * File scanning on the Overview: one line with its state and the last scan (<@ FileSummary @>).
+     *
+     * @return string The HTML.
+     */
+    static function getFileSummary()
+    {
+        $st = sys_filescan::State();
+        $last = $st['runs'] ? end($st['runs']) : null;
+        $on = sys_spamav::On('fs_enabled');
+        return '<div class="sa-card sa-fs-sum"><svg class="sa-ico-lg sa-ico-clam" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/><circle cx="11" cy="14" r="3"/><path d="m13.5 16.5 2 2"/></svg>'
+            . '<div><b>' . self::h(self::t('Website files')) . '</b><span>'
+            . ($last ? self::h(sprintf(self::t('Last scan %1$s: %2$s files, %3$d found.'), ui_language::Date('D j M H:i', (int) $last['started']), number_format((int) $last['files']), (int) $last['found'])) : self::h(self::t('Not scanned yet.')))
+            . '</span></div><span class="sa-pill ' . ($on ? 'on' : 'off') . '">' . self::h(self::t($on ? 'Nightly' : 'Off')) . '</span>'
+            . '<button type="button" class="btn btn-default btn-sm" data-goto="files">' . self::h(self::t('Open')) . '</button></div>';
+    }
+
+    /**
+     * The File scanning tab's dot (green: on, grey: off, red: on without the virus scanner).
+     *
+     * @return string The HTML.
+     */
+    static function getFileState()
+    {
+        $on = sys_spamav::On('fs_enabled');
+        return '<span class="sa-dot ' . (!$on ? 'off' : (sys_spamav::On('clam_enabled') ? 'up' : 'down')) . '"></span>';
     }
 
     /**
