@@ -29,6 +29,10 @@ function MatomoSync()
 {
     global $zdbh;
     matomo_helper::Ensure();
+    $trusted = matomo_helper::TrustHosts();
+    if ($trusted) {
+        echo 'Matomo: trusted hosts added (the panel is opened on them): ' . implode(', ', $trusted) . fs_filehandler::NewLine();
+    }
     if (!matomo_helper::PluginActive()) {
         $failed = matomo_helper::SetUp();
         echo 'Matomo: Sentora\'s plugin and settings ' . (count($failed) ? 'could NOT all be set: ' . implode('; ', $failed) : 'set (they were missing)') . '.' . fs_filehandler::NewLine();

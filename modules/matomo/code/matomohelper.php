@@ -176,6 +176,83 @@ class matomo_helper
     }
 
     /**
+     * The addresses the panel is opened on, in Matomo's trusted hosts (config.ini.php, [General]
+     * trusted_hosts[]): the panel's domain, the server's own IP addresses and its IP setting
+     * (server_ip), 127.0.0.1 and localhost. Matomo shows a warning and refuses to log in on any
+     * other address. Only missing ones are added: entries already there (the administrator's own)
+     * stay. Run by the daemon, so a new address or domain follows within 5 minutes.
+     *
+     * @param string[]|null $want Optional. The addresses (for testing; default: worked out here).
+     * @param string|null $file Optional. Matomo's config file (for testing).
+     * @return string[] The addresses added (empty when none were missing or the file can not be changed).
+     */
+    static function TrustHosts($want = null, $file = null)
+    {
+        $file = $file === null ? self::APP_DIR . 'config/config.ini.php' : $file;
+        if ($want === null) {
+            $want = array(ctrl_statsdomains::PanelDomain(), ctrl_options::GetSystemOption('server_ip'), '127.0.0.1', 'localhost');
+            if (class_exists('sys_serverip')) {
+                $want = array_merge($want, sys_serverip::Own());
+            }
+        }
+        $c = @file_get_contents($file);
+        if (!is_string($c) || is_link($file) || !preg_match('/^\[General\][ \t]*$/m', $c, $m, PREG_OFFSET_CAPTURE)) {
+            return array();
+        }
+        // the [General] section: from its heading to the next one
+        $start = $m[0][1];
+        $end = preg_match('/^\[[^\]]+\][ \t]*$/m', $c, $n, PREG_OFFSET_CAPTURE, $start + strlen($m[0][0])) ? $n[0][1] : strlen($c);
+        $sec = substr($c, $start, $end - $start);
+        preg_match_all('/^\s*trusted_hosts\[\]\s*=\s*"([^"]*)"/m', $sec, $have);
+        $have = array_map('strtolower', $have[1]);
+        $add = array();
+        foreach ($want as $h) {
+            $h = strtolower(trim((string) $h));
+            // (a host name or an IPv4 address, nothing that could break the file)
+            if ($h !== '' && preg_match('/^[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?$/', $h) && !in_array($h, $have, true) && !in_array($h, $add, true)) {
+                $add[] = $h;
+            }
+        }
+        if (!$add) {
+            return array();
+        }
+        $lines = '';
+        foreach ($add as $h) {
+            $lines .= 'trusted_hosts[] = "' . $h . '"' . "\n";
+        }
+        // after the last trusted host there, else right under the heading
+        if (preg_match_all('/^\s*trusted_hosts\[\]\s*=.*$/m', $sec, $t, PREG_OFFSET_CAPTURE)) {
+            $last = end($t[0]);
+            $at = $start + $last[1] + strlen($last[0]) + 1;
+        } else {
+            $at = $start + strlen($m[0][0]) + 1;
+        }
+        $at = min($at, strlen($c));
+        $new = substr($c, 0, $at) . (substr($c, $at - 1, 1) === "\n" || $at === 0 ? '' : "\n") . $lines . substr($c, $at);
+        $tmp = $file . '.sentora-tmp';
+        @unlink($tmp);
+        $um = umask(0077);   // (the file holds Matomo's database password)
+        $f = @fopen($tmp, 'x');
+        umask($um);
+        if (!$f) {
+            return array();
+        }
+        fwrite($f, $new);
+        fclose($f);
+        $st = @stat($file);
+        if ($st) {
+            @chmod($tmp, $st['mode'] & 0777);
+            @chown($tmp, $st['uid']);
+            @chgrp($tmp, $st['gid']);
+        }
+        if (!@rename($tmp, $file)) {
+            @unlink($tmp);
+            return array();
+        }
+        return $add;
+    }
+
+    /**
      * Whether Sentora's sync plugin is switched on in Matomo's config.
      *
      * @return bool
