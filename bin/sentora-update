@@ -723,7 +723,7 @@ ui_step "Updating services and bundled apps"
 # its files from a temporary folder with that folder's SELinux label, which systemd may not start
 # (PHP 7.1 on an AlmaLinux panel): their right labels again (quick; nothing else changes)
 if [ -d /opt/sentora-php ] && command -v restorecon > /dev/null && command -v selinuxenabled > /dev/null && selinuxenabled; then
-    restorecon -R /opt/sentora-php 2> /dev/null || true
+    restorecon -R /opt/sentora-php 9>&- 2> /dev/null || true   # (9: the update's lock, not handed on)
 fi
 
 # Settings of this Linux system that came after this server was installed: they were added with
