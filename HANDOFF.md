@@ -238,6 +238,11 @@ Sentora Panel desktop shortcut, tray icon (green while port 443 answers, one cli
 - **Released 2027.70 (2026-11-10):** Fedora 45, the WSL script and ModSecurity are on the `current` release; all five
 systems passed the install test (with the ModSecurity attack test, which uses the smoke test's kept site).
 
+## Planned (the owner said yes; do when no other session is changing add-ons)
+
+- **Add-on sources in git** (owner, 2026-11-13): today each add-on is only its .zpp in sentora-installers-2027/sentora-repo (git can not show or merge what changed inside). Put each add-on's folder in the installers repository (`addons/<name>/`: module.xml, module.zpm, code, assets, deploy, hooks, and its tests), a script that builds `sentora-repo/<name>.zpp` from it the way CLAUDE.md's "Publishing an add-on" does (same zip order and -X, so the bytes are the same), and a workflow that fails when a .zpp does not match its folder. Then CLAUDE.md's publishing steps and the "unzip both, merge" rule change to "edit the folder, build". Repo Browser and panels see no change.
+- **Remove the hand-over shims** `node/` and `backup/` in the installers repository once the owner's test servers use `docker-node/` and `backup-node/` (ask first).
+
 ## Waiting on the owner (do not start without asking)
 
 **zGod-style overview** (owner's idea, 2026-11-12, remind him now and then): his old zPanel module zGod let the administrator see every account under zadmin as if it were zadmin's own client: totals and "who uses the most" for disk, traffic, mailboxes and their sizes, quotas (figures only, nothing private). Would be an admin-only page or add-on built on the usage figures the panel already keeps; he may hand over the old module to show what it did (complete rewrite). Matomo's clean-up of old raw visits (delete_logs) is also on hold until he decides. Hosting for the add-on repository and the feedback server was deferred by the owner.
