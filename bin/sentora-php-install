@@ -48,6 +48,7 @@ UPDATE=0
 [ -d "$P/etc" ] && UPDATE=1
 [ "$MM" = "$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;')" ] && { echo "PHP $MM is this server's own PHP."; exit 1; }
 
+relabel() { command -v restorecon > /dev/null 2>&1 && selinuxenabled 2> /dev/null && restorecon -R "$P" 2> /dev/null; return 0; }
 WORK=$(mktemp -d /tmp/sentora-php-install.XXXXXX)
 trap 'rm -rf "$WORK"' EXIT
 if [ -z "$FILE" ]; then
@@ -129,6 +130,9 @@ if [ "$UPDATE" = 1 ]; then
         rm -rf "${P:?}/${d:?}.old"; [ -d "$P/$d" ] && mv "$P/$d" "$P/$d.old"
         mv "$NEW/$d" "$P/$d"
     done
+    # files moved from the temporary folder keep its SELinux label (system_cronjob_tmp_t when the
+    # daemon updated it): systemd may then not start them. They get the label of their place.
+    relabel
     cp "$P/BUILD-INFO" "$WORK/BUILD-INFO.old" 2> /dev/null || true
     cp "$NEW/BUILD-INFO" "$P/BUILD-INFO" 2> /dev/null || true
     # add-on extensions the bundle brings (PHP 7.1, 7.4, 8.1): only those that load are switched on
@@ -144,6 +148,7 @@ if [ "$UPDATE" = 1 ]; then
     for d in bin sbin lib include php; do
         [ -d "$P/$d.old" ] && { rm -rf "${P:?}/${d:?}"; mv "$P/$d.old" "$P/$d"; }
     done
+    relabel
     cp "$WORK/BUILD-INFO.old" "$P/BUILD-INFO" 2> /dev/null || true
     # (add-ons the old files do not have are switched off again)
     for f in "$P"/etc/conf.d/30-*.ini; do

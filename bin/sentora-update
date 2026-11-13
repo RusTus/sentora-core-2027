@@ -719,6 +719,13 @@ NEWMODS=$( cd "$PANEL" && php -r '
 ' "$SRC_MODULES" 2>&1 ) || warn "could not register new modules"
 while IFS= read -r l; do [ -n "$l" ] && say "${l#  }"; done <<< "$NEWMODS"
 ui_step "Updating services and bundled apps"
+# Sentora's extra PHP versions (/opt/sentora-php): an update of one by the daemon before 2027.89 moved
+# its files from a temporary folder with that folder's SELinux label, which systemd may not start
+# (PHP 7.1 on an AlmaLinux panel): their right labels again (quick; nothing else changes)
+if [ -d /opt/sentora-php ] && command -v restorecon > /dev/null && command -v selinuxenabled > /dev/null && selinuxenabled; then
+    restorecon -R /opt/sentora-php 2> /dev/null || true
+fi
+
 # Settings of this Linux system that came after this server was installed: they were added with
 # Debian's and Ubuntu's defaults; this system's installer may set others today (on AlmaLinux:
 # ModSecurity's package). Only settings still at their default change (sentora-platform-fill).
