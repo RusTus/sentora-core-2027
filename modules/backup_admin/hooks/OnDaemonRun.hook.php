@@ -12,7 +12,7 @@ global $zdbh; // hooks are included inside a function
 $obDefaults = array('offsite_enabled' => 'false', 'offsite_server' => '', 'offsite_port' => '22', 'offsite_user' => 'sentora-backup',
     'offsite_password' => '', 'offsite_path' => '/srv/sentora-backups', 'offsite_time' => '02:30', 'offsite_keep' => '14',
     'offsite_mail' => 'true', 'offsite_request' => '', 'offsite_hostkey' => '', 'offsite_pubkey' => '',
-    'offsite_nodekey' => '', 'offsite_pairing' => '', 'offsite_seenkey' => '');
+    'offsite_nodekey' => '', 'offsite_pairing' => '', 'offsite_seenkey' => '', 'offsite_target' => '');
 $obHave = $zdbh->query("SELECT so_name_vc, so_value_tx FROM x_settings WHERE so_name_vc LIKE 'offsite\\_%'")->fetchAll(PDO::FETCH_KEY_PAIR);
 foreach ($obDefaults as $obName => $obValue) {
     if (!array_key_exists($obName, $obHave)) {
@@ -59,8 +59,11 @@ if (is_file($obBin) && is_dir('/etc/cron.d')) {
     };
     // "Add the backup node" (2027.86, the node framework: dryden/sys/nodes.class.php): the key the node
     // answers with must be the one its installer showed; only then is it kept and used
-    if (strtok($obHave['offsite_request'], ' ') === 'pair' && class_exists('sys_nodes')) {
-        $obSet('offsite_request', '');
+    // (whenever one was added and not checked yet: a Test connection pressed meanwhile does not lose it)
+    if ($obHave['offsite_nodekey'] !== '' && class_exists('sys_nodes')) {
+        if (strtok($obHave['offsite_request'], ' ') === 'pair') {
+            $obSet('offsite_request', '');
+        }
         $obN = explode(' ', $obHave['offsite_nodekey']);
         $obSet('offsite_nodekey', '');
         if (count($obN) === 3) {
@@ -71,7 +74,7 @@ if (is_file($obBin) && is_dir('/etc/cron.d')) {
                 $obSet('offsite_pairing', 'fail ' . time() . ' ' . $obN[0] . ' answered with another key than the one added: check the address and the key (sentora-backup-node key on the node shows it). Nothing was changed.');
             } else {
                 foreach (array('offsite_server' => $obN[0], 'offsite_port' => (string) (int) $obN[1], 'offsite_user' => 'sentora-backup', 'offsite_password' => '', 'offsite_path' => '/',
-                    'offsite_hostkey' => sys_nodes::SshFingerprint($obLine), 'offsite_seenkey' => '', 'offsite_enabled' => 'true') as $obK => $obV) {
+                    'offsite_hostkey' => sys_nodes::SshFingerprint($obLine), 'offsite_seenkey' => '', 'offsite_enabled' => 'true', 'offsite_target' => 'node') as $obK => $obV) {
                     $obSet($obK, $obV);
                 }
                 @unlink('/root/.ssh/sentora_offsite_known_hosts');
@@ -104,6 +107,14 @@ if (is_file($obBin) && is_dir('/etc/cron.d')) {
             if ($obSeen !== '' && $obHave['offsite_seenkey'] !== $obHave['offsite_server'] . ' ' . $obSeen) {
                 $obSet('offsite_seenkey', $obHave['offsite_server'] . ' ' . $obSeen);
             }
+        }
+    }
+    // a Sentora backup node's status (Backup Config's card): a connection test every 30 minutes, which
+    // also says how full its disk is
+    if ($obHave['offsite_request'] === '' && $obHave['offsite_target'] === 'node' && $obHave['offsite_server'] !== '' && $obHave['offsite_hostkey'] !== '') {
+        $obSt = json_decode((string) @file_get_contents('/var/lib/sentora/offsite-backup.json'), true);
+        if (!is_array($obSt) || (int) ($obSt['check_time'] ?? 0) < time() - 1800) {
+            $obSet('offsite_request', 'check ' . time());
         }
     }
     // a request from the page: run it in the background (a copy can take a while)

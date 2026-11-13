@@ -243,7 +243,8 @@ class module_controller extends ctrl_module
         if ((string) $controller->GetControllerRequest('URL', 'snap') !== '' || self::$restoreMsg || self::$flash !== '' || isset($_SESSION['bk_restore_msg'])) {
             return 'restore';
         }
-        if (self::$offsiteErrors || self::$offsiteSaved || self::$offsiteQueued !== '') {
+        if (self::$offsiteErrors || self::$offsiteSaved || self::$offsiteQueued !== '' || (string) $controller->GetControllerRequest('URL', 'dest') !== ''
+            || (string) $controller->GetControllerRequest('URL', 'tab') === 'offsite') {
             return 'offsite';
         }
         return self::$ok ? 'settings' : '';
@@ -302,8 +303,12 @@ class module_controller extends ctrl_module
     static $offsiteErrors = array();
     /** @var bool True after doSaveOffsite() saved the off-server backup settings. */
     static $offsiteSaved = false;
-    /** @var string The job just queued for the daemon: 'check', 'now', or '' for none. */
+    /** @var string The job just queued for the daemon: 'check', 'now', 'pair', or '' for none. */
     static $offsiteQueued = '';
+    /** @var bool True when that job was started at once (zsudo daemon-run), not at the next daemon run. */
+    static $offsiteNow = false;
+    /** @var bool True after the backup node was removed. */
+    static $offsiteRemoved = false;
 
     /**
      * The off-server backup settings, with their defaults.
@@ -315,7 +320,7 @@ class module_controller extends ctrl_module
         return array('offsite_enabled' => 'false', 'offsite_server' => '', 'offsite_port' => '22', 'offsite_user' => 'sentora-backup',
             'offsite_password' => '', 'offsite_path' => '/srv/sentora-backups', 'offsite_time' => '02:30', 'offsite_keep' => '14',
             'offsite_mail' => 'true', 'offsite_request' => '', 'offsite_hostkey' => '', 'offsite_pubkey' => '',
-            'offsite_nodekey' => '', 'offsite_pairing' => '', 'offsite_seenkey' => '');
+            'offsite_nodekey' => '', 'offsite_pairing' => '', 'offsite_seenkey' => '', 'offsite_target' => '');
     }
 
     /**
@@ -367,7 +372,27 @@ class module_controller extends ctrl_module
         global $controller;
         runtime_csfr::Protect();
         $f = $controller->GetAllControllerRequests('FORM');
-        $get = function ($k) use ($f) { return isset($f[$k]) ? trim((string) $f[$k]) : ''; };
+        // (by reference: the fields of the other destinations are filled in below)
+        $get = function ($k) use (&$f) { return isset($f[$k]) ? trim((string) $f[$k]) : ''; };
+        $o = self::Offsite();
+        // which destination this form is for: only its own fields are posted, the others are kept
+        $dest = in_array($get('inDest'), array('node', 'ssh', 'folder'), true) ? $get('inDest') : 'ssh';
+        if ($dest === 'node' && !self::NodePaired()) {
+            self::$offsiteErrors = array('Add the backup node first (its address and key).');
+            return;
+        }
+        if ($dest !== 'ssh') {
+            foreach (array('inOffsitePort' => 'offsite_port', 'inOffsiteUser' => 'offsite_user', 'inOffsiteHostkey' => 'offsite_hostkey') as $in => $k) {
+                $f[$in] = $o[$k];
+            }
+            $f['inOffsiteServer'] = $dest === 'node' ? $o['offsite_server'] : '';
+            if ($dest === 'node') {
+                $f['inOffsitePath'] = $o['offsite_path'];
+            }
+            if ($dest === 'folder') {
+                $f['inOffsiteHostkey'] = '';
+            }
+        }
         $enabled = $get('inOffsiteEnabled') === '1' ? 'true' : 'false';
         $server = $get('inOffsiteServer');
         $port = $get('inOffsitePort') === '' ? '22' : $get('inOffsitePort');
@@ -401,15 +426,16 @@ class module_controller extends ctrl_module
         if (!preg_match('/^[0-9]{1,3}$/', $keep) || (int) $keep < 1 || (int) $keep > 365) {
             $e[] = 'Nights kept is a number from 1 to 365.';
         }
-        if ($enabled === 'true' && $server === '' && $path === '') {
-            $e[] = 'Set a server (or a local folder) before switching it on.';
+        if ($dest === 'ssh' && $server === '') {
+            $e[] = 'Set the backup machine\'s address (its name or IP address).';
         }
         if ($e) {
             self::$offsiteErrors = $e;
             return;
         }
         foreach (array('offsite_enabled' => $enabled, 'offsite_server' => $server, 'offsite_port' => $port, 'offsite_user' => $user,
-            'offsite_path' => $path, 'offsite_time' => $time, 'offsite_keep' => (string) (int) $keep, 'offsite_mail' => $mail, 'offsite_hostkey' => $hostkey) as $k => $v) {
+            'offsite_path' => $path, 'offsite_time' => $time, 'offsite_keep' => (string) (int) $keep, 'offsite_mail' => $mail, 'offsite_hostkey' => $hostkey,
+            'offsite_target' => $dest) as $k => $v) {
             self::SetOffsite($k, $v);
         }
         // the password: changed only when a new one is typed, cleared only on request
@@ -450,6 +476,7 @@ class module_controller extends ctrl_module
         }
         self::SetOffsite('offsite_request', $what . ' ' . time());
         self::$offsiteQueued = $what;
+        self::$offsiteNow = self::RunNow();
     }
 
     /**
@@ -473,44 +500,222 @@ class module_controller extends ctrl_module
     }
 
     /**
-     * Build the off-server backup settings form and its two action buttons (template <@ OffsiteForm @>).
+     * Where the backups go now: 'node' (a Sentora backup node), 'ssh' (another SSH server), 'folder'
+     * (a folder on this server), or '' (nothing set up yet). Panels from before 2027.87 have no
+     * offsite_target: it is worked out from their settings.
+     *
+     * @return string
+     */
+    static function Target()
+    {
+        $o = self::Offsite();
+        if (in_array($o['offsite_target'], array('node', 'ssh', 'folder'), true)) {
+            return $o['offsite_target'];
+        }
+        if ($o['offsite_server'] !== '') {
+            return ($o['offsite_user'] === 'sentora-backup' && $o['offsite_path'] === '/' && $o['offsite_hostkey'] !== '') ? 'node' : 'ssh';
+        }
+        return $o['offsite_enabled'] === 'true' ? 'folder' : '';
+    }
+
+    /**
+     * The destination the page shows: the one picked above the form (?dest=), else the one in use,
+     * else a Sentora backup node (recommended).
+     *
+     * @return string 'node', 'ssh' or 'folder'
+     */
+    static function Dest()
+    {
+        global $controller;
+        $d = (string) $controller->GetControllerRequest('URL', 'dest');
+        if (in_array($d, array('node', 'ssh', 'folder'), true)) {
+            return $d;
+        }
+        $t = self::Target();
+        return $t !== '' ? $t : 'node';
+    }
+
+    /**
+     * True when a Sentora backup node is in use, its key checked.
+     *
+     * @return bool
+     */
+    static function NodePaired()
+    {
+        $o = self::Offsite();
+        return self::Target() === 'node' && $o['offsite_server'] !== '' && $o['offsite_hostkey'] !== '';
+    }
+
+    /**
+     * Something the daemon is about to do or doing for the off-server backup (the page then looks
+     * again by itself every few seconds).
+     *
+     * @return bool
+     */
+    static function Pending()
+    {
+        $o = self::Offsite();
+        return $o['offsite_nodekey'] !== '' || $o['offsite_request'] !== '';
+    }
+
+    /**
+     * Start the daemon at once (zsudo daemon-run, as Sentora Config's "Run the daemon now"), so what
+     * was just asked for runs within seconds instead of at the next 5-minute run.
+     *
+     * @return bool True when it was started.
+     */
+    static function RunNow()
+    {
+        $zsudo = (string) ctrl_options::GetSystemOption('zsudo');
+        if ($zsudo === '' || !is_executable($zsudo) || !function_exists('exec')) {
+            return false;
+        }
+        $out = array();
+        $rc = 1;
+        exec(escapeshellcmd($zsudo) . ' daemon-run 2>&1', $out, $rc);
+        return (int) $rc === 0;
+    }
+
+    /**
+     * "Where the backups go": three choices above the form (template <@ OffsiteDest @>), the one in
+     * use marked.
+     *
+     * @return string The HTML.
+     */
+    static function getOffsiteDest()
+    {
+        $in = self::Target();
+        $show = self::Dest();
+        $opts = array(
+            'node' => array('cloud', 'A Sentora backup node', 'Recommended: a server of its own, set up with one command; this panel may only copy into its own folder there.'),
+            'ssh' => array('plug', 'Another SSH server', 'Any server you can reach with SSH and rsync (a NAS, a rented backup server).'),
+            'folder' => array('archive', 'A folder on this server', 'For example a disk or a network share (NFS) mounted on this server.'),
+        );
+        $out = '<div class="bk-dest" role="tablist">';
+        foreach ($opts as $k => $v) {
+            $out .= '<a role="tab" class="bk-dest-opt' . ($k === $show ? ' on' : '') . '" href="./?module=backup_admin&amp;dest=' . $k . '#offsite" aria-selected="' . ($k === $show ? 'true' : 'false') . '">'
+                . self::Icon($v[0]) . '<span><b>' . self::t($v[1]) . ($k === $in ? ' <em class="bk-inuse">' . self::t('in use') . '</em>' : '') . '</b><small>' . self::t($v[2]) . '</small></span></a>';
+        }
+        return $out . '</div>';
+    }
+
+    /**
+     * The form of the destination shown (template <@ OffsiteForm @>): a Sentora backup node (how to
+     * add one, or its status once added), another SSH server, or a folder on this server; the night's
+     * time, the nights kept and the mailboxes with each.
      *
      * @return string The HTML.
      */
     static function getOffsiteForm()
     {
         $o = self::Offsite();
+        $dest = self::Dest();
         $field = function ($label, $input, $help) {
             return '<label class="bk-field"><span>' . self::t($label) . '</span>' . $input . ($help !== '' ? '<small>' . self::t($help) . '</small>' : '') . '</label>';
         };
-        $hasPw = ($o['offsite_password'] !== '');
-        return '<form class="bk-ftp" action="./?module=backup_admin&amp;action=SaveOffsite" method="post">' . runtime_csfr::Token()
+        if ($dest === 'node' && !self::NodePaired()) {
+            return self::NodeSetup();
+        }
+        $in = self::Target();
+        $out = '';
+        if ($dest !== $in && $in !== '') {
+            $names = array('node' => 'a Sentora backup node', 'ssh' => 'another SSH server', 'folder' => 'a folder on this server');
+            $out .= '<p class="bk-note">' . sprintf(self::t('The backups go to %s now. Saving here makes this the place they go instead.'), self::t($names[$in])) . '</p>';
+        }
+        if ($dest === 'node') {
+            $out .= self::NodeCard();
+        }
+        $out .= '<form class="bk-ftp" action="./?module=backup_admin&amp;action=SaveOffsite&amp;dest=' . $dest . '" method="post">' . runtime_csfr::Token()
+            . '<input type="hidden" name="inDest" value="' . $dest . '">'
             . '<label class="bk-switch bk-wide"><input type="checkbox" name="inOffsiteEnabled" value="1"' . ($o['offsite_enabled'] === 'true' ? ' checked' : '') . '><span class="bk-toggle" aria-hidden="true"></span>'
-            . '<span><b>' . self::t('Copy the backups every night') . '</b><small>' . self::t('Off: nothing is copied (the settings are kept).') . '</small></span></label>'
-            . $field('Server', '<input class="form-control" type="text" name="inOffsiteServer" value="' . self::h($o['offsite_server']) . '" placeholder="backup.example.com" maxlength="253">', 'The backup machine, reached over SSH. Empty: the folder below is on this server (for example an NFS mount).')
-            . $field('Port', '<input class="form-control" type="text" name="inOffsitePort" value="' . self::h($o['offsite_port']) . '" inputmode="numeric" maxlength="5">', 'SSH port, usually 22.')
-            . $field('Username', '<input class="form-control" type="text" name="inOffsiteUser" value="' . self::h($o['offsite_user']) . '" maxlength="32" autocomplete="off">', 'The user on the backup machine.')
-            . '<label class="bk-field"><span>' . self::t('Password') . '</span><input class="form-control" type="password" name="inOffsitePassword" value="" maxlength="256" autocomplete="new-password" placeholder="' . ($hasPw ? self::t('stored: leave empty to keep it') : self::t('none: the SSH key is used')) . '">'
-                . ($hasPw ? '<span class="bk-check"><input type="checkbox" name="inOffsiteClearPassword" value="1"> ' . self::t('Remove the password and use the SSH key') . '</span>' : '')
-                . '<small>' . self::t('Stored encrypted, never shown again. Without a password the SSH key /root/.ssh/sentora_offsite is used (more secure; sentora-offsite-backup --setup makes it).') . '</small></label>'
-            . $field('Folder', '<input class="form-control" type="text" name="inOffsitePath" value="' . self::h($o['offsite_path']) . '" maxlength="251">', 'Where the copies go; each server gets its own folder in it, with one folder per night. On a Sentora backup node: / (this panel\'s own folder there).')
-            . $field('Backup machine\'s key', '<input class="form-control" type="text" name="inOffsiteHostkey" value="' . self::h($o['offsite_hostkey']) . '" placeholder="SHA256:..." maxlength="60" autocomplete="off" spellcheck="false">', 'Its SSH key\'s fingerprint: every copy checks it is talking to that machine and no other, and nothing is sent until it is set. Set by itself when you add a Sentora backup node below; for another SSH server, Test connection shows the key it answers with, to compare and trust.')
-            . '<label class="bk-field"><span>' . self::t('Time') . '</span><input class="form-control" type="time" name="inOffsiteTime" value="' . self::h($o['offsite_time']) . '"><small>' . sprintf(self::t('Every day at this time (server time, %s).'), self::h(date('T'))) . '</small></label>'
+            . '<span><b>' . self::t('Copy the backups every night') . '</b><small class="bk-when-on">' . sprintf(self::t('On: copied every night at %s.'), self::h($o['offsite_time'])) . '</small>'
+            . '<small class="bk-when-off">' . self::t('Off: nothing is copied (the settings are kept).') . '</small></span></label>';
+        if ($dest === 'ssh') {
+            $hasPw = ($o['offsite_password'] !== '');
+            $out .= $field('Server', '<input class="form-control" type="text" name="inOffsiteServer" value="' . self::h($o['offsite_server']) . '" placeholder="backup.example.com" maxlength="253" required>', 'The backup machine, reached over SSH.')
+                . $field('Port', '<input class="form-control" type="text" name="inOffsitePort" value="' . self::h($o['offsite_port']) . '" inputmode="numeric" maxlength="5">', 'SSH port, usually 22.')
+                . $field('Username', '<input class="form-control" type="text" name="inOffsiteUser" value="' . self::h($o['offsite_user']) . '" maxlength="32" autocomplete="off">', 'The user on the backup machine.')
+                . '<label class="bk-field"><span>' . self::t('Password') . '</span><input class="form-control" type="password" name="inOffsitePassword" value="" maxlength="256" autocomplete="new-password" placeholder="' . ($hasPw ? self::t('stored: leave empty to keep it') : self::t('none: the SSH key is used')) . '">'
+                    . ($hasPw ? '<span class="bk-check"><input type="checkbox" name="inOffsiteClearPassword" value="1"> ' . self::t('Remove the password and use the SSH key') . '</span>' : '')
+                    . '<small>' . self::t('Stored encrypted, never shown again. Without a password the SSH key /root/.ssh/sentora_offsite is used (more secure; sentora-offsite-backup --setup makes it).') . '</small></label>'
+                . $field('Folder', '<input class="form-control" type="text" name="inOffsitePath" value="' . self::h($o['offsite_path']) . '" maxlength="251">', 'Where the copies go there; each server gets its own folder in it, with one folder per night.')
+                . $field('Backup machine\'s key', '<input class="form-control" type="text" name="inOffsiteHostkey" value="' . self::h($o['offsite_hostkey']) . '" placeholder="SHA256:..." maxlength="60" autocomplete="off" spellcheck="false">', 'Its SSH key\'s fingerprint: every copy checks it is talking to that machine and no other, and nothing is sent until it is set. Empty: Test connection shows the key it answers with, to compare and trust.');
+        } elseif ($dest === 'folder') {
+            $out .= $field('Folder', '<input class="form-control" type="text" name="inOffsitePath" value="' . self::h($o['offsite_path']) . '" maxlength="251" required>', 'A folder on this server, for example where a disk or a network share is mounted; one folder per night.');
+        }
+        $out .= '<label class="bk-field"><span>' . self::t('Time') . '</span><input class="form-control" type="time" name="inOffsiteTime" value="' . self::h($o['offsite_time']) . '"><small>' . sprintf(self::t('Every day at this time (server time, %s).'), self::h(date('T'))) . '</small></label>'
             . $field('Nights kept', '<input class="form-control" type="text" name="inOffsiteKeep" value="' . self::h($o['offsite_keep']) . '" inputmode="numeric" maxlength="3">', 'Older nights are removed from the backup machine.')
             . '<label class="bk-switch bk-wide"><input type="checkbox" name="inOffsiteMail" value="1"' . ($o['offsite_mail'] === 'true' ? ' checked' : '') . '><span class="bk-toggle" aria-hidden="true"></span>'
             . '<span><b>' . self::t('Include the mailboxes') . '</b><small>' . self::t('Copied incrementally: only new mail is sent each night.') . '</small></span></label>'
             . '<div class="bk-form-foot bk-wide"><button class="btn btn-primary" type="submit">' . self::t('Save settings') . '</button></div></form>';
+        return $out;
     }
 
     /**
-     * How to make another server this panel's Sentora backup node (template <@ OffsiteServer @>), the
-     * same way every Sentora node is set up (dryden/sys/nodes.class.php): its installer fetches this
-     * panel's backup key and shows this panel's code to compare; it ends with the node's key, added
-     * here; the daemon checks that key against the one the node answers with before anything is sent.
+     * A Sentora backup node in use: its status as a card, green (reachable, its key checked, a copy
+     * in the last day), orange (no copy for more than a day, its disk over 90% full, the last copy
+     * failed) or red (it does not answer, or answers with another key), with Remove.
      *
      * @return string The HTML.
      */
-    static function getOffsiteServer()
+    static function NodeCard()
+    {
+        $o = self::Offsite();
+        $st = json_decode((string) @file_get_contents('/var/lib/sentora/offsite-backup.json'), true);
+        $st = is_array($st) ? $st : array();
+        $checked = isset($st['check_time']);
+        $okNow = $checked && !empty($st['check_ok']);
+        $free = (int) ($st['node_free'] ?? 0);
+        $size = (int) ($st['node_size'] ?? 0);
+        $full = $size > 0 ? round(100 - 100 * $free / $size) : -1;
+        $lastOk = (int) ($st['last_ok'] ?? 0);
+        $warn = array();
+        if ($o['offsite_enabled'] !== 'true') {
+            $warn[] = self::t('the nightly copy is switched off');
+        }
+        if ($o['offsite_enabled'] === 'true' && $lastOk > 0 && $lastOk < time() - 26 * 3600) {
+            $warn[] = self::t('no copy for more than a day');
+        }
+        if (isset($st['result']) && $st['result'] !== 'ok') {
+            $warn[] = self::t('the last copy failed');
+        }
+        if ($full >= 90) {
+            $warn[] = sprintf(self::t('its disk is %d%% full'), $full);
+        }
+        if (!$checked) {
+            list($cls, $word) = array('wait', self::t('Checking'));
+        } elseif (!$okNow) {
+            list($cls, $word) = array('bad', self::t('Not reachable'));
+        } elseif ($warn) {
+            list($cls, $word) = array('warn', self::t('Needs a look'));
+        } else {
+            list($cls, $word) = array('ok', self::t('Working'));
+        }
+        $gb = function ($b) { return $b >= 1073741824 ? sprintf('%.1f GB', $b / 1073741824) : sprintf('%d MB', $b / 1048576); };
+        $rows = array(
+            array(self::t('Address'), self::h($o['offsite_server'] . ($o['offsite_port'] !== '22' ? ':' . $o['offsite_port'] : ''))),
+            array(self::t('Its key'), '<code>' . self::h($o['offsite_hostkey']) . '</code>'),
+            array(self::t('Free space'), $size > 0 ? sprintf(self::t('%1$s free of %2$s (this panel\'s copies: %3$s)'), $gb($free), $gb($size), $gb((int) ($st['node_used'] ?? 0))) : self::t('not known yet')),
+            array(self::t('Last good copy'), self::When($lastOk)),
+            array(self::t('Last checked'), $checked ? self::When((int) $st['check_time']) . (!$okNow && !empty($st['check_message']) ? '<span class="bk-sub">' . self::h($st['check_message']) . '</span>' : '') : self::t('within a few seconds')),
+        );
+        $out = '<div class="bk-node ' . $cls . '"><div class="bk-node-head"><span class="bk-dot" aria-hidden="true"></span><div><b>' . self::t('Sentora backup node') . '</b>'
+            . '<span class="bk-node-state">' . self::h($word) . ($warn && $okNow ? ': ' . self::h(implode(', ', $warn)) : '') . '</span></div>'
+            . '<form class="bk-inline" method="post" action="./?module=backup_admin&amp;action=RemoveBackupNode&amp;dest=node" onsubmit="return confirm(this.dataset.q)" data-q="' . self::t('Stop using this backup node? Nothing is sent there any more; the copies already there stay on it.') . '">' . runtime_csfr::Token()
+            . '<button class="btn btn-default btn-sm bk-btn" type="submit">' . self::Icon('trash') . '<span>' . self::t('Remove') . '</span></button></form></div><dl class="bk-node-rows">';
+        foreach ($rows as $r) {
+            $out .= '<dt>' . $r[0] . '</dt><dd>' . $r[1] . '</dd>';
+        }
+        return $out . '</dl></div>';
+    }
+
+    /**
+     * How to add a Sentora backup node: the command for the new server, this panel's code to compare,
+     * and the form for the node's address and key; while it is checked, and if that failed, why.
+     *
+     * @return string The HTML.
+     */
+    static function NodeSetup()
     {
         $o = self::Offsite();
         $pub = (string) $o['offsite_pubkey'];
@@ -522,26 +727,42 @@ class module_controller extends ctrl_module
         $code = sys_nodes::PanelCode('sentora-backup', $pub);
         $pair = (string) $o['offsite_pairing'];
         $state = '';
-        if ($o['offsite_nodekey'] !== '' || strtok((string) $o['offsite_request'], ' ') === 'pair') {
-            $state = '<div class="bk-state info">' . self::Icon('clock') . '<div><b>' . self::t('Checking the backup node\'s key') . '</b><span>' . self::t('the daemon does it within 5 minutes') . '</span></div></div>';
-        } elseif ($pair !== '') {
+        if ($o['offsite_nodekey'] !== '') {
+            $state = '<div class="bk-state info">' . self::Icon('clock') . '<div><b>' . self::t('Checking the backup node\'s key') . '</b><span>' . self::t('this takes a few seconds; the page shows the result by itself') . '</span></div></div>';
+        } elseif ($pair !== '' && strtok($pair, ' ') !== 'ok') {
             $p = explode(' ', $pair, 3);
-            $ok = $p[0] === 'ok';
-            $state = '<div class="bk-state ' . ($ok ? 'ok' : 'bad') . '">' . self::Icon($ok ? 'check' : 'x') . '<div><b>' . self::t($ok ? 'Backup node added: its key checked and kept' : 'The backup node was not added') . '</b><span>' . self::When((int) ($p[1] ?? 0)) . '</span>'
+            $state = '<div class="bk-state bad">' . self::Icon('x') . '<div><b>' . self::t('The backup node was not added') . '</b><span>' . self::When((int) ($p[1] ?? 0)) . '</span>'
                 . (isset($p[2]) ? '<span class="bk-sub">' . self::h($p[2]) . '</span>' : '') . '</div></div>';
         }
-        return '<ol class="bk-steps">'
+        return '<div class="bk-setup"><ol class="bk-steps">'
             . '<li>' . self::t('On a server of its own (Ubuntu 26.04, Debian 13, AlmaLinux, Rocky Linux or Red Hat Enterprise Linux 10, or Fedora 45; not this panel\'s server), log in, become root and run:') . '</li>'
             . '</ol><pre class="bk-cmd" tabindex="0">' . self::h($cmd) . '</pre>'
             . '<ol class="bk-steps" start="2"><li>' . self::t('It shows a code: answer y only when it is this panel\'s code,') . ' <b class="bk-code">' . self::h($code) . '</b>. '
             . self::t('(If this panel is reached at another address from there, such as its IP address on your network, it asks for it.)') . '</li>'
-            . '<li>' . self::t('It ends with the backup node\'s key (SB1-...). Add it here, with the node\'s address:') . '</li></ol>'
-            . '<form class="bk-ftp bk-addnode" method="post" action="./?module=backup_admin&amp;action=AddBackupNode">' . runtime_csfr::Token()
-            . '<label class="bk-field"><span>' . self::t('The backup node\'s address') . '</span><input class="form-control" type="text" name="inNodeAddress" value="' . self::h($o['offsite_user'] === 'sentora-backup' ? $o['offsite_server'] : '') . '" placeholder="backup.example.com" maxlength="253" required><small>' . self::t('Its name or IP address, as this panel reaches it.') . '</small></label>'
+            . '<li>' . self::t('It ends with the backup node\'s address and key (SB1-...). Add them here:') . '</li></ol>'
+            . '<form class="bk-ftp bk-addnode" method="post" action="./?module=backup_admin&amp;action=AddBackupNode&amp;dest=node">' . runtime_csfr::Token()
+            . '<label class="bk-field"><span>' . self::t('The backup node\'s address') . '</span><input class="form-control" type="text" name="inNodeAddress" value="" placeholder="backup.example.com" maxlength="253" required><small>' . self::t('Its name or IP address, as this panel reaches it.') . '</small></label>'
             . '<label class="bk-field"><span>' . self::t('The backup node\'s key') . '</span><input class="form-control" type="text" name="inNodeKey" value="" placeholder="SB1-ABCD-EFGH-JKLM-NPQR" maxlength="40" autocomplete="off" spellcheck="false" required><small>' . self::t('Shown at the end of its installer (sentora-backup-node key shows it again there).') . '</small></label>'
             . '<div class="bk-form-foot bk-wide"><button class="btn btn-primary" type="submit">' . self::t('Add the backup node') . '</button></div></form>'
             . $state
-            . '<p class="bk-muted">' . self::t('This panel\'s key may only copy into its own folder there and read it back: no shell, nothing else. Several panels can share one backup node, each in its own folder.') . '</p>';
+            . '<p class="bk-muted">' . self::t('Once added, the backups go there every night; this panel\'s key may only copy into its own folder there and read it back: no shell, nothing else. Several panels can share one backup node, each in its own folder.') . '</p></div>';
+    }
+
+    /**
+     * "Remove" on the backup node's card: nothing is sent there any more (its address, key and the
+     * pairing are cleared, the nightly copy switched off); the copies on the node stay.
+     *
+     * @return void
+     */
+    static function doRemoveBackupNode()
+    {
+        runtime_csfr::Protect();
+        foreach (array('offsite_server' => '', 'offsite_hostkey' => '', 'offsite_nodekey' => '', 'offsite_pairing' => '', 'offsite_seenkey' => '',
+            'offsite_enabled' => 'false', 'offsite_target' => '', 'offsite_request' => '') as $k => $v) {
+            self::SetOffsite($k, $v);
+        }
+        @unlink('/var/lib/sentora/offsite-backup.json');
+        self::$offsiteRemoved = true;
     }
 
     /**
@@ -575,6 +796,7 @@ class module_controller extends ctrl_module
         self::SetOffsite('offsite_pairing', '');
         self::SetOffsite('offsite_request', 'pair ' . time());
         self::$offsiteQueued = 'pair';
+        self::$offsiteNow = self::RunNow();
     }
 
     /**
@@ -631,9 +853,18 @@ class module_controller extends ctrl_module
             $out .= $line('x', 'bad', 'Last run failed', self::When($st['last_run'] ?? 0), (string) ($st['message'] ?? ''));
         }
         $out .= $line('archive', '', 'Last good copy', self::When(isset($st['last_ok']) ? $st['last_ok'] : 0), '');
+        // while the daemon works on something asked for here, the page looks again by itself (at most
+        // 2 minutes, so a daemon that does not run does not keep it reloading)
+        $reload = self::Pending() ? '<script>(function () { var k = "bk-reload", n = 0; try { n = +sessionStorage.getItem(k) || 0; } catch (e) {}'
+            . ' if (n < 24) { setTimeout(function () { try { sessionStorage.setItem(k, n + 1); } catch (e) {} location.replace("./?module=backup_admin&tab=offsite"); }, 5000); } })();</script>'
+            : '<script>try { sessionStorage.removeItem("bk-reload"); } catch (e) {}</script>';
+        $dest = self::Dest();
+        if ($dest === 'node' && !self::NodePaired()) {
+            return '<p class="bk-muted">' . self::t('Add a backup node on the left: once it is added, its state and the copies show here.') . '</p>' . $reload;
+        }
         return $out . '<div class="bk-ftp-actions">'
-            . '<form class="bk-inline" method="post" action="./?module=backup_admin&amp;action=OffsiteCheck">' . runtime_csfr::Token() . '<button class="btn btn-default btn-sm bk-btn" type="submit">' . self::Icon('plug') . '<span>' . self::t('Test connection') . '</span></button></form>'
-            . '<form class="bk-inline" method="post" action="./?module=backup_admin&amp;action=OffsiteNow">' . runtime_csfr::Token() . '<button class="btn btn-default btn-sm bk-btn" type="submit">' . self::Icon('play') . '<span>' . self::t('Back up now') . '</span></button></form></div>';
+            . '<form class="bk-inline" method="post" action="./?module=backup_admin&amp;action=OffsiteCheck&amp;dest=' . $dest . '">' . runtime_csfr::Token() . '<button class="btn btn-default btn-sm bk-btn" type="submit">' . self::Icon('plug') . '<span>' . self::t('Test connection') . '</span></button></form>'
+            . '<form class="bk-inline" method="post" action="./?module=backup_admin&amp;action=OffsiteNow&amp;dest=' . $dest . '">' . runtime_csfr::Token() . '<button class="btn btn-default btn-sm bk-btn" type="submit">' . self::Icon('play') . '<span>' . self::t('Back up now') . '</span></button></form></div>' . $reload;
     }
 
     // --- Restore from the full panel backup (sentora-panel-restore, run by the daemon) ----------
@@ -898,8 +1129,17 @@ class module_controller extends ctrl_module
         if (self::$offsiteSaved) {
             return ui_sysmessage::shout(ui_language::translate('The off-server backup settings have been saved. A change to the time or the switch takes effect within 5 minutes.'), 'zannounceok');
         }
+        if (self::$offsiteRemoved) {
+            return ui_sysmessage::shout(ui_language::translate('The backup node is no longer used: nothing is sent there any more (the copies already there stay on it). Choose where the backups go now.'), 'zannounceok');
+        }
         if (self::$offsiteQueued !== '') {
-            return ui_sysmessage::shout(ui_language::translate(self::$offsiteQueued === 'check' ? 'Connection test queued: the result appears below within 5 minutes.' : (self::$offsiteQueued === 'pair' ? 'The backup node\'s key is checked within 5 minutes: the result appears under Add the backup node.' : 'Backup queued: it starts within 5 minutes; the result appears below when it is done.')), 'zannounceok');
+            $q = self::$offsiteQueued;
+            if (self::$offsiteNow) {
+                $m = $q === 'check' ? 'Connection test started: the result appears below in a few seconds.' : ($q === 'pair' ? 'The backup node\'s key is being checked: this page shows the result in a few seconds.' : 'Backup started: the result appears below when it is done.');
+            } else {
+                $m = $q === 'check' ? 'Connection test queued: the result appears below within 5 minutes.' : ($q === 'pair' ? 'The backup node\'s key is checked within 5 minutes: the result appears here.' : 'Backup queued: it starts within 5 minutes; the result appears below when it is done.');
+            }
+            return ui_sysmessage::shout(ui_language::translate($m), 'zannounceok');
         }
         // the message of a request accepted just before the redirect (kept for this page:
         // the template calls this twice)
