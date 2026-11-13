@@ -11,7 +11,8 @@
 global $zdbh; // hooks are included inside a function
 $obDefaults = array('offsite_enabled' => 'false', 'offsite_server' => '', 'offsite_port' => '22', 'offsite_user' => 'sentora-backup',
     'offsite_password' => '', 'offsite_path' => '/srv/sentora-backups', 'offsite_time' => '02:30', 'offsite_keep' => '14',
-    'offsite_mail' => 'true', 'offsite_request' => '', 'offsite_hostkey' => '', 'offsite_pubkey' => '');
+    'offsite_mail' => 'true', 'offsite_request' => '', 'offsite_hostkey' => '', 'offsite_pubkey' => '',
+    'offsite_nodekey' => '', 'offsite_pairing' => '', 'offsite_seenkey' => '');
 $obHave = $zdbh->query("SELECT so_name_vc, so_value_tx FROM x_settings WHERE so_name_vc LIKE 'offsite\\_%'")->fetchAll(PDO::FETCH_KEY_PAIR);
 foreach ($obDefaults as $obName => $obValue) {
     if (!array_key_exists($obName, $obHave)) {
@@ -51,6 +52,59 @@ if (is_file($obBin) && is_dir('/etc/cron.d')) {
         @file_put_contents($obCron, $obWant);
         @chmod($obCron, 0644);
         echo "Off-server backup: every day at " . $obHave['offsite_time'] . fs_filehandler::NewLine();
+    }
+    $obSet = function ($n, $v) use ($zdbh, &$obHave) {
+        $zdbh->prepare("UPDATE x_settings SET so_value_tx = :v WHERE so_name_vc = :n")->execute(array(':v' => (string) $v, ':n' => $n));
+        $obHave[$n] = (string) $v;
+    };
+    // "Add the backup node" (2027.86, the node framework: dryden/sys/nodes.class.php): the key the node
+    // answers with must be the one its installer showed; only then is it kept and used
+    if (strtok($obHave['offsite_request'], ' ') === 'pair' && class_exists('sys_nodes')) {
+        $obSet('offsite_request', '');
+        $obN = explode(' ', $obHave['offsite_nodekey']);
+        $obSet('offsite_nodekey', '');
+        if (count($obN) === 3) {
+            $obLine = sys_nodes::ScanSshKey($obN[0], (int) $obN[1]);
+            if ($obLine === '') {
+                $obSet('offsite_pairing', 'fail ' . time() . ' ' . $obN[0] . ' did not answer on SSH port ' . (int) $obN[1] . ': is the node on, and may this panel reach it?');
+            } elseif (sys_nodes::SshKeyCode($obLine) !== $obN[2]) {
+                $obSet('offsite_pairing', 'fail ' . time() . ' ' . $obN[0] . ' answered with another key than the one added: check the address and the key (sentora-backup-node key on the node shows it). Nothing was changed.');
+            } else {
+                foreach (array('offsite_server' => $obN[0], 'offsite_port' => (string) (int) $obN[1], 'offsite_user' => 'sentora-backup', 'offsite_password' => '', 'offsite_path' => '/',
+                    'offsite_hostkey' => sys_nodes::SshFingerprint($obLine), 'offsite_seenkey' => '', 'offsite_enabled' => 'true') as $obK => $obV) {
+                    $obSet($obK, $obV);
+                }
+                @unlink('/root/.ssh/sentora_offsite_known_hosts');
+                $obSet('offsite_pairing', 'ok ' . time() . ' ' . $obN[0] . ' (' . $obHave['offsite_hostkey'] . '); the copies go there every night at ' . $obHave['offsite_time']);
+                $obSet('offsite_request', 'check ' . time());
+            }
+            echo "Off-server backup: backup node " . $obN[0] . ': ' . strtok($obHave['offsite_pairing'], ' ') . fs_filehandler::NewLine();
+        }
+    }
+    // a remote backup machine is only used with its key confirmed (2027.86): one that worked before
+    // keeps the key root already trusted for it; for a new one, the key it answers with is shown on
+    // the page to compare and trust (a Sentora backup node gets its key when it is added)
+    if ($obHave['offsite_server'] !== '' && $obHave['offsite_hostkey'] === '' && class_exists('sys_nodes')) {
+        $obEntry = ($obHave['offsite_port'] === '22' || $obHave['offsite_port'] === '') ? $obHave['offsite_server'] : '[' . $obHave['offsite_server'] . ']:' . (int) $obHave['offsite_port'];
+        $obKnown = array();
+        if (is_file('/root/.ssh/known_hosts')) {
+            exec('ssh-keygen -F ' . escapeshellarg($obEntry) . ' -f /root/.ssh/known_hosts 2> /dev/null', $obKnown);
+        }
+        $obFp = '';
+        foreach ($obKnown as $obL) {
+            if ($obL !== '' && $obL[0] !== '#' && strpos($obL, 'ssh-ed25519') !== false) {
+                $obFp = sys_nodes::SshFingerprint($obL);
+            }
+        }
+        if ($obFp !== '') {
+            $obSet('offsite_hostkey', $obFp);
+            echo "Off-server backup: kept the key root already trusted for " . $obHave['offsite_server'] . " (" . $obFp . ")" . fs_filehandler::NewLine();
+        } else {
+            $obSeen = sys_nodes::SshFingerprint(sys_nodes::ScanSshKey($obHave['offsite_server'], (int) $obHave['offsite_port']));
+            if ($obSeen !== '' && $obHave['offsite_seenkey'] !== $obHave['offsite_server'] . ' ' . $obSeen) {
+                $obSet('offsite_seenkey', $obHave['offsite_server'] . ' ' . $obSeen);
+            }
+        }
     }
     // a request from the page: run it in the background (a copy can take a while)
     if ($obHave['offsite_request'] !== '') {

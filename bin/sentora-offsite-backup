@@ -51,14 +51,14 @@ case "${1:-}" in
     --setup)
         mkdir -p /root/.ssh; chmod 700 /root/.ssh
         [ -f "$KEY" ] || ssh-keygen -q -t ed25519 -N "" -C "sentora-offsite@$HOST" -f "$KEY"
-        echo "Used when no password is set in Admin > Backup Config > Off-server backup."
+        echo "Used when no password is set in Module Admin > Backup Config > Off-server backup."
         echo "1. On the backup machine, as root (once):"
         echo "     useradd -m -s /bin/bash sentora-backup && mkdir -p /srv/sentora-backups && chown sentora-backup /srv/sentora-backups"
         echo "     install -d -m 700 -o sentora-backup ~sentora-backup/.ssh"
         echo "     echo '$(cat "$KEY.pub")' >> ~sentora-backup/.ssh/authorized_keys"
         echo "     chown sentora-backup ~sentora-backup/.ssh/authorized_keys && chmod 600 ~sentora-backup/.ssh/authorized_keys"
         echo "   (it needs rsync installed: $SENTORA_PKG rsync)"
-        echo "2. Set the server, username and folder in Admin > Backup Config > Off-server backup."
+        echo "2. Set the server, username and folder in Module Admin > Backup Config > Off-server backup."
         echo "3. Press Test connection there, or run: sentora-offsite-backup --check"
         exit 0 ;;
     --status)

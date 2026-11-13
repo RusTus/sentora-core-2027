@@ -53,7 +53,12 @@ run_there() { # a command on the backup machine (or here, for a local folder)
 # The backup machine's key, checked against the fingerprint from the panel: kept in $KNOWN once it
 # matches; a server answering with another key is refused (it is not the backup server). Prints why.
 pin_hostkey() {
-    remote && [ -n "$OB_HOSTKEY" ] || return 0
+    remote || return 0
+    if [ -z "$OB_HOSTKEY" ]; then
+        # (2027.86) never sent to a machine whose key nobody confirmed
+        echo "the backup machine's key is not confirmed yet: add a Sentora backup node with its key, or compare and trust the key Backup Config shows (Module Admin > Backup Config > Off-server backup)"
+        return 1
+    fi
     local host=${OB_SERVER} entry tmp
     [ "$OB_PORT" = 22 ] && entry=$host || entry="[$host]:$OB_PORT"
     if [ -f "$KNOWN" ] && ssh-keygen -F "$entry" -f "$KNOWN" 2> /dev/null | grep -v '^#' | ssh-keygen -lf - 2> /dev/null | grep -qF "$OB_HOSTKEY"; then
