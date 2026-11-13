@@ -37,5 +37,5 @@
 .bk-confirm-word { max-width: 200px; font-family: SFMono-Regular, Menlo, Consolas, monospace; letter-spacing: 1px; }
 /* A Sentora backup node: the install command */
 .bk-steps { margin: 4px 0 8px 18px; padding: 0; font-size: 13px; }
-.bk-cmd { white-space: pre-wrap; word-break: break-all; font-size: 12px; background: var(--bk-soft, #f4f6f8); border: 1px solid var(--bk-line, #e3e7eb); border-radius: 6px; padding: 10px 12px; margin: 0 0 8px; user-select: all; }
+.bk-cmd { white-space: pre-wrap; word-break: break-all; font-size: 12px; background: var(--bk-bg); color: var(--bk-ink); border: 1px solid var(--bk-line); border-radius: 6px; padding: 10px 12px; margin: 0 0 8px; user-select: all; }
 .bk-muted { color: var(--bk-muted); font-size: 13px; margin: 6px 0 0; }

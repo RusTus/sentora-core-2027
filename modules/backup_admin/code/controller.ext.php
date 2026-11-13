@@ -614,7 +614,7 @@ class module_controller extends ctrl_module
             return '<div class="bk-state ' . $class . '">' . self::Icon($icon) . '<div><b>' . self::t($label) . '</b><span>' . $when . '</span>' . ($message !== '' ? '<span class="bk-sub">' . self::h($message) . '</span>' : '') . '</div></div>';
         };
         $out = '';
-        if ($o['offsite_request'] !== '') {
+        if ($o['offsite_request'] !== '' && strtok($o['offsite_request'], ' ') !== 'pair') {
             $out .= $line('clock', 'info', strtok($o['offsite_request'], ' ') === 'check' ? 'Connection test queued' : 'Backup queued', self::t('the daemon runs it within 5 minutes'), '');
         }
         if (isset($st['check_time'])) {

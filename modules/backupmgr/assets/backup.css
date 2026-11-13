@@ -7,7 +7,7 @@
 .bk * { box-sizing: border-box; }
 .bk-ico { width: 18px; height: 18px; flex: none; }
 .bk-sub { display: block; color: var(--bk-muted); font-size: 12px; font-weight: normal; }
-.bk-btn { display: inline-flex !important; align-items: center; gap: 6px; }
+.bk-btn { display: inline-flex !important; align-items: center; gap: 6px; max-width: 100%; white-space: normal; text-align: left; }
 .bk-btn .bk-ico { width: 16px; height: 16px; }
 .bk-inline { display: inline-block; margin: 0; }
 .bk-empty { color: var(--bk-muted); margin: 6px 0; }
@@ -81,6 +81,7 @@
 .bk-state:last-of-type { border-bottom: 0; }
 .bk-state > .bk-ico { margin-top: 1px; color: var(--bk-muted); }
 .bk-state b { display: block; }
+.bk-state > div { min-width: 0; overflow-wrap: anywhere; }
 .bk-state.ok > .bk-ico, .bk-state.ok b { color: var(--sn-ok, #1e8a4c); }
 .bk-state.bad > .bk-ico, .bk-state.bad b { color: var(--sn-bad, #b42b27); }
 .bk-state.info > .bk-ico, .bk-state.info b { color: var(--sn-info, #2a5f80); }
