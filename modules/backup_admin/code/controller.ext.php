@@ -455,6 +455,11 @@ class module_controller extends ctrl_module
             self::SetOffsite('offsite_password', $enc);
         }
         self::$offsiteSaved = true;
+        // a machine to reach: its connection is tested at once, so the page shows the new state
+        if ($dest !== 'folder' || $path !== '') {
+            self::SetOffsite('offsite_request', 'check ' . time());
+            self::$offsiteNow = self::RunNow();
+        }
     }
 
     /**
@@ -555,7 +560,24 @@ class module_controller extends ctrl_module
     static function Pending()
     {
         $o = self::Offsite();
-        return $o['offsite_nodekey'] !== '' || $o['offsite_request'] !== '';
+        return $o['offsite_nodekey'] !== '' || $o['offsite_request'] !== '' || self::Checking();
+    }
+
+    /**
+     * A connection test asked for and not finished yet: waiting for the daemon, or running (it notes
+     * when it started; at most 2 minutes, so a test that died does not show as running for good).
+     *
+     * @return bool
+     */
+    static function Checking()
+    {
+        $o = self::Offsite();
+        if (in_array(strtok((string) $o['offsite_request'], ' '), array('check', 'pair'), true) || $o['offsite_nodekey'] !== '') {
+            return true;
+        }
+        $st = json_decode((string) @file_get_contents('/var/lib/sentora/offsite-backup.json'), true);
+        $started = is_array($st) ? (int) ($st['check_started'] ?? 0) : 0;
+        return $started > (int) ($st['check_time'] ?? 0) && $started > time() - 120;
     }
 
     /**
@@ -725,8 +747,9 @@ class module_controller extends ctrl_module
         if ($full >= 90) {
             $warn[] = sprintf(self::t('its disk is %d%% full'), $full);
         }
-        if (!$checked) {
-            list($cls, $word) = array('wait', self::t('Checking'));
+        $busy = self::Checking();
+        if (!$checked || $busy) {
+            list($cls, $word) = array('wait', self::t('Checking...'));
         } elseif (!$okNow) {
             list($cls, $word) = array('bad', self::t('Not reachable'));
         } elseif ($warn) {
@@ -740,10 +763,10 @@ class module_controller extends ctrl_module
             array(self::t('Its key'), '<code>' . self::h($o['offsite_hostkey']) . '</code>'),
             array(self::t('Free space'), $size > 0 ? sprintf(self::t('%1$s free of %2$s (this panel\'s copies: %3$s)'), $gb($free), $gb($size), $gb((int) ($st['space_used'] ?? 0))) : self::t('not known yet')),
             array(self::t('Last good copy'), self::When($lastOk)),
-            array(self::t('Last checked'), $checked ? self::When((int) $st['check_time']) . (!$okNow && !empty($st['check_message']) ? '<span class="bk-sub">' . self::h($st['check_message']) . '</span>' : '') : self::t('within a few seconds')),
+            array(self::t($busy && $checked ? 'Last result' : 'Last checked'), $checked ? self::When((int) $st['check_time']) . ($busy ? ' <span class="bk-sub">' . self::t($okNow ? '(passed; checking again now)' : '(did not pass; checking again now)') . '</span>' : (!$okNow && !empty($st['check_message']) ? '<span class="bk-sub">' . self::h($st['check_message']) . '</span>' : '')) : self::t('within a few seconds')),
         );
         $out = '<div class="bk-node ' . $cls . '"><div class="bk-node-head"><span class="bk-dot" aria-hidden="true"></span><div><b>' . self::t('Sentora backup node') . '</b>'
-            . '<span class="bk-node-state">' . self::h($word) . ($warn && $okNow ? ': ' . self::h(implode(', ', $warn)) : '') . '</span></div>'
+            . '<span class="bk-node-state">' . self::h($word) . ($cls === 'warn' ? ': ' . self::h(implode(', ', $warn)) : '') . '</span></div>'
             . '<form class="bk-inline" method="post" action="./?module=backup_admin&amp;action=RemoveBackupNode&amp;dest=node" onsubmit="return confirm(this.dataset.q)" data-q="' . self::t('Stop using this backup node? Nothing is sent there any more; the copies already there stay on it.') . '">' . runtime_csfr::Token()
             . '<button class="btn btn-default btn-sm bk-btn" type="submit">' . self::Icon('trash') . '<span>' . self::t('Remove') . '</span></button></form></div><dl class="bk-node-rows">';
         foreach ($rows as $r) {
@@ -880,11 +903,14 @@ class module_controller extends ctrl_module
         };
         $out = '';
         if ($o['offsite_request'] !== '' && strtok($o['offsite_request'], ' ') !== 'pair') {
-            $out .= $line('clock', 'info', strtok($o['offsite_request'], ' ') === 'check' ? 'Connection test queued' : 'Backup queued', self::t('the daemon runs it within 5 minutes'), '');
+            $out .= $line('clock', 'info', strtok($o['offsite_request'], ' ') === 'check' ? 'Connection test queued' : 'Backup queued', self::t('it starts in a moment'), '');
+        } elseif (self::Checking()) {
+            $out .= $line('clock', 'info', 'Testing the connection', self::t('the result shows here in a few seconds'), '');
         }
         if (isset($st['check_time'])) {
             $ok = !empty($st['check_ok']);
-            $out .= $line($ok ? 'check' : 'x', $ok ? 'ok' : 'bad', $ok ? 'Connection test passed' : 'Connection test failed', self::When($st['check_time']), isset($st['check_message']) ? (string) $st['check_message'] : '');
+            $prev = self::Checking();
+            $out .= $line($ok ? 'check' : 'x', $prev ? '' : ($ok ? 'ok' : 'bad'), $prev ? ($ok ? 'Previous test: passed' : 'Previous test: failed') : ($ok ? 'Connection test passed' : 'Connection test failed'), self::When($st['check_time']), isset($st['check_message']) ? (string) $st['check_message'] : '');
         }
         $seen = explode(' ', (string) $o['offsite_seenkey']);
         if ($o['offsite_hostkey'] === '' && count($seen) === 2 && $seen[0] === $o['offsite_server']) {
@@ -899,7 +925,7 @@ class module_controller extends ctrl_module
         $out = self::SpaceChart($st) . $out;
         // while the daemon works on something asked for here, the page looks again by itself (at most
         // 2 minutes, so a daemon that does not run does not keep it reloading)
-        $reload = self::Pending() ? '<p class="bk-muted bk-waiting">' . self::t('Waiting for the daemon: this page looks again by itself (or press Refresh).') . '</p>'
+        $reload = self::Pending() ? '<p class="bk-muted bk-waiting">' . self::t('Working on it: this page looks again by itself (or press Refresh).') . '</p>'
             . '<script>(function () { var k = "bk-reload", n = 0; try { n = +sessionStorage.getItem(k) || 0; } catch (e) {}'
             . ' if (n < 24) { setTimeout(function () { try { sessionStorage.setItem(k, n + 1); } catch (e) {} location.replace("./?module=backup_admin&tab=offsite"); }, 5000); } })();</script>'
             : '<script>try { sessionStorage.removeItem("bk-reload"); } catch (e) {}</script>';
@@ -1172,7 +1198,7 @@ class module_controller extends ctrl_module
             return ui_sysmessage::shout(htmlspecialchars(ui_language::translate($e), ENT_QUOTES, 'UTF-8'), 'zannounceerror');
         }
         if (self::$offsiteSaved) {
-            return ui_sysmessage::shout(ui_language::translate('The off-server backup settings have been saved. A change to the time or the switch takes effect within 5 minutes.'), 'zannounceok');
+            return ui_sysmessage::shout(ui_language::translate(self::$offsiteNow ? 'Saved. The connection is being tested: the result shows below in a few seconds.' : 'The off-server backup settings have been saved. A change to the time or the switch takes effect within 5 minutes.'), 'zannounceok');
         }
         if (self::$offsiteRemoved) {
             return ui_sysmessage::shout(ui_language::translate('The backup node is no longer used: nothing is sent there any more (the copies already there stay on it). Choose where the backups go now.'), 'zannounceok');

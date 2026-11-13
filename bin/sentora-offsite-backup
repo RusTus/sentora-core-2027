@@ -85,6 +85,7 @@ fi
 BASE="$(rpath)/$HOST"; BASE=${BASE//\/\//\/}
 
 if [ "${1:-}" = "--check" ]; then
+    state_set check_started "$(date +%s)"   # (Backup Config shows "Checking..." until check_time is newer)
     if remote && [ -z "$OB_PASSWORD" ] && [ -z "${SENTORA_OFFSITE_SSH:-}" ] && [ ! -f "$KEY" ]; then
         out="no password set and no SSH key: set a password, or run sentora-offsite-backup --setup"
     elif remote && ! out=$(pin_hostkey); then
