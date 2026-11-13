@@ -15,7 +15,7 @@ $CONFIG = '{"lang":"en","error_reporting":false,"show_hidden":false,"hide_Cols":
  * @github https://github.com/prasathmani/tinyfilemanager
  * @link https://tinyfilemanager.github.io
  *
- * Written by RusTus, 2026-11-05
+ * Written by RusTus, 2026-11-13
  */
 
 //TFM version

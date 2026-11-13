@@ -13,7 +13,7 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  *
- * Updated by RusTus, 2026-11-06
+ * Updated by RusTus, 2026-11-13
  */
 /**
  * Runs module hook files (modules/NAME/hooks/HOOK.hook.php).
