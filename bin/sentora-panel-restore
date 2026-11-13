@@ -32,7 +32,8 @@ VMAIL=/var/sentora/vmail
 [ "$(id -u)" -eq 0 ] || { echo "Run this as root."; exit 2; }
 mkdir -p "$(dirname "$LOG")"; touch "$LOG"; chmod 640 "$LOG"
 
-say() { echo "$(date '+%Y-%m-%d %H:%M:%S')  $*" | tee -a "$LOG"; rstate step "$*"; }
+# (a new step has no copy running yet: the Restore tab shows its bar only while files are copied)
+say() { echo "$(date '+%Y-%m-%d %H:%M:%S')  $*" | tee -a "$LOG"; rstate step "$*" progress_pct 0 progress_bytes 0 progress_rate ""; }
 rstate() { # key value [key value...]: merged into the progress file the page shows
     php -r '$f = $argv[1]; $d = json_decode((string) @file_get_contents($f), true); $d = is_array($d) ? $d : array();
         for ($i = 2; $i + 1 < $argc; $i += 2) { $d[$argv[$i]] = ctype_digit($argv[$i + 1]) ? (int) $argv[$i + 1] : substr($argv[$i + 1], 0, 300); }

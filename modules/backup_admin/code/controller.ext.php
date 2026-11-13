@@ -951,7 +951,7 @@ class module_controller extends ctrl_module
             $pct = max(0, min(100, (int) ($st['progress_pct'] ?? 0)));
             $out .= '<div class="bk-job bk-copy"><span class="bk-spinner" aria-hidden="true"></span><div class="bk-job-text"><b>' . self::t('Backing up now') . '</b>'
                 . '<span data-bk="step">' . self::h(ui_language::translate((string) ($st['step'] ?? ''))) . '</span>'
-                . '<div class="bk-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' . $pct . '"><i style="width: ' . $pct . '%"></i></div><span class="bk-sub" data-bk="copied"></span>'
+                . '<div class="bk-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' . $pct . '"' . (empty($st['progress_bytes']) ? ' hidden' : '') . '><i style="width: ' . $pct . '%"></i></div><span class="bk-sub" data-bk="copied"></span>'
                 . '<span class="bk-sub">' . sprintf(self::t('Started %s. You can leave this page: the copy goes on.'), self::When((int) $st['copy_started'])) . '</span></div></div>';
         } elseif ($o['offsite_request'] !== '' && strtok($o['offsite_request'], ' ') !== 'pair') {
             $out .= $line('clock', 'info', strtok($o['offsite_request'], ' ') === 'check' ? 'Connection test queued' : 'Backup queued', self::t('it starts in a moment'), '');
@@ -990,7 +990,7 @@ class module_controller extends ctrl_module
                 . '   fails = 0;'
                 . '   if (!d.active || d.sig !== sig || (d.copying && !bar)) { location.replace("./?module=backup_admin&tab=offsite"); return; }'
                 . '   if (!d.copying && Date.now() - t0 > 600000) { return; }'
-                . '   if (d.copying && bar) { bar.firstChild.style.width = d.pct + "%"; bar.setAttribute("aria-valuenow", d.pct); if (q("step") && d.step) { q("step").textContent = d.step; } if (q("copied")) { q("copied").textContent = d.bytes ? d.pct + "% · " + size(d.bytes) + (d.rate ? " · " + d.rate : "") : ""; } }'
+                . '   if (d.copying && bar) { bar.hidden = !d.bytes; bar.firstChild.style.width = d.pct + "%"; bar.setAttribute("aria-valuenow", d.pct); if (q("step") && d.step) { q("step").textContent = d.step; } if (q("copied")) { q("copied").textContent = d.bytes ? d.pct + "% · " + size(d.bytes) + (d.rate ? " · " + d.rate : "") : ""; } }'
                 . '   setTimeout(look, 2000);'
                 . '  }).catch(function () { if (++fails < 5) { setTimeout(look, 4000); } });'
                 . ' };'
@@ -1189,7 +1189,7 @@ class module_controller extends ctrl_module
             $pct = max(0, min(100, (int) ($st['progress_pct'] ?? 0)));
             $out .= '<div class="bk-job"><span class="bk-spinner" aria-hidden="true"></span><div class="bk-job-text"><b>' . self::h(!empty($st['listing']) ? ui_language::translate('Reading the backups') : ui_language::translate('Restoring') . ' ' . ($st['snapshot'] ?? '')) . '…</b>'
                 . '<span data-bk="step">' . self::h($st['step'] ?? '') . '</span>'
-                . (empty($st['listing']) ? '<div class="bk-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' . $pct . '"><i style="width: ' . $pct . '%"></i></div><span class="bk-sub" data-bk="copied"></span>' : '')
+                . (empty($st['listing']) ? '<div class="bk-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' . $pct . '"' . (empty($st['progress_bytes']) ? ' hidden' : '') . '><i style="width: ' . $pct . '%"></i></div><span class="bk-sub" data-bk="copied"></span>' : '')
                 . '<span class="bk-sub">' . self::t('This page follows it by itself. The log: /var/sentora/logs/panel-restore.log') . '</span></div></div>';
         } elseif (!empty($st['result'])) {
             $ok = $st['result'] === 'ok';
@@ -1210,7 +1210,7 @@ class module_controller extends ctrl_module
                 . '   if (!d.active || (wasQueued && !d.queued)) { location.reload(); return; }'
                 . '   if (d.queued && Date.now() - t0 > 600000) { return; }'
                 . '   if (d.step && q("step")) { q("step").textContent = d.step; }'
-                . '   if (bar) { bar.firstChild.style.width = d.pct + "%"; bar.setAttribute("aria-valuenow", d.pct); }'
+                . '   if (bar) { bar.hidden = !d.bytes; bar.firstChild.style.width = d.pct + "%"; bar.setAttribute("aria-valuenow", d.pct); }'
                 . '   if (q("copied")) { q("copied").textContent = d.bytes ? d.pct + "% · " + size(d.bytes) + (d.rate ? " · " + d.rate : "") : ""; }'
                 . '   setTimeout(look, 2000);'
                 . '  }).catch(function () { if (++fails < 5) { setTimeout(look, 4000); } });'

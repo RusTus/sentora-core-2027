@@ -123,7 +123,7 @@ flock -n 9 || { echo "Another copy is running."; exit 1; }
 START=$(date +%s); TODAY=${SENTORA_OFFSITE_DATE:-$(date +%Y-%m-%d)}  # the override is for testing
 say "Off-server backup to $TARGET/$HOST/$TODAY"
 # (Backup Config follows the copy: its step and, while copying, how far; until last_run is newer)
-step() { state_set step "$1"; }
+step() { state_set step "$1" progress_pct 0 progress_bytes 0 progress_rate ""; }
 state_set copy_started "$START" step "Connecting to the backup machine" progress_pct 0 progress_bytes 0 progress_rate ""
 if remote; then why=$(pin_hostkey) || die "$why"; fi
 
