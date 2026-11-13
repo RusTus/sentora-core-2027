@@ -36,7 +36,9 @@ containers with systemd.
 `preconf/selinux/sentora.cil` (installers repo, loaded with `semodule -i`; one rule so far: BIND may
 enter /var/sentora/logs). Some refusals are not logged (dontaudit): when a service fails with
 "permission denied" and `ausearch` shows nothing, check its rules with `sesearch` (an AlmaLinux 10
-container with selinux-policy-targeted, -targeted-extra from CRB, and setools-console). Never
+container with selinux-policy-targeted, -targeted-extra from CRB, and setools-console). rsync started by a service or cron enters rsync_t (an rsync server's domain: no ssh, no reading the
+sites): Sentora's root tools run it with `runcon "$(id -Z)" rsync` (RSYNC in bin/sentora-backup-common), not with
+wider rules; the VM test's x_offsite checks it. Never
 switch SELinux off ("less secure, not done"). **AppArmor (Debian, Ubuntu, since 2026-11-10):** on, never switched off. Sentora's paths for a
 program go in `preconf/apparmor/local/<profile>` (installers repo), which the installers' `aa_sentora` writes into
 /etc/apparmor.d/local/<profile> between `# BEGIN Sentora` / `# END Sentora` and reloads. So far: BIND (usr.sbin.named)
