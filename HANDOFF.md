@@ -151,7 +151,7 @@ two guards, each off / watch only / on. **ModSecurity:** the installers install 
 
 `backup-node/sentora2027-backup-node` (installers repo; same screen and platform block as the node installer: FAMILY deb/el/fedora, ufw on deb, firewalld elsewhere; options --key, --name (variable AREA: os-release has NAME), --gate, --update) + `backup-node/sentora-backup-gate` (forced command `restrict,command="/usr/local/sbin/sentora-backup-gate AREA"` in /etc/ssh/sentora-backup/authorized_keys, root 644, Match block in sshd_config between `# BEGIN/END Sentora backup node`; area /srv/sentora-backups/AREA; refuses shell characters; `inside()` keeps paths in the area with realpath and KEEPS a trailing slash; rsync --server options checked, --link-dest/--compare-dest/--copy-dest as `=` or as two words; verbs hello, ready, begin, latest, finish, count, list; log /var/log/sentora-backup-gate.log). Tool `sentora-backup-node list|add|remove|fingerprint`. Panel side (core): `bin/sentora-backup-common` (offsite_hostkey pinned in a known file, StrictHostKeyChecking=yes once set; is_gate and there_ready/begin/latest/finish/count use the gate's verbs, plain SSH servers as before), backup_admin's daemon hook makes /root/.ssh/sentora_offsite and stores offsite_pubkey; the page's panel "A Sentora backup node" shows the install command. Tests: Actions > Backup node test (`.github/scripts/backup-docker-node-test.sh`, five systems, `core_ref`). The panel side reaches servers with the next panel release.
 
-## Docker Hosting (add-on, sentora-repo/docker_hosting.zpp, 131; built 2026-11-11 at the owner's request)
+## Docker Hosting (add-on, sentora-repo/docker_hosting.zpp, 132; built 2026-11-11 at the owner's request)
 
 ### What it is
 
