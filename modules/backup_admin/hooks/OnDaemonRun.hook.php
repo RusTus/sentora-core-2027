@@ -127,6 +127,19 @@ if (is_file($obBin) && is_dir('/etc/cron.d')) {
         $obWhat = strtok($obHave['offsite_request'], ' ');
         $zdbh->exec("UPDATE x_settings SET so_value_tx = '' WHERE so_name_vc = 'offsite_request'");
         $obArg = ($obWhat === 'check') ? '--check' : '--now';
+        // noted as started now, before the script runs (Backup Config keeps following it without a gap)
+        $obSf = '/var/lib/sentora/offsite-backup.json';
+        $obS = json_decode((string) @file_get_contents($obSf), true);
+        $obS = is_array($obS) ? $obS : array();
+        if ($obWhat === 'check') {
+            $obS['check_started'] = time();
+        } else {
+            $obS = array_merge($obS, array('copy_started' => time(), 'step' => 'Starting', 'progress_pct' => 0, 'progress_bytes' => 0, 'progress_rate' => ''));
+        }
+        if (!is_link($obSf)) {
+            @file_put_contents($obSf, json_encode($obS));
+            @chmod($obSf, 0644);
+        }
         exec('setsid nohup ' . escapeshellarg($obBin) . ' ' . $obArg . ' > /dev/null 2>&1 < /dev/null &');
         echo "Off-server backup: " . ($obWhat === 'check' ? 'connection test' : 'backup') . " started (from the panel)" . fs_filehandler::NewLine();
     }

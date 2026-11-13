@@ -560,7 +560,51 @@ class module_controller extends ctrl_module
     static function Pending()
     {
         $o = self::Offsite();
-        return $o['offsite_nodekey'] !== '' || $o['offsite_request'] !== '' || self::Checking();
+        return $o['offsite_nodekey'] !== '' || $o['offsite_request'] !== '' || self::Checking() || self::Copying();
+    }
+
+    /**
+     * A copy to the backup machine is running: it started (copy_started) after the last run ended
+     * (last_run), within the last 12 hours (a copy that died does not show as running for good).
+     *
+     * @param array<string,mixed>|null $st Optional. The state file, when already read.
+     * @return bool
+     */
+    static function Copying($st = null)
+    {
+        if ($st === null) {
+            $st = json_decode((string) @file_get_contents('/var/lib/sentora/offsite-backup.json'), true);
+        }
+        $c = is_array($st) ? (int) ($st['copy_started'] ?? 0) : 0;
+        return $c > (int) ($st['last_run'] ?? 0) && $c > time() - 12 * 3600;
+    }
+
+    /**
+     * How the off-server backup stands, for the tab's background check (code/progress.php): whether the
+     * daemon still works on something asked for, a copy's step and progress, and a signature of what the
+     * page shows (when it changes, the page is loaded again to show the new state).
+     *
+     * @return array<string,mixed>
+     */
+    static function OffsiteProgress()
+    {
+        $o = self::Offsite();
+        $st = json_decode((string) @file_get_contents('/var/lib/sentora/offsite-backup.json'), true);
+        $st = is_array($st) ? $st : array();
+        $sig = array($o['offsite_request'], $o['offsite_nodekey'], $o['offsite_pairing'], $o['offsite_server'], $o['offsite_hostkey'], $o['offsite_seenkey']);
+        foreach (array('check_time', 'check_started', 'check_ok', 'last_run', 'last_ok', 'result', 'copy_started') as $k) {
+            $sig[] = (string) ($st[$k] ?? '');
+        }
+        $copying = self::Copying($st);
+        return array(
+            'active' => self::Pending(),
+            'sig' => substr(hash('sha256', implode('|', $sig)), 0, 16),
+            'copying' => $copying,
+            'step' => $copying ? (string) ($st['step'] ?? '') : '',
+            'pct' => $copying ? max(0, min(100, (int) ($st['progress_pct'] ?? 0))) : 0,
+            'bytes' => $copying ? (int) ($st['progress_bytes'] ?? 0) : 0,
+            'rate' => $copying && preg_match('/^[0-9.]+[kMGT]?B\/s$/', (string) ($st['progress_rate'] ?? '')) ? (string) $st['progress_rate'] : '',
+        );
     }
 
     /**
@@ -902,7 +946,14 @@ class module_controller extends ctrl_module
             return '<div class="bk-state ' . $class . '">' . self::Icon($icon) . '<div><b>' . self::t($label) . '</b><span>' . $when . '</span>' . ($message !== '' ? '<span class="bk-sub">' . self::h($message) . '</span>' : '') . '</div></div>';
         };
         $out = '';
-        if ($o['offsite_request'] !== '' && strtok($o['offsite_request'], ' ') !== 'pair') {
+        if (self::Copying($st)) {
+            // the copy running now: its step and a bar, kept up to date by the script below
+            $pct = max(0, min(100, (int) ($st['progress_pct'] ?? 0)));
+            $out .= '<div class="bk-job bk-copy"><span class="bk-spinner" aria-hidden="true"></span><div class="bk-job-text"><b>' . self::t('Backing up now') . '</b>'
+                . '<span data-bk="step">' . self::h(ui_language::translate((string) ($st['step'] ?? ''))) . '</span>'
+                . '<div class="bk-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' . $pct . '"><i style="width: ' . $pct . '%"></i></div><span class="bk-sub" data-bk="copied"></span>'
+                . '<span class="bk-sub">' . sprintf(self::t('Started %s. You can leave this page: the copy goes on.'), self::When((int) $st['copy_started'])) . '</span></div></div>';
+        } elseif ($o['offsite_request'] !== '' && strtok($o['offsite_request'], ' ') !== 'pair') {
             $out .= $line('clock', 'info', strtok($o['offsite_request'], ' ') === 'check' ? 'Connection test queued' : 'Backup queued', self::t('it starts in a moment'), '');
         } elseif (self::Checking()) {
             $out .= $line('clock', 'info', 'Testing the connection', self::t('the result shows here in a few seconds'), '');
@@ -923,12 +974,28 @@ class module_controller extends ctrl_module
         }
         $out .= $line('archive', '', 'Last good copy', self::When(isset($st['last_ok']) ? $st['last_ok'] : 0), '');
         $out = self::SpaceChart($st) . $out;
-        // while the daemon works on something asked for here, the page looks again by itself (at most
-        // 2 minutes, so a daemon that does not run does not keep it reloading)
-        $reload = self::Pending() ? '<p class="bk-muted bk-waiting">' . self::t('Working on it: this page looks again by itself (or press Refresh).') . '</p>'
-            . '<script>(function () { var k = "bk-reload", n = 0; try { n = +sessionStorage.getItem(k) || 0; } catch (e) {}'
-            . ' if (n < 24) { setTimeout(function () { try { sessionStorage.setItem(k, n + 1); } catch (e) {} location.replace("./?module=backup_admin&tab=offsite"); }, 5000); } })();</script>'
-            : '<script>try { sessionStorage.removeItem("bk-reload"); } catch (e) {}</script>';
+        // while the daemon works on something asked for here, the tab asks how it stands every 2 seconds in
+        // the background (code/progress.php?what=offsite): a copy's bar moves in place, and when something
+        // the page shows changes (the node paired, a test or the copy done) the page is loaded once more.
+        // Waiting for the daemon is given up on after 10 minutes; a running copy is followed to its end.
+        $reload = '';
+        if (self::Pending()) {
+            $p = self::OffsiteProgress();
+            $reload = '<p class="bk-muted bk-waiting">' . self::t('Working on it: this page follows it by itself.') . '</p>'
+                . '<script>(function () {'
+                . ' var sig = "' . $p['sig'] . '", fails = 0, t0 = Date.now(), q = function (n) { return document.querySelector(".bk-copy [data-bk=\\"" + n + "\\"]"); }, bar = document.querySelector(".bk-copy .bk-progress");'
+                . ' var size = function (b) { var u = ["B", "KB", "MB", "GB", "TB"], i = 0; while (b >= 1024 && i < 4) { b /= 1024; i++; } return (i ? b.toFixed(1) : b) + " " + u[i]; };'
+                . ' var look = function () {'
+                . '  fetch("modules/backup_admin/code/progress.php?what=offsite", { credentials: "same-origin", cache: "no-store" }).then(function (r) { if (!r.ok) { throw r.status; } return r.json(); }).then(function (d) {'
+                . '   fails = 0;'
+                . '   if (!d.active || d.sig !== sig || (d.copying && !bar)) { location.replace("./?module=backup_admin&tab=offsite"); return; }'
+                . '   if (!d.copying && Date.now() - t0 > 600000) { return; }'
+                . '   if (d.copying && bar) { bar.firstChild.style.width = d.pct + "%"; bar.setAttribute("aria-valuenow", d.pct); if (q("step") && d.step) { q("step").textContent = d.step; } if (q("copied")) { q("copied").textContent = d.bytes ? d.pct + "% · " + size(d.bytes) + (d.rate ? " · " + d.rate : "") : ""; } }'
+                . '   setTimeout(look, 2000);'
+                . '  }).catch(function () { if (++fails < 5) { setTimeout(look, 4000); } });'
+                . ' };'
+                . ' setTimeout(look, 2000); })();</script>';
+        }
         $dest = self::Dest();
         if ($dest === 'node' && !self::NodePaired()) {
             return '<p class="bk-muted">' . self::t('Add a backup node on the left: once it is added, its state and the copies show here.') . '</p>' . $reload;

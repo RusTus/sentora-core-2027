@@ -1,9 +1,11 @@
 <?php
 
 /**
- * Backup Config, Restore tab: how far a restore or a reading of the backups is, as JSON, for the bar the
- * tab moves in the background (every 2 seconds while one is queued or runs). Panel administrators only;
- * only the progress is answered (the step, how much was copied, the result), nothing of the backups.
+ * Backup Config: how far a restore or a reading of the backups is (Restore tab), or how the off-server
+ * backup stands (?what=offsite: adding the node, a connection test, a copy and its progress), as JSON,
+ * for the tabs to follow in the background (every 2 seconds while something is queued or runs).
+ * Panel administrators only; only the progress is answered (the step, how much was copied), nothing
+ * of the backups or the settings.
  *
  * @package Sentora
  * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
@@ -26,6 +28,10 @@ header('Cache-Control: no-store');
 if (!$user || (int) $user['usergroupid'] !== 1) {
     http_response_code(403);
     exit('{}');
+}
+if (isset($_GET['what']) && $_GET['what'] === 'offsite') {
+    require_once 'modules/backup_admin/code/controller.ext.php';
+    exit(json_encode(module_controller::OffsiteProgress()));
 }
 $st = json_decode((string) @file_get_contents('/var/lib/sentora/panel-restore.json'), true);
 $st = is_array($st) ? $st : array();
