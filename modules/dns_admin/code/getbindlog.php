@@ -8,7 +8,7 @@
  * @package Sentora
  * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
  *
- * Updated by RusTus, 2026-11-12
+ * Updated by RusTus, 2026-11-13
  */
 chdir(dirname(__FILE__) . '/../../../');
 require_once 'dryden/loader.inc.php';
@@ -34,9 +34,12 @@ if (!$user || (int) $user['usergroupid'] !== 1) {
     exit('<p>' . htmlspecialchars(ui_language::translate('The BIND log is only available to panel administrators.'), ENT_QUOTES, 'UTF-8') . '</p>');
 }
 
-$bindlog = '/var/sentora/logs/bind/bind.log';
+// BIND's log from the settings (bind_log, set by each system's installer), only a plain file
+$bindlog = (string) ctrl_options::GetSystemOption('bind_log');
 $lines = array();
-if (is_file($bindlog) && !is_link($bindlog) && is_readable($bindlog) && ($fh = @fopen($bindlog, 'rb'))) {
+$logdir = realpath((string) ctrl_options::GetSystemOption('log_dir'));
+$inside = $logdir !== false && $bindlog !== '' && realpath($bindlog) !== false && strpos(realpath($bindlog), rtrim($logdir, '/') . '/') === 0;
+if ($inside && $bindlog[0] === '/' && strpos($bindlog, '..') === false && is_file($bindlog) && !is_link($bindlog) && is_readable($bindlog) && ($fh = @fopen($bindlog, 'rb'))) {
     $size = (int) fstat($fh)['size'];
     if ($size > 2 * 1024 * 1024) {
         fseek($fh, -2 * 1024 * 1024, SEEK_END);

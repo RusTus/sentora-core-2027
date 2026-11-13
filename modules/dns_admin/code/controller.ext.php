@@ -52,12 +52,6 @@ class module_controller extends ctrl_module
     static $reset;
     /** @var int|null Number of domains AddMissing() created default records for. */
     static $addmissing;
-    /** @var string[]|null The error lines of the BIND log (set by ViewErrors()). */
-    static $logerror;
-    /** @var string[]|null The warning lines of the BIND log (set by ViewErrors()). */
-    static $logwarning;
-    /** @var string[]|null All lines of the BIND log (set by ViewErrors()). */
-    static $getlog;
     /** @var bool|null True when the "View logs" button was pressed (set, not read, here). */
     static $showlog;
     /** @var bool|null True when the BIND log could not be written (shown by getResult()). */
@@ -79,7 +73,7 @@ class module_controller extends ctrl_module
     /**
      * Build the DNS Config page: tabs for settings, tools, the BIND service, logs and the usage charts.
      *
-     * Reads the BIND log through ViewErrors() for the error/warning counts.
+     * Counts the BIND log's error and warning lines (LogCounts()).
      *
      * @global db_driver $zdbh The panel's database connection.
      * @global runtime_controller $controller The request controller.
@@ -104,10 +98,7 @@ class module_controller extends ctrl_module
         $deleted = (int) $zdbh->query("SELECT COUNT(*) FROM x_dns WHERE dn_deleted_ts IS NOT NULL")->fetchColumn();
         $domains = (int) $zdbh->query("SELECT COUNT(*) FROM x_vhosts WHERE vh_deleted_ts IS NULL")->fetchColumn();
         $without = (int) $zdbh->query("SELECT COUNT(*) FROM x_vhosts v WHERE v.vh_deleted_ts IS NULL AND NOT EXISTS (SELECT 1 FROM x_dns d WHERE d.dn_vhost_fk = v.vh_id_pk AND d.dn_deleted_ts IS NULL)")->fetchColumn();
-        self::ViewErrors();
-        $nErr = count((array) self::$logerror);
-        $nWarn = count((array) self::$logwarning);
-        $nLog = count((array) self::$getlog);
+        list($nErr, $nWarn, $nLog) = self::LogCounts();
 
         $line = '<link rel="stylesheet" href="modules/dns_admin/assets/dns.css">';
         $line .= '<div class="dn">';
@@ -179,7 +170,7 @@ class module_controller extends ctrl_module
 
         // Log: view (a window of its own) and clear, side by side for each kind
         $line .= '<div class="sf-pane" id="logs" hidden>'
-            . '<form id="dnLogView" name="launchbindlog" action="modules/dns_admin/code/getbindlog.php" target="bindlogwindow" method="post" onsubmit="window.open(\'\', \'bindlogwindow\', \'scrollbars=yes,menubar=no,height=525,width=825,resizable=yes,toolbar=no,location=no,status=no\')"><input type="hidden" name="inBindLog" value="' . $h(ctrl_options::GetSystemOption('bind_log')) . '"></form>'
+            . '<form id="dnLogView" name="launchbindlog" action="modules/dns_admin/code/getbindlog.php" target="bindlogwindow" method="post" onsubmit="window.open(\'\', \'bindlogwindow\', \'scrollbars=yes,menubar=no,height=525,width=825,resizable=yes,toolbar=no,location=no,status=no\')"></form>'
             . '<form id="dnLogClear" action="./?module=dns_admin&amp;action=Updatelogs" method="post"></form>'
             . '<div class="dn-acts">';
         foreach (array(array('Errors', 'inViewErrors', 'inClearErrors', $nErr, 'The lines where BIND could not do something (a zone it could not load, for example).'),
@@ -629,39 +620,108 @@ class module_controller extends ctrl_module
     }
 
     /**
+     * BIND's log (the setting bind_log), only when it is a plain file inside Sentora's logs folder
+     * (log_dir): never a link (it could lead to another file), so nothing here reads or writes anywhere else.
+     *
+     * @return string The path, or '' when there is no such plain file.
+     */
+    static function LogPath()
+    {
+        $f = (string) ctrl_options::GetSystemOption('bind_log');
+        if ($f === '' || $f[0] !== '/' || strpos($f, '..') !== false || !is_file($f) || is_link($f)) {
+            return '';
+        }
+        // and only inside Sentora's logs folder (log_dir): the setting can be changed in Sentora Config,
+        // and Clear must never empty some other file
+        $dir = realpath((string) ctrl_options::GetSystemOption('log_dir'));
+        $real = realpath($f);
+        return ($dir !== false && $real !== false && strpos($real, rtrim($dir, '/') . '/') === 0) ? $f : '';
+    }
+
+    /**
+     * How many lines of BIND's log are errors, warnings, and in all (read line by line, not kept).
+     *
+     * @return array{0: int, 1: int, 2: int}
+     */
+    static function LogCounts()
+    {
+        $n = array(0, 0, 0);
+        $f = self::LogPath();
+        if ($f !== '' && ($fh = @fopen($f, 'rb'))) {
+            while (($l = fgets($fh, 8192)) !== false) {
+                $n[2]++;
+                if (self::IsLine($l, 'error')) {
+                    $n[0]++;
+                }
+                if (self::IsLine($l, 'warning')) {
+                    $n[1]++;
+                }
+            }
+            fclose($fh);
+        }
+        return $n;
+    }
+
+    /**
+     * True when a log line is of that kind ("error:" or "error ", "warning:" or "warning ").
+     *
+     * @param string $l
+     * @param string $kind 'error' or 'warning'
+     * @return bool
+     */
+    static function IsLine($l, $kind)
+    {
+        return strpos($l, $kind . ':') !== false || strpos($l, $kind . ' ') !== false;
+    }
+
+    /**
+     * Remove lines from BIND's log: those of a kind ('error', 'warning'), or all of them (''). The file
+     * stays the same file (BIND keeps writing to it), locked while it is rewritten, and it must still
+     * be the plain file that was checked (not exchanged for a link meanwhile). Sets self::$notwritable
+     * when it can not be done.
+     *
+     * @param string $kind
+     * @return void
+     */
+    static function ClearLines($kind)
+    {
+        $f = self::LogPath();
+        $st = $f !== '' ? @lstat($f) : false;
+        $fh = ($st && is_writable($f)) ? @fopen($f, 'r+b') : false;
+        if (!$fh) {
+            self::$notwritable = true;
+            return;
+        }
+        $now = fstat($fh);
+        if (!$now || $now['ino'] !== $st['ino'] || $now['dev'] !== $st['dev'] || !flock($fh, LOCK_EX)) {
+            fclose($fh);
+            self::$notwritable = true;
+            return;
+        }
+        $keep = '';
+        if ($kind !== '') {
+            while (($l = fgets($fh, 8192)) !== false) {
+                if (!self::IsLine($l, $kind)) {
+                    $keep .= $l;
+                }
+            }
+        }
+        rewind($fh);
+        ftruncate($fh, 0);
+        fwrite($fh, $keep);
+        fflush($fh);
+        flock($fh, LOCK_UN);
+        fclose($fh);
+    }
+
+    /**
      * Remove the error lines from the BIND log (sets self::$notwritable when it cannot be written).
      *
      * @return void
      */
     static function ClearErrors()
     {
-        $bindlog = ctrl_options::GetSystemOption('bind_log');
-        if (is_writable($bindlog)) {
-            $log = $bindlog;
-            if (is_readable($bindlog)) {
-                $handle = @fopen($log, "r");
-                $getlog = array();
-                if ($handle) {
-                    while (!feof($handle)) {
-                        $buffer = fgets($handle, 4096);
-                        if (strstr($buffer, 'error:') || strstr($buffer, 'error ')) {
-                            $line = "";
-                        } else {
-                            $line = $buffer;
-                        }
-                        $getlog[] = $line;
-                    }fclose($handle);
-                }
-
-                $fp = fopen($log, 'w');
-                foreach ($getlog as $key => $value) {
-                    fwrite($fp, $value);
-                }
-                fclose($fp);
-            }
-        } else {
-            self::$notwritable = true;
-        }
+        self::ClearLines('error');
     }
 
     /**
@@ -671,33 +731,7 @@ class module_controller extends ctrl_module
      */
     static function ClearWarnings()
     {
-        $bindlog = ctrl_options::GetSystemOption('bind_log');
-        if (is_writable($bindlog)) {
-            $log = $bindlog;
-            if (is_readable($bindlog)) {
-                $handle = @fopen($log, "r");
-                $getlog = array();
-                if ($handle) {
-                    while (!feof($handle)) {
-                        $buffer = fgets($handle, 4096);
-                        if (strstr($buffer, 'warning:') || strstr($buffer, 'warning ')) {
-                            $line = "";
-                        } else {
-                            $line = $buffer;
-                        }
-                        $getlog[] = $line;
-                    }fclose($handle);
-                }
-
-                $fp = fopen($log, 'w');
-                foreach ($getlog as $key => $value) {
-                    fwrite($fp, $value);
-                }
-                fclose($fp);
-            }
-        } else {
-            self::$notwritable = true;
-        }
+        self::ClearLines('warning');
     }
 
     /**
@@ -707,17 +741,7 @@ class module_controller extends ctrl_module
      */
     static function ClearLog()
     {
-        $bindlog = ctrl_options::GetSystemOption('bind_log');
-        if (is_writable($bindlog)) {
-            $log = $bindlog;
-            if (is_writable($bindlog)) {
-                $fp = fopen($log, 'w');
-                fwrite($fp, '');
-                fclose($fp);
-            }
-        } else {
-            self::$notwritable = true;
-        }
+        self::ClearLines('');
     }
 
     /**
@@ -1007,44 +1031,6 @@ class module_controller extends ctrl_module
         $sql->bindParam(':vh_name_vc', $domainName['vh_name_vc']);
         $sql->execute();
         return;
-    }
-
-    /**
-     * Read the BIND log into self::$getlog, with its error and warning lines in self::$logerror and self::$logwarning.
-     *
-     * @return void
-     */
-    static function ViewErrors()
-    {
-        $bindlog = ctrl_options::GetSystemOption('bind_log');
-        $logerror = array();
-        $logwarning = array();
-        $getlog = array();
-        if (is_readable($bindlog)) {
-            $handle = @fopen($bindlog, "r");
-            $getlog = array();
-            if ($handle) {
-                while (!feof($handle)) {
-                    $buffer = fgets($handle, 4096);
-                    $getlog[] = $buffer;
-                    if (strstr($buffer, 'error:') || strstr($buffer, 'error ')) {
-                        $logerror[] = $buffer;
-                    }
-                    if (strstr($buffer, 'warning:') || strstr($buffer, 'warning ')) {
-                        $logwarning[] = $buffer;
-                    }
-                }fclose($handle);
-                if (!fs_director::CheckForEmptyValue($logerror)) {
-                    self::$logerror = $logerror;
-                }
-                if (!fs_director::CheckForEmptyValue($logwarning)) {
-                    self::$logwarning = $logwarning;
-                }
-                if (!fs_director::CheckForEmptyValue($getlog)) {
-                    self::$getlog = $getlog;
-                }
-            }
-        }
     }
 
     /**
