@@ -53,7 +53,6 @@ function apst_fetch($query)
         CURLOPT_FOLLOWLOCATION => false, CURLOPT_MAXFILESIZE => 8388608));
     $body = (string) curl_exec($ch);
     $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
     return array($code, $body);
 }
 

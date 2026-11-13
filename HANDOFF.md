@@ -159,7 +159,7 @@ two guards, each off / watch only / on. **ModSecurity:** the installers install 
 - Backup Config (Module Admin > Backup Config > Off-server backup): "Add the backup node" (address + key) stores `offsite_nodekey` = "addr port code", request `pair <time>`. The daemon hook scans, compares SshKeyCode, then sets server/port/user sentora-backup/password ''/path '/'/hostkey (fingerprint)/enabled true, removes /root/.ssh/sentora_offsite_known_hosts, `offsite_pairing` = "ok|fail <time> <words>", then a connection test. Tested with a SQLite harness (wrong key: nothing changed; right key: paired) and in the backup node test (the panel's ScanSshKey of the real node gives the key the installer showed).
 - `bin/sentora-backup-common` pin_hostkey: a remote machine with no OB_HOSTKEY is refused (before: first key seen trusted). The hook adopts the ed25519 key in root's known_hosts for a machine that worked before; otherwise it stores the scanned key in `offsite_seenkey` and the page shows it with a "trust this key" button (doTrustKey).
 
-## Docker Hosting (add-on, sentora-repo/docker_hosting.zpp, 134; built 2026-11-11 at the owner's request)
+## Docker Hosting (add-on, sentora-repo/docker_hosting.zpp, 135; built 2026-11-11 at the owner's request)
 
 ### What it is
 
@@ -250,6 +250,8 @@ version and checksum; the **Add-ons** workflow (.github/workflows/addons.yml) ru
 zip differs, and runs tests/docker_hosting, payment_plans and php_hardening on their folders. All nine zips were built
 again with it (same contents, same versions: panels see no update; only SHA256SUMS changed). The panel's own unzip
 (sys_archive::Unzip) gives exactly the folder; the three test suites passed on built zips (447, 218, 218).
+
+**PHP 8.5 (found by the Add-ons workflow, 2026-11-13):** GitHub's runners have PHP 8.5, like the panels on Ubuntu 26.04 and Fedora 45. It flags curl_close(), imagedestroy(), finfo_close() and xml_parser_free() as deprecated (they do nothing since PHP 8.0/8.1); they are gone from the core, the add-ons (Docker Hosting 135, Payment Plans 107, QuickFig 209) and node agent 114, and only called on PHP < 8 by the feedback server (its host's PHP is not ours). PHP 8.5 also adds a stack trace to fatal errors (Web Hardening's test now ignores it). Do not use them again.
 
 ## Planned (the owner said yes; do when no other session is changing add-ons)
 

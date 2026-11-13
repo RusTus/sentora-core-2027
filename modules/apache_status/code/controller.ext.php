@@ -36,7 +36,6 @@ class module_controller extends ctrl_module
             curl_setopt($ch, CURLOPT_FOLLOWLOCATION, false);
             $body = (string) curl_exec($ch);
             $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            curl_close($ch);
             self::$status = array('ok' => ($code === 200 && strpos($body, 'Total Accesses') !== false), 'code' => $code);
         }
         return self::$status;

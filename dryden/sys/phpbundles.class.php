@@ -132,7 +132,6 @@ class sys_phpbundles
             CURLOPT_PROGRESSFUNCTION => function ($ch, $total, $got) { return $got > 1048576 ? 1 : 0; }));
         $body = curl_exec($c);
         $code = (int) curl_getinfo($c, CURLINFO_RESPONSE_CODE);
-        curl_close($c);
         return ($body !== false && $code === 200) ? (string) $body : false;
     }
 

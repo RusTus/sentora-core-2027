@@ -683,7 +683,6 @@ if ((isset($_SESSION[FM_SESSION_ID]['logged'], $auth_users[$_SESSION[FM_SESSION_
             if (!$success) {
                 $err = array("message" => curl_error($ch));
             }
-            @curl_close($ch);
             fclose($fp);
             $fileinfo->size = $curl_info["size_download"];
             $fileinfo->type = $curl_info["content_type"];
@@ -2606,7 +2605,6 @@ function fm_get_mime_type($file_path)
         $finfo = finfo_open(FILEINFO_MIME_TYPE);
         $mime = finfo_file($finfo, $file_path);
         if (\PHP_VERSION_ID < 80000) {
-            finfo_close($finfo);
         }
         return $mime;
     } elseif (function_exists('mime_content_type')) {

@@ -239,7 +239,6 @@ class ctrl_feedback
         curl_setopt_array($c, array(CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 5, CURLOPT_CONNECTTIMEOUT => 3, CURLOPT_FOLLOWLOCATION => false,
             CURLOPT_PROTOCOLS => CURLPROTO_HTTPS, CURLOPT_USERAGENT => 'ZppyClient (Sentora-2027 ' . self::Version() . ')'));
         @curl_exec($c);
-        curl_close($c);
     }
 
     /**
@@ -284,7 +283,6 @@ class ctrl_feedback
                     'comment' => (string) $r['rr_comment_tx'], 'version' => (string) $r['mo_version_in']))));
             curl_exec($c);
             $code = (int) curl_getinfo($c, CURLINFO_HTTP_CODE);
-            curl_close($c);
             // sent; or refused for good (not a rating, no such module): not tried again
             if (($code >= 200 && $code < 300) || $code === 400 || $code === 404) {
                 $zdbh->prepare("UPDATE x_repo_ratings SET rr_sent_in = :t WHERE rr_module_vc = :m")->execute(array(':t' => time(), ':m' => $r['rr_module_vc']));
@@ -310,7 +308,6 @@ class ctrl_feedback
         curl_setopt_array($c, array(CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 5, CURLOPT_CONNECTTIMEOUT => 3, CURLOPT_FOLLOWLOCATION => false,
             CURLOPT_PROTOCOLS => CURLPROTO_HTTPS, CURLOPT_USERAGENT => 'Sentora-2027 Repo Browser'));
         $j = json_decode((string) curl_exec($c), true);
-        curl_close($c);
         if (!is_array($j)) {
             return null;
         }
@@ -340,7 +337,6 @@ class ctrl_feedback
         curl_setopt_array($c, array(CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 5, CURLOPT_CONNECTTIMEOUT => 3, CURLOPT_FOLLOWLOCATION => false,
             CURLOPT_PROTOCOLS => CURLPROTO_HTTPS, CURLOPT_USERAGENT => 'Sentora-2027 Repo Browser'));
         $j = json_decode((string) curl_exec($c), true);
-        curl_close($c);
         $out = array('counts' => array(), 'stars' => array());
         foreach (is_array($j) ? $j : array() as $r) {
             if (is_array($r) && isset($r['package'], $r['downloads']) && preg_match('/^[A-Za-z0-9_-]{1,64}$/', (string) $r['package'])) {
@@ -369,7 +365,6 @@ class ctrl_feedback
             CURLOPT_SSL_VERIFYPEER => true, CURLOPT_SSL_VERIFYHOST => 2));
         curl_exec($c);
         $code = (int) curl_getinfo($c, CURLINFO_HTTP_CODE);
-        curl_close($c);
         return $code;
     }
 

@@ -198,7 +198,6 @@ class pDraw
 	function __destruct()
 	{
 		if (is_resource($this->Picture)){
-			imagedestroy($this->Picture);
 		}
 	}
 
@@ -206,7 +205,6 @@ class pDraw
 	function resize(int $XSize, int $YSize)
 	{
 		if (is_resource($this->Picture)){
-			imagedestroy($this->Picture);
 		}
 		$this->__construct($XSize, $YSize, $this->TransparentBackground);
 	}
@@ -1247,7 +1245,6 @@ class pDraw
 
 		$this->Shadow = $RestoreShadow;
 		imagecopy($this->Picture, $Raster, $X, $Y, 0, 0, $Width, $Height);
-		imagedestroy($Raster);
 	}
 
 	/* Mirror Effect */
@@ -1266,7 +1263,6 @@ class pDraw
 
 		imagecopy($this->Picture, $Picture, 0, 0, 0, 0, $this->XSize, $this->YSize);
 
-		imagedestroy($Picture);
 	}
 
 	/* Draw an arrow */

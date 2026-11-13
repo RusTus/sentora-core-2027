@@ -730,7 +730,6 @@ keyUsage = nonRepudiation, digitalSignature, keyEncipherment');
         $h = curl_init('https://cloudflare-dns.com/dns-query?name=' . rawurlencode($name) . '&type=A');
         curl_setopt_array($h, array(CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 8, CURLOPT_HTTPHEADER => array('Accept: application/dns-json')));
         $j = json_decode((string) curl_exec($h), true);
-        curl_close($h);
         if (!is_array($j) || !isset($j['Status'])) {
             return null;
         }

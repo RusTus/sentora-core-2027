@@ -364,8 +364,6 @@ class ctrl_branding
         ob_start();
         imagepng($dst, null, 9);
         $png = (string) ob_get_clean();
-        imagedestroy($src);
-        imagedestroy($dst);
         if ($png === '') {
             return 'gd';
         }
