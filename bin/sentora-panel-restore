@@ -64,9 +64,9 @@ fetch() { # snapshot-path local-dir [rsync options...]
     local src="$SNAP/$1" dest="$2"; shift 2
     mkdir -p "$dest"
     if remote; then
-        rsync -a --numeric-ids "$@" -e "$SSH" "$(rhost):$src" "$dest" >> "$LOG" 2>&1
+        "${RSYNC[@]}" -a --numeric-ids "$@" -e "$SSH" "$(rhost):$src" "$dest" >> "$LOG" 2>&1
     else
-        rsync -a --numeric-ids "$@" "$src" "$dest" >> "$LOG" 2>&1
+        "${RSYNC[@]}" -a --numeric-ids "$@" "$src" "$dest" >> "$LOG" 2>&1
     fi
 }
 
@@ -153,7 +153,7 @@ restore_files() { # username exact(yes|no)
     fetch "var/sentora/hostdata/$u/" "$STAGE/files-$u/" --exclude=/tmp/ || { say "could not fetch the files of $u"; return 1; }
     chown -R "$web:$web" "$STAGE/files-$u"; chmod 700 "$STAGE/files-$u"
     local del=(); [ "$exact" = yes ] && del=(--delete)
-    setpriv --reuid="$web" --regid="$web" --init-groups rsync -rlt "${del[@]}" --exclude=/tmp/ "$STAGE/files-$u/" "$home/" >> "$LOG" 2>&1 \
+    setpriv --reuid="$web" --regid="$web" --init-groups "${RSYNC[@]}" -rlt "${del[@]}" --exclude=/tmp/ "$STAGE/files-$u/" "$home/" >> "$LOG" 2>&1 \
         || { say "the files of $u were not all copied (see the log)"; rm -rf "$STAGE/files-$u"; return 1; }
     rm -rf "$STAGE/files-$u"
 }

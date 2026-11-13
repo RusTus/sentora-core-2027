@@ -186,7 +186,7 @@ LIST="$STAGE/sources"
 # --- a dated snapshot: unchanged files are hard links to the last one -------------------------
 there_begin "$BASE" "$TODAY" || die "could not make $BASE/$TODAY.partial on the backup machine"
 LINK=""; there_latest "$BASE" && LINK="--link-dest=$BASE/latest/"
-RS=(rsync -aHR --delete --numeric-ids --partial --exclude=/var/sentora/hostdata/*/tmp/)
+RS=("${RSYNC[@]}" -aHR --delete --numeric-ids --partial --exclude=/var/sentora/hostdata/*/tmp/)
 [ -n "$LINK" ] && RS+=("$LINK")
 if remote; then RS+=(-e "$SSH"); DEST="$(rhost):$BASE/$TODAY.partial/"; else DEST="$BASE/$TODAY.partial/"; fi
 mapfile -t SRC < "$LIST"

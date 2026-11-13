@@ -9,6 +9,14 @@ STATE=/var/lib/sentora/offsite-backup.json
 PANEL=/etc/sentora/panel
 LOCAL=/var/sentora/backups
 
+# rsync in this job's own SELinux domain: started by a service or cron (Backup Config's Back up now,
+# the nightly copy), rsync would otherwise enter rsync_t, the domain meant for an rsync server, which
+# may not start ssh nor write the job's log (the copy failed with code 14 and no message). The job is
+# root's own, as from SSH; nothing in SELinux is widened. Elsewhere (no SELinux) plain rsync.
+RSYNC=(rsync)
+if command -v runcon > /dev/null 2>&1 && selinuxenabled 2> /dev/null && ctx=$(id -Z 2> /dev/null) \
+        && runcon "$ctx" rsync --version > /dev/null 2>&1; then RSYNC=(runcon "$ctx" rsync); fi
+
 # --- the settings, from the panel (the password decrypted with the panel's key) -----------
 OB_ENABLED=false; OB_SERVER=""; OB_PORT=22; OB_USER=""; OB_PASSWORD=""; OB_PATH=""; OB_KEEP=14; OB_MAIL=true; OB_HOSTKEY=""
 if [ -n "${SENTORA_OFFSITE_SETTINGS:-}" ]; then SETTINGS=$(cat "$SENTORA_OFFSITE_SETTINGS"); else

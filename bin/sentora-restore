@@ -91,7 +91,11 @@ if [ $FILES -eq 1 ] && [ -d "$TMP/x/public_html" ]; then
     # Copy AS the account's own user (web<id>), so a symlink the account put in its
     # own folder can not redirect a root write outside it. -rlt keeps links as links.
     chown -R "$WEBU:$WEBU" "$TMP/x/public_html"; chmod 711 "$TMP" "$TMP/x"
-    setpriv --reuid="$WEBU" --regid="$WEBU" --init-groups rsync -rlt $DEL "$TMP/x/public_html/" "$HOME_DIR/public_html/" || die "the file restore did not complete"
+    # (rsync in this job's own SELinux domain, not rsync_t: see sentora-backup-common)
+    RSYNC=(rsync)
+    if command -v runcon > /dev/null 2>&1 && selinuxenabled 2> /dev/null && ctx=$(id -Z 2> /dev/null) \
+            && runcon "$ctx" rsync --version > /dev/null 2>&1; then RSYNC=(runcon "$ctx" rsync); fi
+    setpriv --reuid="$WEBU" --regid="$WEBU" --init-groups "${RSYNC[@]}" -rlt $DEL "$TMP/x/public_html/" "$HOME_DIR/public_html/" || die "the file restore did not complete"
 fi
 if [ $DBS -eq 1 ] && [ -n "$DUMPS" ]; then
     # Load each dump as a MySQL user limited to just that database, with DEFINER
