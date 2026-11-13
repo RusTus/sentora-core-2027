@@ -67,7 +67,7 @@ class ui_moduleloader {
             $has_icons = false;
             while ($row = $sql->fetch()) {
                 foreach (self::Modules($row['mc_id_pk']) as $rowcheck) {
-                    if (ctrl_groups::CheckGroupModulePermissions($user['usergroupid'], $rowcheck['mo_id_pk'])) {
+                    if (ctrl_groups::CheckGroupModulePermissions($user['usergroupid'], $rowcheck['mo_id_pk']) && self::Shown($rowcheck['mo_folder_vc'], $user)) {
                         $has_icons = true;
                     }
                 }
@@ -80,6 +80,37 @@ class ui_moduleloader {
         } else {
             return false;
         }
+    }
+
+    /**
+     * Whether a module's menu entry is shown to this user. A module may leave the menu of users it has
+     * nothing for (Payment Plans: clients who are not billed through the panel) with a file
+     * modules/<folder>/code/menu.php that returns false for them; it sees $user (ctrl_users::GetUserDetail).
+     * Only the menu: the group's permission still decides whether the module may be opened. Asked once
+     * per module and page.
+     *
+     * @param string $folder The module's folder (x_modules.mo_folder_vc).
+     * @param array<string, mixed>|false $user The user whose menu it is.
+     * @return bool
+     */
+    static function Shown($folder, $user) {
+        static $seen = array();
+        $folder = (string) $folder;
+        if (!is_array($user) || !preg_match('/^[A-Za-z0-9_-]{1,64}$/', $folder)) {
+            return true;
+        }
+        $key = $folder . '|' . (int) ($user['userid'] ?? 0);
+        if (!isset($seen[$key])) {
+            $file = 'modules/' . $folder . '/code/menu.php';
+            $seen[$key] = !is_file($file) || (function ($file, $user) {
+                try {
+                    return (include $file) !== false;
+                } catch (Throwable $e) {
+                    return true;   // (a module's mistake does not take its entry away)
+                }
+            })($file, $user);
+        }
+        return $seen[$key];
     }
 
     /**
@@ -132,7 +163,7 @@ class ui_moduleloader {
         if ($rows) {
             $res = array();
             foreach ($rows as $row) {
-                if (ctrl_groups::CheckGroupModulePermissions($user['usergroupid'], $row['mo_id_pk'])) {
+                if (ctrl_groups::CheckGroupModulePermissions($user['usergroupid'], $row['mo_id_pk']) && ($catid == "" || self::Shown($row['mo_folder_vc'], $user))) {
                     array_push($res, array('mo_id_pk' => $row['mo_id_pk'],
                         'mo_category_fk' => $row['mo_category_fk'],
                         'mo_name_vc' => $row['mo_name_vc'],
