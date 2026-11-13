@@ -943,6 +943,9 @@ class module_controller extends ctrl_module
     const RESTORE_REQ = '/var/lib/sentora/tmp/panel-restore-request.json';
     const RESTORE_STATE = '/var/lib/sentora/panel-restore.json';
     const RESTORE_CATALOG = '/var/lib/sentora/restore-catalog.json';
+    /** @var bool True when the restore job was started at once (zsudo daemon-run), not at the next daemon run. */
+    static $restoreNow = false;
+
     /** @var array<int, array{0: string, 1: string}> Messages for getResult(): array(kind 'ok'|'error', text). */
     static $restoreMsg = array();
     /** @var string The message of a restore request accepted just before the redirect (from the session; kept for this page). */
@@ -1010,6 +1013,7 @@ class module_controller extends ctrl_module
         $req['by'] = ctrl_users::GetUserDetail()['username'];
         $req['time'] = time();
         file_put_contents(self::RESTORE_REQ, json_encode($req));
+        self::$restoreNow = self::RunNow();
         return true;
     }
 
@@ -1024,7 +1028,7 @@ class module_controller extends ctrl_module
     {
         runtime_csfr::Protect();
         if (self::RestoreQueue(array('action' => 'list'))) {
-            self::RestoreDone(ui_language::translate('Reading the backups: the list appears here within 5 minutes.'));
+            self::RestoreDone(ui_language::translate(self::$restoreNow ? 'Reading the backups: the list appears here in a few seconds.' : 'Reading the backups: the list appears here within 5 minutes.'));
         }
     }
 
@@ -1066,7 +1070,7 @@ class module_controller extends ctrl_module
             $parts[] = 'exact';
         }
         if (self::RestoreQueue(array('action' => 'account', 'server' => $snap['server'], 'date' => $snap['date'], 'username' => $user, 'parts' => $parts))) {
-            self::RestoreDone(self::Fill('Restore of %s from %s queued: it starts within 5 minutes. Its progress shows here.', array($user, $snap['date'])), $snap['server'] . '/' . $snap['date']);
+            self::RestoreDone(self::Fill(self::$restoreNow ? 'Restore of %s from %s started. Its progress shows here.' : 'Restore of %s from %s queued: it starts within 5 minutes. Its progress shows here.', array($user, $snap['date'])), $snap['server'] . '/' . $snap['date']);
         }
     }
 
@@ -1094,7 +1098,7 @@ class module_controller extends ctrl_module
             return;
         }
         if (self::RestoreQueue(array('action' => 'full', 'server' => $snap['server'], 'date' => $snap['date']))) {
-            self::RestoreDone(self::Fill('Full restore from %s %s queued: it starts within 5 minutes. Its progress shows here.', array($snap['server'], $snap['date'])), $snap['server'] . '/' . $snap['date']);
+            self::RestoreDone(self::Fill(self::$restoreNow ? 'Full restore from %s %s started. Its progress shows here.' : 'Full restore from %s %s queued: it starts within 5 minutes. Its progress shows here.', array($snap['server'], $snap['date'])), $snap['server'] . '/' . $snap['date']);
         }
     }
 
@@ -1112,16 +1116,22 @@ class module_controller extends ctrl_module
         $st = self::RestoreJson(self::RESTORE_STATE);
         $req = self::RestoreJson(self::RESTORE_REQ);
         if ($req) {
-            $out .= '<div class="bk-job"><span class="bk-spinner" aria-hidden="true"></span><div><b>' . self::t($req['action'] === 'list' ? 'Reading the backups' : 'Restore') . ' ' . self::t('queued') . '</b><span class="bk-sub">' . self::t('It starts within 5 minutes. Reload the page to follow it.') . '</span></div></div>';
+            $out .= '<div class="bk-job"><span class="bk-spinner" aria-hidden="true"></span><div><b>' . self::t($req['action'] === 'list' ? 'Reading the backups' : 'Restore') . ' ' . self::t('queued') . '</b><span class="bk-sub">' . self::t('It starts within 5 minutes. This page looks again by itself.') . '</span></div></div>';
         } elseif (!empty($st['running']) || !empty($st['listing'])) {
             $out .= '<div class="bk-job"><span class="bk-spinner" aria-hidden="true"></span><div><b>' . self::h(!empty($st['listing']) ? ui_language::translate('Reading the backups') : ui_language::translate('Restoring') . ' ' . ($st['snapshot'] ?? '')) . '…</b>'
-                . '<span>' . self::h($st['step'] ?? '') . '</span><span class="bk-sub">' . self::t('Reload the page to follow it. The log: /var/sentora/logs/panel-restore.log') . '</span></div></div>';
+                . '<span>' . self::h($st['step'] ?? '') . '</span><span class="bk-sub">' . self::t('This page looks again by itself. The log: /var/sentora/logs/panel-restore.log') . '</span></div></div>';
         } elseif (!empty($st['result'])) {
             $ok = $st['result'] === 'ok';
             $out .= '<div class="bk-state ' . ($ok ? 'ok' : 'bad') . ' bk-last">' . self::Icon($ok ? 'check' : ($st['result'] === 'partial' ? 'alert' : 'x')) . '<div><b>'
                 . self::t($ok ? 'Last restore finished' : ($st['result'] === 'partial' ? 'Last restore finished with problems' : 'Last restore failed')) . '</b><span>' . self::When($st['finished'] ?? 0) . '</span>'
                 . '<span class="bk-sub">' . self::h($st['message'] ?? '') . '</span></div></div>';
         }
+        // while a listing or a restore is queued or runs, the page looks again by itself (every 5 seconds,
+        // at most 30 minutes, so a daemon that does not run does not keep it reloading)
+        $out .= ($req || !empty($st['running']) || !empty($st['listing']))
+            ? '<script>(function () { var k = "bk-rs-reload", n = 0; try { n = +sessionStorage.getItem(k) || 0; } catch (e) {}'
+                . ' if (n < 360) { setTimeout(function () { try { sessionStorage.setItem(k, n + 1); } catch (e) {} location.reload(); }, 5000); } })();</script>'
+            : '<script>try { sessionStorage.removeItem("bk-rs-reload"); } catch (e) {}</script>';
         $cat = self::RestoreJson(self::RESTORE_CATALOG);
         $out .= '<div class="bk-panel-head"><div><h4>' . self::t('Snapshots on the backup machine') . '</h4><p>'
             . (!empty($cat['time']) ? self::t('Last read') . ' ' . self::When($cat['time']) . (isset($cat['target']) ? ' · ' . self::t('from') . ' ' . self::h($cat['target']) : '')
