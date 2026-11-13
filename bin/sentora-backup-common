@@ -65,7 +65,19 @@ pin_hostkey() {
         return 0
     fi
     tmp=$(mktemp)
-    ssh-keyscan -p "$OB_PORT" -T 15 "$host" 2> /dev/null > "$tmp"
+    # one key type, one connection (newer OpenSSH, e.g. Ubuntu 26.04's, makes an address that opens
+    # several connections without logging in wait a while: PerSourcePenalties); once more after 20 s
+    # when nothing answered
+    ssh-keyscan -t ed25519 -p "$OB_PORT" -T 15 "$host" 2> /dev/null > "$tmp"
+    if ! grep -q '^[^#]' "$tmp"; then
+        sleep 20
+        ssh-keyscan -t ed25519 -p "$OB_PORT" -T 15 "$host" 2> /dev/null > "$tmp"
+    fi
+    if ! grep -q '^[^#]' "$tmp"; then
+        rm -f "$tmp"
+        echo "the backup machine did not answer at $host port $OB_PORT (is it on, and may this server reach it? It may also refuse for a minute after many connections: try again shortly)"
+        return 1
+    fi
     if ! ssh-keygen -lf "$tmp" 2> /dev/null | grep -qF "$OB_HOSTKEY"; then
         rm -f "$tmp"
         echo "the backup server's SSH key is not the one set in the panel ($OB_HOSTKEY): another server answered at $host, or the fingerprint was mistyped"

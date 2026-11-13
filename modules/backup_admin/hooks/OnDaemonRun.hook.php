@@ -77,7 +77,12 @@ if (is_file($obBin) && is_dir('/etc/cron.d')) {
                     'offsite_hostkey' => sys_nodes::SshFingerprint($obLine), 'offsite_seenkey' => '', 'offsite_enabled' => 'true', 'offsite_target' => 'node') as $obK => $obV) {
                     $obSet($obK, $obV);
                 }
-                @unlink('/root/.ssh/sentora_offsite_known_hosts');
+                // the key just checked is the one every copy expects: kept as the known key at once, so
+                // the connection test does not scan the node again (a node refuses for a while an
+                // address that opens many connections without logging in)
+                @mkdir('/root/.ssh', 0700, true);
+                @file_put_contents('/root/.ssh/sentora_offsite_known_hosts', trim($obLine) . "\n");
+                @chmod('/root/.ssh/sentora_offsite_known_hosts', 0600);
                 $obSet('offsite_pairing', 'ok ' . time() . ' ' . $obN[0] . ' (' . $obHave['offsite_hostkey'] . '); the copies go there every night at ' . $obHave['offsite_time']);
                 $obSet('offsite_request', 'check ' . time());
             }
