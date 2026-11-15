@@ -283,6 +283,10 @@ again with it (same contents, same versions: panels see no update; only SHA256SU
 
 ## Waiting on the owner (do not start without asking)
 
+**New node types** (owner's ideas, 2026-11-15, back burner; the failover/standby panel left out on purpose):
+- **Edge node**, one node with roles switched on: Secondary DNS (BIND secondary of the panel's zones, signed transfers), Watch (outside checks of sites, mail, certificates, the panel; email/push when the panel itself is down; uptime per site), Backup MX (accepts and holds mail while the panel is down), Outgoing mail relay (optional: the panel's mail leaves from the node's IP). 1 CPU / 1 GB; one pairing, one status card with a row per role; designed so two Edge nodes in two places can run side by side.
+- Kept as their own nodes (not in the Edge node): **Database node** (MySQL for heavy sites), **Storage node** (S3-style storage for apps), **Edge cache** (CDN-like proxy in front of sites). The backup node and Docker nodes stay single-purpose.
+
 **PostgreSQL for clients** (owner's idea, 2026-11-13, back burner): an add-on like MySQL Databases (client databases and users under their prefix, counted in the package's database limit; the panel itself stays on MySQL). Needs: PostgreSQL from each system's packages via x_settings, localhost only; one role per client, no superuser; pgsql in the PHP bundles (not built today) and the system PHP's package; PHP-Adminer for web access (it speaks PostgreSQL); client backups, the off-server copy and restore to include pg_dump; size watched by the daemon (PostgreSQL has no quota). Several MySQL versions side by side: not advised.
 
 **A module's menu name per kind of user** (owner's idea, 2026-11-13, "in the future"): a module could show another name in the menu depending on who looks (Payment Plans: "Billing" for a billed client, "Payment Plans" for sellers), much like code/menu.php decides whether it shows at all (ui_moduleloader::Shown). For now Payment Plans keeps its one name; only its page heading differs.
