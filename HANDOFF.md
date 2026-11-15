@@ -279,7 +279,7 @@ again with it (same contents, same versions: panels see no update; only SHA256SU
 
 ## Planned (the owner said yes; do when no other session is changing add-ons)
 
-- **Remove the hand-over shims** `node/` and `backup/` in the installers repository once the owner's test servers use `docker-node/` and `backup-node/` (ask first).
+- (done 2026-11-15, owner's yes) the hand-over shims `node/` and `backup/` were removed from the installers repository: the installers live only in `docker-node/` and `backup-node/` (panels before 2027.86 and Docker Hosting before 130 showed the old addresses).
 
 ## Waiting on the owner (do not start without asking)
 
