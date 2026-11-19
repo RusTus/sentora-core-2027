@@ -1,4 +1,4 @@
-Sentora changes to Matomo 5.14.2 (reapply when replacing Matomo):
+Sentora changes to Matomo 5.14.3 (reapply when replacing Matomo):
 
 1. plugins/SentoraSync/ (new plugin): the sentora:sync console command the
    Sentora daemon uses to create sites, users, access and tokens.
