@@ -172,7 +172,7 @@ two guards, each off / watch only / on. **ModSecurity:** the installers install 
 - Disk chart (owner, 2026-11-13: "a stat style graph of disk space"): `SpaceChart()` at the top of Status, a ring as on DNS Config (this panel's copies, other files on that disk, free; orange when 90% full) with disk size and nights kept, for every destination: `sentora-offsite-backup --check` stores space_free/space_size/space_used/nights (a node's gate `space`, elsewhere df/du there, `there_count`).
 - Tested: a SQLite harness (10 checks: each destination saved, a node form before pairing refused, pairing after a Test connection, the node's form keeps its server and folder, the 30-minute check, Remove) and screenshots of 9 states, light/dark, desktop/390 px. The backup node test checks `space`.
 
-## Docker Hosting (add-on, sentora-repo/docker_hosting.zpp, 139, node agent 119; built 2026-11-11 at the owner's request)
+## Docker Hosting (add-on, sentora-repo/docker_hosting.zpp, 140, node agent 119; built 2026-11-11 at the owner's request)
 
 ### What it is
 
@@ -218,6 +218,7 @@ two guards, each off / watch only / on. **ModSecurity:** the installers install 
 
 ### Look and behaviour of the page
 
+- Look (140, owner: "more pleasing to the eye"): `Fold($card, $hint, $open)` turns a card into `<details class="dh-card dh-fold">` (Add a Docker node open while there is no node or after AddNode; Your own apps open with ?app=, a form being changed, App/AppRemove; Registry logins after Registry/RegistryRemove); app notes in `.dh-notes` under the row (grid-column 2 / -1, 1 / -1 on a phone); `ShareTiles` tiles with `.dh-bar` (warn colour at 90 %), "gave" only when > 0, administrators: "Room on the nodes" (online nodes that take new apps: Room() free of CPU x CPU_OVER, MEM_SHARE and DISK_SHARE). The add-on test saves every main page with DH_PAGES=<folder> (admin-apps, -nodes, -node, -shares, -log, client-apps, -settings, security, node) to look at with the panel's style sheets.
 - Look (126): every text box needs type="text" (the panel's Bootstrap styles boxes by their type only; .form-control means nothing there), tabs as the reworked pages (bar, open tab underlined), buttons first on the left in .dh-foot, every list as .dh-item card rows (also Your own apps: &app= opens its form), dh.css is one ordered file: change the rule in its place, do not add overrides at the end.
 - Widget and notices (134): assets/widget (widget.xml/php/css, class dashboard_widget_docker_hosting) copied by dh_daemon::Widget into <sentora_root>/etc/dashboard-widgets/docker_hosting when it differs; short labels in its $labels; dh_daemon::Notices keeps only offline, gone, disk, missing, app-*. Removing a node (132-133): RemoveNode($id, $by, $confirm) deletes its apps (and counts found apps) once the name is typed; Forget keeps nd_gonesign_vc/nd_gonebox_vc and queues uninstall {purge}; dh::GoneNode answers a removed node only with that job, then drops the keys.
 - Page behaviour (129): Button() posts back to the same place (`Here()`: tab + manage/settings/plan/share/app); `Behind()` lists nodes behind the newest agent, `UpdateAllButton()` / doNodeUpdateAll (Update all (N), asked first); NodeButton shows "<label> (queued)" / "(in progress)"; WarningsHtml: one line per node, short words per dh::Warnings key, fix buttons under it (emails keep dh::Warnings' sentences).
