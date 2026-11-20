@@ -420,6 +420,13 @@ again with it (same contents, same versions: panels see no update; only SHA256SU
      and mail activity per user, Microsoft 365 service health.
   3. **Magento store**: read-only REST integration token; orders over time, revenue, status, country (no customer
      names or emails kept), beside the store's visits from the web logs.
+  4. **Veeam Backup & Replication** (owner, same evening: "how about a nice Veeam backup on as well"): v12+ sends
+     syslog (Options > Event Forwarding) to the node like the FortiGate (TLS where Veeam offers it, the Veeam server's
+     address only); the REST API (read-only account) for history. Dashboard: job results (success/warning/failed),
+     duration, data moved, last good backup per machine, failures as Elk node alerts.
+  The owner: FortiGate (and the others) are general options, not his alone: "other Sentora users may have a
+  fortigate, so it's no problem if it's an option in the Elk node and Log Forwarder options": a "Sources" part on the
+  Log Forwarder page (steps and state, administrators only) and `sentora-elk-node fortigate|veeam|m365|magento` on the node.
 - **Fortinet: real visitor addresses on the owner's live panel** (owner, 2026-11-20: "take a note of that fortinet
   stuff for when I ask you later"). His panel (172.16.0.21, store.hemsaw.com) sits behind a FortiGate that forwards
   the web ports with a Virtual IP; the store's 532,021 imported visits came from only 13 addresses, so the policy has
