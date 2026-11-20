@@ -285,6 +285,7 @@ the node (https://<node>/, `sentora-elk-node kibana-from` limits who reaches it)
   firewall lists, retention, password, --update keeping key/logins/logs. Tried by hand on a Debian 13 panel container
   against Elastic 9.5.6: pairing, rsyslog, live lines, one file shared by a Log Forwarder destination and the Elk node
   (both got the same lines); the page looked at light/dark, desktop/390 px; the dashboards and the world map looked at.
+- Log Forwarder 204 (the owner: "have that script as an option in the module"): the card "Bring in older logs" (elk::QueueImport -> setting elk_import -> the daemon's elk::RunImports -> elk::Import; marks imported-<site> / import-failed-<site> in /var/lib/sentora/elk). The script below calls the same elk::Import.
 - `elk-node/sentora-elk-import` (the owner's wish, 2026-11-20, for his web store): run as root ON THE PANEL,
   `php sentora-elk-import <site> [--days N] [--dry-run] [--again]`: sends what the panel still keeps of one site's access
   log (the current file, .1 and .2.gz: about three weeks; logrotate weekly, rotate 2) over the panel's certificate; each
