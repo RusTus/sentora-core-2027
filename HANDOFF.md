@@ -419,7 +419,10 @@ again with it (same contents, same versions: panels see no update; only SHA256SU
      Reports.Read.All for Teams and mail activity, ServiceHealth.Read.All). Sign-ins on a map, failures and MFA, Teams
      and mail activity per user, Microsoft 365 service health.
   3. **Magento store**: read-only REST integration token; orders over time, revenue, status, country (no customer
-     names or emails kept), beside the store's visits from the web logs.
+     names or emails kept), beside the store's visits from the web logs. Search terms (owner: "is it possible to add
+     search terms people used on the site?"): (a) from the access logs, no setup: q= of /catalogsearch/result/ in
+     web-access lines -> a search-term field (top searches, over time, countries; works on imported history too);
+     (b) from Magento's own search_query list (read-only): number of results, so the searches that found nothing.
   4. **Veeam Backup & Replication** (owner, same evening: "how about a nice Veeam backup on as well"): v12+ sends
      syslog (Options > Event Forwarding) to the node like the FortiGate (TLS where Veeam offers it, the Veeam server's
      address only); the REST API (read-only account) for history. Dashboard: job results (success/warning/failed),
