@@ -236,6 +236,23 @@ two guards, each off / watch only / on. **ModSecurity:** the installers install 
 
 - Later ideas (ask first): more nodes per customer, restoring an older night of an app from the backup node, one node shared by two panels (back burner, owner 2026-11-12: today a node trusts one panel; sharing needs per-panel users, ports, Caddy files and LAN lists, since account ids collide).
 
+## Elk (add-on + Elk node; owner's request 2026-11-20, IN PROGRESS)
+
+The owner's choices (2026-11-20): administrators only see the logs (clients keep Log Forwarder for their own sites;
+per-client Kibana later); the panel server sends first, the Docker and backup nodes later; Kibana with its own login on
+the node (https://<node>/, the firewall can limit who reaches it). The node starts on Ubuntu 26.04 (owner: "start with
+Ubuntu 26.04"); other systems later.
+
+- Node: `elk-node/sentora2027-elk-node` (installers repo), the node way (NODES.md, prefix SE1): Elastic's 9.x apt
+  repository (key checked), Elasticsearch on 127.0.0.1 with security on, Logstash taking the panel's lines on TCP 6514
+  over TLS with the panel's certificate required (mutual TLS, pinned at pairing), Kibana on 443 with its own TLS and an
+  administrator login made by the installer, dashboards imported, retention by ILM (30 days by default).
+- Panel: add-on `addons/elk` (administrators): add the node (address + SE1 key, the panel pins the node's CA), which
+  log groups go, status, Open Kibana. The daemon hook (root) writes rsyslog's settings (JSON lines over TLS, a disk
+  queue), with Log Forwarder's handling of rsyslog's user, AppArmor and SELinux, on every supported system.
+- Codes: panel code = panel_code('sentora-elk', base64 of the panel certificate's SubjectPublicKeyInfo DER); node key =
+  SE1 + the first 16 base32 letters of sha256(the node CA's SubjectPublicKeyInfo DER).
+
 ## Recent releases (newest first; every change is in CHANGELOG.md)
 
 - **Released 2027.91 (2026-11-19, full test):** Matomo 5.14.3 (signed files checked; SENTORA-PATCHES.txt reapplied: the Ubuntu-PHP check now sits in `isPhpAffectedBySecurityAdvisory20261021()`, Matomo renamed it), published with Docker Hosting 141 / node agent 120 (real-node test passed on all six, alma10-vm with SELinux) and the Payment Plans MySQL/MariaDB tests (Add-ons workflow green).
