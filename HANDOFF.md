@@ -297,6 +297,19 @@ the node (https://<node>/, `sentora-elk-node kibana-from` limits who reaches it)
   stream maps them as float dynamically until it rolls over: both are numbers to Kibana). Dashboard "Server health",
   one line per panel. A saved group choice without the token "v2" (saved before 207) gets health too, unless "none".
   No systemd timer on purpose (a 5-minute daemon run is enough, no new unit or SELinux surface).
+- **Alerts** (2026-11-20, the owner's list 3; Log Forwarder 208): the node's `sentora-elk-alerts` service (installers repo
+  `elk-node/alerts/sentora-elk-alerts.py`, Python standard library only, own user sentora-elk-alerts, systemd-hardened,
+  ES user sentora_alerts: read logs-sentora-* and heartbeat-* only, copies of its key/certs in /etc/sentora-elk-alerts)
+  checks every 5 minutes: a website's last 3 checks down, a certificate under 14 days (outage under 3), disk >= 90%,
+  mail queue >= 200, CPU >= 90% over 15 min, >= 100 failed logins or >= 200 waf-blocked in 15 min, >= 50 bounces in an
+  hour, no line (health aside) from a panel for 30 min while there were lines that day. Limits in
+  /etc/sentora-elk-alerts/limits.json; `sentora-elk-node alerts` checks now. Served on 6515 (firewall: panel-from, as
+  6514) to the panel's certificate only; it sends /var/lib/sentora-elk-alerts/alerts.json and closes. Panel:
+  `code/alerts.php` (elk_alerts) each daemon run while the group "Alerts" is ticked: one notice per alert to the
+  administrators (key elk-alert-md5(id), outage/warning, link to the node's Kibana board built by the panel), withdrawn
+  when it clears; one mail to the administrators for new ones, again after a day. The node's words are cleaned: no
+  [ ], no http(s)://, no markup, cut to size; ids/boards by pattern. Node not updated: the page says to run
+  sentora-elk-node update. Group token now "v3" (a saved choice without it gets Alerts too).
 - **World map** (the owner: "the world map that shows where your hits are coming from... something fancy"): a Kibana
   Maps saved object `sentora-world-map` (kibana/build.py writes dashboards/sentora-world-map.map.json): dark world
   (EMS dark_map), visitors as a heat map, attacks/failed logins/bans/probes as red circles with counts, countries
