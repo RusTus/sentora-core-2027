@@ -257,24 +257,34 @@ the node (https://<node>/, `sentora-elk-node kibana-from` limits who reaches it)
   problems, webmail) into ECS fields (+ GeoLite2 countries); a line not understood keeps its message (tag
   sentora_unparsed). `elasticsearch/` the index template (data stream logs-sentora-default) and ILM policy.
   `kibana/build.py` writes `kibana/dashboards/*.json` (Kibana 9.5's dashboards API, PUT /api/dashboards/<id>): Overview,
-  Websites, Mail, Security, Panel and server; the workflow fails when the JSON differs from build.py. Made from a real
+  World map, Websites, Mail, Security, Panel and server; the workflow fails when the JSON differs from build.py. Made from a real
   panel's logs (the VM exercise on the Docker image) and looked at in Kibana 9.5.6 (screenshots).
-- **Panel** add-on `addons/elk` (Server Admin > Elk, administrators only): the panel's own certificate (/etc/sentora/elk,
-  key root:<rsyslog's group> 640; the certificate also in the hidden setting elk_panel_cert, served at
-  `modules/elk/code/node.php?cert=1` with no login). "Add the Elk node" (address + SE1 key) -> the daemon connects with the
-  panel's certificate, finds the authority whose code is the key, checks it signed the node's certificate, pins it
-  (elk_node_ca) and only then writes `/etc/rsyslog.d/61-sentora-elk.conf` (checked with rsyslogd -N1): imfile for the
-  files (paths from log_dir and the database: each website's access/error log), and the lines rsyslog already gets from
-  the journal by program (postfix*, sshd, sudo) - Debian 13 writes no mail.log/auth.log, so this works the same on every
-  system; JSON lines (option.jsonf) over gtls, x509/name sentora-elk-node, a 1 GB disk queue. rsyslog, its TLS driver
-  and acl installed with package_install (and the journal restarted so it hands rsyslog its lines); ACLs for rsyslog's
-  user (Ubuntu: syslog), an AppArmor rule file; groups of logs switchable on the page. Status every 10 minutes (Check now).
-- **Tested** (Actions > Elk node test, `.github/scripts/elk-node-test.sh`, whole way): the panel image + the add-on
+- **Panel**: part of **Log Forwarder** (203; the owner, 2026-11-20: "build everything we need into the log forwarder
+  module"; a separate Elk add-on existed on the branch only and was folded in). `addons/log_forwarder/code/elk.php`
+  (class elk) and the page's administrators-only section "Elk node" (controller getElk, assets/elk.css). The panel's own
+  certificate (/etc/sentora/elk, key root:<rsyslog's group> 640; also in the hidden setting elk_panel_cert, served at
+  `modules/log_forwarder/code/node.php?cert=1` with no login). "Add the Elk node" (address + SE1 key) -> the daemon
+  (elk::Prepare, before Log Forwarder's own run) connects with the panel's certificate, finds the authority whose code is
+  the key, checks it signed the node's certificate (CN sentora-elk-node), pins it (elk_node_ca). Then **one** rsyslog
+  file, Log Forwarder's `/etc/rsyslog.d/60-sentora-logforward.conf` (rsyslogd -N1 checked): each file followed ONCE (rsyslog
+  follows a file in one imfile input only: a second input got nothing, tried 2026-11-20), its ruleset calls every
+  Log Forwarder destination that wants it and `sentora_elk_out` (JSON lines, option.jsonf, gtls x509/name, 1 GB queue);
+  plus the lines rsyslog gets from the journal by program (postfix*, sshd, sudo; Debian 13 writes no mail.log/auth.log).
+  imfile is loaded only when no file read EARLIER loads it (an input before the load is an error). elk::After notes the
+  state (queue, a check every 10 minutes or on Check now). rsyslog, its TLS driver and acl installed with
+  package_install (the journal restarted so it hands rsyslog its lines); ACLs for rsyslog's user; an AppArmor rule file.
+- **World map** (the owner: "the world map that shows where your hits are coming from... something fancy"): a Kibana
+  Maps saved object `sentora-world-map` (kibana/build.py writes dashboards/sentora-world-map.map.json): dark world
+  (EMS dark_map), visitors as a heat map, attacks/failed logins/bans/probes as red circles with counts, countries
+  shaded by visits; on the "Sentora: World map" dashboard with live figures and top countries (30 s refresh). The
+  dashboards API takes no map panel: the installer adds it to that dashboard by reference (kibana/addmap.py).
+- **Tested** (Actions > Elk node test, `.github/scripts/elk-node-test.sh`, whole way): the panel image + Log Forwarder
   (installed as zppy does), the node installed fetching the panel's real certificate and its code checked (a wrong code
   stops it), pairing (a wrong key: nothing sent), the panel's own logs arriving, 162 real lines of every kind all
   understood, a stranger's certificate and no certificate turned away, Kibana's login (can not delete the logs), the
   firewall lists, retention, password, --update keeping key/logins/logs. Tried by hand on a Debian 13 panel container
-  against Elastic 9.5.6: pairing, rsyslog, live lines; the page looked at light/dark, desktop/390 px.
+  against Elastic 9.5.6: pairing, rsyslog, live lines, one file shared by a Log Forwarder destination and the Elk node
+  (both got the same lines); the page looked at light/dark, desktop/390 px; the dashboards and the world map looked at.
 - Later (ask first): the node on Debian/AlmaLinux/Fedora; the Docker and backup nodes sending too; per-client Kibana;
   Let's Encrypt for Kibana.
 
