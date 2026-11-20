@@ -310,6 +310,14 @@ the node (https://<node>/, `sentora-elk-node kibana-from` limits who reaches it)
   when it clears; one mail to the administrators for new ones, again after a day. The node's words are cleaned: no
   [ ], no http(s)://, no markup, cut to size; ids/boards by pattern. Node not updated: the page says to run
   sentora-elk-node update. Group token now "v3" (a saved choice without it gets Alerts too).
+- **Website speed** (2026-11-20, the owner's list 5; core apache_admin hook + Log Forwarder 209): while the hidden setting
+  apache_timing_log is 'true' (Log Forwarder sets it while paired with "Websites" ticked, and sets apache_changed), the
+  core writes `GlobalLog "<log_dir>/domains/_timing/sites-access.log" "%{%Y-%m-%dT%H:%M:%S}t%{%z}t %v %>s %D %B %m \"%U\""`
+  in httpd-vhosts.conf: every site in one file, the page without its query string. In domains/ (750, closed to the sites;
+  `_timing` can be no account's name) and rotated by the domains' *access.log rule. Not in the access logs themselves:
+  Webalizer, QuickFig and the import read those. Kind web-timing -> sentora.response_ms (double), event.duration,
+  sentora.domain, url.path, status; dashboard "Website speed" (median, 95%, slow over 2 s, 5xx, slowest pages and sites).
+  Needs the panel release with the core change; older cores ignore the setting.
 - **World map** (the owner: "the world map that shows where your hits are coming from... something fancy"): a Kibana
   Maps saved object `sentora-world-map` (kibana/build.py writes dashboards/sentora-world-map.map.json): dark world
   (EMS dark_map), visitors as a heat map, attacks/failed logins/bans/probes as red circles with counts, countries

@@ -547,6 +547,20 @@ function BuildVhostConfig() {
         . "Require local" . fs_filehandler::NewLine()
         . "</Location>" . fs_filehandler::NewLine()
         . "</IfModule>" . fs_filehandler::NewLine() . fs_filehandler::NewLine();
+    // How long each request took, for every website at once (Log Forwarder's Elk node reads it for its Website
+    // speed board): one small extra log, written only while the hidden setting apache_timing_log is 'true'. It
+    // lists every site's pages, so it lives with the sites' own logs (domains/, closed to the sites) in a folder
+    // no account can have (names start with a letter or digit), and is rotated with them (*access.log).
+    // The page without its query string, so no search words or tokens are kept.
+    if (ctrl_options::GetSystemOption('apache_timing_log') === 'true') {
+        $timingDir = rtrim(SentoraOneLine(ctrl_options::GetSystemOption('log_dir')), '/') . '/domains/_timing';
+        if (!is_dir($timingDir) && !is_link($timingDir)) {
+            @mkdir($timingDir, 0750, true);
+        }
+        $line .= "<IfModule log_config_module>" . fs_filehandler::NewLine()
+            . 'GlobalLog "' . $timingDir . '/sites-access.log" "%{%Y-%m-%dT%H:%M:%S}t%{%z}t %v %>s %D %B %m \"%U\""' . fs_filehandler::NewLine()
+            . "</IfModule>" . fs_filehandler::NewLine() . fs_filehandler::NewLine();
+    }
 
     // Listen is mandatory for each port <> 80 (80 is defined in system config)
 	//$line .= "Listen " . SentoraOneLine(ctrl_options::GetSystemOption('apache_port'));
