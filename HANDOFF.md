@@ -273,6 +273,15 @@ the node (https://<node>/, `sentora-elk-node kibana-from` limits who reaches it)
   imfile is loaded only when no file read EARLIER loads it (an input before the load is an error). elk::After notes the
   state (queue, a check every 10 minutes or on Check now). rsyslog, its TLS driver and acl installed with
   package_install (the journal restarted so it hands rsyslog its lines); ACLs for rsyslog's user; an AppArmor rule file.
+- **Uptime** (owner's list 1): Heartbeat (heartbeat-elastic, user sentora_heartbeat: write heartbeat-* + read for its
+  state, ILM sentora-logs, password in Heartbeat's keystore) on the node. Log Forwarder 206: elk::SendSites (in After)
+  sends one line, sentora_log "sites", message = JSON [{host, https}] (https = vh_ssl_tx has SSL; plus the panel's own
+  address), when the list changes or hourly. Logstash's ruby filter validates it, writes /var/lib/logstash/sentora/
+  sites.json and drops the event (never indexed). The timer sentora-elk-monitors (5 min) runs `sentora-elk-node
+  monitors`: validates again (root does not trust the logstash-writable file), writes /etc/heartbeat/monitors.d/
+  sentora-sites.yml (JSON, which YAML reads) only when changed; Heartbeat reloads monitors.d. Data view sentora-uptime;
+  the Uptime dashboard. A check is up for 2xx/3xx/401/403/404 with a valid certificate. Note for the owner's LAN: the
+  node checks by name, so a site behind his FortiGate needs the name to work from the node (hairpin or internal DNS).
 - **Web firewall and Mail delivery dashboards** (2026-11-20, the owner's list 4 and 6): ModSecurity's lines in the websites'
   error logs (one per matched rule; 949110/959100 = the verdict: "Access denied" -> event.action waf-blocked, "Warning"
   -> waf-watched; others waf-rule with rule.id/name, sentora.waf.attack from the attack-* tag; 98xxxx = waf-report);
