@@ -287,6 +287,16 @@ the node (https://<node>/, `sentora-elk-node kibana-from` limits who reaches it)
   -> waf-watched; others waf-rule with rule.id/name, sentora.waf.attack from the attack-* tag; 98xxxx = waf-report);
   spamd's "result:" lines (Log Forwarder 205 sends programname spamd/spamass* with the mail lines) -> sentora.mail.status
   spam/clean, spam_score, spam_rules; email.to/from.domain for every mail line. The failed-login figures exclude waf-*.
+- **Server health** (2026-11-20, the owner's list 2; Log Forwarder 207): `code/health.php` (class elk_health), run by
+  the daemon hook (every 5 minutes, not more often than every 4) while paired and the group "Server health" is ticked:
+  CPU % and network bytes/s as averages since the run before (/proc/stat, /proc/net/dev, state in
+  /var/lib/sentora/elk/health-last.json), load, memory/swap %, disk % and free for / and hosted_dir, Apache busy/idle
+  and requests/s (`http://127.0.0.1/server-status?auto`), MySQL connections, queries/s, slow/min (SHOW GLOBAL STATUS),
+  Postfix queue (files in deferred + active). One JSON line, kind "health", straight to 6514 (like the sites list);
+  Logstash keeps only the known names, numbers only, into sentora.health.* (double in the template; an existing data
+  stream maps them as float dynamically until it rolls over: both are numbers to Kibana). Dashboard "Server health",
+  one line per panel. A saved group choice without the token "v2" (saved before 207) gets health too, unless "none".
+  No systemd timer on purpose (a 5-minute daemon run is enough, no new unit or SELinux surface).
 - **World map** (the owner: "the world map that shows where your hits are coming from... something fancy"): a Kibana
   Maps saved object `sentora-world-map` (kibana/build.py writes dashboards/sentora-world-map.map.json): dark world
   (EMS dark_map), visitors as a heat map, attacks/failed logins/bans/probes as red circles with counts, countries
