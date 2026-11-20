@@ -273,6 +273,11 @@ the node (https://<node>/, `sentora-elk-node kibana-from` limits who reaches it)
   imfile is loaded only when no file read EARLIER loads it (an input before the load is an error). elk::After notes the
   state (queue, a check every 10 minutes or on Check now). rsyslog, its TLS driver and acl installed with
   package_install (the journal restarted so it hands rsyslog its lines); ACLs for rsyslog's user; an AppArmor rule file.
+- **Web firewall and Mail delivery dashboards** (2026-11-20, the owner's list 4 and 6): ModSecurity's lines in the websites'
+  error logs (one per matched rule; 949110/959100 = the verdict: "Access denied" -> event.action waf-blocked, "Warning"
+  -> waf-watched; others waf-rule with rule.id/name, sentora.waf.attack from the attack-* tag; 98xxxx = waf-report);
+  spamd's "result:" lines (Log Forwarder 205 sends programname spamd/spamass* with the mail lines) -> sentora.mail.status
+  spam/clean, spam_score, spam_rules; email.to/from.domain for every mail line. The failed-login figures exclude waf-*.
 - **World map** (the owner: "the world map that shows where your hits are coming from... something fancy"): a Kibana
   Maps saved object `sentora-world-map` (kibana/build.py writes dashboards/sentora-world-map.map.json): dark world
   (EMS dark_map), visitors as a heat map, attacks/failed logins/bans/probes as red circles with counts, countries
