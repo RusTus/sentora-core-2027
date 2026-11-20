@@ -236,22 +236,47 @@ two guards, each off / watch only / on. **ModSecurity:** the installers install 
 
 - Later ideas (ask first): more nodes per customer, restoring an older night of an app from the backup node, one node shared by two panels (back burner, owner 2026-11-12: today a node trusts one panel; sharing needs per-panel users, ports, Caddy files and LAN lists, since account ids collide).
 
-## Elk (add-on + Elk node; owner's request 2026-11-20, IN PROGRESS)
+## Elk (add-on + Elk node; owner's request 2026-11-20)
 
 The owner's choices (2026-11-20): administrators only see the logs (clients keep Log Forwarder for their own sites;
 per-client Kibana later); the panel server sends first, the Docker and backup nodes later; Kibana with its own login on
-the node (https://<node>/, the firewall can limit who reaches it). The node starts on Ubuntu 26.04 (owner: "start with
-Ubuntu 26.04"); other systems later.
+the node (https://<node>/, `sentora-elk-node kibana-from` limits who reaches it). The node starts on Ubuntu 26.04 (owner:
+"start with Ubuntu 26.04"); other systems later. The ELK stack is on a server of its own, never the panel's.
 
-- Node: `elk-node/sentora2027-elk-node` (installers repo), the node way (NODES.md, prefix SE1): Elastic's 9.x apt
-  repository (key checked), Elasticsearch on 127.0.0.1 with security on, Logstash taking the panel's lines on TCP 6514
-  over TLS with the panel's certificate required (mutual TLS, pinned at pairing), Kibana on 443 with its own TLS and an
-  administrator login made by the installer, dashboards imported, retention by ILM (30 days by default).
-- Panel: add-on `addons/elk` (administrators): add the node (address + SE1 key, the panel pins the node's CA), which
-  log groups go, status, Open Kibana. The daemon hook (root) writes rsyslog's settings (JSON lines over TLS, a disk
-  queue), with Log Forwarder's handling of rsyslog's user, AppArmor and SELinux, on every supported system.
-- Codes: panel code = panel_code('sentora-elk', base64 of the panel certificate's SubjectPublicKeyInfo DER); node key =
-  SE1 + the first 16 base32 letters of sha256(the node CA's SubjectPublicKeyInfo DER).
+- **Node** `elk-node/sentora2027-elk-node` (installers repo), the node way (NODES.md, prefix SE1): Elastic's 9.x apt source
+  (key fingerprint 4609 5ACC 8548 582C 1A26 99A9 D27D 666C D88E 42B4 checked); Elasticsearch on 127.0.0.1 with security on
+  (heap 40% of memory, at most 31 GB; ML off), Logstash (1 GB) taking the panel's lines on TCP 6514 over TLS, only with
+  the panel's certificate (`ssl_certificate_authorities` = that certificate alone), Kibana (1 GB) on 443 with its own TLS
+  (AmbientCapabilities, not root) and the login `sentora-admin` (role sentora_admin: read logs-sentora-*, Kibana all; can
+  not delete). The node's own small authority (/etc/sentora-elk/ca.key, root's) signs the node's certificate (CN
+  sentora-elk-node, shown with the authority) and Kibana's. Retention by ILM `sentora-logs` (30 days; `sentora-elk-node
+  retention`). ufw: SSH, 443 from `kibana-from`, 6514 from `panel-from` (the panel's address). Tool
+  `sentora-elk-node` status/key/password/retention/kibana-from/panel-from/firewall/update. Needs 4 GB (refuses less).
+- **Rules and dashboards** (installers repo `elk-node/`): `logstash/sentora.conf` reads 16 kinds (sentora.log: web-access,
+  web-error, panel-access, panel-error, panel-login, mail, dovecot, auth, ftp, ftp-login, dns, fail2ban, zsudo, daemon,
+  problems, webmail) into ECS fields (+ GeoLite2 countries); a line not understood keeps its message (tag
+  sentora_unparsed). `elasticsearch/` the index template (data stream logs-sentora-default) and ILM policy.
+  `kibana/build.py` writes `kibana/dashboards/*.json` (Kibana 9.5's dashboards API, PUT /api/dashboards/<id>): Overview,
+  Websites, Mail, Security, Panel and server; the workflow fails when the JSON differs from build.py. Made from a real
+  panel's logs (the VM exercise on the Docker image) and looked at in Kibana 9.5.6 (screenshots).
+- **Panel** add-on `addons/elk` (Server Admin > Elk, administrators only): the panel's own certificate (/etc/sentora/elk,
+  key root:<rsyslog's group> 640; the certificate also in the hidden setting elk_panel_cert, served at
+  `modules/elk/code/node.php?cert=1` with no login). "Add the Elk node" (address + SE1 key) -> the daemon connects with the
+  panel's certificate, finds the authority whose code is the key, checks it signed the node's certificate, pins it
+  (elk_node_ca) and only then writes `/etc/rsyslog.d/61-sentora-elk.conf` (checked with rsyslogd -N1): imfile for the
+  files (paths from log_dir and the database: each website's access/error log), and the lines rsyslog already gets from
+  the journal by program (postfix*, sshd, sudo) - Debian 13 writes no mail.log/auth.log, so this works the same on every
+  system; JSON lines (option.jsonf) over gtls, x509/name sentora-elk-node, a 1 GB disk queue. rsyslog, its TLS driver
+  and acl installed with package_install (and the journal restarted so it hands rsyslog its lines); ACLs for rsyslog's
+  user (Ubuntu: syslog), an AppArmor rule file; groups of logs switchable on the page. Status every 10 minutes (Check now).
+- **Tested** (Actions > Elk node test, `.github/scripts/elk-node-test.sh`, whole way): the panel image + the add-on
+  (installed as zppy does), the node installed fetching the panel's real certificate and its code checked (a wrong code
+  stops it), pairing (a wrong key: nothing sent), the panel's own logs arriving, 162 real lines of every kind all
+  understood, a stranger's certificate and no certificate turned away, Kibana's login (can not delete the logs), the
+  firewall lists, retention, password, --update keeping key/logins/logs. Tried by hand on a Debian 13 panel container
+  against Elastic 9.5.6: pairing, rsyslog, live lines; the page looked at light/dark, desktop/390 px.
+- Later (ask first): the node on Debian/AlmaLinux/Fedora; the Docker and backup nodes sending too; per-client Kibana;
+  Let's Encrypt for Kibana.
 
 ## Recent releases (newest first; every change is in CHANGELOG.md)
 
