@@ -251,7 +251,7 @@ class sys_phpbundles
     }
 
     /**
-     * Daemon (root): install an update asked for in PHP Versions, and check again once a day.
+     * Daemon (root): install an update asked for in PHP Versions, and check again once a day (hourly while a build is awaited).
      *
      * @return string What happened, for the daemon's log ('' when nothing).
      */
@@ -275,7 +275,13 @@ class sys_phpbundles
             $out .= 'PHP update request for ' . $mm . ' ignored (not an installed version).' . fs_filehandler::NewLine();
         }
         $state = self::State();
-        if ((int) $state['checked'] < time() - 86400) {
+        // once a day; every hour while a new PHP release is out and its Sentora build is not published yet
+        // (the builds follow php.net within hours), or after a check that could not read the list
+        $waiting = !empty($state['error']);
+        foreach ((array) $state['versions'] as $v) {
+            $waiting = $waiting || (is_array($v) && isset($v['state']) && $v['state'] === 'waiting');
+        }
+        if ((int) $state['checked'] < time() - ($waiting ? 3600 : 86400)) {
             $out .= self::Check();
         }
         return $out;

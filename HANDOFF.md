@@ -55,7 +55,7 @@ built on GitHub by Actions > PHP bundles (system ubuntu26.04, debian13, alma10 o
 versions empty = usual set, `8.4` = newest from php.net, or exact; `list_only` rewrites the list).
 Each run writes `php-bundles.json` on the release (system, version, SHA-256 of every build). The
 panel checks it daily (`dryden/sys/phpbundles.class.php`): a notice and an Update button in PHP
-Versions when a newer build is ready; nothing is ever compiled on a server (owner's decision).
+Versions when a newer build is ready; nothing is ever compiled on a server (owner's decision). While php.net has a release whose Sentora build is not published yet ("not ready yet"), or the list could not be read, the daemon checks hourly instead of daily (2026-11-20: two panels showed different notices for hours while the builds ran one system after another).
 
 ## Install tests (since 2027.68)
 
