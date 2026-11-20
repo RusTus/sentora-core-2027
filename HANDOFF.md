@@ -396,6 +396,30 @@ again with it (same contents, same versions: panels see no update; only SHA256SU
 
 ## Waiting on the owner (do not start without asking)
 
+- **Company dashboards on the Elk node** (owner, 2026-11-20: "definitely a fortinet dashboard ... what sites people are
+  going to and also VPN or forticlient current users ... sales orders and connections for our magento store ... office
+  o365 and entra information especially teams and mail"; then "I won't be able to get those connected tonight, let's
+  make a note so we can finish that when I'm ready"). Kept on the Elk node (may cross over to other Sentora users);
+  their dashboards get their own names (not "Sentora:"). The owner also asked to hold the panel release (2027.92, with
+  the Website speed log) until these are done. Plan, in order:
+  1. **FortiGate** (started on the branch, not published): the FortiGate sends syslog "reliable" mode over TLS (FortiOS
+     frames it by length, which rsyslog reads and Logstash does not) to the node's rsyslog on 6516 (ufw: the
+     FortiGate's address only; a client certificate the node makes, imported on the FortiGate: `config log syslogd
+     setting` set mode reliable, enc-algorithm high, certificate). rsyslog hands each line as JSON to a second Logstash
+     pipeline on 127.0.0.1:5516 (`elk-node/company/fortigate.conf`, pipelines.yml with two pipelines), data stream
+     logs-fortigate-default (`elasticsearch/fortigate-template.json`: raw pairs in the flattened field fgt.*, ECS
+     fields for the boards). Samples: `tests/elk/fortigate.txt`. Still to do: the rsyslog part and the node command
+     `sentora-elk-node fortigate ADDRESS` (certificate as PKCS#12 for the FortiGate, firewall, pipeline on), roles
+     (writer and admin read logs-fortigate-*), dashboards (sites visited by user and category, blocked sites, apps and
+     bandwidth by user; VPN/FortiClient users connected in the last 15 minutes (tunnel-up/tunnel-stats), logins,
+     failures and where from; IPS, viruses, botnets, admin logins), the whole-way test with the samples. Then the
+     owner's FortiGate steps (and the NAT fix below).
+  2. **Microsoft 365 / Entra**: a read-only reader on the node (like the alerts service) with an app the owner
+     registers in Entra (client credentials, admin consent: AuditLog.Read.All for sign-ins (needs Entra ID P1),
+     Reports.Read.All for Teams and mail activity, ServiceHealth.Read.All). Sign-ins on a map, failures and MFA, Teams
+     and mail activity per user, Microsoft 365 service health.
+  3. **Magento store**: read-only REST integration token; orders over time, revenue, status, country (no customer
+     names or emails kept), beside the store's visits from the web logs.
 - **Fortinet: real visitor addresses on the owner's live panel** (owner, 2026-11-20: "take a note of that fortinet
   stuff for when I ask you later"). His panel (172.16.0.21, store.hemsaw.com) sits behind a FortiGate that forwards
   the web ports with a Virtual IP; the store's 532,021 imported visits came from only 13 addresses, so the policy has
