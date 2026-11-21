@@ -359,8 +359,8 @@ the node (https://<node>/, `sentora-elk-node kibana-from` limits who reaches it)
     service issues; the app secret expires, then run the m365 command again), the store store.hemsaw.com (orders in).
   - FortiGate NAT (2026-11-21, done by the owner): the incoming WAN policy to the panel's Virtual IP (172.16.0.21)
     had NAT on, so Apache saw 172.16.0.1 for every visitor; the panel's gateway is 172.16.0.1, NAT switched off,
-    his phone's address now shows. Older imported visits keep 172.16.0.1. Still open from that note: the red error
-    marks on the World map dashboard (ask for a screenshot if he still sees them).
+    his phone's address now shows. Older imported visits keep 172.16.0.1. The red error marks he once saw
+    on the World map dashboard are gone (owner, 2026-11-21).
   - Alerts added: a Veeam job's last run failed; >= 5 failed FortiGate admin logins or >= 20 failed VPN logins in 15 min.
   - `sentora-elk-node update` fetches the newest installer from master2027 first (bash -n and its "Checking" step must
     be there) into /usr/local/lib/sentora-elk/installer, then runs it (before 2026-11-21 it ran the install-time copy:
