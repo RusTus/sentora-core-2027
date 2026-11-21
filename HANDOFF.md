@@ -470,7 +470,9 @@ the node (https://<node>/, `sentora-elk-node kibana-from` limits who reaches it)
 Actions > Windows setup on every release; `test_release` puts a test build on the `windows-setup-test` release for a public link):
 Sentora 2027 in Settings > Apps and the Start menu, the same PowerShell script inside (-FromSetup, -Yes), updates in place (fixed AppId),
 uninstalls cleanly (.wslconfig put back). Tested on the owner's Windows 11 VM. **Website:** SentoraReloaded2027/SentoraReloaded2027.github.io
-(https://sentorareloaded2027.github.io, one index.html on `main`, GitHub Pages); only tested facts on it. Its "Find an answer" search reads the READMEs and
+(https://sentorareloaded2027.github.io, index.html + topic pages made by tools/build-pages.py, on `main`, GitHub Pages; never
+edit a topic page by hand, change build-pages.py and run it); only tested facts on it. 2026-11-21: /kibana-dashboards/ (the Elk
+node's 34 dashboards, screenshots from a sandbox with sample data only, neutral names) and /nodes/; main page sections #dashboards, #nodes. Its "Find an answer" search reads the READMEs and
 CHANGELOG live from raw.githubusercontent. **Ask Sentora** (ready, off): `worker/ask-sentora` in that repo, a Cloudflare Worker answering
 with Claude from those documents (cached block, refusal fallback, origin and per-visitor limits; 17 checks in its test; deploy: Actions >
 Deploy Ask Sentora). Waits for the owner's Anthropic API key (with a spending limit) and Cloudflare account; then set `ASK_URL` in index.html.
