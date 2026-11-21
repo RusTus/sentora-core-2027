@@ -375,6 +375,14 @@ the node (https://<node>/, `sentora-elk-node kibana-from` limits who reaches it)
     within 3 h), office-new:<user-country> (not in their 30 days), backup-stale:<host> (> 26 h). Alert ids keep to
     [a-z-] before the colon (the panel's check): m365-... would be dropped.
     The owner updated his node and switched on veeam-api (2026-11-21): "all works".
+  - Walls (owner, 2026-11-21, after a Veeam/Grafana blog: "colourful... green or red or yellow... without scrolling"):
+    sentora-backupwall (now-2d, refresh 60 s) and sentora-serverwall (now-6h, 30 s), second and third in the link bars.
+    Built from metric grids (breakdown_by + columns; colour = dynamic bands, build.py tile()/dial()/bands()); a grid
+    keeps empty cells up to its limit, so limits are near real counts (jobs 15, machines 24, websites 18, repos 6) and
+    the panels tall. Dials: gauge, styling.shape semi_circle, max static_value 100. Job health 1 / 0.5 / 0 (Success /
+    Warning / Failed) on Veeam job events and on the reader's job states. Reader: repositories from
+    /api/v1/backupInfrastructure/repositories/states (event.action repo-state, veeam_repo.*); alert repo-full:<repo>
+    at >= 90% used (>= 97 outage). Kibana makes its own phone layout (panels stacked).
   - Alerts added: a Veeam job's last run failed; >= 5 failed FortiGate admin logins or >= 20 failed VPN logins in 15 min.
   - `sentora-elk-node update` fetches the newest installer from master2027 first (bash -n and its "Checking" step must
     be there) into /usr/local/lib/sentora-elk/installer, then runs it (before 2026-11-21 it ran the install-time copy:
