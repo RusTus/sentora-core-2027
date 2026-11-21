@@ -353,6 +353,10 @@ the node (https://<node>/, `sentora-elk-node kibana-from` limits who reaches it)
     sentora-shop with a fixed id (an order re-sent with a new status replaces itself). Search words from the visits:
     q= of /catalogsearch/result/ and WordPress ?s= -> sentora.search.term. A long write needs the connection held
     open a moment before closing (Logstash otherwise loses the end: seen, fixed).
+  - The owner's own (2026-11-21, all working): FortiGate 172.16.0.1 (lines arriving; 356 failed VPN logins in a day
+    seen, advised MFA/blocking; three VPN users show their address as the name: send fgt.* of one to see which field
+    holds the name), Veeam over TLS (CA in Local Computer > Trusted Root), Microsoft 365 (695 sign-ins, reports, 8
+    service issues; the app secret expires, then run the m365 command again), the store store.hemsaw.com (orders in).
   - Alerts added: a Veeam job's last run failed; >= 5 failed FortiGate admin logins or >= 20 failed VPN logins in 15 min.
   - `sentora-elk-node update` fetches the newest installer from master2027 first (bash -n and its "Checking" step must
     be there) into /usr/local/lib/sentora-elk/installer, then runs it (before 2026-11-21 it ran the install-time copy:
@@ -439,10 +443,6 @@ again with it (same contents, same versions: panels see no update; only SHA256SU
 
 ## Waiting on the owner (do not start without asking)
 
-- **Connect the other sources on the owner's own systems** (built and tested 2026-11-21, see Elk > Other sources): his
-  FortiGate (`sentora-elk-node fortigate ADDRESS`, then the steps it prints), Veeam (`sentora-elk-node veeam ADDRESS`),
-  Microsoft 365 (register an app in Entra, then `sentora-elk-node m365 TENANT APP`), the store (Log Forwarder > Elk
-  node > Online store: store.hemsaw.com). Give him the steps one block at a time when he is ready.
 - **Fortinet: real visitor addresses on the owner's live panel** (owner, 2026-11-20: "take a note of that fortinet
   stuff for when I ask you later"). His panel (172.16.0.21, store.hemsaw.com) sits behind a FortiGate that forwards
   the web ports with a Virtual IP; the store's 532,021 imported visits came from only 13 addresses, so the policy has
