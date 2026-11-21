@@ -383,6 +383,19 @@ the node (https://<node>/, `sentora-elk-node kibana-from` limits who reaches it)
     Warning / Failed) on Veeam job events and on the reader's job states. Reader: repositories from
     /api/v1/backupInfrastructure/repositories/states (event.action repo-state, veeam_repo.*); alert repo-full:<repo>
     at >= 90% used (>= 97 outage). Kibana makes its own phone layout (panels stacked).
+  - More walls (owner, 2026-11-21, "do all of them"): sentora-netwall (fortigate.vpn.up 1/0 set by the FortiGate pipeline:
+    tunnel-up/tunnel-stats 1, tunnel-down 0; tiles by fortigate.vpn.name, last value), sentora-m365wall (reader: GET
+    /v1.0/admin/serviceAnnouncement/healthOverviews, one doc per service per 10 min, m365.service/status/health 1|0.5|0
+    /state in plain words; same ServiceHealth.Read.All permission), sentora-secwall, sentora-saleswall (now/d), sentora-week
+    (now-7d). "Against last week": secondary metric time_shift 1w + compare {to: primary, palette: compare_to or
+    compare_to_reversed (red when up)}. Certificates: runtime field sentora.cert_days on the sentora-uptime data view
+    (not_after minus @timestamp, days). Charts: pie styling.donut_hole "m" (rings everywhere), treemap, area_stacked,
+    date_histogram suggested_interval. Links: options use_time_range false (each board its own range).
+  - Flows (sentora-flows): Vega Sankeys built by build.py sankey() (terms > terms > terms, %dashboard_context% clauses +
+    %timefilter%; the layout done in Vega transforms: stack per column, gaps, bands as filled paths), written as
+    dashboards/sentora-flow-*.vis.json, saved as visualizations, then put on the board by kibana/addvis.py (the
+    dashboards API has no Vega panel). Labels take their bar's colour (readable in light and dark). Not done: ownCloud
+    (owner, 2026-11-21: "forget the owncloud one for now"); Active Directory: ideas given, waiting on the owner.
   - Alerts added: a Veeam job's last run failed; >= 5 failed FortiGate admin logins or >= 20 failed VPN logins in 15 min.
   - `sentora-elk-node update` fetches the newest installer from master2027 first (bash -n and its "Checking" step must
     be there) into /usr/local/lib/sentora-elk/installer, then runs it (before 2026-11-21 it ran the install-time copy:
