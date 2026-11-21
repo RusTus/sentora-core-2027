@@ -374,6 +374,7 @@ the node (https://<node>/, `sentora-elk-node kibana-from` limits who reaches it)
     tests/elk/fakeveeam.py). Alerts: attacker:<ip> (2+ datasets, >= 10 in an hour), office-travel:<user> (two countries
     within 3 h), office-new:<user-country> (not in their 30 days), backup-stale:<host> (> 26 h). Alert ids keep to
     [a-z-] before the colon (the panel's check): m365-... would be dropped.
+    The owner updated his node and switched on veeam-api (2026-11-21): "all works".
   - Alerts added: a Veeam job's last run failed; >= 5 failed FortiGate admin logins or >= 20 failed VPN logins in 15 min.
   - `sentora-elk-node update` fetches the newest installer from master2027 first (bash -n and its "Checking" step must
     be there) into /usr/local/lib/sentora-elk/installer, then runs it (before 2026-11-21 it ran the install-time copy:
