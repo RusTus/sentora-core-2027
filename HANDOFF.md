@@ -395,7 +395,32 @@ the node (https://<node>/, `sentora-elk-node kibana-from` limits who reaches it)
     %timefilter%; the layout done in Vega transforms: stack per column, gaps, bands as filled paths), written as
     dashboards/sentora-flow-*.vis.json, saved as visualizations, then put on the board by kibana/addvis.py (the
     dashboards API has no Vega panel). Labels take their bar's colour (readable in light and dark). Not done: ownCloud
-    (owner, 2026-11-21: "forget the owncloud one for now"); Active Directory: ideas given, waiting on the owner.
+    (owner, 2026-11-21: "forget the owncloud one for now").
+  - Active Directory (owner, 2026-11-21: 3 DCs, Winlogbeat unzipped in C:\winlogbeat on each): `sentora-elk-node windows ADDRESS`
+    (sources.sh) makes the DCs' own authority (sources/windows-ca.*, P-384, signs only DC certificates), a client certificate
+    CN=sentora-dc-ADDRESS (key PKCS#8), adds ADDRESS to sources/windows, and /root/sentora-dc-ADDRESS.ps1 (600; built by
+    sources/winsetup.py: finds winlogbeat.exe under C:\winlogbeat (or -Folder), writes the certs (key ACL SYSTEM +
+    Administrators), winlogbeat.yml (Security log, 18 ids/ranges, drops computer accounts, network logons and good NTLM
+    checks; add_locale for the office time), reinstalls the service with Winlogbeat's own script, test config/output,
+    auditpol check). Logstash: company/windows.conf, beats input 0.0.0.0:6518 (node shows web.crt, client certs from the
+    DC authority required), the gate drops any event whose certificate CN is not sentora-dc-<its own source address> in
+    the list (SENTORA_DC_LIST written in by pipelines()); ufw: 6518 from each DC only. Fields: event.action (logon,
+    logon-failed, kerberos-logon/-failed, ntlm-failed, locked-out, account-*, password-*, group-member-added/removed,
+    gpo-changed, log-cleared, audit-policy-changed), windows.reason (status codes in words), windows.from, target, member,
+    admin_group, logon_kind, hour_n, weekday, off_hours. Data stream logs-windows-*, data view sentora-windows. Tested
+    locally with Logstash 9.5.6 + Filebeat (same protocol) and in the whole-way test (Filebeat on the runner, --network
+    host = the allowed address); a cert for another address and one from another authority get nothing in. Alerts:
+    ad-lockout, ad-admin (outage), ad-cleared (outage), ad-guess (>= 15 failures/15 min), ad-quiet (6 h).
+  - vSphere (owner, 2026-11-21: "an esxi8 dashboard or vcenter"): `sentora-elk-node vsphere ADDRESS USER`: vCenter's
+    certificate fetched, SHA-256 shown, "yes" needed; connects by the address if the certificate names it, else by its
+    first DNS name pinned to the address in /etc/hosts (# sentora-vsphere). Metricbeat (apt, from Elastic's repo) runs
+    as service sentora-vsphere, user sentora-vsphere, SSL_CERT_FILE=/etc/sentora-elk-vsphere/vcenter.pem (the vSphere
+    module ignores ssl.* settings: found with VMware's vcsim; insecure: false), config root:sentora-vsphere 640,
+    output to Logstash 127.0.0.1:5519 (company/vsphere.conf: vmw.kind/name/health/cpu_pct/mem_pct/used_pct/free_gb/on/
+    alarms/snapshot_days; "on" = uptime or CPU > 0, no power state in Metricbeat). Data stream logs-vsphere-*, data view
+    sentora-vsphere. The whole-way test runs vcsim (4 hosts, 12 VMs, 2 datastores). Alerts: vsphere-ds (90/97%),
+    vsphere-host (red), vsphere-busy (90% over 15 min), vsphere-alarm (red), vsphere-snap (> 7 days), vsphere-quiet.
+  - 4K TV (owner, 2026-11-21): the walls are at most 48 rows (fits a 4K screen at 150%); detailed boards may scroll.
   - Alerts added: a Veeam job's last run failed; >= 5 failed FortiGate admin logins or >= 20 failed VPN logins in 15 min.
   - `sentora-elk-node update` fetches the newest installer from master2027 first (bash -n and its "Checking" step must
     be there) into /usr/local/lib/sentora-elk/installer, then runs it (before 2026-11-21 it ran the install-time copy:
