@@ -318,6 +318,44 @@ the node (https://<node>/, `sentora-elk-node kibana-from` limits who reaches it)
   Webalizer, QuickFig and the import read those. Kind web-timing -> sentora.response_ms (double), event.duration,
   sentora.domain, url.path, status; dashboard "Website speed" (median, 95%, slow over 2 s, 5xx, slowest pages and sites).
   Needs the panel release with the core change; older cores ignore the setting.
+- **Other sources** (owner, 2026-11-20/21: "definitely a fortinet dashboard ... what sites people are going to and
+  also VPN or forticlient current users ... sales orders ... for our magento store ... office o365 and entra ...
+  especially teams and mail ... a nice Veeam backup"; "other Sentora users may have a fortigate, so ... an option in
+  the Elk node and Log Forwarder options"; search terms: "is it possible to add search terms people used on the site?").
+  General options, each off until switched on; dashboards "Sentora: FortiGate: ..., Veeam backups, Microsoft 365,
+  Online store" with their own links bar (data views sentora-fortigate, -veeam, -m365, -shop).
+  - Node tool `elk-node/sources/sentora-elk-sources.sh` (installed as /usr/local/lib/sentora-elk/sources.sh, run by
+    `sentora-elk-node fortigate|veeam|m365|sources`; `refresh` on --update). State in /etc/sentora-elk/sources/<name>
+    (the address, or the tenant). /etc/sentora-elk-alerts/sources.json (on/off only) -> the alerts answer on 6515 ->
+    the panel's "More sources" card.
+  - FortiGate: FortiOS "reliable" syslog is length-framed (RFC 6587), which Logstash's tcp input does not read, so the
+    node's rsyslog (rsyslog-gnutls, installed when needed) takes it: `/etc/rsyslog.d/40-sentora-sources.conf`, imtcp
+    6516 gtls x509/name PermittedPeer sentora-fortigate (a client certificate the node signs: /root/sentora-fortigate.p12,
+    password shown once; node CA /root/sentora-elk-ca.crt for the FortiGate), only from the given address (ruleset
+    and ufw), JSON to Logstash pipeline `fortigate` on 127.0.0.1:5516 (`elk-node/company/fortigate.conf`), data stream
+    logs-fortigate-default (template `fortigate-template.json`: every pair in flattened fgt.*, ECS fields for boards).
+    Tried locally on rsyslog 8.2504: the right certificate in, a wrong name and another authority cut off.
+  - Veeam (12.1+, Options > Event Forwarding, TLS): rsyslog 6517 gtls anon (Veeam shows no certificate) + address
+    only; pipeline `veeam` (5517, `company/veeam.conf`): RFC 5424 structured data -> flattened veeam.*, veeam_job.name,
+    result, why, duration_min, transferred_gb; malware detection, console logins. Alert: a job whose last run failed.
+  - Microsoft 365: `elk-node/sources/sentora-elk-reader.py`, service sentora-elk-reader (own user, hardened unit), ES
+    user sentora_reader (create only on logs-m365-*); app secret in /etc/sentora-elk-reader/m365.json (root:reader
+    640, asked for with read -s, never shown). Graph: signIns every 5 min (needs Entra ID P1/P2), Teams/mail daily and
+    per-person reports every 6 h (CSV behind a 302 fetched without the token), open service issues; fixed ids so
+    nothing counts twice. Permissions: AuditLog.Read.All, Reports.Read.All, ServiceHealth.Read.All (application,
+    admin consent). The test uses `tests/elk/fakegraph.py` via SENTORA_TEST_* (never set for the service).
+  - Online store (Log Forwarder 210, `code/shop.php`): the admin picks a website where Magento 2 is found
+    (app/etc/env.php + bin/magento inside the owner's public_html). env.php is read as text; its database must be the
+    owner's (x_mysql_databases) on localhost; read with the panel's connection: orders changed since last run (first
+    run: a year, 500 a run; boundary ids remembered), their top-level items, Magento's search_query. Never names,
+    e-mail, streets or payment. Sent as kinds shop-order/item/search over 6514; Logstash writes them to the index
+    sentora-shop with a fixed id (an order re-sent with a new status replaces itself). Search words from the visits:
+    q= of /catalogsearch/result/ and WordPress ?s= -> sentora.search.term. A long write needs the connection held
+    open a moment before closing (Logstash otherwise loses the end: seen, fixed).
+  - Alerts added: a Veeam job's last run failed; >= 5 failed FortiGate admin logins or >= 20 failed VPN logins in 15 min.
+  - Whole-way test: FortiGate (p12 opened with the shown password, 14 lines, a stranger's and no certificate refused),
+    Veeam (7 events, the failed job's alert), Microsoft 365 (stand-in, 9 documents, the secret kept and unseen), the
+    store (a fake Magento on the test panel: 85 documents, no e-mail or street on the node), search words.
 - **World map** (the owner: "the world map that shows where your hits are coming from... something fancy"): a Kibana
   Maps saved object `sentora-world-map` (kibana/build.py writes dashboards/sentora-world-map.map.json): dark world
   (EMS dark_map), visitors as a heat map, attacks/failed logins/bans/probes as red circles with counts, countries
@@ -396,40 +434,10 @@ again with it (same contents, same versions: panels see no update; only SHA256SU
 
 ## Waiting on the owner (do not start without asking)
 
-- **Company dashboards on the Elk node** (owner, 2026-11-20: "definitely a fortinet dashboard ... what sites people are
-  going to and also VPN or forticlient current users ... sales orders and connections for our magento store ... office
-  o365 and entra information especially teams and mail"; then "I won't be able to get those connected tonight, let's
-  make a note so we can finish that when I'm ready"). Kept on the Elk node (may cross over to other Sentora users);
-  their dashboards get their own names (not "Sentora:"). The owner also asked to hold the panel release (2027.92, with
-  the Website speed log) until these are done. Plan, in order:
-  1. **FortiGate** (started on the branch, not published): the FortiGate sends syslog "reliable" mode over TLS (FortiOS
-     frames it by length, which rsyslog reads and Logstash does not) to the node's rsyslog on 6516 (ufw: the
-     FortiGate's address only; a client certificate the node makes, imported on the FortiGate: `config log syslogd
-     setting` set mode reliable, enc-algorithm high, certificate). rsyslog hands each line as JSON to a second Logstash
-     pipeline on 127.0.0.1:5516 (`elk-node/company/fortigate.conf`, pipelines.yml with two pipelines), data stream
-     logs-fortigate-default (`elasticsearch/fortigate-template.json`: raw pairs in the flattened field fgt.*, ECS
-     fields for the boards). Samples: `tests/elk/fortigate.txt`. Still to do: the rsyslog part and the node command
-     `sentora-elk-node fortigate ADDRESS` (certificate as PKCS#12 for the FortiGate, firewall, pipeline on), roles
-     (writer and admin read logs-fortigate-*), dashboards (sites visited by user and category, blocked sites, apps and
-     bandwidth by user; VPN/FortiClient users connected in the last 15 minutes (tunnel-up/tunnel-stats), logins,
-     failures and where from; IPS, viruses, botnets, admin logins), the whole-way test with the samples. Then the
-     owner's FortiGate steps (and the NAT fix below).
-  2. **Microsoft 365 / Entra**: a read-only reader on the node (like the alerts service) with an app the owner
-     registers in Entra (client credentials, admin consent: AuditLog.Read.All for sign-ins (needs Entra ID P1),
-     Reports.Read.All for Teams and mail activity, ServiceHealth.Read.All). Sign-ins on a map, failures and MFA, Teams
-     and mail activity per user, Microsoft 365 service health.
-  3. **Magento store**: read-only REST integration token; orders over time, revenue, status, country (no customer
-     names or emails kept), beside the store's visits from the web logs. Search terms (owner: "is it possible to add
-     search terms people used on the site?"): (a) from the access logs, no setup: q= of /catalogsearch/result/ in
-     web-access lines -> a search-term field (top searches, over time, countries; works on imported history too);
-     (b) from Magento's own search_query list (read-only): number of results, so the searches that found nothing.
-  4. **Veeam Backup & Replication** (owner, same evening: "how about a nice Veeam backup on as well"): v12+ sends
-     syslog (Options > Event Forwarding) to the node like the FortiGate (TLS where Veeam offers it, the Veeam server's
-     address only); the REST API (read-only account) for history. Dashboard: job results (success/warning/failed),
-     duration, data moved, last good backup per machine, failures as Elk node alerts.
-  The owner: FortiGate (and the others) are general options, not his alone: "other Sentora users may have a
-  fortigate, so it's no problem if it's an option in the Elk node and Log Forwarder options": a "Sources" part on the
-  Log Forwarder page (steps and state, administrators only) and `sentora-elk-node fortigate|veeam|m365|magento` on the node.
+- **Connect the other sources on the owner's own systems** (built and tested 2026-11-21, see Elk > Other sources): his
+  FortiGate (`sentora-elk-node fortigate ADDRESS`, then the steps it prints), Veeam (`sentora-elk-node veeam ADDRESS`),
+  Microsoft 365 (register an app in Entra, then `sentora-elk-node m365 TENANT APP`), the store (Log Forwarder > Elk
+  node > Online store: store.hemsaw.com). Give him the steps one block at a time when he is ready.
 - **Fortinet: real visitor addresses on the owner's live panel** (owner, 2026-11-20: "take a note of that fortinet
   stuff for when I ask you later"). His panel (172.16.0.21, store.hemsaw.com) sits behind a FortiGate that forwards
   the web ports with a Virtual IP; the store's 532,021 imported visits came from only 13 addresses, so the policy has
