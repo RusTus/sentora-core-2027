@@ -357,6 +357,10 @@ the node (https://<node>/, `sentora-elk-node kibana-from` limits who reaches it)
     seen, advised MFA/blocking; three VPN users show their address as the name: send fgt.* of one to see which field
     holds the name), Veeam over TLS (CA in Local Computer > Trusted Root), Microsoft 365 (695 sign-ins, reports, 8
     service issues; the app secret expires, then run the m365 command again), the store store.hemsaw.com (orders in).
+  - FortiGate NAT (2026-11-21, done by the owner): the incoming WAN policy to the panel's Virtual IP (172.16.0.21)
+    had NAT on, so Apache saw 172.16.0.1 for every visitor; the panel's gateway is 172.16.0.1, NAT switched off,
+    his phone's address now shows. Older imported visits keep 172.16.0.1. Still open from that note: the red error
+    marks on the World map dashboard (ask for a screenshot if he still sees them).
   - Alerts added: a Veeam job's last run failed; >= 5 failed FortiGate admin logins or >= 20 failed VPN logins in 15 min.
   - `sentora-elk-node update` fetches the newest installer from master2027 first (bash -n and its "Checking" step must
     be there) into /usr/local/lib/sentora-elk/installer, then runs it (before 2026-11-21 it ran the install-time copy:
@@ -442,21 +446,6 @@ again with it (same contents, same versions: panels see no update; only SHA256SU
 - (done 2026-11-15, owner's yes) the hand-over shims `node/` and `backup/` were removed from the installers repository: the installers live only in `docker-node/` and `backup-node/` (panels before 2027.86 and Docker Hosting before 130 showed the old addresses).
 
 ## Waiting on the owner (do not start without asking)
-
-- **Fortinet: real visitor addresses on the owner's live panel** (owner, 2026-11-20: "take a note of that fortinet
-  stuff for when I ask you later"). His panel (172.16.0.21, store.hemsaw.com) sits behind a FortiGate that forwards
-  the web ports with a Virtual IP; the store's 532,021 imported visits came from only 13 addresses, so the policy has
-  NAT on and Apache sees the FortiGate's inside address: no countries on the Elk world map, and fail2ban bans would hit
-  the firewall (everyone). The steps given to him (he does them himself when he can; nothing on our side):
-  1. On the panel, `ip route | grep default`: the gateway must be the FortiGate's inside address (replies go back
-     through it once NAT is off).
-  2. Kibana > Websites > "Busiest addresses": the top ones should be the FortiGate's inside address (confirms it).
-  3. FortiGate: Policy & Objects > Firewall Policy > the incoming WAN policy using the Virtual IP for 172.16.0.21 >
-     NAT off > OK; the same for the other incoming policies to the panel (mail, FTP).
-  New visits then carry real addresses and countries; the already imported ones keep the firewall's addresses.
-  Not done (the panel has no support yet): logging a header address (mod_remoteip) for a proxy that passes one; a
-  FortiGate port forward does not, so NAT off is the fix. Also ask him what the red error marks on the World map
-  dashboard said (at the right edge of his screenshot).
 
 - **gVisor on SELinux nodes** (owner 2026-11-18: later): write Sentora's own SELinux rules for gVisor (a domain for runsc, tried on the Docker node test's SELinux machine) so apps on AlmaLinux/Rocky/RHEL/Fedora nodes get gVisor and SELinux together. Until then gVisor is not used there (agent `Runsc()`).
 
