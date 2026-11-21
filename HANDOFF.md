@@ -336,7 +336,8 @@ the node (https://<node>/, `sentora-elk-node kibana-from` limits who reaches it)
     logs-fortigate-default (template `fortigate-template.json`: every pair in flattened fgt.*, ECS fields for boards).
     Tried locally on rsyslog 8.2504: the right certificate in, a wrong name and another authority cut off.
   - Veeam (12.1+, Options > Event Forwarding, TLS): rsyslog 6517 gtls anon (Veeam shows no certificate) + address
-    only; pipeline `veeam` (5517, `company/veeam.conf`): RFC 5424 structured data -> flattened veeam.*, veeam_job.name,
+    only, with web.crt (it carries the node's addresses: Windows checks the address it connects to; node.crt only
+    names sentora-elk-node, fine for the FortiGate, which checks the authority); pipeline `veeam` (5517, `company/veeam.conf`): RFC 5424 structured data -> flattened veeam.*, veeam_job.name,
     result, why, duration_min, transferred_gb; malware detection, console logins. Alert: a job whose last run failed.
   - Microsoft 365: `elk-node/sources/sentora-elk-reader.py`, service sentora-elk-reader (own user, hardened unit), ES
     user sentora_reader (create only on logs-m365-*); app secret in /etc/sentora-elk-reader/m365.json (root:reader
