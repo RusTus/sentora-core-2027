@@ -333,7 +333,9 @@ the node (https://<node>/, `sentora-elk-node kibana-from` limits who reaches it)
     6516 gtls x509/name PermittedPeer sentora-fortigate (a client certificate the node signs: /root/sentora-fortigate.p12,
     password shown once; node CA /root/sentora-elk-ca.crt for the FortiGate), only from the given address (ruleset
     and ufw), JSON to Logstash pipeline `fortigate` on 127.0.0.1:5516 (`elk-node/company/fortigate.conf`), data stream
-    logs-fortigate-default (template `fortigate-template.json`: every pair in flattened fgt.*, ECS fields for boards).
+    logs-fortigate-default; an IPsec tunnel with no xauthuser and an address (or nothing) in user is
+    fortigate.vpn.kind site-to-site, fortigate.vpn.name its vpntunnel, no user.name (the owner's MainToEast showed as
+    "users" named by address); people: kind user (template `fortigate-template.json`: every pair in flattened fgt.*, ECS fields for boards).
     Tried locally on rsyslog 8.2504: the right certificate in, a wrong name and another authority cut off.
   - Veeam (12.1+, Options > Event Forwarding, TLS): rsyslog 6517 gtls anon (Veeam shows no certificate) + address
     only, with web.crt (it carries the node's addresses: Windows checks the address it connects to; node.crt only
@@ -354,8 +356,7 @@ the node (https://<node>/, `sentora-elk-node kibana-from` limits who reaches it)
     q= of /catalogsearch/result/ and WordPress ?s= -> sentora.search.term. A long write needs the connection held
     open a moment before closing (Logstash otherwise loses the end: seen, fixed).
   - The owner's own (2026-11-21, all working): FortiGate 172.16.0.1 (lines arriving; 356 failed VPN logins in a day
-    seen, advised MFA/blocking; three VPN users show their address as the name: send fgt.* of one to see which field
-    holds the name), Veeam over TLS (CA in Local Computer > Trusted Root), Microsoft 365 (695 sign-ins, reports, 8
+    seen, advised MFA/blocking; the three "users" named by address were his site-to-site tunnels: fixed, now a tunnels table), Veeam over TLS (CA in Local Computer > Trusted Root), Microsoft 365 (695 sign-ins, reports, 8
     service issues; the app secret expires, then run the m365 command again), the store store.hemsaw.com (orders in).
   - FortiGate NAT (2026-11-21, done by the owner): the incoming WAN policy to the panel's Virtual IP (172.16.0.21)
     had NAT on, so Apache saw 172.16.0.1 for every visitor; the panel's gateway is 172.16.0.1, NAT switched off,
