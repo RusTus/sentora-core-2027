@@ -362,6 +362,18 @@ the node (https://<node>/, `sentora-elk-node kibana-from` limits who reaches it)
     had NAT on, so Apache saw 172.16.0.1 for every visitor; the panel's gateway is 172.16.0.1, NAT switched off,
     his phone's address now shows. Older imported visits keep 172.16.0.1. The red error marks he once saw
     on the World map dashboard are gone (owner, 2026-11-21).
+  - Six more dashboards (owner, 2026-11-21: "1-6 do all"): Today (sentora-today, first in both links bars; data view
+    sentora-all = logs-sentora-*,logs-fortigate-*,logs-m365-*), Store funnel (Logstash sets sentora.store.step on
+    web-access from Magento paths: search, cart-add, cart, checkout, order-placed, account-created; formulas per store;
+    a calculated column can not sort a table), Attackers (sentora-all; BAD = failures, waf-*, IPS, bans, inside
+    addresses left out; data_stream.dataset = where seen), Internet use (fortigate.hour "07" + hour_n integer for the
+    heat map: a heat map ignores alphabetical order, a histogram keeps 0-23; fortigate.weekday "1 Mon"), Backup
+    coverage (reader: Veeam REST 9419, POST /api/oauth2/token x-api-version 1.1-rev0, objectRestorePoints newest per
+    name, jobs/states; PinnedHTTPS checks the certificate's SHA-256 before sending; `sentora-elk-node veeam-api ADDRESS
+    USER` shows the fingerprint, asks "yes", then the password; veeam.json root:reader 640; read hourly; test stand-in
+    tests/elk/fakeveeam.py). Alerts: attacker:<ip> (2+ datasets, >= 10 in an hour), office-travel:<user> (two countries
+    within 3 h), office-new:<user-country> (not in their 30 days), backup-stale:<host> (> 26 h). Alert ids keep to
+    [a-z-] before the colon (the panel's check): m365-... would be dropped.
   - Alerts added: a Veeam job's last run failed; >= 5 failed FortiGate admin logins or >= 20 failed VPN logins in 15 min.
   - `sentora-elk-node update` fetches the newest installer from master2027 first (bash -n and its "Checking" step must
     be there) into /usr/local/lib/sentora-elk/installer, then runs it (before 2026-11-21 it ran the install-time copy:
