@@ -353,6 +353,9 @@ the node (https://<node>/, `sentora-elk-node kibana-from` limits who reaches it)
     q= of /catalogsearch/result/ and WordPress ?s= -> sentora.search.term. A long write needs the connection held
     open a moment before closing (Logstash otherwise loses the end: seen, fixed).
   - Alerts added: a Veeam job's last run failed; >= 5 failed FortiGate admin logins or >= 20 failed VPN logins in 15 min.
+  - `sentora-elk-node update` fetches the newest installer from master2027 first (bash -n and its "Checking" step must
+    be there) into /usr/local/lib/sentora-elk/installer, then runs it (before 2026-11-21 it ran the install-time copy:
+    the owner's update showed 11 steps and 6 dashboards; nodes from before then need the one-line fetch once).
   - Whole-way test: FortiGate (p12 opened with the shown password, 14 lines, a stranger's and no certificate refused),
     Veeam (7 events, the failed job's alert), Microsoft 365 (stand-in, 9 documents, the secret kept and unseen), the
     store (a fake Magento on the test panel: 85 documents, no e-mail or street on the node), search words.
