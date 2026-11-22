@@ -506,6 +506,18 @@ an upgraded file had the same date as the one before and PHP-FPM's OPcache kept 
 Log Forwarder 211). bin/zppy's zppy_fresh() now touches every file of the module after unpacking (install and upgrade).
 Until a panel has that core, after an add-on update: restart its PHP-FPM services (the panel's and sentora-php*-fpm).
 
+**Store searches sorted; orders with their lines (2026-11-22, owner's screenshots):** sentora.conf has one rule (tc lambda,
+in the shop filter and the web filter): length <= 2 -> noise; starts with "by model" or "view id" -> old (the owner's old
+Magento addresses, turned into searches by the store); WordPress and scanner words (wp, xmlrpc, admin, well known, api
+session, hellopress...), hex codes of 10+ characters, .php/.env... -> noise; else customer. Fields: sentora.shop.term_class
+(shop-template) and sentora.search.class (index-template). build.py: SEARCHED (visits: persons, not noise/old, plus a
+name fallback for visits stored before), STORE_SEARCH, STORE_OLD, SINCE_START ("Times (since the store began)": Magento's
+popularity is cumulative). New Online store row "Old addresses still being asked for". Sales wall "Latest orders and what
+was in them": item docs with sentora.shop.number (Log Forwarder 213 sends increment_id on each item). shop.php resends
+orders (the last year) and the search list once (state "resent" = 213; counts reset), so stored docs are re-sorted and
+numbered (same doc ids: replaced, not doubled). Checked in a real Logstash 9.5 and Kibana 9.5 (both boards load, no
+panel errors, screenshots); the Elk test's fake store has a bot probe and an old address (7 searches, 87 docs).
+
 **AD: Windows' own accounts (2026-11-22, owner's screenshot):** the "Remote desktop and keyboard logons" table showed
 dwm-1, umfd-0... (Window Manager / Font Driver Host virtual accounts, one per session, logon type 2). windows.conf sets
 windows.system_account (boolean, in windows-template.json) on logon events: DWM-n, UMFD-n, names ending in $, ANONYMOUS
