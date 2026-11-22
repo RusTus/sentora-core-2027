@@ -510,10 +510,9 @@ Until a panel has that core, after an add-on update: restart its PHP-FPM service
 ubuntu 26.04 / debian 13 (deb) and almalinux, rocky, rhel 10 / fedora 45 (rpm); $CONF/family and $CONF/firewall
 (ufw | firewalld rich rules); the first tools (openssl, curl) installed before the panel's certificate is read; SELinux
 port labels for 6516, 6517, 5516, 5517. The Elk test (Actions > Elk node test, matrix of the five) passed on all five at
-ad37c8f. Test-only: the AlmaLinux and Rocky containers set rsyslog's global(libcapng.enable="off"), because RHEL 10's
-libcap-ng does not know the runner kernel's newer capabilities (capng_apply=-4); real servers set nothing. Next: the
-VM test (elk-vm-test.yml, AlmaLinux 10 with SELinux enforcing, fails on any AVC); then the website's and the page's
-"Ubuntu 26.04" for the node.
+ad37c8f; the VM test (elk-vm-test.yml, AlmaLinux 10.3, SELinux enforcing) passed at ea5f042: 18 ok, no AVC. Test-only: the AlmaLinux and Rocky containers set rsyslog's global(libcapng.enable="off"), because RHEL 10's
+libcap-ng does not know the runner kernel's newer capabilities (capng_apply=-4); real servers set nothing (the VM
+test, a real kernel, needs nothing). Still to do: the website's and Log Forwarder's page's "Ubuntu 26.04" for the node.
 
 **Elk node website checks: DNS and where (2026-11-22, owner's request):** the owner's internal (.local) websites showed
 "down" ("lookup X on 127.0.0.53: server misbehaving": systemd-resolved does not pass .local to unicast DNS) and the
