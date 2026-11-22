@@ -305,9 +305,15 @@ the node (https://<node>/, `sentora-elk-node kibana-from` limits who reaches it)
   hour, no line (health aside) from a panel for 30 min while there were lines that day. Limits in
   /etc/sentora-elk-alerts/limits.json; `sentora-elk-node alerts` checks now. Served on 6515 (firewall: panel-from, as
   6514) to the panel's certificate only; it sends /var/lib/sentora-elk-alerts/alerts.json and closes. Panel:
-  `code/alerts.php` (elk_alerts) each daemon run while the group "Alerts" is ticked: one notice per alert to the
-  administrators (key elk-alert-md5(id), outage/warning, link to the node's Kibana board built by the panel), withdrawn
-  when it clears; one mail to the administrators for new ones, again after a day. The node's words are cleaned: no
+  `code/alerts.php` (elk_alerts) each daemon run while the group "Alerts" is ticked: ONE notice to the administrators
+  (key elk-alerts, closable a year; outage when any is down; up to 12 titles, a link to the Alerts card,
+  ./?module=log_forwarder&elk=alerts, and to Kibana). It is sent again (new version, shows after a close) only when a new
+  alert id starts or it turns into an outage; otherwise its title/body are updated in x_notices without nt_updated_ts,
+  so a closed notice stays closed (owner, 2026-11-22: "a bit much, and they come back when I close them"). The old
+  one-per-alert notices (elk-alert-md5(id), 211 and older) are withdrawn once (state "one"). Choices in hidden x_settings
+  elk_alert_rules: {"kinds": {kind: notice|off}, "mute": {id: {t, title}}} (kind = the id before ":"; Kinds() lists
+  them by source; mute capped at 500); Alerts card on the page (Mute per alert, kinds as selects, Unmute). Mail: only
+  kinds left at "Notice and mail", not muted; one mail for new ones, again after a day. The node's words are cleaned: no
   [ ], no http(s)://, no markup, cut to size; ids/boards by pattern. Node not updated: the page says to run
   sentora-elk-node update. Group token now "v3" (a saved choice without it gets Alerts too).
 - **Website speed** (2026-11-20, the owner's list 5; core apache_admin hook + Log Forwarder 209): while the hidden setting
