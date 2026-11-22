@@ -37,6 +37,24 @@ $package_file = "etc/zppy-cache/package.list";
  * A repository's address: "https://host/path" as written (GitHub serves only HTTPS), or
  * http:// in front of the old form "host[:port][/path]"
  */
+/**
+ * Give every file of a module just unpacked the current time. Add-on zips carry one fixed date (the same files always
+ * give the same zip), so an upgraded file would keep the date of the version before it, and PHP's OPcache, which
+ * notices a changed file by its date, would go on running the old one until PHP restarts.
+ *
+ * @param string $dir The module's folder.
+ */
+function zppy_fresh($dir)
+{
+    $now = time();
+    $it = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($dir, FilesystemIterator::SKIP_DOTS), RecursiveIteratorIterator::SELF_FIRST);
+    foreach ($it as $f) {
+        if (!$f->isLink()) {
+            @touch($f->getPathname(), $now);
+        }
+    }
+}
+
 function zppy_base($repo)
 {
     $repo = rtrim(trim((string) $repo), '/');
@@ -134,6 +152,7 @@ if ((isset($argv[1])) && ($argv[1] == 'install')) {
                 if (!fs_director::CheckFolderExists(ctrl_options::GetSystemOption('sentora_root') . 'modules/' . $argv[2])) {
                     if (fs_director::CreateDirectory('modules/' . $argv[2])) {
                         if (sys_archive::Unzip('etc/zppy-cache/package-downloads/' . $argv[2] . '.zpp', 'modules/' . $argv[2] . '')) {
+                            zppy_fresh('modules/' . $argv[2]);
                             fs_director::SetFileSystemPermissions('modules/' . $argv[2] . '', 0777);
                             if (!fs_director::CheckFileExists('modules/' . $argv[2] . '/module.xml')) {
                                 fwrite(STDOUT, "No module.xml file found in the unzipped archive.\n");
@@ -203,6 +222,7 @@ if ((isset($argv[1])) && ($argv[1] == 'upgrade')) {
          * We need to overwrite any existing files here!!!
          */
         if (sys_archive::Unzip('etc/zppy-cache/package-downloads/' . $argv[2] . '.zpp', 'modules/' . $argv[2] . '')) {
+            zppy_fresh('modules/' . $argv[2]);
             fs_director::SetFileSystemPermissions('modules/' . $argv[2] . '', 0777);
             if (!fs_director::CheckFileExists('modules/' . $argv[2] . '/module.xml')) {
                 fwrite(STDOUT, "No module.xml file found in the unzipped archive.\n");
