@@ -13,7 +13,7 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  *
- * Updated by RusTus, 2026-11-07
+ * Updated by RusTus, 2026-11-22
  */
 /**
  * Template tag <# ui_tpl_notice #>: the notices the logged-in account sees (see ctrl_notices).
