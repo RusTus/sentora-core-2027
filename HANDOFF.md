@@ -506,6 +506,20 @@ an upgraded file had the same date as the one before and PHP-FPM's OPcache kept 
 Log Forwarder 211). bin/zppy's zppy_fresh() now touches every file of the module after unpacking (install and upgrade).
 Until a panel has that core, after an add-on update: restart its PHP-FPM services (the panel's and sentora-php*-fpm).
 
+**Elk node website checks: DNS and where (2026-11-22, owner's request):** the owner's internal (.local) websites showed
+"down" ("lookup X on 127.0.0.53: server misbehaving": systemd-resolved does not pass .local to unicast DNS) and the
+public ones timed out (no hairpin NAT to the office's own public address). elk-node/sources/monitors.py (installed to
+/usr/local/lib/sentora-elk/, run by `sentora-elk-node monitors`, the 5-minute timer) now writes, besides
+monitors.d/sentora-sites.yml, /etc/sentora-elk/heartbeat/{resolv.conf,hosts,at,not-in-dns}; Heartbeat's unit drop-in
+sentora-net.conf binds resolv.conf and hosts over /etc/resolv.conf and /etc/hosts (BindReadOnlyPaths with "-", files
+written in place, the first run restarts Heartbeat). DNS: $C/dns (auto | panel | up to 3 servers), else
+/run/systemd/resolve/resolv.conf (the real servers), else /etc/resolv.conf. Where: $C/sites-at (auto: the panel's
+address from panel-url when it is RFC 1918 / 100.64/10 / fc00::/7; panel; dns; an address). Left out: a site every
+answering DNS (Heartbeat's servers, plus the panel's own DNS when checks go to the panel) calls NXDOMAIN/no A and AAAA,
+unless it is in the node's /etc/hosts; an error or no answer keeps it (owner: some sites are set up but not in DNS yet;
+some use the panel's DNS, not the office's). Tested with stand-in DNS servers (office, resolved-like errors for .local,
+silent) and in the Elk test (left out, then named in /etc/hosts; Heartbeat alone sees its hosts).
+
 **Notice cookies (2026-11-22):** dryden/ui/tpl/notice.class.php kept one cookie per closed notice and version
 (`sn_notice_<id>-<updated>`, a year), so Elk alerts (closed again after each change) filled the browser until Apache's
 8 KB header limit refused every page with 431 (the owner's panel). Now two cookies: `sn_nc` (a year) and `sn_ncl` (session,
