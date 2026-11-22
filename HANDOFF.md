@@ -506,6 +506,13 @@ an upgraded file had the same date as the one before and PHP-FPM's OPcache kept 
 Log Forwarder 211). bin/zppy's zppy_fresh() now touches every file of the module after unpacking (install and upgrade).
 Until a panel has that core, after an add-on update: restart its PHP-FPM services (the panel's and sentora-php*-fpm).
 
+**AD: Windows' own accounts (2026-11-22, owner's screenshot):** the "Remote desktop and keyboard logons" table showed
+dwm-1, umfd-0... (Window Manager / Font Driver Host virtual accounts, one per session, logon type 2). windows.conf sets
+windows.system_account (boolean, in windows-template.json) on logon events: DWM-n, UMFD-n, names ending in $, ANONYMOUS
+LOGON, LOCAL/NETWORK SERVICE, SYSTEM, IUSR, "-", or domains Window Manager, Font Driver Host, NT AUTHORITY, NT SERVICE.
+build.py's AD_PEOPLE (also by name dwm-*/umfd-* for older events) is added to AD_LOGON and the RDP/keyboard table. Test
+event: DWM-1 in tests/elk/winevents.py (14 events now; both Elk tests count 14 and check the mark).
+
 **Elk node on five systems (2026-11-22, owner: "the elk node definitely should support all 6"):** the installer detects
 ubuntu 26.04 / debian 13 (deb) and almalinux, rocky, rhel 10 / fedora 45 (rpm); $CONF/family and $CONF/firewall
 (ufw | firewalld rich rules); the first tools (openssl, curl) installed before the panel's certificate is read; SELinux
