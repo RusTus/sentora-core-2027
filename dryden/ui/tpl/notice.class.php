@@ -27,8 +27,8 @@ class ui_tpl_notice {
     /**
      * The notices the account sees, one box each, most urgent first.
      *
-     * Notices a client may close stay closed (a cookie per notice and version) until the notice changes;
-     * those sent with 'closable' => 'login' only until the next login (the cookie names the login, see LoginKey()).
+     * Notices a client may close stay closed (their key, notice and version, in the cookie sn_nc) until the notice changes;
+     * those sent with 'closable' => 'login' only until the next login (in sn_ncl; the key names the login, see LoginKey()).
      *
      * @return string|false The HTML, or false when there are none.
      */
@@ -44,12 +44,20 @@ class ui_tpl_notice {
         if ($out === '') {
             return false;
         }
-        // hide the ones closed before (here, so they do not flash), and remember a close
+        // hide the ones closed before (here, so they do not flash), and remember a close: two cookies, sn_nc (a year) and
+        // sn_ncl (until the browser closes, for 'closable' => 'login'), each only the keys of notices still shown, so they
+        // never grow (one cookie per closed notice did: enough of them and Apache refuses every page, "Request Header
+        // Fields Too Large"); those older cookies are read once and removed
         return '<div class="sn-notices" id="sn-notices">' . $out . '</div><script>(function(){var w=document.getElementById("sn-notices");if(!w){return;}'
-            . 'Array.prototype.forEach.call(w.querySelectorAll(".sn-notice[data-key]"),function(n){var k="sn_notice_"+n.getAttribute("data-key");'
-            . 'if(document.cookie.split("; ").indexOf(k+"=1")>=0){n.parentNode.removeChild(n);return;}'
-            . 'var c=n.querySelector(".sn-notice-close");if(c){c.addEventListener("click",function(){document.cookie=k+"=1; path=/; "+(n.hasAttribute("data-login")?"":"max-age=31536000; ")+"SameSite=Lax";n.parentNode.removeChild(n);});}});'
-            . 'if(!w.querySelector(".sn-notice")){w.parentNode.removeChild(w);}})();</script>';
+            . 'function get(n){var m=document.cookie.match(new RegExp("(?:^|; )"+n+"=([^;]*)"));return m&&m[1]?m[1].split("."):[];}'
+            . 'var Y=get("sn_nc"),L=get("sn_ncl"),cur={};'
+            . 'document.cookie.split("; ").forEach(function(c){var n=c.split("=")[0];if(n.indexOf("sn_notice_")===0){var k=n.substr(10);(k.split("-").length>2?L:Y).push(k);document.cookie=n+"=; path=/; max-age=0; SameSite=Lax";}});'
+            . 'function save(){function keep(a){return a.filter(function(k,i){return cur[k]&&a.indexOf(k)===i;}).join(".");}var y=keep(Y),l=keep(L);'
+            . 'document.cookie="sn_nc="+y+"; path=/; "+(y?"max-age=31536000":"max-age=0")+"; SameSite=Lax";document.cookie="sn_ncl="+l+"; path=/; "+(l?"":"max-age=0; ")+"SameSite=Lax";}'
+            . 'Array.prototype.forEach.call(w.querySelectorAll(".sn-notice[data-key]"),function(n){var k=n.getAttribute("data-key");cur[k]=1;'
+            . 'if(Y.indexOf(k)>=0||L.indexOf(k)>=0){n.parentNode.removeChild(n);return;}'
+            . 'var c=n.querySelector(".sn-notice-close");if(c){c.addEventListener("click",function(){(n.hasAttribute("data-login")?L:Y).push(k);save();n.parentNode.removeChild(n);});}});'
+            . 'save();if(!w.querySelector(".sn-notice")){w.parentNode.removeChild(w);}})();</script>';
     }
 
     /**
