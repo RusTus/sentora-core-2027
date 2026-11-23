@@ -574,13 +574,16 @@ has to delete the panel's cookies once.
 along"; ZPanel ran natively on Windows until it was dropped, and that was its real difference): the same panel code on
 Windows, platform differences in settings and per-program drivers (as ZPanel's mailserver_php / ftp_php drivers:
 hmail.php / postfix.php, filezilla.php / proftpd-mysql.php; Sentora 2027's hidden x_settings already do this for the
-Linux systems). WSL stays the supported Windows way until then. Groundwork so far (outside the repositories, the owner's
-side project): a PowerShell stack installer for Windows Server 2022/2025 into C:\zpanel (Apache 2.4 Apache Lounge, PHP
+Linux systems). WSL stays the supported Windows way until then. Groundwork so far, in its own repository
+**RusTus/sentora-windows-2027** (private; installer/, CLAUDE.md, install-test.yml on every push): a PowerShell stack installer for Windows Server 2022/2025 into C:\zpanel (Apache 2.4 Apache Lounge, PHP
 8.5 TS, MySQL 8.4 LTS, checksums pinned, services Apache2 / MySQL, -RelaxedSqlMode, -LegacyForeignKeys), tested on
-GitHub's Windows Server 2025; -WithFtp adds SFTPGo (users in MySQL, FTPS required, SFTP 2022, REST API on 127.0.0.1)
-under test. Picks so far: FTP SFTPGo (FileZilla Server and IIS FTP considered); mail Stalwart (SQL directory) unless
+GitHub's Windows Server 2025; SFTPGo for FTP (users in MySQL, FTPS required, SFTP 2022, REST API on 127.0.0.1,
+C:\zpanel\bin\ftpuser.ps1). It asks about each part, Yes by default (owner: "I'm going to want the default installation
+every time"); -Unattended takes every default, a switch answers its own question. The owner's download page is a private
+artifact (a zip; .ps1 downloads are not allowed there). Picks so far: FTP SFTPGo (FileZilla Server and IIS FTP considered); mail Stalwart (SQL directory) unless
 hMailServer 5.8 is released (commits Nov 2026); DNS Technitium or CoreDNS (zone files); cron Task Scheduler; webmail
-Roundcube. Next when the owner says: finish the stack (mail, DNS, cron), a Windows update script (a version list with
+Roundcube; ActiveSync for phones wanted (owner: "the cherry on the pie"; SOGo is Linux-only, so Z-Push on Apache if it
+is still kept up). Next when the owner says: finish the stack (mail, DNS, cron), a Windows update script (a version list with
 checksums, compared nightly, notify first), then Windows drivers module by module, FTP first.
 
 **New node types** (owner's ideas, 2026-11-15, back burner; the failover/standby panel left out on purpose):
