@@ -123,7 +123,7 @@ installer really finished (/etc/sentora/.installing gone), ends with a short log
 Backup / Uninstall files in Sentora's folder; read-only disks (WSL's kernel headers) no longer raise disk alerts.
 Restart test passed (panel answered from another PC after a reboot). **Next (the owner's list, 2026-11-12):** the owner tests the panel; open from that night: 75 "Remote file inclusion" lines from his PC on the panel by IP (URI not seen yet: ask for a screenshot if they come back). His panel's time zone was America/Catamarca by mistake; fixed to America/Chicago (timedatectl + date.timezone in every php.ini). Debian VM confirmed 2027.65 (smoke 26/26).
 
-## Payment Plans (add-on, sentora-repo/payment_plans.zpp, 109)
+## Payment Plans (add-on, sentora-repo/payment_plans.zpp, 110)
 
 Menu (108, owner 2026-11-13): `code/menu.php` hides it from clients with no plan and no invoice (core 2027.89 `ui_moduleloader::Shown` asks a module's optional code/menu.php for each menu); sellers always see it.
 
@@ -147,6 +147,11 @@ before publishing a change; `run.sh <unzipped module folder>` tests a working co
   at StartPlan; 0 for older plans = as before) given to `PeriodEnd`; PayPal disputes: lost only for RESOLVED_BUYER_FAVOUR,
   RESOLVED_WITH_PAYOUT, ACCEPTED; `Tell` logs `mailfail` when sys_email::SendEmail returns false; step 3 skips deleted
   accounts and sets in_reminded_in = 2 only for an active plan. Phone: .pp-table rows become cards.
+- **110** (owner: "go ahead with 1-8"; 110-112 planned, 8 waits for the owner's sandbox keys): doStartAll in test mode needs
+  inTestOk=1 (a tick on the page); x_pp_sellers.ps_resume_vc today|owed (added as 'owed' for sellers from before) used by
+  MarkPaid when the plan was switched off and paid-until is in the past (paid-until = now, anchor = today's day);
+  ps_before_in (0-30; 0 for sellers from before) + x_pp_invoices.in_soon_in: daemon step 2b Tell('soon'); doExport (CSV,
+  UTF-8 BOM, formula-looking cells prefixed with ', the seller's invoices only). Settings not posted keep their value.
   **Still open, for the owner to choose** (review 2026-11-23): client billing details on invoices (company, address, VAT ID);
   tax beyond one flat rate (EU OSS, reverse charge); PDF invoices and credit notes on refunds; one-off invoices and extra
   lines (setup fees, discounts); CSV export; a reminder before the due date; test mode touching real clients ("Start billing
