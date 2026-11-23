@@ -123,7 +123,7 @@ installer really finished (/etc/sentora/.installing gone), ends with a short log
 Backup / Uninstall files in Sentora's folder; read-only disks (WSL's kernel headers) no longer raise disk alerts.
 Restart test passed (panel answered from another PC after a reboot). **Next (the owner's list, 2026-11-12):** the owner tests the panel; open from that night: 75 "Remote file inclusion" lines from his PC on the panel by IP (URI not seen yet: ask for a screenshot if they come back). His panel's time zone was America/Catamarca by mistake; fixed to America/Chicago (timedatectl + date.timezone in every php.ini). Debian VM confirmed 2027.65 (smoke 26/26).
 
-## Payment Plans (add-on, sentora-repo/payment_plans.zpp, 108)
+## Payment Plans (add-on, sentora-repo/payment_plans.zpp, 109)
 
 Menu (108, owner 2026-11-13): `code/menu.php` hides it from clients with no plan and no invoice (core 2027.89 `ui_moduleloader::Shown` asks a module's optional code/menu.php for each menu); sellers always see it.
 
@@ -138,6 +138,22 @@ of the seller's page; every step noted in `x_pp_log`. Security-reviewed in 103 (
 PayPal/Stripe test modes; refunds and chargebacks (105): no webhooks (no public address, owner's rule: less exposed); `pp_daemon` step 4 asks each processor's `Reversals()` once a day for invoices paid within 180 days and while a chargeback is open (columns in_refund_vc, in_refunded_in, in_dispute_vc, in_checked_in), `pp_pay::Reversals` notes it on the invoice and history and tells the seller (`pp::TellSeller`); the client's hosting is never touched by it. The module is only kept as the .zpp: unzip it to change it. Its tests:
 `tests/payment_plans/run.sh` in sentora-installers-2027 (stand-in panel, fake PayPal and Stripe; run
 before publishing a change; `run.sh <unzipped module folder>` tests a working copy, without it the .zpp).
+- **109** (owner, 2026-11-23: "is it 100% ready for a real panel?"; an independent review, then fixes): `pp_pay::Create` claims the
+  invoice first (`UPDATE ... SET in_order_in = now WHERE in_order_in IS NULL OR <= now-10`, one row or "started a moment ago")
+  and stores its reference only while the claim is still its own (else it abandons the page it made); `Apply` failed/pending
+  only `AND in_order_vc = <the answer's ref>`; the controller's `CloseOnline` (Settle, Abandon, Settle) runs before Void and
+  Mark paid; `Abandon` without keys: a processor whose page takes money alone (`TakesMoneyAlone()`: Stripe true, PayPal
+  false; absent = true) is not called closed for a day after the start; `x_pp_plans.pl_anchor_in` (day of the paid-until date
+  at StartPlan; 0 for older plans = as before) given to `PeriodEnd`; PayPal disputes: lost only for RESOLVED_BUYER_FAVOUR,
+  RESOLVED_WITH_PAYOUT, ACCEPTED; `Tell` logs `mailfail` when sys_email::SendEmail returns false; step 3 skips deleted
+  accounts and sets in_reminded_in = 2 only for an active plan. Phone: .pp-table rows become cards.
+  **Still open, for the owner to choose** (review 2026-11-23): client billing details on invoices (company, address, VAT ID);
+  tax beyond one flat rate (EU OSS, reverse charge); PDF invoices and credit notes on refunds; one-off invoices and extra
+  lines (setup fees, discounts); CSV export; a reminder before the due date; test mode touching real clients ("Start billing
+  them" while testing bills real accounts with TEST invoices and can switch them off); after a long switch-off the next
+  invoice starts where they left off (owed months), not from the day they pay; PayPal `application_context` ->
+  `payment_source.paypal.experience_context` and a newer Stripe-Version (both need a real sandbox run first); the seller's
+  page gets long (invoice filter/paging).
 
 ## Web Hardening (add-on, sentora-repo/php_hardening.zpp, 106, administrators; folder php_hardening, was "PHP Hardening")
 
