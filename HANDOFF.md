@@ -123,7 +123,7 @@ installer really finished (/etc/sentora/.installing gone), ends with a short log
 Backup / Uninstall files in Sentora's folder; read-only disks (WSL's kernel headers) no longer raise disk alerts.
 Restart test passed (panel answered from another PC after a reboot). **Next (the owner's list, 2026-11-12):** the owner tests the panel; open from that night: 75 "Remote file inclusion" lines from his PC on the panel by IP (URI not seen yet: ask for a screenshot if they come back). His panel's time zone was America/Catamarca by mistake; fixed to America/Chicago (timedatectl + date.timezone in every php.ini). Debian VM confirmed 2027.65 (smoke 26/26).
 
-## Payment Plans (add-on, sentora-repo/payment_plans.zpp, 111)
+## Payment Plans (add-on, sentora-repo/payment_plans.zpp, 112)
 
 Menu (108, owner 2026-11-13): `code/menu.php` hides it from clients with no plan and no invoice (core 2027.89 `ui_moduleloader::Shown` asks a module's optional code/menu.php for each menu); sellers always see it.
 
@@ -158,10 +158,19 @@ before publishing a change; `run.sh <unzipped module folder>` tests a working co
   MarkPaid leaves paid-until alone for it and the "already has an open invoice" checks skip it; unpaid past the grace days
   it switches off like any invoice, and paying switches on only when no other invoice is overdue. Pages: seller card "Extra charges and one-off
   invoices", client card "Your billing details", invoice view with lines and subtotal (pp.css .pp-block/.pp-chargeline).
-  **Still open:** 112 = PDF invoices, credit notes on refunds, tax options (tax-inclusive prices, reverse charge for a
-  business VAT ID, per-country rates); then a real PayPal/Stripe sandbox run with the owner's keys (PayPal
-  `payment_source.paypal.experience_context` and a newer Stripe-Version wait for it); invoice filter/paging when a seller's
-  list gets long.
+- **112**: code/pdf.php (pp_pdf: plain PHP PDF writer, A4, Helvetica WinAnsi with its width table, iconv to Windows-1252,
+  more pages when long; Invoice() and CreditNote()); doPdf (POST, seller or client only); Tell attaches the PDF to 'new'
+  and 'paid' mails when sys_email has addStringAttachment. x_pp_credits + x_pp_invoices.in_credited_in: pp::MakeCredit
+  (under the seller's lock, CN-/TEST-CN- numbers from ps_cnnext_in/ps_cntestnext_in, never past the total, the last one
+  takes the rest of the tax), called by pp_pay::Reversals for a refund amount above what is credited and for a lost
+  chargeback, and by doCredit (seller; for an invoice not paid online it also sets in_refund_vc/in_refunded_in).
+  Tax: ps_taxincl_in (in_items_in = what the lines add up to as shown; in_taxincl_in), ps_rates_tx ("DE 19" lines,
+  pp::Rates), ps_country_vc + bt_country_vc, ps_reverse_in (TaxFor: rate 0 and in_note_vc when the client has a tax
+  ID and another country; with inclusive prices each line is taken without that country's rate). The settings form
+  sends inTaxOpts so an older form keeps the options. pp::Plain writes negatives with one sign.
+  **Still open:** a real PayPal/Stripe sandbox run with the owner's keys (PayPal `payment_source.paypal.experience_context`
+  and a newer Stripe-Version wait for it); invoice filter/paging when a seller's list gets long; VAT ID check (VIES) by
+  the panel (the seller checks for now).
 
 ## Web Hardening (add-on, sentora-repo/php_hardening.zpp, 106, administrators; folder php_hardening, was "PHP Hardening")
 
