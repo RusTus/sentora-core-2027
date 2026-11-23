@@ -155,6 +155,16 @@ key. Daily report (OnDaemonDay, sys_email, off by default; to the chosen address
 x_zgod (settings only). Test: tests/zgod (stand-in panel on SQLite; views, actions, refusals, an attack test: hostile names,
 injection tries, no or a wrong form key, a reseller and a client). The owner's later ideas (not started): a Kibana dashboard
 for zGod's figures, and installing a dashboard file on the Elk node with one command.
+- **101** (owner, 2026-11-23: "a quick top-down look at everything on the panel", as the old one's pages were): tabs Usage,
+  Domains, Mail, MySQL, FTP, Cron jobs, Docker apps (only while x_dh_containers exists: zgod::HasDocker), Packages: plain
+  tables (controller Table/ListCard/Find/Match; on a phone each row a card with data-label). zgod::All($what) holds the
+  queries (never a password: x_mysql_users only name/access/created). Activity by ac_lastlogon_ts: recent 7 days, active
+  90, inactive, never (zgod::Activity). Account page: MySQL users with their databases (x_mysql_dbmap), DNS records by
+  domain (x_dns), Docker apps; Shadow posts to ./?module=shadowing&action=ShadowUser (inShadow_<id>, inReturn=zgod) when
+  Shadowing is on, never for yourself; Edit/Delete link to Manage Clients (owner agreed: zGod never deletes).
+  Bug fixed: x_logs.lg_when_ts is a TIMESTAMP (the only non-number _ts column): zGod 100 wrote time() into it and MySQL
+  strict mode refused, after the suspend/mailbox change was made. Now left to the database; read with zgod::When. The
+  test's stand-in has it as TEXT DEFAULT CURRENT_TIMESTAMP. Found by the Elk whole-way test on a real panel.
 
 ## Patch scripts (installers repo, 2026-11-10)
 
