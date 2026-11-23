@@ -444,6 +444,20 @@ the node (https://<node>/, `sentora-elk-node kibana-from` limits who reaches it)
   - `sentora-elk-node update` fetches the newest installer from master2027 first (bash -n and its "Checking" step must
     be there) into /usr/local/lib/sentora-elk/installer, then runs it (before 2026-11-21 it ran the install-time copy:
     the owner's update showed 11 steps and 6 dashboards; nodes from before then need the one-line fetch once).
+  - Dashboards someone made (owner, 2026-11-23: "upload a panel ... with one command"): `sentora-elk-node dashboard
+    install FILE.ndjson|https://.. [NAME]` / `list` / `remove NAME` (elk-node/sources/dashboards.py, python3 -I). Checks the
+    Kibana export (types allowed: dashboard, visualization, lens, map, search, index-pattern, tag, canvas-*, links,
+    event-annotation-group; never action/alert/cases/...; no id sentora-*; at least one dashboard; 20 MB; https only),
+    imports through /api/saved_objects/_import?overwrite=true as elastic, keeps what was added in
+    /etc/sentora-elk/dashboards/NAME.json (700/600); remove deletes only those (an object another added file also has stays).
+    Tested in the whole-way test (added, listed, connector/takeover/junk/http refused, kept by the update, removed).
+  - zGod on the node (owner, 2026-11-23): a node dashboard (sentora-zgod, build.py), not an uploaded file: the node has to
+    read zGod's lines anyway (Logstash kind zgod), so the board comes with it. zGod 101's OnDaemonRun hook (zgod::ElkRun)
+    writes log_dir/zgod.log (640; > 5 MB -> zgod.log.1): type account (hourly), server (hourly), action (from x_logs rows of
+    module zgod after the last id sent, x_zgod elk_log_id; the first run starts from now). Log Forwarder 214 follows it in
+    the "panel" group. Logstash: only known keys, numbers as doubles, strings cut (64, reason 200); the line's own
+    @timestamp. Template: sentora.zgod.* mapped; the installer lazily rolls logs-sentora-default over when sentora.zgod.disk
+    is not mapped yet. Whole-way test: zGod installed on the test panel, its lines read back on the node.
   - Whole-way test: FortiGate (p12 opened with the shown password, 14 lines, a stranger's and no certificate refused),
     Veeam (7 events, the failed job's alert), Microsoft 365 (stand-in, 9 documents, the secret kept and unseen), the
     store (a fake Magento on the test panel: 85 documents, no e-mail or street on the node), search words.
