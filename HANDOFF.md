@@ -601,7 +601,10 @@ next to Windows' DNS Server; something on 53 at one inside address (connection s
 ::. Releases (2026-11-23): VERSION 2027.N in sentora-windows-2027 and a
 release.yml run by hand (the whole install test first, then v2027.N and "current", whose link never changes:
 releases/download/current/install-zpanel-stack.zip; the installer prints its version). 2027.1 released; the owner's
-hand-made release tagged "main" (the branch's name) was removed by it. Still open: a real certificate (Let's Encrypt) and
+hand-made release tagged "main" (the branch's name) was removed by it. 2027.2: ClamAV's first download tried three times, and
+the install goes on without the virus check if it still fails (on the owner's fresh Server 2025 the first download failed
+once with "Connection failed", then worked). Owner's own test on a real Server 2025 (2026-11-23): installed, mailbox, DNS MX,
+webmail sign-in and a message sent and received: all working. Still open: a real certificate (Let's Encrypt) and
 Autodiscover; then scheduled jobs, the update command, the panel. Next when
 the owner says: finish the stack (mail, DNS, cron), a Windows update script (a version list with
 checksums, compared nightly, notify first), then Windows drivers module by module, FTP first.
