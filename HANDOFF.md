@@ -570,6 +570,19 @@ has to delete the panel's cookies once.
 
 - **gVisor on SELinux nodes** (owner 2026-11-18: later): write Sentora's own SELinux rules for gVisor (a domain for runsc, tried on the Docker node test's SELinux machine) so apps on AlmaLinux/Rocky/RHEL/Fedora nodes get gVisor and SELinux together. Until then gVisor is not used there (agent `Runsc()`).
 
+**Native Windows panel** (owner's goal, 2026-11-23: "restoring the Windows part makes it how it was supposed to be all
+along"; ZPanel ran natively on Windows until it was dropped, and that was its real difference): the same panel code on
+Windows, platform differences in settings and per-program drivers (as ZPanel's mailserver_php / ftp_php drivers:
+hmail.php / postfix.php, filezilla.php / proftpd-mysql.php; Sentora 2027's hidden x_settings already do this for the
+Linux systems). WSL stays the supported Windows way until then. Groundwork so far (outside the repositories, the owner's
+side project): a PowerShell stack installer for Windows Server 2022/2025 into C:\zpanel (Apache 2.4 Apache Lounge, PHP
+8.5 TS, MySQL 8.4 LTS, checksums pinned, services Apache2 / MySQL, -RelaxedSqlMode, -LegacyForeignKeys), tested on
+GitHub's Windows Server 2025; -WithFtp adds SFTPGo (users in MySQL, FTPS required, SFTP 2022, REST API on 127.0.0.1)
+under test. Picks so far: FTP SFTPGo (FileZilla Server and IIS FTP considered); mail Stalwart (SQL directory) unless
+hMailServer 5.8 is released (commits Nov 2026); DNS Technitium or CoreDNS (zone files); cron Task Scheduler; webmail
+Roundcube. Next when the owner says: finish the stack (mail, DNS, cron), a Windows update script (a version list with
+checksums, compared nightly, notify first), then Windows drivers module by module, FTP first.
+
 **New node types** (owner's ideas, 2026-11-15, back burner; the failover/standby panel left out on purpose):
 - **Edge node**, one node with roles switched on: Secondary DNS (BIND secondary of the panel's zones, signed transfers), Watch (outside checks of sites, mail, certificates, the panel; email/push when the panel itself is down; uptime per site), Backup MX (accepts and holds mail while the panel is down), Outgoing mail relay (optional: the panel's mail leaves from the node's IP). 1 CPU / 1 GB; one pairing, one status card with a row per role; designed so two Edge nodes in two places can run side by side.
 - Kept as their own nodes (not in the Edge node): **Database node** (MySQL for heavy sites), **Storage node** (S3-style storage for apps), **Edge cache** (CDN-like proxy in front of sites). The backup node and Docker nodes stay single-purpose.
