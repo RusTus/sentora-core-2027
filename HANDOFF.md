@@ -594,7 +594,11 @@ Stalwart; plain HTTP to those addresses redirects). Mailboxes: C:\zpanel\bin\mai
 same API). SOGo is Linux-only, hence Z-Push. ClamAV 1.5.5 (2026-11-23): services ClamAV (clamd 127.0.0.1:3310) and FreshClam under NSSM
 (bin\nssm), Stalwart's MTA hook (stage data) to http://127.0.0.1/_sentora/mailscan (apps\mailscan\scan.php, Require ip
 127.0.0.1, key in configs\stalwart\mailscan-key.txt): virus refused 554, ClamAV down 451; EICAR tested. SpamAssassin left
-out (Stalwart's own filter does that job; the owner agreed). Still open: a real certificate (Let's Encrypt) and Autodiscover. Next when
+out (Stalwart's own filter does that job; the owner agreed). DNS is done (2026-11-23): CoreDNS 1.15.0 (service CoreDNS under NSSM; Corefile in configs\dns: the auto plugin
+over configs\dns\zones\db.DOMAIN, reload 15s, any, errors; no forward, so other names are REFUSED), dnszone.ps1 (zones and
+records, values checked, serial raised; the panel's DNS driver on Windows can write the same BIND-format files). Not installed
+next to Windows' DNS Server; something on 53 at one inside address (connection sharing, Docker) is fine, CoreDNS listens on
+::. Still open: a real certificate (Let's Encrypt) and Autodiscover; then scheduled jobs, the update command, the panel. Next when
 the owner says: finish the stack (mail, DNS, cron), a Windows update script (a version list with
 checksums, compared nightly, notify first), then Windows drivers module by module, FTP first.
 
