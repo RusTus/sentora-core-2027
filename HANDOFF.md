@@ -591,7 +591,10 @@ and ActiveSync with Z-Push 2.7.7 (/Microsoft-Server-ActiveSync; PECL php_imap 1.
 IpcFileProvider written for Windows, as Z-Push's IPC needs sem_get or WinCache; combined backend IMAP + CalDAV + CardDAV;
 LOG_SYSLOG_FACILITY LOG_USER). Apache gets HTTPS on 443 (mail.conf: proxy /dav and /.well-known/cal|carddav to
 Stalwart; plain HTTP to those addresses redirects). Mailboxes: C:\zpanel\bin\mailuser.ps1 (the panel's way in later,
-same API). SOGo is Linux-only, hence Z-Push. Still open: a real certificate (Let's Encrypt) and Autodiscover. Next when
+same API). SOGo is Linux-only, hence Z-Push. ClamAV 1.5.5 (2026-11-23): services ClamAV (clamd 127.0.0.1:3310) and FreshClam under NSSM
+(bin\nssm), Stalwart's MTA hook (stage data) to http://127.0.0.1/_sentora/mailscan (apps\mailscan\scan.php, Require ip
+127.0.0.1, key in configs\stalwart\mailscan-key.txt): virus refused 554, ClamAV down 451; EICAR tested. SpamAssassin left
+out (Stalwart's own filter does that job; the owner agreed). Still open: a real certificate (Let's Encrypt) and Autodiscover. Next when
 the owner says: finish the stack (mail, DNS, cron), a Windows update script (a version list with
 checksums, compared nightly, notify first), then Windows drivers module by module, FTP first.
 
