@@ -604,7 +604,13 @@ releases/download/current/install-zpanel-stack.zip; the installer prints its ver
 hand-made release tagged "main" (the branch's name) was removed by it. 2027.2: ClamAV's first download tried three times, and
 the install goes on without the virus check if it still fails (on the owner's fresh Server 2025 the first download failed
 once with "Connection failed", then worked). Owner's own test on a real Server 2025 (2026-11-23): installed, mailbox, DNS MX,
-webmail sign-in and a message sent and received: all working. Still open: a real certificate (Let's Encrypt) and
+webmail sign-in and a message sent and received: all working. 2027.3: updates. C:\zpanel\bin\sentora-update.ps1 (-Check:
+tells only, logs\update-available.txt and the Application log; a nightly task "Sentora update check" at 3:17 runs it; without
+-Check: current release downloaded through the GitHub API, SHA256SUMS checked, configs zipped to C:\zpanel\backups, the NSSM
+services stopped and their programs waited for, then the new installer run with -Unattended and the answers in
+configs\install-choices.json; configs\version.txt holds the version). Private repository: a read-only fine-grained token in
+configs\update\github-token.txt. The test updates from the checked-out copy to current and checks mail, zones and services.
+Expand-Into now waits for programs running from a folder before replacing it (NSSM says stopped before its program exits). Still open: a real certificate (Let's Encrypt) and
 Autodiscover; then scheduled jobs, the update command, the panel. Next when
 the owner says: finish the stack (mail, DNS, cron), a Windows update script (a version list with
 checksums, compared nightly, notify first), then Windows drivers module by module, FTP first.
