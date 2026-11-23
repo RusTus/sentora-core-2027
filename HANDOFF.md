@@ -489,6 +489,12 @@ the node (https://<node>/, `sentora-elk-node kibana-from` limits who reaches it)
   - `sentora-elk-node update` fetches the newest installer from master2027 first (bash -n and its "Checking" step must
     be there) into /usr/local/lib/sentora-elk/installer, then runs it (before 2026-11-21 it ran the install-time copy:
     the owner's update showed 11 steps and 6 dashboards; nodes from before then need the one-line fetch once).
+  - Viewer logins (owner, 2026-11-23: a kiosk; zadmin is not a Kibana login): `sentora-elk-node viewer add|password|remove|list
+    NAME` (tool's `viewer` case). Each call PUTs the Kibana role sentora_viewer (/api/security/role: base read in every
+    space, ES read + view_index_metadata on the same indices as sentora_admin); users are ES native users with exactly
+    that role; password/remove refuse any login that is not one; names [a-z][a-z0-9_-]{2,30}, not sentora*/elastic/kibana/...
+    Kibana's default session lifespan (30 days) applies. Whole-way test: log in, open a dashboard, refused change/make/delete,
+    list, refused names, new password, removed.
   - Dashboards someone made (owner, 2026-11-23: "upload a panel ... with one command"): `sentora-elk-node dashboard
     install FILE.ndjson|https://.. [NAME]` / `list` / `remove NAME` (elk-node/sources/dashboards.py, python3 -I). Checks the
     Kibana export (types allowed: dashboard, visualization, lens, map, search, index-pattern, tag, canvas-*, links,
