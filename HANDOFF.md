@@ -142,6 +142,25 @@ before publishing a change; `run.sh <unzipped module folder>` tests a working co
 ## Web Hardening (add-on, sentora-repo/php_hardening.zpp, 106, administrators; folder php_hardening, was "PHP Hardening")
 
 two guards, each off / watch only / on. **ModSecurity:** the installers install it switched off (settings modsec_*; the core's `etc/modsecurity/coreruleset` is OWASP CRS 4.25.2 LTS, updated with `.github/scripts/update-crs.sh`; Sentora's httpd.conf includes modsec_conf_dir); the add-on's daemon writes `sentora-web-hardening.conf` there (`ph_modsec::Conf`), tests Apache, reloads, rolls back; the panel's own host is always DetectionOnly (106: ModSecurity 2.9.8+ refuses form data over SecRequestBodyNoFilesLimit even in DetectionOnly, so watch only uses 12.5 MB and the panel's hosts skip bodies over 128 KB); what it caught comes from the audit log (parts AHZ). The install test switches it on through the add-on and requires 403s for attacks (`.github/scripts/modsec-test.sh`). **Snuffleupagus:** the PHP bundles carry it switched off; Actions > PHP bundles also builds it for each system's own PHP (on the release, in php-bundles.json under `snuffleupagus`); rules in `ph::Catalog()`; the daemon writes 90-sentora-php-hardening.ini and the rules into that PHP's own scan dir, tries PHP with them first, reloads, puts back on failure; what it caught comes from `journalctl -t snuffleupagus`. Not used: read-only-exec (sites own their files) and anything needing a secret key (the rules file is world-readable). Tried on the owner's AlmaLinux panel (2026-11-12, both guards, checked out OK); the ModSecurity part is also tested by the install test; Snuffleupagus builds for every system's own PHP are on the `current` release (alma10 8.3, debian13 8.4, ubuntu26.04 and fedora45 8.5; checked 2026-11-11), so it can be tried now. What it caught (102-103): `assets/ph.js` + `code/caught.php` (module_controller::Feed: list pages before/after an id with filters q/kind/act/guard via ph::Where, or stats=1&days via ph::Stats); every line has ca_kind_vc (ph::KindOf: CRS families / Snuffleupagus feature), daily counts in x_ph_daily (400 days), list keeps 5000; Look now = zsudo daemon-run once a minute. The panel's own names (ph_modsec::PanelHosts: sentora_domain + Branding addresses) and requests to a bare IP are DetectionOnly. ModSecurity 2 writes zones as "--0600" (Entries fixes it). Tests: `tests/php_hardening/run.sh` (real Snuffleupagus, fake PHP-FPMs and Apache).
+- **107 Bans and Flood protection** (owner, 2026-11-23: "mod evasive" and a way to see and change fail2ban's bans; the
+  owner chose Web Hardening over a page of its own). `code/bans.php` (ph_bans): hidden settings fail2ban_client and
+  fail2ban_dir (added by the add-on with /usr/bin/fail2ban-client, /etc/fail2ban when missing). The daemon (as root)
+  writes /etc/fail2ban/jail.d/sentora-web-hardening.local ([DEFAULT] ignoreip = the server's own from jail.d/sentora.conf +
+  the never-ban list; [sentora-manual] systemd backend, a filter that never matches, bantime -1, banaction_allports;
+  [sentora-flood] polling on log_dir/domains/*/*-access.log tail, maxretry = limit, findtime 60) and filter.d/sentora-flood.conf
+  (`^<HOST> -[^"]*"[A-Z]+ `, static files in ignoreregex: fail2ban takes the date out before matching, so no `\[...\]`),
+  tests with `fail2ban-client -t` (old files back on failure), reloads when they changed or the list of website logs did
+  (a jail with no log stops fail2ban: the flood jail stays disabled until one website has a log), then does the page's
+  requests (x_ph_settings ban_asked; ban = set sentora-manual banip, unban = unban, out of every jail), unbans hand bans
+  whose time is up, and stores who is banned (status, get <jail> banip --with-time) in ban_state. Every address goes
+  through filter_var/inet_pton, jails through a name pattern, every word through escapeshellarg. The page (tabs Web
+  firewall and PHP / Bans / Flood protection) runs the daemon at once (zsudo daemon-run, at most every 10 s) and reloads
+  itself while something waits. mod_reqtimeout is loaded with Apache's defaults on every system (Debian/Ubuntu enable
+  it; RHEL's base modules load it; Sentora's module trim keeps it): the page only shows it. The access logs are closed to
+  the sites (domains/), so a site can not forge lines to get someone banned. Tests: tests/php_hardening/bans.sh (fake
+  fail2ban; with a real one on the machine also fail2ban-regex and -t; the Add-ons workflow installs fail2ban);
+  .github/scripts/modsec-test.sh (install test, real panels, five systems): hand ban and unban, a real flood from an
+  address on the box banned, the jail gone when switched off, no SELinux refusals, remove takes the jails away.
 
 ## zGod (add-on, sentora-repo/zgod.zpp, 100, administrators; owner's request 2026-11-23)
 The owner's zGod for ZPanel (2011, admin/zGod) written again: the panel's tables read across every account and reseller
