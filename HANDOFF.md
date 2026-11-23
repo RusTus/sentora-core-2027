@@ -582,8 +582,17 @@ C:\zpanel\bin\ftpuser.ps1). It asks about each part, Yes by default (owner: "I'm
 every time"); -Unattended takes every default, a switch answers its own question. The owner's download page is a private
 artifact (a zip; .ps1 downloads are not allowed there). Picks so far: FTP SFTPGo (FileZilla Server and IIS FTP considered); mail Stalwart (SQL directory) unless
 hMailServer 5.8 is released (commits Nov 2026); DNS Technitium or CoreDNS (zone files); cron Task Scheduler; webmail
-Roundcube; ActiveSync for phones wanted (owner: "the cherry on the pie"; SOGo is Linux-only, so Z-Push on Apache if it
-is still kept up). Next when the owner says: finish the stack (mail, DNS, cron), a Windows update script (a version list with
+Roundcube. Mail is done (2026-11-23, tested on GitHub's Windows Server 2025): Stalwart 1.1.1 under NSSM (service
+Stalwart; RocksDB in C:\zpanel\data\mail; set up through its JMAP API in recovery mode on 8091 so no mail port opens
+before its settings are in: listeners 25/587/465/143/993/995 and https on 127.0.0.1:8443 only, its log, 127.0.0.1 and ::1
+never banned, the shared certificate C:\zpanel\configs\ssl\server.crt/key, the domain and an admin in
+configs\stalwart\admin.txt; each run does it again without duplicates), Roundcube 1.7.6 (/webmail, database roundcube),
+and ActiveSync with Z-Push 2.7.7 (/Microsoft-Server-ActiveSync; PECL php_imap 1.0.3; AWL 0.65 for CalDAV; an
+IpcFileProvider written for Windows, as Z-Push's IPC needs sem_get or WinCache; combined backend IMAP + CalDAV + CardDAV;
+LOG_SYSLOG_FACILITY LOG_USER). Apache gets HTTPS on 443 (mail.conf: proxy /dav and /.well-known/cal|carddav to
+Stalwart; plain HTTP to those addresses redirects). Mailboxes: C:\zpanel\bin\mailuser.ps1 (the panel's way in later,
+same API). SOGo is Linux-only, hence Z-Push. Still open: a real certificate (Let's Encrypt) and Autodiscover. Next when
+the owner says: finish the stack (mail, DNS, cron), a Windows update script (a version list with
 checksums, compared nightly, notify first), then Windows drivers module by module, FTP first.
 
 **New node types** (owner's ideas, 2026-11-15, back burner; the failover/standby panel left out on purpose):
