@@ -123,7 +123,7 @@ installer really finished (/etc/sentora/.installing gone), ends with a short log
 Backup / Uninstall files in Sentora's folder; read-only disks (WSL's kernel headers) no longer raise disk alerts.
 Restart test passed (panel answered from another PC after a reboot). **Next (the owner's list, 2026-11-12):** the owner tests the panel; open from that night: 75 "Remote file inclusion" lines from his PC on the panel by IP (URI not seen yet: ask for a screenshot if they come back). His panel's time zone was America/Catamarca by mistake; fixed to America/Chicago (timedatectl + date.timezone in every php.ini). Debian VM confirmed 2027.65 (smoke 26/26).
 
-## Payment Plans (add-on, sentora-repo/payment_plans.zpp, 110)
+## Payment Plans (add-on, sentora-repo/payment_plans.zpp, 111)
 
 Menu (108, owner 2026-11-13): `code/menu.php` hides it from clients with no plan and no invoice (core 2027.89 `ui_moduleloader::Shown` asks a module's optional code/menu.php for each menu); sellers always see it.
 
@@ -152,13 +152,16 @@ before publishing a change; `run.sh <unzipped module folder>` tests a working co
   MarkPaid when the plan was switched off and paid-until is in the past (paid-until = now, anchor = today's day);
   ps_before_in (0-30; 0 for sellers from before) + x_pp_invoices.in_soon_in: daemon step 2b Tell('soon'); doExport (CSV,
   UTF-8 BOM, formula-looking cells prefixed with ', the seller's invoices only). Settings not posted keep their value.
-  **Still open, for the owner to choose** (review 2026-11-23): client billing details on invoices (company, address, VAT ID);
-  tax beyond one flat rate (EU OSS, reverse charge); PDF invoices and credit notes on refunds; one-off invoices and extra
-  lines (setup fees, discounts); CSV export; a reminder before the due date; test mode touching real clients ("Start billing
-  them" while testing bills real accounts with TEST invoices and can switch them off); after a long switch-off the next
-  invoice starts where they left off (owed months), not from the day they pay; PayPal `application_context` ->
-  `payment_source.paypal.experience_context` and a newer Stripe-Version (both need a real sandbox run first); the seller's
-  page gets long (invoice filter/paging).
+- **111**: x_pp_billto (client's company, address, tax ID; doBillTo from the client's page) copied into the invoice's buyer
+  text by BuyerText() when it is made; x_pp_extras (lines waiting for the next hosting invoice; doCharge, inDropExtra) and
+  x_pp_lines (an invoice's lines). MakeInvoice and MakeOneOff both go through Issue(); a one-off has in_period_vc 'once':
+  MarkPaid leaves paid-until alone for it and the "already has an open invoice" checks skip it; unpaid past the grace days
+  it switches off like any invoice, and paying switches on only when no other invoice is overdue. Pages: seller card "Extra charges and one-off
+  invoices", client card "Your billing details", invoice view with lines and subtotal (pp.css .pp-block/.pp-chargeline).
+  **Still open:** 112 = PDF invoices, credit notes on refunds, tax options (tax-inclusive prices, reverse charge for a
+  business VAT ID, per-country rates); then a real PayPal/Stripe sandbox run with the owner's keys (PayPal
+  `payment_source.paypal.experience_context` and a newer Stripe-Version wait for it); invoice filter/paging when a seller's
+  list gets long.
 
 ## Web Hardening (add-on, sentora-repo/php_hardening.zpp, 106, administrators; folder php_hardening, was "PHP Hardening")
 
