@@ -598,7 +598,11 @@ out (Stalwart's own filter does that job; the owner agreed). DNS is done (2026-1
 over configs\dns\zones\db.DOMAIN, reload 15s, any, errors; no forward, so other names are REFUSED), dnszone.ps1 (zones and
 records, values checked, serial raised; the panel's DNS driver on Windows can write the same BIND-format files). Not installed
 next to Windows' DNS Server; something on 53 at one inside address (connection sharing, Docker) is fine, CoreDNS listens on
-::. Still open: a real certificate (Let's Encrypt) and Autodiscover; then scheduled jobs, the update command, the panel. Next when
+::. Releases (2026-11-23): VERSION 2027.N in sentora-windows-2027 and a
+release.yml run by hand (the whole install test first, then v2027.N and "current", whose link never changes:
+releases/download/current/install-zpanel-stack.zip; the installer prints its version). 2027.1 released; the owner's
+hand-made release tagged "main" (the branch's name) was removed by it. Still open: a real certificate (Let's Encrypt) and
+Autodiscover; then scheduled jobs, the update command, the panel. Next when
 the owner says: finish the stack (mail, DNS, cron), a Windows update script (a version list with
 checksums, compared nightly, notify first), then Windows drivers module by module, FTP first.
 
