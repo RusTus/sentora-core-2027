@@ -20,7 +20,12 @@
  */
 
 echo fs_filehandler::NewLine() . "START Sencrypt service certificate sync." . fs_filehandler::NewLine();
-SyncPanelCertificateToServices();
+if (sys_versions::IsWindows()) {
+    // (Windows: mail and FTP keep their own certificate files; the panel's certificate is not from Sencrypt there)
+    echo "Windows: nothing to copy." . fs_filehandler::NewLine();
+} else {
+    SyncPanelCertificateToServices();
+}
 echo "END Sencrypt service certificate sync." . fs_filehandler::NewLine();
 
 /**

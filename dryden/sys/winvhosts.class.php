@@ -7,7 +7,12 @@
  * folder with its error pages and welcome page (Apache's account may not write in hostdata), tests Apache's settings and
  * asks SentoraZsudo for a gentle restart; a refused file is put back as it was. Each site's PHP is its account's own
  * (phpaccount.ps1: every folder in hostdata\NAME runs NAME's PHP), so a vhost here names no PHP at all.
- * Not built yet on Windows: HTTPS per domain, quotas' pages, custom vhost entries, port forwarding (Linux: apache_admin).
+ * HTTPS: a domain with a certificate from Sencrypt (its vh_ssl_tx names the files) gets an HTTPS site on the port of
+ * configs/apache/ssl.conf, and its plain-HTTP site sends visitors there; the files are checked (in the account's own
+ * certificate folder, readable, the key belongs to the certificate) and only their paths are written, never the stored
+ * text. Certificates live in the panel's state folder (CertHome(): Apache's account writes them, the accounts' own PHP
+ * can not read them), Let's Encrypt's check files in one folder for every site (AcmeDir()).
+ * Not built yet on Windows: quotas' pages, custom vhost entries, port forwarding (Linux: apache_admin).
  * Nothing here runs on Linux.
  *
  * @package Sentora
@@ -81,10 +86,18 @@ class sys_winvhosts
         $logs = self::Fwd(ctrl_options::GetSystemOption('log_dir'));
         $port = (int) ctrl_options::GetSystemOption('apache_port');
         $port = $port > 0 ? $port : 80;
+        $https = self::HttpsPort();
+        $acme = self::AcmeDir();
         $allowDisabled = strtolower((string) ctrl_options::GetSystemOption('apache_allow_disabled')) === 'true';
         $t = '# Made by the Sentora panel (sys_winvhosts) from its domains: changes here are written over at the next change.' . $nl
-            . '# Your own sites go in httpd-vhosts.conf.' . $nl . $nl;
-        $q = $zdbh->query("SELECT v.vh_id_pk, v.vh_name_vc, v.vh_directory_vc, v.vh_type_in, v.vh_enabled_in, a.ac_id_pk, a.ac_user_vc
+            . '# Your own sites go in httpd-vhosts.conf.' . $nl . $nl
+            . '# Let\'s Encrypt\'s check files, for every site (written by Sencrypt; plain files only)' . $nl
+            . 'Alias /.well-known/acme-challenge/ "' . $acme . '.well-known/acme-challenge/"' . $nl
+            . '<Directory "' . $acme . '.well-known/acme-challenge">' . $nl
+            . '    Options None' . $nl . '    AllowOverride None' . $nl . '    Require all granted' . $nl . '    ForceType text/plain' . $nl
+            . '    <IfModule php_module>' . $nl . '        php_admin_flag engine Off' . $nl . '    </IfModule>' . $nl
+            . '</Directory>' . $nl . $nl;
+        $q = $zdbh->query("SELECT v.vh_id_pk, v.vh_name_vc, v.vh_directory_vc, v.vh_type_in, v.vh_enabled_in, v.vh_ssl_tx, a.ac_id_pk, a.ac_user_vc
             FROM x_vhosts v JOIN x_accounts a ON a.ac_id_pk = v.vh_acc_fk
             WHERE v.vh_deleted_ts IS NULL AND a.ac_deleted_ts IS NULL ORDER BY v.vh_name_vc");
         $active = $zdbh->prepare("UPDATE x_vhosts SET vh_active_in = 1 WHERE vh_id_pk = :id");
@@ -106,15 +119,32 @@ class sys_winvhosts
             } else {
                 $root = $hosted . $user . '/public_html' . $dir;
             }
-            $t .= '# ' . $name . ' (' . $user . ')' . $nl
-                . '<VirtualHost *:' . $port . '>' . $nl
-                . '    ServerName ' . $name . $nl
-                . ((int) $v['vh_type_in'] === 2 ? '' : '    ServerAlias www.' . $name . $nl)
-                . '    DocumentRoot "' . rtrim($root, '/') . '"' . $nl
+            $names = '    ServerName ' . $name . $nl . ((int) $v['vh_type_in'] === 2 ? '' : '    ServerAlias www.' . $name . $nl);
+            $body = '    DocumentRoot "' . rtrim($root, '/') . '"' . $nl
                 . '    ErrorLog "' . $logs . 'domains/' . $user . '/' . $name . '-error.log"' . $nl
                 . '    CustomLog "' . $logs . 'domains/' . $user . '/' . $name . '-access.log" combined' . $nl
-                . self::ErrorPages($hosted . $user . '/public_html' . $dir, $enabled && (int) $v['vh_type_in'] !== 3)
-                . '</VirtualHost>' . $nl . $nl;
+                . self::ErrorPages($hosted . $user . '/public_html' . $dir, $enabled && (int) $v['vh_type_in'] !== 3);
+            $cert = self::Cert($v['vh_ssl_tx'], $user);
+            if ($cert === null) {
+                $t .= '# ' . $name . ' (' . $user . ')' . $nl . '<VirtualHost *:' . $port . '>' . $nl . $names . $body . '</VirtualHost>' . $nl . $nl;
+            } else {
+                // (plain HTTP sends visitors to HTTPS, except Let's Encrypt's check files; the fingerprint line makes a
+                // renewed certificate a change, so Apache restarts and takes it)
+                $t .= '# ' . $name . ' (' . $user . '), HTTPS: ' . $cert['sum'] . $nl
+                    . '<VirtualHost *:' . $port . '>' . $nl . $names
+                    . '    RewriteEngine On' . $nl
+                    . '    RewriteCond %{REQUEST_URI} !^/\.well-known/acme-challenge/' . $nl
+                    . '    RewriteRule ^/?(.*) https://%{SERVER_NAME}' . ($https === 443 ? '' : ':' . $https) . '/$1 [R=301,L]' . $nl
+                    . '    ErrorLog "' . $logs . 'domains/' . $user . '/' . $name . '-error.log"' . $nl
+                    . '    CustomLog "' . $logs . 'domains/' . $user . '/' . $name . '-access.log" combined' . $nl
+                    . '</VirtualHost>' . $nl
+                    . '<VirtualHost *:' . $https . '>' . $nl . $names . $body
+                    . '    SSLEngine on' . $nl
+                    . '    SSLCertificateFile "' . $cert['cert'] . '"' . $nl
+                    . '    SSLCertificateKeyFile "' . $cert['key'] . '"' . $nl
+                    . ($cert['chain'] !== '' ? '    SSLCertificateChainFile "' . $cert['chain'] . '"' . $nl : '')
+                    . '</VirtualHost>' . $nl . $nl;
+            }
             $active->execute(array(':id' => (int) $v['vh_id_pk']));
         }
         return $t;
@@ -133,6 +163,25 @@ class sys_winvhosts
         $static = self::Fwd(ctrl_options::GetSystemOption('static_dir'));
         $logs = self::Fwd(ctrl_options::GetSystemOption('log_dir'));
         $made = 0;
+        // Let's Encrypt's check files, and each account's certificate folders (in the folder the installer protected:
+        // nothing is made when it is not there, so a key never lands in a folder others may read)
+        $acme = self::AcmeDir() . '.well-known/acme-challenge';
+        if (!is_dir($acme)) {
+            @mkdir($acme, 0755, true);
+        }
+        $certs = self::CertBase();
+        if (is_dir($certs)) {
+            foreach ($zdbh->query("SELECT ac_user_vc FROM x_accounts WHERE ac_deleted_ts IS NULL")->fetchAll(PDO::FETCH_COLUMN) as $u) {
+                $n = sys_winphp::Name($u);
+                if ($n !== '') {
+                    foreach (array('letsencrypt', 'third_party') as $kind) {
+                        if (!is_dir($certs . $n . '/ssl/sencrypt/' . $kind)) {
+                            @mkdir($certs . $n . '/ssl/sencrypt/' . $kind, 0700, true);
+                        }
+                    }
+                }
+            }
+        }
         $q = $zdbh->query("SELECT v.vh_directory_vc, v.vh_type_in, a.ac_user_vc FROM x_vhosts v JOIN x_accounts a ON a.ac_id_pk = v.vh_acc_fk
             WHERE v.vh_deleted_ts IS NULL AND a.ac_deleted_ts IS NULL");
         foreach ($q->fetchAll(PDO::FETCH_ASSOC) as $v) {
@@ -222,6 +271,141 @@ class sys_winvhosts
         $o = array();
         exec(escapeshellcmd($zsudo) . ' service ' . $svc . ' graceful 2>&1', $o, $rc);
         return trim(implode(' ', $o));
+    }
+
+    /**
+     * Where an account's certificates are, as Sencrypt names them (HOME . '/ssl/sencrypt/<kind>/<domain>/'): on Linux
+     * the account's own folder; on Windows its folder in the panel's state folder (Apache's account writes it, the
+     * accounts' own PHP can not read it).
+     *
+     * @param string $user The account's user name.
+     * @return string HOME, with no slash at the end.
+     */
+    static function CertHome($user)
+    {
+        if (!sys_versions::IsWindows()) {
+            return ctrl_options::GetSystemOption('hosted_dir') . $user;
+        }
+        return self::CertBase() . $user;
+    }
+
+    /**
+     * The folder of every account's certificates on Windows ('C:/zpanel/data/sentora/certs/').
+     *
+     * @return string
+     */
+    static function CertBase()
+    {
+        return self::Fwd(dirname(rtrim(self::Fwd(ctrl_options::GetSystemOption('hosted_dir')), '/'))) . 'data/sentora/certs/';
+    }
+
+    /**
+     * The folder Let's Encrypt's check files go in on Windows (its .well-known/acme-challenge, for every site).
+     *
+     * @return string With a slash at the end.
+     */
+    static function AcmeDir()
+    {
+        return self::Fwd(dirname(rtrim(self::Fwd(ctrl_options::GetSystemOption('hosted_dir')), '/'))) . 'data/sentora/acme/';
+    }
+
+    /**
+     * Apache's HTTPS port (the Listen line of configs/apache/ssl.conf, which the installer writes), else 443.
+     *
+     * @return int
+     */
+    static function HttpsPort()
+    {
+        $f = dirname((string) ctrl_options::GetSystemOption('apache_vhost')) . '/ssl.conf';
+        $s = is_file($f) ? (string) @file_get_contents($f) : '';
+        return preg_match('/^\s*Listen\s+(?:[0-9.]+:)?([0-9]{1,5})\s*$/mi', $s, $m) && (int) $m[1] > 0 && (int) $m[1] < 65536 ? (int) $m[1] : 443;
+    }
+
+    /**
+     * The options openssl_pkey_new(), openssl_csr_new() and openssl_csr_sign() need: on Windows PHP finds no
+     * openssl.cnf of its own, so the one next to PHP is named (extras/ssl/openssl.cnf).
+     *
+     * @param array<string, mixed> $more Options of the caller's own.
+     * @return array<string, mixed>
+     */
+    static function OpensslArgs($more = array())
+    {
+        if (sys_versions::IsWindows() && !isset($more['config'])) {
+            $cnf = dirname(str_replace('\\', '/', (string) ctrl_options::GetSystemOption('php_exer'))) . '/extras/ssl/openssl.cnf';
+            if (is_file($cnf)) {
+                $more['config'] = $cnf;
+            }
+        }
+        return $more;
+    }
+
+    /**
+     * Two paths name the same place (Windows: either slash, any case).
+     *
+     * @param string|false $a
+     * @param string|false $b
+     * @return bool
+     */
+    static function SamePath($a, $b)
+    {
+        if ($a === false || $b === false) {
+            return false;
+        }
+        $a = rtrim(str_replace('\\', '/', (string) $a), '/');
+        $b = rtrim(str_replace('\\', '/', (string) $b), '/');
+        return sys_versions::IsWindows() ? strtolower($a) === strtolower($b) : $a === $b;
+    }
+
+    /**
+     * The certificate files a domain's SSL settings name, when they may be used: in the account's own certificate
+     * folder, readable, and the key belongs to the certificate (Apache would not start otherwise). The full chain is
+     * used when Let's Encrypt left one next to the certificate.
+     *
+     * @param string|null $tx The domain's vh_ssl_tx.
+     * @param string $user The account's user name.
+     * @return array{cert: string, key: string, chain: string, sum: string}|null
+     */
+    static function Cert($tx, $user)
+    {
+        $tx = (string) $tx;
+        if (trim($tx) === '') {
+            return null;
+        }
+        $f = array();
+        foreach (preg_split('/\r\n|\r|\n/', $tx) as $line) {
+            if (preg_match('/^\s*(SSLCertificateFile|SSLCertificateKeyFile|SSLCACertificateFile|SSLCertificateChainFile)\s+"?([^"]+?)"?\s*$/i', $line, $m)) {
+                $f[strtolower($m[1])] = str_replace('\\', '/', $m[2]);
+            }
+        }
+        $home = str_replace('\\', '/', self::CertHome($user)) . '/ssl/sencrypt/';
+        $ok = function ($p) use ($home) {
+            return is_string($p) && $p !== '' && strpos($p, '..') === false && preg_match('#^[A-Za-z0-9:/._-]+$#', $p)
+                && strncasecmp($p, $home, strlen($home)) === 0 && is_file($p) && is_readable($p);
+        };
+        $cert = isset($f['sslcertificatefile']) ? $f['sslcertificatefile'] : '';
+        $key = isset($f['sslcertificatekeyfile']) ? $f['sslcertificatekeyfile'] : '';
+        if (!$ok($cert) || !$ok($key)) {
+            return null;
+        }
+        $cp = (string) @file_get_contents($cert);
+        $kp = (string) @file_get_contents($key);
+        if ($cp === '' || $kp === '' || !@openssl_x509_check_private_key($cp, $kp)) {
+            return null;
+        }
+        $chain = '';
+        $full = dirname($cert) . '/fullchain.pem';
+        if (basename($cert) === 'cert.pem' && $ok($full) && @openssl_x509_check_private_key((string) @file_get_contents($full), $kp)) {
+            $cert = $full;
+        } else {
+            foreach (array('sslcertificatechainfile', 'sslcacertificatefile') as $k) {
+                if (isset($f[$k]) && $ok($f[$k]) && filesize($f[$k]) > 0 && @openssl_x509_read((string) @file_get_contents($f[$k]))) {
+                    $chain = $f[$k];
+                    break;
+                }
+            }
+        }
+        $sum = substr(hash('sha256', (string) @file_get_contents($cert) . $kp . ($chain !== '' ? (string) @file_get_contents($chain) : '')), 0, 16);
+        return array('cert' => $cert, 'key' => $key, 'chain' => $chain, 'sum' => $sum);
     }
 
     /**

@@ -517,12 +517,14 @@ keyUsage = nonRepudiation, digitalSignature, keyEncipherment');
      */
     protected function generateKey($outputDirectory)
     {
-        $res = openssl_pkey_new(array(
+        $opts = array(
             "private_key_type" => OPENSSL_KEYTYPE_RSA,
             "private_key_bits" => 4096,
-        ));
+        );
+        // (on Windows PHP has no openssl.cnf of its own: the panel names the one next to PHP)
+        $res = openssl_pkey_new(class_exists('sys_winvhosts') ? sys_winvhosts::OpensslArgs($opts) : $opts);
 
-        if (!openssl_pkey_export($res, $privateKey)) {
+        if (!openssl_pkey_export($res, $privateKey, null, class_exists('sys_winvhosts') ? sys_winvhosts::OpensslArgs() : array())) {
             throw new RuntimeException("Key export failed!");
         }
 

@@ -314,7 +314,7 @@ function SentoraExpiringCertificates($days)
         }
         foreach (array('letsencrypt' => 'Let\'s Encrypt renewal has been failing (see modules/sencrypt/sencrypt.log)',
             'third_party' => 'it is a third-party certificate: upload a renewed one in Sencrypt') as $kind => $why) {
-            $file = $hosted . $user . '/ssl/sencrypt/' . $kind . '/' . $domain . '/cert.pem';
+            $file = (class_exists('sys_winvhosts') ? sys_winvhosts::CertHome($user) : $hosted . $user) . '/ssl/sencrypt/' . $kind . '/' . $domain . '/cert.pem';
             $cert = is_file($file) ? @openssl_x509_parse((string) @file_get_contents($file)) : false;
             if (!$cert || empty($cert['validTo_time_t'])) {
                 continue;

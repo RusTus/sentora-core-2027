@@ -295,7 +295,7 @@ class module_controller extends ctrl_module {
 	 * @return array{kind: string, days: int|null, until: string}|null 'letsencrypt' or 'third_party', whole days left (null when not issued yet) and the end date; null when there is none.
 	 */
 	static function CertOf($username, $domain) {
-		$base = ctrl_options::GetSystemOption('hosted_dir') . $username . '/ssl/sencrypt/';
+		$base = sys_winvhosts::CertHome($username) . '/ssl/sencrypt/';
 		foreach (array('letsencrypt', 'third_party') as $kind) {
 			$dir = $base . $kind . '/' . $domain;
 			if (!is_dir($dir)) {
@@ -388,6 +388,9 @@ class module_controller extends ctrl_module {
 	 * @return string HTML table rows.
 	 */
 	static function getPanelCertRows() {
+		if (sys_versions::IsWindows()) {
+			return '<tr><td colspan="5" class="sc-empty">' . self::t('On Windows the panel\'s own HTTPS uses the certificate in C:\\zpanel\\configs\\ssl (server.crt and server.key): replace those two files with your own, then restart Apache.') . '</td></tr>';
+		}
 		$currentuser = ctrl_users::GetUserDetail();
 		$domain = (string) ctrl_options::GetSystemOption('sentora_domain');
 		$c = self::CertOf($currentuser['username'], $domain);
@@ -497,7 +500,7 @@ class module_controller extends ctrl_module {
 		$rootdir = str_replace('.', '_', $domain);
 		
 		$temp_dir = ctrl_options::GetSystemOption('sentora_root') . "etc/tmp/";
-		$homedir = ctrl_options::GetSystemOption('hosted_dir') . $username;
+		$homedir = sys_winvhosts::CertHome($username);
     	$backupname = $rootdir;
 		// -y: symbolic links are stored as links, not followed (a link in the account's
 		// folder could otherwise put any file the panel can read into this download)
@@ -538,7 +541,8 @@ class module_controller extends ctrl_module {
 			return false;
 		}
 		$currentuser = ctrl_users::GetUserDetail();
-		if ($domain === (string) ctrl_options::GetSystemOption('sentora_domain') && (int) $currentuser['usergroupid'] === 1) {
+		// (on Windows the panel's own HTTPS is the installer's certificate for now, not one from this page)
+		if ($domain === (string) ctrl_options::GetSystemOption('sentora_domain') && (int) $currentuser['usergroupid'] === 1 && !sys_versions::IsWindows()) {
 			return true;
 		}
 		$sql = $zdbh->prepare("SELECT COUNT(*) FROM x_vhosts WHERE vh_name_vc = :domain AND vh_acc_fk = :uid AND vh_deleted_ts IS NULL");
@@ -623,9 +627,9 @@ class module_controller extends ctrl_module {
 					"commonName" => "$domain",
 					"emailAddress" => "$address"
 		);
-		$privkey = openssl_pkey_new($config);
-		$csr = $privkey ? openssl_csr_new($dn, $privkey, $csrconfig) : false;
-		if (!$csr || !openssl_csr_export($csr, $csrout) || !openssl_pkey_export($privkey, $pkeyout, $password)) {
+		$privkey = openssl_pkey_new(sys_winvhosts::OpensslArgs($config));
+		$csr = $privkey ? openssl_csr_new($dn, $privkey, sys_winvhosts::OpensslArgs($csrconfig)) : false;
+		if (!$csr || !openssl_csr_export($csr, $csrout) || !openssl_pkey_export($privkey, $pkeyout, $password, sys_winvhosts::OpensslArgs())) {
 			self::$csrFailed = true;
 			return false;
 		}
@@ -666,7 +670,7 @@ class module_controller extends ctrl_module {
 	 * @return string|false The key file's path, or false when a folder is not safe (or missing).
 	 */
 	static function RequestKeyFile($username, $domain, $create = false) {
-		$home = rtrim(ctrl_options::GetSystemOption('hosted_dir'), '/') . '/' . $username;
+		$home = sys_winvhosts::CertHome($username);
 		$path = $home;
 		foreach (array('/ssl', '/sencrypt', '/third_party', '/requests') as $sub) {
 			$path .= $sub;
@@ -674,7 +678,7 @@ class module_controller extends ctrl_module {
 			if ($create && !file_exists($path) && !is_link($path)) {
 				@mkdir($path, $sub === '/requests' ? 0700 : 0755);
 			}
-			if (is_link($path) || !is_dir($path) || realpath($path) !== $path) {
+			if (is_link($path) || !is_dir($path) || !sys_winvhosts::SamePath(realpath($path), $path)) {
 				return false;
 			}
 		}
@@ -725,7 +729,7 @@ class module_controller extends ctrl_module {
 		global $zdbh;
 		global $controller;
 		$currentuser = ctrl_users::GetUserDetail();
-		$dir = ctrl_options::GetSystemOption('hosted_dir') . $username . "/ssl/sencrypt/" . $sub_module . "/" . $domain;
+		$dir = sys_winvhosts::CertHome($username) . "/ssl/sencrypt/" . $sub_module . "/" . $domain;
 		$objects = scandir($dir);
 		
 		foreach ($objects as $object) {
@@ -744,15 +748,15 @@ class module_controller extends ctrl_module {
 			$line .= fs_filehandler::NewLine();
 			$line .= 'SSLEngine On' . fs_filehandler::NewLine();
 			$line .= sys_tls::Lines();
-			$line .= "SSLCertificateFile " . ctrl_options::GetSystemOption('hosted_dir') . $currentuser['username'] . "/ssl/sencrypt/" . $sub_module . "/" . $domain . "/cert.pem" . fs_filehandler::NewLine();
-			$line .= "SSLCertificateKeyFile " . ctrl_options::GetSystemOption('hosted_dir') . $currentuser['username'] . "/ssl/sencrypt/" . $sub_module . "/" . $domain . "/private.pem" . fs_filehandler::NewLine();
+			$line .= "SSLCertificateFile " . sys_winvhosts::CertHome($currentuser['username']) . "/ssl/sencrypt/" . $sub_module . "/" . $domain . "/cert.pem" . fs_filehandler::NewLine();
+			$line .= "SSLCertificateKeyFile " . sys_winvhosts::CertHome($currentuser['username']) . "/ssl/sencrypt/" . $sub_module . "/" . $domain . "/private.pem" . fs_filehandler::NewLine();
 
 			// If Letsencrypt or purchased SSL
 			if ( $sub_module == "letsencrypt" ) {
-				$line .= "SSLCACertificateFile " . ctrl_options::GetSystemOption('hosted_dir') . $currentuser['username'] . "/ssl/sencrypt/" . $sub_module . "/" . $domain . "/chain.pem" . fs_filehandler::NewLine();
+				$line .= "SSLCACertificateFile " . sys_winvhosts::CertHome($currentuser['username']) . "/ssl/sencrypt/" . $sub_module . "/" . $domain . "/chain.pem" . fs_filehandler::NewLine();
 				
 			} elseif ( $sub_module == "third_party" ) {
-				$line .= "SSLCACertificateFile " . ctrl_options::GetSystemOption('hosted_dir') . $currentuser['username'] . "/ssl/sencrypt/" . $sub_module . "/" . $domain . "/intermediate.crt". fs_filehandler::NewLine();
+				$line .= "SSLCACertificateFile " . sys_winvhosts::CertHome($currentuser['username']) . "/ssl/sencrypt/" . $sub_module . "/" . $domain . "/intermediate.crt". fs_filehandler::NewLine();
 				
 			} elseif ( $sub_module == "self_signed" ) {
 				// self signed - DO NOthing
@@ -792,8 +796,8 @@ class module_controller extends ctrl_module {
 			$line .= fs_filehandler::NewLine();
 			$line .= 'SSLEngine On' . fs_filehandler::NewLine();
 			$line .= sys_tls::Lines();
-			$line .= "SSLCertificateFile " . ctrl_options::GetSystemOption('hosted_dir') . $currentuser['username'] . "/ssl/sencrypt/" . $sub_module . "/" . $domain . "/cert.pem" . fs_filehandler::NewLine();
-			$line .= "SSLCertificateKeyFile " . ctrl_options::GetSystemOption('hosted_dir') . $currentuser['username'] . "/ssl/sencrypt/" . $sub_module . "/" . $domain . "/private.pem" . fs_filehandler::NewLine();
+			$line .= "SSLCertificateFile " . sys_winvhosts::CertHome($currentuser['username']) . "/ssl/sencrypt/" . $sub_module . "/" . $domain . "/cert.pem" . fs_filehandler::NewLine();
+			$line .= "SSLCertificateKeyFile " . sys_winvhosts::CertHome($currentuser['username']) . "/ssl/sencrypt/" . $sub_module . "/" . $domain . "/private.pem" . fs_filehandler::NewLine();
 
 			$line .= "# Made from Sencrypt - " . $sub_module . " - end" . fs_filehandler::NewLine();
 				
@@ -824,15 +828,15 @@ class module_controller extends ctrl_module {
 			$line .= fs_filehandler::NewLine();
 			$line .= 'SSLEngine On' . fs_filehandler::NewLine();
 			$line .= sys_tls::Lines();
-			$line .= "SSLCertificateFile " . ctrl_options::GetSystemOption('hosted_dir') . $currentuser['username'] . "/ssl/sencrypt/" . $sub_module . "/" . $domain . "/cert.pem" . fs_filehandler::NewLine();
-			$line .= "SSLCertificateKeyFile " . ctrl_options::GetSystemOption('hosted_dir') . $currentuser['username'] . "/ssl/sencrypt/" . $sub_module . "/" . $domain . "/private.pem" . fs_filehandler::NewLine();
+			$line .= "SSLCertificateFile " . sys_winvhosts::CertHome($currentuser['username']) . "/ssl/sencrypt/" . $sub_module . "/" . $domain . "/cert.pem" . fs_filehandler::NewLine();
+			$line .= "SSLCertificateKeyFile " . sys_winvhosts::CertHome($currentuser['username']) . "/ssl/sencrypt/" . $sub_module . "/" . $domain . "/private.pem" . fs_filehandler::NewLine();
 			
 			// If Letsencrypt or purchased SSL
 			if ( $sub_module == "letsencrypt" ) {
-				$line .= "SSLCACertificateFile " . ctrl_options::GetSystemOption('hosted_dir') . $currentuser['username'] . "/ssl/sencrypt/" . $sub_module . "/" . $domain . "/chain.pem" . fs_filehandler::NewLine();
+				$line .= "SSLCACertificateFile " . sys_winvhosts::CertHome($currentuser['username']) . "/ssl/sencrypt/" . $sub_module . "/" . $domain . "/chain.pem" . fs_filehandler::NewLine();
 				
 			} elseif ( $sub_module == "third_party" ) {
-				$line .= "SSLCACertificateFile " . ctrl_options::GetSystemOption('hosted_dir') . $currentuser['username'] . "/ssl/sencrypt/" . $sub_module . "/" . $domain . "/intermediate.crt". fs_filehandler::NewLine();
+				$line .= "SSLCACertificateFile " . sys_winvhosts::CertHome($currentuser['username']) . "/ssl/sencrypt/" . $sub_module . "/" . $domain . "/intermediate.crt". fs_filehandler::NewLine();
 				
 			} elseif ( $sub_module == "self_signed" ) {
 				// self signed - DO NOthing
@@ -877,8 +881,8 @@ class module_controller extends ctrl_module {
 				$ssline .= fs_filehandler::NewLine();
 				$ssline .= 'SSLEngine On' . fs_filehandler::NewLine();
 				$ssline .= sys_tls::Lines();
-				$ssline .= "SSLCertificateFile " . ctrl_options::GetSystemOption('hosted_dir') . $currentuser['username'] . "/ssl/sencrypt/" . $sub_module . "/" . $domain . "/cert.pem" . fs_filehandler::NewLine();
-				$ssline .= "SSLCertificateKeyFile " . ctrl_options::GetSystemOption('hosted_dir') . $currentuser['username'] . "/ssl/sencrypt/" . $sub_module . "/" . $domain . "/private.pem" . fs_filehandler::NewLine();
+				$ssline .= "SSLCertificateFile " . sys_winvhosts::CertHome($currentuser['username']) . "/ssl/sencrypt/" . $sub_module . "/" . $domain . "/cert.pem" . fs_filehandler::NewLine();
+				$ssline .= "SSLCertificateKeyFile " . sys_winvhosts::CertHome($currentuser['username']) . "/ssl/sencrypt/" . $sub_module . "/" . $domain . "/private.pem" . fs_filehandler::NewLine();
 				$ssline .= "# Made from Sencrypt - " . $sub_module . " - end" . fs_filehandler::NewLine();
 	
 				if ( ctrl_options::GetSystemOption('dbversion') <= "1.0.3") {	
@@ -951,29 +955,29 @@ class module_controller extends ctrl_module {
 			return false;
 		}
 		
-		if (!is_dir(ctrl_options::GetSystemOption('hosted_dir') . $currentuser["username"] . "/ssl/sencrypt/third_party/") ) {
-			mkdir(ctrl_options::GetSystemOption('hosted_dir') . $currentuser["username"] . "/ssl/sencrypt/third_party/", 0777);
+		if (!is_dir(sys_winvhosts::CertHome($currentuser["username"]) . "/ssl/sencrypt/third_party/") ) {
+			mkdir(sys_winvhosts::CertHome($currentuser["username"]) . "/ssl/sencrypt/third_party/", 0777);
 		}
 		// These folders are in the account's own folder, which the account controls: each
 		// must be a real folder there, not a link (through one the panel would write the
 		// uploaded files wherever the link points)
-		$home = rtrim(ctrl_options::GetSystemOption('hosted_dir'), '/') . '/' . $currentuser["username"];
+		$home = sys_winvhosts::CertHome($currentuser["username"]);
 		foreach (array('', '/ssl', '/ssl/sencrypt', '/ssl/sencrypt/third_party') as $sub) {
 			clearstatcache(true, $home . $sub);
-			if (is_link($home . $sub) || !is_dir($home . $sub) || realpath($home . $sub) !== $home . $sub) {
+			if (is_link($home . $sub) || !is_dir($home . $sub) || !sys_winvhosts::SamePath(realpath($home . $sub), $home . $sub)) {
 				self::$error = true;
 				return false;
 			}
 		}
 			
-		if (!is_dir(ctrl_options::GetSystemOption('hosted_dir') . $currentuser["username"] . "/ssl/sencrypt/third_party/" . $domain . "/") ) {
-				mkdir(ctrl_options::GetSystemOption('hosted_dir') . $currentuser["username"] . "/ssl/sencrypt/third_party/" . $domain . "/", 0777);
+		if (!is_dir(sys_winvhosts::CertHome($currentuser["username"]) . "/ssl/sencrypt/third_party/" . $domain . "/") ) {
+				mkdir(sys_winvhosts::CertHome($currentuser["username"]) . "/ssl/sencrypt/third_party/" . $domain . "/", 0777);
 			} else {
 				self::$error = true;
 				return false;
 			}
 			
-			$target_dir = ctrl_options::GetSystemOption('hosted_dir') . $currentuser["username"] . "/ssl/sencrypt/third_party/" . $domain . "/";
+			$target_dir = sys_winvhosts::CertHome($currentuser["username"]) . "/ssl/sencrypt/third_party/" . $domain . "/";
 			
 			$uploadkey = $target_dir . "private.pem";
 			$uploadwcrt = $target_dir . "cert.pem";
@@ -996,9 +1000,9 @@ class module_controller extends ctrl_module {
 				$line  .= fs_filehandler::NewLine();
 				$line .= 'SSLEngine On' . fs_filehandler::NewLine();
 				$line .= sys_tls::Lines();
-				$line .= "SSLCertificateFile " . ctrl_options::GetSystemOption('hosted_dir') . $currentuser['username'] . "/ssl/sencrypt/third_party/" . $domain . "/cert.pem" . fs_filehandler::NewLine();
-				$line .= "SSLCertificateKeyFile " . ctrl_options::GetSystemOption('hosted_dir') . $currentuser['username'] . "/ssl/sencrypt/third_party/" . $domain . "/private.pem" . fs_filehandler::NewLine();
-				$line .= "SSLCACertificateFile " . ctrl_options::GetSystemOption('hosted_dir') . $currentuser['username'] . "/ssl/sencrypt/third_party/" . $domain . "/intermediate.crt". fs_filehandler::NewLine();
+				$line .= "SSLCertificateFile " . sys_winvhosts::CertHome($currentuser['username']) . "/ssl/sencrypt/third_party/" . $domain . "/cert.pem" . fs_filehandler::NewLine();
+				$line .= "SSLCertificateKeyFile " . sys_winvhosts::CertHome($currentuser['username']) . "/ssl/sencrypt/third_party/" . $domain . "/private.pem" . fs_filehandler::NewLine();
+				$line .= "SSLCACertificateFile " . sys_winvhosts::CertHome($currentuser['username']) . "/ssl/sencrypt/third_party/" . $domain . "/intermediate.crt". fs_filehandler::NewLine();
 				$line .= "# Made from Sencrypt - third_party - end" . fs_filehandler::NewLine();
 
 				if ( ctrl_options::GetSystemOption('dbversion') <= "1.0.3") {
@@ -1049,9 +1053,9 @@ class module_controller extends ctrl_module {
 				$line .= fs_filehandler::NewLine();
                 $line .= 'SSLEngine On' . fs_filehandler::NewLine();
 				$line .= sys_tls::Lines();
-				$line .= "SSLCertificateFile " . ctrl_options::GetSystemOption('hosted_dir') . $currentuser['username'] . "/ssl/sencrypt/third_party/" . $domain . "/cert.pem" . fs_filehandler::NewLine();
-				$line .= "SSLCertificateKeyFile " . ctrl_options::GetSystemOption('hosted_dir') . $currentuser['username'] . "/ssl/sencrypt/third_party/" . $domain . "/private.pem" . fs_filehandler::NewLine();
-				$line .= "SSLCACertificateFile " . ctrl_options::GetSystemOption('hosted_dir') . $currentuser['username'] . "/ssl/sencrypt/third_party/" . $domain . "/intermediate.crt". fs_filehandler::NewLine();
+				$line .= "SSLCertificateFile " . sys_winvhosts::CertHome($currentuser['username']) . "/ssl/sencrypt/third_party/" . $domain . "/cert.pem" . fs_filehandler::NewLine();
+				$line .= "SSLCertificateKeyFile " . sys_winvhosts::CertHome($currentuser['username']) . "/ssl/sencrypt/third_party/" . $domain . "/private.pem" . fs_filehandler::NewLine();
+				$line .= "SSLCACertificateFile " . sys_winvhosts::CertHome($currentuser['username']) . "/ssl/sencrypt/third_party/" . $domain . "/intermediate.crt". fs_filehandler::NewLine();
 				$line .= "# Made from Sencrypt - third_party - end" . fs_filehandler::NewLine();
 				
 				$port = "443";
@@ -1138,12 +1142,12 @@ class module_controller extends ctrl_module {
 		$formvars = $controller->GetAllControllerRequests('FORM');
 		$rootdir = str_replace('.', '_', $domain);
 		
-		if (!is_dir(ctrl_options::GetSystemOption('hosted_dir') . $currentuser["username"] . "/ssl/sencrypt/third_party") ) {
-			mkdir(ctrl_options::GetSystemOption('hosted_dir') . $currentuser["username"] . "/ssl/sencrypt/third_party", 0777);
+		if (!is_dir(sys_winvhosts::CertHome($currentuser["username"]) . "/ssl/sencrypt/third_party") ) {
+			@mkdir(sys_winvhosts::CertHome($currentuser["username"]) . "/ssl/sencrypt/third_party", 0777, true);
 		}
 
-		if (!is_dir(ctrl_options::GetSystemOption('hosted_dir') . $currentuser["username"] . "/ssl/sencrypt/third_party/" . $domain . "/") ) {
-			mkdir(ctrl_options::GetSystemOption('hosted_dir') . $currentuser["username"] . "/ssl/sencrypt/third_party/" . $domain . "/", 0777);	
+		if (!is_dir(sys_winvhosts::CertHome($currentuser["username"]) . "/ssl/sencrypt/third_party/" . $domain . "/") ) {
+			mkdir(sys_winvhosts::CertHome($currentuser["username"]) . "/ssl/sencrypt/third_party/" . $domain . "/", 0777);	
 		} else {
 			
 			self::$error = true;
@@ -1162,17 +1166,17 @@ class module_controller extends ctrl_module {
 		); 		
 
 		// Make Key
-		$privkey = openssl_pkey_new();
+		$privkey = openssl_pkey_new(sys_winvhosts::OpensslArgs());
 			
 		// Generate a certificate signing request
-		$csr = openssl_csr_new($dn, $privkey);
+		$csr = openssl_csr_new($dn, $privkey, sys_winvhosts::OpensslArgs());
 			
 		$config = array("digest_alg" => "sha256", "x509_extensions" => "v3_req");
 			
-		$sscert = openssl_csr_sign($csr, null, $privkey, 365, $config);
+		$sscert = openssl_csr_sign($csr, null, $privkey, 365, sys_winvhosts::OpensslArgs($config));
 			
-		openssl_x509_export_to_file($sscert, ctrl_options::GetSystemOption('hosted_dir') . $currentuser["username"] . "/ssl/sencrypt/third_party/" . $domain . "/cert.pem");
-		openssl_pkey_export_to_file($privkey, ctrl_options::GetSystemOption('hosted_dir') . $currentuser["username"] . "/ssl/sencrypt/third_party/" . $domain . "/private.pem");	
+		openssl_x509_export_to_file($sscert, sys_winvhosts::CertHome($currentuser["username"]) . "/ssl/sencrypt/third_party/" . $domain . "/cert.pem");
+		openssl_pkey_export_to_file($privkey, sys_winvhosts::CertHome($currentuser["username"]) . "/ssl/sencrypt/third_party/" . $domain . "/private.pem", null, sys_winvhosts::OpensslArgs());	
 		
 		if ( $domain == ctrl_options::GetSystemOption('sentora_domain') ) {
 					
@@ -1180,8 +1184,8 @@ class module_controller extends ctrl_module {
 			$line .= fs_filehandler::NewLine();
 			$line .= 'SSLEngine On' . fs_filehandler::NewLine();
 			$line .= sys_tls::Lines();
-			$line .= "SSLCertificateFile " . ctrl_options::GetSystemOption('hosted_dir') . $currentuser['username'] . "/ssl/sencrypt/third_party/" . $domain . "/cert.pem" . fs_filehandler::NewLine();
-			$line .= "SSLCertificateKeyFile " . ctrl_options::GetSystemOption('hosted_dir') . $currentuser['username'] . "/ssl/sencrypt/third_party/" . $domain . "/private.pem" . fs_filehandler::NewLine();
+			$line .= "SSLCertificateFile " . sys_winvhosts::CertHome($currentuser['username']) . "/ssl/sencrypt/third_party/" . $domain . "/cert.pem" . fs_filehandler::NewLine();
+			$line .= "SSLCertificateKeyFile " . sys_winvhosts::CertHome($currentuser['username']) . "/ssl/sencrypt/third_party/" . $domain . "/private.pem" . fs_filehandler::NewLine();
 			$line .= "# Made from Sencrypt - third_party - end" . fs_filehandler::NewLine();					
 
 			$portname = "sentora_port";
@@ -1236,8 +1240,8 @@ class module_controller extends ctrl_module {
 			$line .= fs_filehandler::NewLine();
 			$line .= 'SSLEngine On' . fs_filehandler::NewLine();
 			$line .= sys_tls::Lines();
-			$line .= "SSLCertificateFile " . ctrl_options::GetSystemOption('hosted_dir') . $currentuser['username'] . "/ssl/sencrypt/third_party/" . $domain . "/cert.pem" . fs_filehandler::NewLine();
-			$line .= "SSLCertificateKeyFile " . ctrl_options::GetSystemOption('hosted_dir') . $currentuser['username'] . "/ssl/sencrypt/third_party/" . $domain . "/private.pem" . fs_filehandler::NewLine();
+			$line .= "SSLCertificateFile " . sys_winvhosts::CertHome($currentuser['username']) . "/ssl/sencrypt/third_party/" . $domain . "/cert.pem" . fs_filehandler::NewLine();
+			$line .= "SSLCertificateKeyFile " . sys_winvhosts::CertHome($currentuser['username']) . "/ssl/sencrypt/third_party/" . $domain . "/private.pem" . fs_filehandler::NewLine();
 			$line .= "# Made from Sencrypt - third_party - end" . fs_filehandler::NewLine();
 			
 			$port = "443";
@@ -1308,10 +1312,10 @@ class module_controller extends ctrl_module {
 			$panel_Domain = ctrl_options::GetSystemOption('sentora_domain');
 			
 			// Check if ssl exists else where
-			if ( (int) $currentuser['usergroupid'] === 1 && !is_dir(ctrl_options::GetSystemOption('hosted_dir') . $currentuser["username"] . "/ssl/sencrypt/letsencrypt/" . $panel_Domain . "/") ) {
+			if ( (int) $currentuser['usergroupid'] === 1 && !sys_versions::IsWindows() && !is_dir(sys_winvhosts::CertHome($currentuser["username"]) . "/ssl/sencrypt/letsencrypt/" . $panel_Domain . "/") ) {
 			
 				// check if cert exist or not
-				if ( is_dir(ctrl_options::GetSystemOption('hosted_dir') . $currentuser["username"] . "/ssl/sencrypt/third_party/" . $panel_Domain . "/") ) {
+				if ( is_dir(sys_winvhosts::CertHome($currentuser["username"]) . "/ssl/sencrypt/third_party/" . $panel_Domain . "/") ) {
 					// Do nothing
 
 				} else {
@@ -1328,10 +1332,10 @@ class module_controller extends ctrl_module {
             while ($rowdomains = $sql->fetch()) {
 				
 				//check if cert exist or not
-				if (!is_dir(ctrl_options::GetSystemOption('hosted_dir') . $currentuser["username"] . "/ssl/sencrypt/third_party/" . $rowdomains['vh_name_vc'] . "/") ) {
+				if (!is_dir(sys_winvhosts::CertHome($currentuser["username"]) . "/ssl/sencrypt/third_party/" . $rowdomains['vh_name_vc'] . "/") ) {
 
 					// Check if ssl exists else where
-					if ( is_dir(ctrl_options::GetSystemOption('hosted_dir') . $currentuser["username"] . "/ssl/sencrypt/letsencrypt/" . $rowdomains['vh_name_vc'] . "/") ) {
+					if ( is_dir(sys_winvhosts::CertHome($currentuser["username"]) . "/ssl/sencrypt/letsencrypt/" . $rowdomains['vh_name_vc'] . "/") ) {
 						// Do nothing
 
 					} else {
@@ -1370,11 +1374,11 @@ class module_controller extends ctrl_module {
 	static function ListSSL($uname) {
 		global $controller;
 		$retval = null;
-		if (!is_dir(ctrl_options::GetSystemOption('hosted_dir') . $uname . "/ssl/sencrypt/third_party/") ) {
-			mkdir( ctrl_options::GetSystemOption('hosted_dir'). $uname . "/ssl/sencrypt/third_party/", 0777);
+		if (!is_dir(sys_winvhosts::CertHome($uname) . "/ssl/sencrypt/third_party/") ) {
+			mkdir( sys_winvhosts::CertHome($uname) . "/ssl/sencrypt/third_party/", 0777);
 		}
 		
-		$dir = ctrl_options::GetSystemOption('hosted_dir') . $uname . "/ssl/sencrypt/third_party/";
+		$dir = sys_winvhosts::CertHome($uname) . "/ssl/sencrypt/third_party/";
 		if(substr($dir, -1) != "/") $dir .= "/";
 			$d = @dir($dir);
 			while(false !== ($entry = $d->read())) {
@@ -1516,7 +1520,7 @@ class module_controller extends ctrl_module {
 		$formvars = $controller->GetAllControllerRequests('FORM');
 		// The panel's own certificate: administrators only, for the panel domain only
 		$sentoraUser = ctrl_users::GetUserDetail();
-		if ((int) $sentoraUser['usergroupid'] !== 1 || !isset($formvars['inDomain']) || (string) $formvars['inDomain'] !== (string) ctrl_options::GetSystemOption('sentora_domain')) {
+		if (sys_versions::IsWindows() || (int) $sentoraUser['usergroupid'] !== 1 || !isset($formvars['inDomain']) || (string) $formvars['inDomain'] !== (string) ctrl_options::GetSystemOption('sentora_domain')) {
 			return false;
 		}
 		if (self::ExecuteMakePanelSSL($formvars['inDomain'], $currentuser["username"], $sub_module))
@@ -1543,8 +1547,8 @@ class module_controller extends ctrl_module {
 		$currentuser = ctrl_users::GetUserDetail();
 		$username = $currentuser["username"];
 		$userid = $currentuser["userid"];
-		$accountDir = ctrl_options::GetSystemOption('hosted_dir') . $username . "/ssl/sencrypt/letsencrypt/";
-		$certlocation = ctrl_options::GetSystemOption('hosted_dir') . $username . "/ssl/sencrypt/letsencrypt/" . $domain;
+		$accountDir = sys_winvhosts::CertHome($username) . "/ssl/sencrypt/letsencrypt/";
+		$certlocation = sys_winvhosts::CertHome($username) . "/ssl/sencrypt/letsencrypt/" . $domain;
 		// NEW CODE - tg - get hosted folder from DB (vh_directory_vc) so that challenge is in propper location
 		$sql = $zdbh->prepare("SELECT vh_directory_vc FROM x_vhosts WHERE vh_name_vc = :domain");
 			$sql->bindParam(':domain', $domain);
@@ -1552,6 +1556,10 @@ class module_controller extends ctrl_module {
 		$domain_folder=$sql->fetchColumn();
 		//$domain_folder = str_replace(".","_", $domain);
 		$domainRoot = ctrl_options::GetSystemOption('hosted_dir') . $username . "/public_html/" . $domain_folder;
+		if (sys_versions::IsWindows()) {
+			// (Windows: Apache's account may not write in the site; every site serves the check files from one folder)
+			$domainRoot = rtrim(sys_winvhosts::AcmeDir(), '/');
+		}
 
 		require("modules/sencrypt/code/Lescript.php");
 		date_default_timezone_set("UTC");
@@ -1695,7 +1703,7 @@ class module_controller extends ctrl_module {
 					
 		$domainRoot = ctrl_options::GetSystemOption('sentora_root');
 		$panelDomain = ctrl_options::GetSystemOption('sentora_domain');
-		$accountDir = ctrl_options::GetSystemOption('hosted_dir') . $username . "/ssl/sencrypt/letsencrypt/";
+		$accountDir = sys_winvhosts::CertHome($username) . "/ssl/sencrypt/letsencrypt/";
 		$certlocation = $accountDir . $panelDomain . "/";
 		
 		// Other panel subomains to include
@@ -1879,7 +1887,7 @@ class module_controller extends ctrl_module {
 		global $controller;
 		$currentuser = ctrl_users::GetUserDetail();
 		$rootdir = str_replace('.', '_', $domain);
-		$dir = ctrl_options::GetSystemOption('hosted_dir') . $username . "/ssl/sencrypt/letsencrypt/" . $domain;
+		$dir = sys_winvhosts::CertHome($username) . "/ssl/sencrypt/letsencrypt/" . $domain;
 		$objects = scandir($dir);
 		
 		foreach ($objects as $object) {
@@ -1896,9 +1904,9 @@ class module_controller extends ctrl_module {
 		$line = "# Lets Encrypt start" . fs_filehandler::NewLine();
 		$line .= fs_filehandler::NewLine();
 		$line .= 'SSLEngine On' . fs_filehandler::NewLine();
-		$line .= "SSLCertificateFile " . ctrl_options::GetSystemOption('hosted_dir') . $currentuser['username'] . "/ssl/sencrypt/letsencrypt/" . $domain . "/cert.pem" . fs_filehandler::NewLine();
-		$line .= "SSLCertificateKeyFile " . ctrl_options::GetSystemOption('hosted_dir') . $currentuser['username'] . "/ssl/sencrypt/letsencrypt/" . $domain . "/private.pem" . fs_filehandler::NewLine();
-		$line .= "SSLCACertificateFile " . ctrl_options::GetSystemOption('hosted_dir') . $currentuser['username'] . "/ssl/sencrypt/letsencrypt/" . $domain . "/chain.pem" . fs_filehandler::NewLine();
+		$line .= "SSLCertificateFile " . sys_winvhosts::CertHome($currentuser['username']) . "/ssl/sencrypt/letsencrypt/" . $domain . "/cert.pem" . fs_filehandler::NewLine();
+		$line .= "SSLCertificateKeyFile " . sys_winvhosts::CertHome($currentuser['username']) . "/ssl/sencrypt/letsencrypt/" . $domain . "/private.pem" . fs_filehandler::NewLine();
+		$line .= "SSLCACertificateFile " . sys_winvhosts::CertHome($currentuser['username']) . "/ssl/sencrypt/letsencrypt/" . $domain . "/chain.pem" . fs_filehandler::NewLine();
 		$line .= sys_tls::Lines();
 		$line .= "# Lets Encrypt end" . fs_filehandler::NewLine();
 
@@ -1945,7 +1953,7 @@ class module_controller extends ctrl_module {
 		$formvars = $controller->GetAllControllerRequests('FORM');			
 		// The panel's own certificate: administrators only, for the panel domain only
 		$sentoraUser = ctrl_users::GetUserDetail();
-		if ((int) $sentoraUser['usergroupid'] !== 1 || !isset($formvars['inDomain']) || (string) $formvars['inDomain'] !== (string) ctrl_options::GetSystemOption('sentora_domain')) {
+		if (sys_versions::IsWindows() || (int) $sentoraUser['usergroupid'] !== 1 || !isset($formvars['inDomain']) || (string) $formvars['inDomain'] !== (string) ctrl_options::GetSystemOption('sentora_domain')) {
 			return false;
 		}
 		//if (self::ExecuteDeletePanelSSL($formvars['inDomain'], $currentuser["username"]))
@@ -1967,11 +1975,11 @@ class module_controller extends ctrl_module {
 		global $zdbh;
 		global $controller;
 		$currentuser = ctrl_users::GetUserDetail();
-		$certlocation = ctrl_options::GetSystemOption('hosted_dir') . $username . "/ssl/sencrypt/letsencrypt/";
+		$certlocation = sys_winvhosts::CertHome($username) . "/ssl/sencrypt/letsencrypt/";
 		
 		$sub_module = "letsencrypt";
 		
-		$dir = ctrl_options::GetSystemOption('hosted_dir') . $username . "/ssl/sencrypt/letsencrypt/" . $panelDomain;
+		$dir = sys_winvhosts::CertHome($username) . "/ssl/sencrypt/letsencrypt/" . $panelDomain;
 		
 		// delete cert files
 		$objects = scandir($dir);
@@ -2062,7 +2070,7 @@ class module_controller extends ctrl_module {
 	static function ExecuteRevokeSSL($domain, $username, $sub_module) {
 		$currentuser = ctrl_users::GetUserDetail();
 		$username = $currentuser["username"];
-		$accountDir = ctrl_options::GetSystemOption('hosted_dir') . $username . "/ssl/sencrypt/letsencrypt/";
+		$accountDir = sys_winvhosts::CertHome($username) . "/ssl/sencrypt/letsencrypt/";
 		$certlocation = $accountDir . $domain;
 		$domainRoot = ctrl_options::GetSystemOption('hosted_dir') . $username . "/public_html/" . $domain;
 

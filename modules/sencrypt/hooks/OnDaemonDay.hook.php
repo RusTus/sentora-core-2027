@@ -102,6 +102,10 @@ function renewCertificates() {
 			
 			$vhostOwner = ctrl_users::GetUserDetail($sslVhost['vh_acc_fk']);
 			$domainPath = ctrl_options::GetSystemOption('hosted_dir') . $vhostOwner['username'] . "/public_html" . $sslVhost['vh_directory_vc'];
+			if (sys_versions::IsWindows()) {
+				// (Windows: every site serves Let's Encrypt's check files from one folder)
+				$domainPath = rtrim(sys_winvhosts::AcmeDir(), '/');
+			}
 			echo "Checking certificate for Client: " . $vhostOwner['username'] . " / Domain: " . $sslVhost['vh_name_vc'] . fs_filehandler::NewLine();
 			//echo "At location: " . $domainPath . fs_filehandler::NewLine(); - For DEBUGGING
 			
@@ -111,9 +115,9 @@ function renewCertificates() {
 			$domain = $sslVhost['vh_name_vc'];
 			$webroot = $domainPath;
 			
-			$accountDir = ctrl_options::GetSystemOption('hosted_dir') . $vhostOwner['username'] . "/ssl/sencrypt/letsencrypt/";
+			$accountDir = sys_winvhosts::CertHome($vhostOwner['username']) . "/ssl/sencrypt/letsencrypt/";
 			// Changed to help with backup and compability
-			$certlocation = ctrl_options::GetSystemOption('hosted_dir') . $vhostOwner['username'] . "/ssl/sencrypt/letsencrypt/" . $sslVhost['vh_name_vc'] . "/";
+			$certlocation = sys_winvhosts::CertHome($vhostOwner['username']) . "/ssl/sencrypt/letsencrypt/" . $sslVhost['vh_name_vc'] . "/";
 			
 			// Require Lescript for renewal of SSL certs
 			require_once 'modules/sencrypt/code/Lescript.php';
@@ -252,9 +256,9 @@ function renewPanelCertificates() {
 			$domain = ctrl_options::GetSystemOption('sentora_domain');
 			$webroot = $domainPath;
 			
-			$accountDir = ctrl_options::GetSystemOption('hosted_dir') . $panelOwner . "/ssl/sencrypt/letsencrypt/";
+			$accountDir = sys_winvhosts::CertHome($panelOwner) . "/ssl/sencrypt/letsencrypt/";
 			// Changed to help with backup and compability
-			$certlocation = ctrl_options::GetSystemOption('hosted_dir') . $panelOwner . "/ssl/sencrypt/letsencrypt/" . $domain . "/";
+			$certlocation = sys_winvhosts::CertHome($panelOwner) . "/ssl/sencrypt/letsencrypt/" . $domain . "/";
 			
 			// Require Lescript for renewal of SSL certs
 			require_once 'modules/sencrypt/code/Lescript.php';
@@ -391,8 +395,13 @@ function RestartHttpdServicesForSSL() {
 
 	$returnValue = 0;
 
-	if (sys_versions::ShowOSPlatformVersion() == "Windows") {
-		system("" . ctrl_options::GetSystemOption('httpd_exe') . " " . ctrl_options::GetSystemOption('apache_restart') . "", $returnValue);
+	if (sys_versions::IsWindows()) {
+		// (Windows: a renewed certificate changes the panel's sites file, which is tested and Apache restarted)
+		ctrl_options::SetSystemOption('apache_changed', 'true');
+		foreach (sys_winvhosts::Run() as $l) {
+			echo "   " . $l . fs_filehandler::NewLine();
+		}
+		return;
 	} else {
 		$command = ctrl_options::GetSystemOption('zsudo');
 		$args = array(
