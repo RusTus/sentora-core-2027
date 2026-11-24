@@ -147,7 +147,16 @@ jobs:
           readme = links(open('README.md', encoding='utf-8').read().replace('\r\n', '\n').rstrip())
           text = '\n'.join(head + ['---', '', readme]) + '\n'
           if len(text) > 120000:
-              sys.exit('The release text is %d characters; GitHub allows 125000.' % len(text))
+              # (GitHub allows 125000: the README's later sections are left to README.md itself, cut at a heading)
+              more = '\n\n---\n\nThe rest of the README: [README.md](' + base + 'README.md)\n'
+              room = 120000 - len('\n'.join(head + ['---', ''])) - len(more)
+              cut = readme.rfind('\n## ', 0, room)
+              if cut <= 0:
+                  cut = readme.rfind('\n# ', 0, room)
+              if cut <= 0:
+                  sys.exit('The release text is %d characters and the README has no heading to cut at.' % len(text))
+              text = '\n'.join(head + ['---', '', readme[:cut].rstrip()]) + more
+              sys.stderr.write('The README was cut at a heading (%d characters left out) to stay under GitHub\'s limit.\n' % (len(readme) - cut))
           sys.stdout.write(text)
           EOF
           # (marked Latest and titled "(current)": the newest version release, also Sentora-<VERSION>, was
