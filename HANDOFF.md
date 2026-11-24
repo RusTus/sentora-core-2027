@@ -727,6 +727,17 @@ allowed again without the junction leading in is not tested yet. The installer r
 kept) and update/repair stop their services while PHP is replaced; uninstall removes them and the group. Next: the panel
 makes and removes the accounts through SentoraZsudo (a "phpaccount add/remove NAME" action) when a client is made or
 deleted.
+The panel part (2026-11-24, tested in the Windows install test, also after the repair): sys_winphp (Windows only). The daemon
+(SYSTEM) writes the live accounts' names to \var\lib\sentora\phpaccounts\wanted.txt (a folder only root's jobs write; Apache's
+account can not: the panel test checks it) and, when the list changed or once a day, asks SentoraZsudo for "phpaccount-sync"
+(no names in the request); phpaccount.ps1 sync gives each listed account its PHP and removes only the accounts the panel
+made ("panel": true in their saved settings; ones added by hand stay), then one gentle Apache restart (httpd -k restart).
+Making or deleting a client in Manage Clients only asks for a daemon run (sys_winphp::Soon), so a page can not name an
+account to add or remove. Every live account gets one, zadmin too. Names: the panel's user names (a-z, 0-9, -, 1-63).
+Installers: install-web-stack.ps1 is install-zpanel-stack.ps1 with $Edition = 'stack' (Apache, PHP and MySQL only, nothing
+else asked; a switch still adds a part; the owner wants it kept for other uses); the release and the install test check the
+two differ in that line only, and the test installs the copy on its own server. Per-account PHP and the hostdata lockdown
+come only with the panel; without it PHP for hostdata stays inside Apache.
 
 **Native Windows panel** (owner's goal, 2026-11-23: "restoring the Windows part makes it how it was supposed to be all
 along"; ZPanel ran natively on Windows until it was dropped, and that was its real difference): the same panel code on
