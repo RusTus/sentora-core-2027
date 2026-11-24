@@ -24,8 +24,9 @@ if (PHP_SAPI !== 'cli') {
     exit;
 }
 
-/** The queue: \var\lib\sentora\zsudo on the panel's drive (a junction to C:\zpanel\data\sentora). */
-const ZS_DIR = '/var/lib/sentora/zsudo';
+/** The queue: \var\lib\sentora\zsudo on the panel's drive (a junction to C:\zpanel\data\sentora), named with that
+ *  drive so it is the same folder whatever drive the caller is on. */
+define('ZS_DIR', (preg_match('/^[A-Za-z]:/', __DIR__) ? substr(__DIR__, 0, 2) : '') . '/var/lib/sentora/zsudo');
 
 /** The services a request may name (the Windows installer's service names). */
 const ZS_SERVICES = array('Apache2', 'CoreDNS', 'SFTPGo', 'Stalwart');
