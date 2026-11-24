@@ -738,6 +738,17 @@ Installers: install-web-stack.ps1 is install-zpanel-stack.ps1 with $Edition = 's
 else asked; a switch still adds a part; the owner wants it kept for other uses); the release and the install test check the
 two differ in that line only, and the test installs the copy on its own server. Per-account PHP and the hostdata lockdown
 come only with the panel; without it PHP for hostdata stays inside Apache.
+Websites (2026-11-25, tested in the Windows install test): sys_winvhosts (Windows only), run by the Domains module's daemon
+hook when apache_changed is set or the file is missing. It writes every live domain (and its www.), subdomain and parked
+domain into the panel's own file (apache_vhost = configs/apache/sentora-vhosts.conf, included after the administrator's
+httpd-vhosts.conf, whose first site stays the one for names no site claims), makes each domain's folder, error pages and
+welcome page as SYSTEM (Apache's account may not write in hostdata), tests with httpd -t and asks SentoraZsudo for
+"service Apache2 graceful" (httpd -k restart); a refused file is put back. A site's PHP is its account's own with nothing in
+the vhost (phpaccount.ps1's <Directory hostdata/NAME>). A disabled account's sites show static/disabled; parked domains
+the parking page; logs in logs/domains/<user>/. Domains, Sub Domains and Parked Domains are ready for Windows; zPanel's
+dead setroute.exe calls are gone. Not built yet on Windows: HTTPS per domain, the quota pages, custom vhost entries, port
+forwarding. (The panel refuses a parked domain that looks like a subdomain of another account's domain, e.g. one sharing
+example.net with a domain already there: an old rule, not Windows'.)
 
 **Native Windows panel** (owner's goal, 2026-11-23: "restoring the Windows part makes it how it was supposed to be all
 along"; ZPanel ran natively on Windows until it was dropped, and that was its real difference): the same panel code on
