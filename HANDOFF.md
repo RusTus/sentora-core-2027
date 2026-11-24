@@ -746,8 +746,22 @@ welcome page as SYSTEM (Apache's account may not write in hostdata), tests with 
 "service Apache2 graceful" (httpd -k restart); a refused file is put back. A site's PHP is its account's own with nothing in
 the vhost (phpaccount.ps1's <Directory hostdata/NAME>). A disabled account's sites show static/disabled; parked domains
 the parking page; logs in logs/domains/<user>/. Domains, Sub Domains and Parked Domains are ready for Windows; zPanel's
-dead setroute.exe calls are gone. Not built yet on Windows: HTTPS per domain, the quota pages, custom vhost entries, port
-forwarding. (The panel refuses a parked domain that looks like a subdomain of another account's domain, e.g. one sharing
+dead setroute.exe calls are gone. Not built yet on Windows: the quota pages, custom vhost entries, port forwarding.
+HTTPS per website (2026-11-25): the Sencrypt page works on Windows (self-signed, your own certificate, Let's Encrypt).
+Certificates and keys are kept in C:\zpanel\data\sentora\certs\<user>\ssl\sencrypt\ (sys_winvhosts::CertHome; on Linux it
+is still hostdata/<user>), a folder only Administrators, SYSTEM and Apache's account may use, so the accounts' own PHP can
+not read a key. sys_winvhosts gives a domain whose vh_ssl_tx names files there (readable, key matching the certificate,
+fullchain.pem when Let's Encrypt left one) an HTTPS site on ssl.conf's port, with only the file paths written (never the
+stored text), and its plain-HTTP site sends visitors to HTTPS (301) except /.well-known/acme-challenge/, which every site
+serves from C:\zpanel\data\sentora\acme (plain files, PHP off). A fingerprint line per HTTPS site makes a renewed
+certificate a change, so Apache restarts and takes it; Sencrypt's daily renewal asks for that too. The installer writes
+configs\apache\ssl.conf (Listen 443, TLS 1.2/1.3 and the ciphers in one place, and with the panel but no mail the panel as
+the site for names no website claims, on configs\ssl\server.crt), included before the sites with mail.conf; firewall: 443
+for Apache. On Windows PHP has no openssl.cnf of its own, so key and request calls pass PHP's extras\ssl\openssl.cnf
+(sys_winvhosts::OpensslArgs). The panel's own certificate is not offered on Windows yet (it uses configs\ssl\server.crt;
+the page says so). Tested in the Windows install test with a self-signed certificate (served with its own name, PHP the
+account's own over HTTPS, 301 from HTTP, check files served and never run, the account's PHP refused the key); Let's
+Encrypt itself is not tested there (no public name). (The panel refuses a parked domain that looks like a subdomain of another account's domain, e.g. one sharing
 example.net with a domain already there: an old rule, not Windows'.)
 Where Windows lives (owner, 2026-11-25): the native installer moved from RusTus/sentora-windows-2027 (left with a note) to
 sentora-installers-2027/windows/server (install-zpanel-stack.ps1; install-web-stack.ps1 = the same file with
