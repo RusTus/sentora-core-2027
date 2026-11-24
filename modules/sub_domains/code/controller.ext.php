@@ -273,13 +273,6 @@ class module_controller extends ctrl_module
             $time = time();
             $sql->bindParam(':time', $time);
             $sql->execute();
-            // Only run if the Server platform is Windows.
-            if (sys_versions::ShowOSPlatformVersion() == 'Windows') {
-                if (ctrl_options::GetSystemOption('disable_hostsen') == 'false') {
-                    // Lets add the hostname to the HOSTS file so that the server can view the domain immediately...
-                    @exec("C:/Sentora/bin/zpss/setroute.exe " . $domain . "");
-                }
-            }
             self::SetWriteApacheConfigTrue();
             $retval = TRUE;
             runtime_hook::Execute('OnAfterAddSubDomain');

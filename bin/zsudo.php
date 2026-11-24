@@ -11,7 +11,7 @@
  *   php bin\zsudo.php --run-queue    (the service's side): takes the requests one by one, oldest first
  *
  * The same actions and words as on Linux, so the modules ask the same way on both:
- *   service <Apache2|CoreDNS|SFTPGo|Stalwart> <start|stop|restart|reload|graceful>
+ *   service <Apache2|CoreDNS|SFTPGo|Stalwart> <start|stop|restart|reload|graceful>   (Apache2 graceful/reload: httpd -k restart)
  *   daemon-run
  *   phpaccount-sync   each hosting account's PHP in line with the list the daemon wrote where only root's jobs write
  *                     (\var\lib\sentora\phpaccounts\wanted.txt): bin\phpaccount.ps1 sync beside the panel
@@ -50,6 +50,11 @@ function zs_command(array $w)
     $panel = str_replace('/', '\\', dirname(__DIR__));
     $php = PHP_BINARY;
     if (count($w) === 3 && $w[0] === 'service' && in_array($w[1], ZS_SERVICES, true) && in_array($w[2], ZS_SERVICE_ACTIONS, true)) {
+        if ($w[1] === 'Apache2' && in_array($w[2], array('graceful', 'reload'), true)) {
+            // (gently: the pages being served finish; httpd and its settings beside the panel, as the installer put them)
+            $top = str_replace('/', '\\', dirname(dirname(__DIR__)));
+            return '"' . $top . '\\bin\\apache\\bin\\httpd.exe" -k restart -n Apache2 -f "' . $top . '\\configs\\apache\\httpd.conf"';
+        }
         $verb = array('start' => 'Start-Service', 'stop' => 'Stop-Service')[$w[2]] ?? 'Restart-Service';
         return 'powershell.exe -NoProfile -NonInteractive -Command "' . $verb . ' -Name ' . $w[1] . ($verb === 'Start-Service' ? '' : ' -Force') . '"';
     }
