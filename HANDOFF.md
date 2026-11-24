@@ -680,6 +680,16 @@ on Linux); the database-only modules are marked. The state folder /var/lib/sento
 sentora-windows-2027 Actions > Panel on Windows probe (core branch as input): unchanged panel logged in and 12 of 14 modules
 loaded; the daemon stopped at Apache Config's posix_getpwnam(). Per-account PHP on Windows: one php-cgi per account as its own
 Windows user (never one PHP for all: less secure) - to be proven before building on it (step 2).
+Step 1 tested whole (2026-11-24, sentora-windows-2027 install-test.yml with -WithPanel, Windows Server 2025): the installer
+puts the panel in C:\zpanel\panel (its database, 24 Windows settings, zadmin's password in configs\panel), Apache runs as
+`NT SERVICE\Apache2` (service SID on; C:\zpanel locked to Administrators and SYSTEM, Apache's account only on its own folders,
+the folders above them listed, C:\var, C:\var\lib and the junction itself), root jobs by the service SentoraZsudo
+(bin/zsudo.php --run-queue as SYSTEM; the panel's side is bin/zsudo.bat, the `zsudo` setting: .bat because PHP on Windows
+counts only .exe as runnable, hence `sys_versions::CanRun()` in the pages that ask zsudo), the daemon by the task
+'Sentora daemon' every 5 minutes as SYSTEM. Proven: zadmin logs in, the ready modules load, the others are kept out (page,
+menu, dashboard), "Run the daemon now" goes page -> zsudo -> SentoraZsudo -> daemon, zsudo refuses what is not on its list,
+Apache's account can not read MySQL's or zadmin's password, change the panel's code or php.ini or write root's state; update
+and repair stop SentoraZsudo and the task while PHP's folder is replaced; uninstall removes both.
 
 **Native Windows panel** (owner's goal, 2026-11-23: "restoring the Windows part makes it how it was supposed to be all
 along"; ZPanel ran natively on Windows until it was dropped, and that was its real difference): the same panel code on
