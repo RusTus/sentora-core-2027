@@ -749,6 +749,12 @@ the parking page; logs in logs/domains/<user>/. Domains, Sub Domains and Parked 
 dead setroute.exe calls are gone. Not built yet on Windows: HTTPS per domain, the quota pages, custom vhost entries, port
 forwarding. (The panel refuses a parked domain that looks like a subdomain of another account's domain, e.g. one sharing
 example.net with a domain already there: an old rule, not Windows'.)
+Where Windows lives (owner, 2026-11-25): the native installer moved from RusTus/sentora-windows-2027 (left with a note) to
+sentora-installers-2027/windows/server (install-zpanel-stack.ps1; install-web-stack.ps1 = the same file with
+$Edition = 'stack', kept for other uses; README.txt; tests/), tested by .github/workflows/windows-server-test.yml there (a
+push to windows/server, and every release). Each installers release builds sentora-windows-server.zip with the core's
+VERSION written in; the installer takes the panel from the core's and the installers' current releases, and
+sentora-update.ps1 the zip from the installers' current release, each file checked against the SHA-256 GitHub keeps for it.
 
 **Native Windows panel** (owner's goal, 2026-11-23: "restoring the Windows part makes it how it was supposed to be all
 along"; ZPanel ran natively on Windows until it was dropped, and that was its real difference): the same panel code on
