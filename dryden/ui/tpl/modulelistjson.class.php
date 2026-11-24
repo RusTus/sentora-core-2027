@@ -13,7 +13,7 @@
  * @link http://www.zpanelcp.com/
  * @license GPL (http://www.gnu.org/licenses/gpl.html)
  *
- * Updated by RusTus, 2026-11-07
+ * Updated by RusTus, 2026-11-24
  */
 /**
  * Template tag <# ui_tpl_modulelistjson #>: the enabled user modules as JSON.
