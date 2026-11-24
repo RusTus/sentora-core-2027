@@ -664,6 +664,23 @@ has to delete the panel's cookies once.
 ## Waiting on the owner (do not start without asking)
 
 
+**Native Windows panel, the way it is built (owner, 2026-11-24; started 2026-11-24 with step 1):** the same panel code;
+`sys_versions::IsWindows()` tells the two apart (zPanel's `ShowOSPlatformVersion()` still exists; its old Windows branches
+call zPanel's long-gone C:\Sentora\bin\zpss tools and get replaced as each part is done). **Every program name, path and
+service name comes from the settings (x_settings, hidden ones for root's commands), never from the code, on Windows as on
+Linux; anything still written in the code is moved to a setting when its part is done** (the survey found `systemctl` in about
+10 places, /var/lib/sentora in 77, `useradd`, `hostname -I`, `zip`, `mysqldump`). A program of the same kind is swapped by
+settings alone; a different kind (Postfix -> Stalwart, ProFTPD -> SFTPGo, BIND -> CoreDNS) by a driver the settings name, as
+zPanel did (`mailserver_php`, `ftp_php`): a new app = one driver file + its settings. Root's jobs on Windows: a Sentora service
+(SYSTEM at first, a narrower account later) running a fixed list of jobs from a locked queue folder, like zsudo; the panel's
+Apache no longer runs as LocalSystem (zPanel did, and the stack installer still does). Step 1 (2026-11-24): a module runs on
+Windows (page, menu, daemon jobs) only when its module.xml says `<windows>yes</windows>` (`ui_module::ReadyHere`; always true
+on Linux); the database-only modules are marked. The state folder /var/lib/sentora is a junction on Windows
+(\var\lib\sentora on the panel's drive -> C:\zpanel\data\sentora), so the 77 places that name it work unchanged. Probe:
+sentora-windows-2027 Actions > Panel on Windows probe (core branch as input): unchanged panel logged in and 12 of 14 modules
+loaded; the daemon stopped at Apache Config's posix_getpwnam(). Per-account PHP on Windows: one php-cgi per account as its own
+Windows user (never one PHP for all: less secure) - to be proven before building on it (step 2).
+
 **Native Windows panel** (owner's goal, 2026-11-23: "restoring the Windows part makes it how it was supposed to be all
 along"; ZPanel ran natively on Windows until it was dropped, and that was its real difference): the same panel code on
 Windows, platform differences in settings and per-program drivers (as ZPanel's mailserver_php / ftp_php drivers:
