@@ -690,6 +690,29 @@ counts only .exe as runnable, hence `sys_versions::CanRun()` in the pages that a
 menu, dashboard), "Run the daemon now" goes page -> zsudo -> SentoraZsudo -> daemon, zsudo refuses what is not on its list,
 Apache's account can not read MySQL's or zadmin's password, change the panel's code or php.ini or write root's state; update
 and repair stop SentoraZsudo and the task while PHP's folder is replaced; uninstall removes both.
+Step 2 proven (2026-11-24, sentora-windows-2027 Actions > "PHP per account on Windows probe", tests/php-isolation-probe.ps1,
+Windows Server 2025; not built into the installer yet): **each hosting account's PHP runs as its own Windows account** -
+a service SentoraPHP-<account> under its virtual account NT SERVICE\SentoraPHP-<account> (no password to keep), running
+bin\sentora-php-pool.php (php.exe -n), which keeps three php-cgi -b 127.0.0.1:<port> running and restarts any that stops;
+Apache (mod_proxy_fcgi + a balancer of the three, ProxyFCGIBackendType GENERIC, SCRIPT_FILENAME set from DOCUMENT_ROOT and
+SCRIPT_NAME, the address ending in "/" or Apache on Windows glues the drive letter to the port) passes each site's PHP to its
+account's. Rights: the local group SentoraPHP (every account's service in it) reads bin\php, NSSM and the launcher; each
+account changes only hostdata\<account> and reads its own php.ini and guard; the folders above (C:\zpanel, configs,
+configs\php, bin, hostdata) need "list" for the group (with "read attributes" only, php-cgi silently runs with no php.ini
+at all). **The fences go on php-cgi's command line** (-d, each value in quotes: -d is read like a php.ini line, where ; starts
+a note): open_basedir = the account's folder + its guard, auto_prepend_file = its guard, so they hold even if php.ini can not
+be read. **A key per account:** Apache adds SENTORA_KEY (64 hex characters, only in Apache's settings and the account's
+guard) to each request it passes; the guard refuses a request without it (403). Needed because any account's PHP can open
+a connection to another account's php-cgi port and ask it to run that account's scripts as that account, and Windows
+Firewall does not filter connections inside the server (a block rule by service and by user were both tried: no effect).
+Proven: alice's PHP can not read, list or write bob's files, read the MySQL password, bob's php.ini, httpd.conf or the panel,
+write PHP's or Windows' folders or zsudo's queue, stop Apache or bob's PHP, kill bob's php-cgi, or act as an administrator;
+straight at bob's port, bob's own script is refused by the guard (also with PHP_VALUE / PHP_ADMIN_VALUE trying to switch it
+off) and a script alice planted in C:\Windows\Temp is refused by open_basedir ("No input file specified"); three slow pages at
+once take 2 s (one php-cgi answers one at a time, hence three); a killed php-cgi is back within a second; about 20-28 MB each.
+Still open: whether hostdata needs "list" (it shows the other accounts' folder names, not their contents), a per-account
+pool size setting, and building it into the installer and the panel (the account's service made by zsudo, its ports and key
+in the settings).
 
 **Native Windows panel** (owner's goal, 2026-11-23: "restoring the Windows part makes it how it was supposed to be all
 along"; ZPanel ran natively on Windows until it was dropped, and that was its real difference): the same panel code on
