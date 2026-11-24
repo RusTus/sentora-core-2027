@@ -81,6 +81,11 @@ class ui_tpl_clientdomains {
                 break;
         }
 
+        // (on Windows only while its module is ready there: ui_module::ReadyHere)
+        if (!ui_module::ReadyHere($domain_url)) {
+            return '';
+        }
+
         /* Domains */
         $sql = 'SELECT * FROM x_vhosts WHERE vh_acc_fk= :userid AND vh_type_in=' .$domain_type. ' AND vh_deleted_ts IS NULL ORDER BY vh_id_pk LIMIT '.$domain_limit;
 
