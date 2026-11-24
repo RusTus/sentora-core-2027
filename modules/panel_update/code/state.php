@@ -225,7 +225,7 @@ class panel_update_state
     static function Ask($action, $backup = '')
     {
         $zsudo = (string) ctrl_options::GetSystemOption('zsudo');
-        if (!in_array($action, array('panel-check', 'panel-update', 'panel-rollback'), true) || $zsudo === '' || !is_executable($zsudo) || !function_exists('exec')) {
+        if (!in_array($action, array('panel-check', 'panel-update', 'panel-rollback'), true) || $zsudo === '' || !sys_versions::CanRun($zsudo) || !function_exists('exec')) {
             return 1;
         }
         if ($action === 'panel-rollback' && !self::IsBackupName($backup)) {

@@ -492,7 +492,7 @@ class module_controller extends ctrl_module
         }
         $zsudo = (string) ctrl_options::GetSystemOption('zsudo');
         $rc = 1;
-        if ($zsudo !== '' && is_executable($zsudo) && function_exists('exec')) {
+        if ($zsudo !== '' && sys_versions::CanRun($zsudo) && function_exists('exec')) {
             // (a note first: a run already busy then runs the regular jobs once more; bin/daemon.php)
             @touch('/var/lib/sentora/tmp/daemon-again');
             $out = array();

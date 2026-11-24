@@ -73,6 +73,20 @@ class sys_versions {
     }
 
     /**
+     * Whether a program can be run: is_executable() on Linux; on Windows, where PHP's is_executable() takes only
+     * real programs (.exe), a file ending in .exe, .com or .bat (as the panel's zsudo.bat).
+     *
+     * @param string $path
+     * @return bool
+     */
+    static function CanRun($path) {
+        if (!self::IsWindows()) {
+            return is_executable($path);
+        }
+        return is_file($path) && (bool) preg_match('/\\.(exe|com|bat)$/i', $path);
+    }
+
+    /**
      * Is the panel running on Windows (natively, not WSL)?
      *
      * @return bool

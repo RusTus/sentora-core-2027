@@ -116,7 +116,7 @@ if (!function_exists('FtpSyncClientState')) {
             return;
         }
         $zsudo = (string) ctrl_options::GetSystemOption('zsudo');
-        if ($zsudo !== '' && is_executable($zsudo) && function_exists('exec')) {
+        if ($zsudo !== '' && sys_versions::CanRun($zsudo) && function_exists('exec')) {
             exec(escapeshellcmd($zsudo) . ' ftp-kick > /dev/null 2>&1');
         }
     }

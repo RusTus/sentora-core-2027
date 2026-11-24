@@ -67,7 +67,7 @@ class module_controller extends ctrl_module
             return;
         }
         $zsudo = (string) ctrl_options::GetSystemOption('zsudo');
-        if ($zsudo !== '' && is_executable($zsudo) && function_exists('exec')) {
+        if ($zsudo !== '' && sys_versions::CanRun($zsudo) && function_exists('exec')) {
             $out = array();
             exec(escapeshellcmd($zsudo) . ' hardening-check 2>&1', $out, $rc);
             if ((int) $rc === 0) {

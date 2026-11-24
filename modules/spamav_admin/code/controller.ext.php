@@ -634,7 +634,7 @@ class module_controller extends ctrl_module
         }
         file_put_contents(sys_filescan::REQUEST, json_encode(array('action' => $what, 'id' => $id, 'by' => ctrl_users::GetUserDetail()['username'], 'time' => time())));
         $zsudo = (string) ctrl_options::GetSystemOption('zsudo');
-        if ($zsudo !== '' && is_executable($zsudo) && function_exists('exec')) {
+        if ($zsudo !== '' && sys_versions::CanRun($zsudo) && function_exists('exec')) {
             @touch('/var/lib/sentora/tmp/daemon-again');
             exec(escapeshellcmd($zsudo) . ' daemon-run > /dev/null 2>&1');
         }

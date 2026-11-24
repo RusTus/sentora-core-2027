@@ -633,7 +633,7 @@ class module_controller extends ctrl_module
     static function RunNow()
     {
         $zsudo = (string) ctrl_options::GetSystemOption('zsudo');
-        if ($zsudo === '' || !is_executable($zsudo) || !function_exists('exec')) {
+        if ($zsudo === '' || !sys_versions::CanRun($zsudo) || !function_exists('exec')) {
             return false;
         }
         // (a note first: when a run is already busy, it runs the regular jobs once more at its end; bin/daemon.php)
