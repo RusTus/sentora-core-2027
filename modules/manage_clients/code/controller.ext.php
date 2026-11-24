@@ -533,6 +533,8 @@ class module_controller extends ctrl_module
         // its notices go with it: the ones it sent and the personal ones to it (Client Notice Manager)
         ctrl_notices::ForgetAccount((int) $userid);
         runtime_hook::Execute('OnAfterDeleteClient');
+        // (on Windows: the account's own PHP goes at the daemon run this asks for; sys_winphp)
+        sys_winphp::Soon();
         self::$ok = true;
         return true;
     }
@@ -835,6 +837,8 @@ class module_controller extends ctrl_module
             $phpmailer->SendEmail();
         }
         runtime_hook::Execute('OnAfterCreateClient');
+        // (on Windows: the account's own PHP comes at the daemon run this asks for; sys_winphp)
+        sys_winphp::Soon();
         self::$resetform = true;
         self::$ok = true;
         return true;

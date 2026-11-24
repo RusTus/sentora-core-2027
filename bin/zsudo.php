@@ -13,6 +13,8 @@
  * The same actions and words as on Linux, so the modules ask the same way on both:
  *   service <Apache2|CoreDNS|SFTPGo|Stalwart> <start|stop|restart|reload|graceful>
  *   daemon-run
+ *   phpaccount-sync   each hosting account's PHP in line with the list the daemon wrote where only root's jobs write
+ *                     (\var\lib\sentora\phpaccounts\wanted.txt): bin\phpaccount.ps1 sync beside the panel
  *
  * @package Sentora
  * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
@@ -50,6 +52,14 @@ function zs_command(array $w)
     if (count($w) === 3 && $w[0] === 'service' && in_array($w[1], ZS_SERVICES, true) && in_array($w[2], ZS_SERVICE_ACTIONS, true)) {
         $verb = array('start' => 'Start-Service', 'stop' => 'Stop-Service')[$w[2]] ?? 'Restart-Service';
         return 'powershell.exe -NoProfile -NonInteractive -Command "' . $verb . ' -Name ' . $w[1] . ($verb === 'Start-Service' ? '' : ' -Force') . '"';
+    }
+    if (count($w) === 1 && $w[0] === 'phpaccount-sync') {
+        // (no names come with the request: phpaccount.ps1 reads them from the list only root's jobs may write)
+        $tool = dirname(dirname(__DIR__)) . '\\bin\\phpaccount.ps1';
+        if (!is_file($tool)) {
+            return null;
+        }
+        return 'powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' . str_replace('/', '\\', $tool) . '" sync';
     }
     if (count($w) === 1 && $w[0] === 'daemon-run') {
         // (the daemon's own lock keeps it from overlapping a scheduled run; its report for the panel)
