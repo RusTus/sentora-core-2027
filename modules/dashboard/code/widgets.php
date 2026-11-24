@@ -283,7 +283,7 @@ class dashboard_widgets
                 $ids[$r['mo_folder_vc']] = (int) $r['mo_id_pk'];
             }
         }
-        return isset($ids[$folder]) && ctrl_groups::CheckGroupModulePermissions($user['usergroupid'], $ids[$folder]);
+        return isset($ids[$folder]) && ui_module::ReadyHere($folder) && ctrl_groups::CheckGroupModulePermissions($user['usergroupid'], $ids[$folder]);
     }
 
     /**

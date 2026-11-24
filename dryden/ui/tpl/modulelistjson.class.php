@@ -36,10 +36,14 @@ class ui_tpl_modulelistjson {
         $line = '';
 
         // Build Module list Array
-        if ($dbh->fetch() !== 0) {
-
-            $result = array();
-            while ($row = $dbh->fetch()) {
+        // (every row: the first was read and dropped before; on Windows only the modules ready for it)
+        $rows = $dbh->fetchAll();
+        $result = array();
+        if ($rows) {
+            foreach ($rows as $row) {
+                if (!ui_module::ReadyHere($row['mo_folder_vc'])) {
+                    continue;
+                }
                 $result[] = array(
                     'name' => htmlentities(ui_language::translate($row['mo_name_vc']), ENT_QUOTES),
                     'url' => $row['mo_folder_vc']
