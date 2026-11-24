@@ -713,6 +713,20 @@ once take 2 s (one php-cgi answers one at a time, hence three); a killed php-cgi
 Still open: whether hostdata needs "list" (it shows the other accounts' folder names, not their contents), a per-account
 pool size setting, and building it into the installer and the panel (the account's service made by zsudo, its ports and key
 in the settings).
+Built into the Windows installer (2026-11-24, the install test's "PHP per hosting account" step passes, also after an update
+and a repair): bin\phpaccount.ps1 add NAME [-Processes 3] | remove NAME | list | repair (saved settings and key in
+configs\php\accounts\NAME.json, Administrators only; ports 16 per account from 20000; Apache's part in
+configs\apache\php-accounts\NAME.conf: a <Directory hostdata/NAME> sending its .php files to NAME's PHP with NAME's key, so any
+site whose folder is in hostdata\NAME gets it with no more settings); the guard also hides the key from the site's $_SERVER and
+$_ENV (getenv() still shows the account its own key, which opens only its own PHP). hostdata in httpd.conf: a PHP file of no
+account is refused (403), php_admin_flag engine Off (a .htaccess can not hand files to the panel's own PHP), no includes or
+CGI, AllowOverride AuthConfig FileInfo Indexes Limit Options=Indexes,MultiViews,SymLinksIfOwnerMatch, Options
++SymLinksIfOwnerMatch: a junction an account makes into another's folder is not followed (403). Trade-off to look at: a
+site's .htaccess with "Options +FollowSymLinks" (Drupal's, some Laravel ones) now gets a 500; whether FollowSymLinks may be
+allowed again without the junction leading in is not tested yet. The installer rebuilds every account on each run (keys
+kept) and update/repair stop their services while PHP is replaced; uninstall removes them and the group. Next: the panel
+makes and removes the accounts through SentoraZsudo (a "phpaccount add/remove NAME" action) when a client is made or
+deleted.
 
 **Native Windows panel** (owner's goal, 2026-11-23: "restoring the Windows part makes it how it was supposed to be all
 along"; ZPanel ran natively on Windows until it was dropped, and that was its real difference): the same panel code on
