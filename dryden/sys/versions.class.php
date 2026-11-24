@@ -73,6 +73,16 @@ class sys_versions {
     }
 
     /**
+     * Is the panel running on Windows (natively, not WSL)?
+     *
+     * @return bool
+     */
+    static function IsWindows() {
+        // (the panel itself on Windows, as ZPanel ran: the Windows stack in C:\zpanel, sentora-windows-2027)
+        return DIRECTORY_SEPARATOR === '\\' || strtoupper(substr(PHP_OS, 0, 3)) === 'WIN';
+    }
+
+    /**
      * Returns in human readable form the operating system platform (eg. Windows, Linux, FreeBSD, Other)
      * @author Bobby Allen (ballen@bobbyallen.me)
      * @return string Human readable OS Platform name.

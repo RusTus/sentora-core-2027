@@ -128,7 +128,8 @@ class ui_moduleloader {
         $all = ($zdbh instanceof db_driver) ? $zdbh->Remember('x_modules:user', $read) : $read();
         $out = array();
         foreach ($all as $row) {
-            if ((string) $row['mo_category_fk'] === (string) $catid) {
+            // (on Windows only the modules ready for it: ui_module::ReadyHere)
+            if ((string) $row['mo_category_fk'] === (string) $catid && ui_module::ReadyHere($row['mo_folder_vc'])) {
                 $out[] = $row;
             }
         }

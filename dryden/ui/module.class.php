@@ -35,10 +35,31 @@ class ui_module {
      */
     static function CheckModuleExists($name) {
         $user = ctrl_users::GetUserDetail();
-        if (file_exists("modules/" . $name . "/module.zpm"))
+        if (file_exists("modules/" . $name . "/module.zpm") && self::ReadyHere($name))
             if (ctrl_groups::CheckGroupModulePermissions($user['usergroupid'], self::GetModuleID()))
                 return true;
         return false;
+    }
+
+    /**
+     * May this module run on this system? Always on Linux. On Windows (the panel natively on Windows, as ZPanel
+     * ran) only a module whose module.xml says <windows>yes</windows>: its page, its menu entry and its daemon
+     * jobs. The others need a Windows way of doing their job first (their own driver), and stay out until then.
+     *
+     * @param string $folder The module's folder name.
+     * @return bool
+     */
+    static function ReadyHere($folder) {
+        static $seen = array();
+        if (!sys_versions::IsWindows()) {
+            return true;
+        }
+        $folder = (string) $folder;
+        if (!isset($seen[$folder])) {
+            $xml = preg_match('/^[A-Za-z0-9_-]+$/', $folder) ? @file_get_contents('modules/' . $folder . '/module.xml') : false;
+            $seen[$folder] = is_string($xml) && preg_match('#<windows>\s*yes\s*</windows>#i', $xml) === 1;
+        }
+        return $seen[$folder];
     }
 
     /**

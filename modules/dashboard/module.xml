@@ -9,4 +9,5 @@
     <updateurl></updateurl>
     <type>user</type>
     <defaultcat>Account Information</defaultcat>
+    <windows>yes</windows>
 </module>

@@ -45,6 +45,10 @@ class runtime_hook {
         $hook_log->method = ctrl_options::GetSystemOption('logmode');
         $hook_log->logcode = "861";
         foreach ($found[$name] as $hook_file) {
+            // (on Windows only the hooks of modules ready for it: ui_module::ReadyHere)
+            if (!ui_module::ReadyHere(basename(dirname(dirname($hook_file))))) {
+                continue;
+            }
             if (file_exists($hook_file)) {
                 $hook_log->detail = "Execute hook file (" . $hook_file . ")";
                 try {
