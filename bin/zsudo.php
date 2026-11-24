@@ -6,7 +6,7 @@
  * run as SYSTEM by the Windows installer) does the job, but only one from the fixed list below, built only from
  * the constants here.
  *
- *   bin\zsudo.cmd <action> [words]   (the panel's side; the 'zsudo' setting names it): leaves the request in
+ *   bin\zsudo.bat <action> [words]   (the panel's side; the 'zsudo' setting names it; .bat, as PHP on Windows takes only .exe, .com and .bat for runnable): leaves the request in
  *                                   the queue, written whole in new\ before it appears in queue\
  *   php bin\zsudo.php --run-queue    (the service's side): takes the requests one by one, oldest first
  *
