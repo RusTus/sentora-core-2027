@@ -52,7 +52,7 @@ class cron_safe
         if ($st === false || ($st['mode'] & 0170000) !== 0100000) {
             return false; // missing, a link or not a plain file
         }
-        return (realpath($file) === $file) ? $file : false;
+        return (realpath($file) === $file || (sys_versions::IsWindows() && sys_winvhosts::SamePath(realpath($file), $file))) ? $file : false;
     }
 
     /**
@@ -81,7 +81,9 @@ class cron_safe
         clearstatcache(true, $file);
         $st = @lstat($file);
         $pw = function_exists('posix_getpwnam') ? posix_getpwnam(sys_accountphp::UserName((int) $accountId)) : false;
-        if ($st === false || ($st['mode'] & 0170000) !== 0100000 || $pw === false || $st['uid'] !== $pw['uid']) {
+        // (Windows: no file owners to compare; the log is written by the cron runner, bin/sentora-cron.php)
+        $owned = sys_versions::IsWindows() || ($pw !== false && $st !== false && $st['uid'] === $pw['uid']);
+        if ($st === false || ($st['mode'] & 0170000) !== 0100000 || !$owned) {
             return false;
         }
         $fh = @fopen($file, 'rb');

@@ -83,6 +83,13 @@ class pd_safe
         }
         // the real path must be exactly that (no link anywhere above either)
         $real = realpath($path);
+        if ($real !== false && sys_versions::IsWindows()) {
+            // (Windows: realpath gives backslashes and the folders' own case)
+            $real = str_replace('\\', '/', $real);
+            if (strcasecmp($real, $path) === 0) {
+                $real = $path;
+            }
+        }
         if ($real === false || $real !== $path || strpos($real . '/', self::PublicRoot($username) . '/') !== 0) {
             return false;
         }
