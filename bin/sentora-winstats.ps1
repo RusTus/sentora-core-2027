@@ -59,15 +59,21 @@ function Sample {
     # disk space per local disk
     $o.fs = @(Get-CimInstance Win32_LogicalDisk -Filter 'DriveType=3' | Where-Object { $_.Size -gt 0 } |
         ForEach-Object { [ordered]@{ mount = $_.DeviceID; total = [int64]$_.Size; free = [int64]$_.FreeSpace } })
-    # processes: pid, name, owner, CPU time in 10 ms ticks, memory in use
-    $o.procs = @(Get-Process -IncludeUserName -ErrorAction SilentlyContinue | Where-Object { $_.Id -ne 0 } | ForEach-Object {
-        $ticks = 0; try { $ticks = [int64]($_.TotalProcessorTime.Ticks / 100000) } catch { }
-        $user = "$($_.UserName)"; if ($user -match '\\([^\\]+)$') { $user = $Matches[1] }
-        , @([int]$_.Id, "$($_.ProcessName)", $(if ($user) { $user } else { '-' }), $ticks, [int64]$_.WorkingSet64)
-    })
+    # processes: pid, name, owner, CPU time in 10 ms ticks, memory in use (each section on its own: one that fails keeps
+    # its last good value, the others are still written)
+    try {
+        $o.procs = @(Get-Process -IncludeUserName -ErrorAction SilentlyContinue | Where-Object { $_.Id -ne 0 } | ForEach-Object {
+            $ticks = 0; try { $ticks = [int64]($_.TotalProcessorTime.Ticks / 100000) } catch { }
+            $user = "$($_.UserName)"; if ($user -match '\\([^\\]+)$') { $user = $Matches[1] }
+            , @([int]$_.Id, "$($_.ProcessName)", $(if ($user) { $user } else { '-' }), $ticks, [int64]$_.WorkingSet64)
+        })
+        if ($o.procs.Count -gt 0) { $script:lastProcs = $o.procs }
+    } catch { }
+    if (-not $o.procs -or $o.procs.Count -eq 0) { $o.procs = $script:lastProcs }
     # the services and whether each runs (the page picks the panel's by the names in its settings)
     $svc = [ordered]@{}
-    foreach ($s in @(Get-Service -ErrorAction SilentlyContinue)) { $svc[$s.Name] = ($s.Status -eq 'Running') }
+    try { foreach ($s in @(Get-Service -ErrorAction SilentlyContinue)) { $svc[$s.Name] = ($s.Status -eq 'Running') } } catch { }
+    if ($svc.Count -gt 0) { $script:lastSvc = $svc } elseif ($script:lastSvc) { $svc = $script:lastSvc }
     $o.services = $svc
     $cpuName = (@(Get-CimInstance Win32_Processor) | Select-Object -First 1).Name
     $o.info = [ordered]@{ host = $env:COMPUTERNAME; kernel = "$($os.Version)"; os = "$($os.Caption)"; cpu = "$cpuName".Trim()
@@ -75,6 +81,7 @@ function Sample {
     return $o
 }
 
+$script:lastProcs = @(); $script:lastSvc = $null
 $dir = Split-Path -Parent $Out
 if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
 while ($true) {
