@@ -113,6 +113,25 @@ class pd_safe
     }
 
     /**
+     * On Windows a page (Apache's account) may not write in the account's folder: the files are written by the daemon
+     * (SYSTEM) from the database instead (the module's daemon hook), which this asks for once. True there.
+     *
+     * @return bool
+     */
+    static function Deferred()
+    {
+        static $asked = false;
+        if (!sys_versions::IsWindows() || PHP_SAPI === 'cli') {
+            return false;
+        }
+        if (!$asked && class_exists('sys_winphp')) {
+            sys_winphp::Soon();
+            $asked = true;
+        }
+        return true;
+    }
+
+    /**
      * Return the folder for the account's password files (outside public_html), made if needed.
      *
      * @param string $username The account's panel user name.
@@ -129,7 +148,8 @@ class pd_safe
             return false;
         }
         clearstatcache(true, $dir);
-        return (!is_link($dir) && is_dir($dir) && realpath($dir) === $dir) ? $dir : false;
+        $same = realpath($dir) === $dir || (sys_versions::IsWindows() && strcasecmp(str_replace('\\', '/', (string) realpath($dir)), $dir) === 0);
+        return (!is_link($dir) && is_dir($dir) && $same) ? $dir : false;
     }
 
     /**
@@ -181,8 +201,12 @@ class pd_safe
      */
     static function Write($dir, $name, $content, $mode)
     {
+        if (self::Deferred()) {
+            return true;
+        }
         clearstatcache(true, $dir);
-        if (is_link($dir) || !is_dir($dir) || realpath($dir) !== $dir || strpos($name, '/') !== false) {
+        $same = realpath($dir) === $dir || (sys_versions::IsWindows() && strcasecmp(str_replace('\\', '/', (string) realpath($dir)), $dir) === 0);
+        if (is_link($dir) || !is_dir($dir) || !$same || strpos($name, '/') !== false) {
             return false;
         }
         $target = $dir . '/' . $name;
@@ -213,6 +237,9 @@ class pd_safe
      */
     static function Remove($file)
     {
+        if (self::Deferred()) {
+            return true;
+        }
         clearstatcache(true, $file);
         if (is_link($file) || is_file($file)) {
             return @unlink($file);
