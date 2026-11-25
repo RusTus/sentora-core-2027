@@ -25,6 +25,9 @@ class sys_winmail
     /** @var string|null Stalwart's account id for its own API. */
     private static $acct = null;
 
+    /** @var string What Stalwart said about the last call it refused. */
+    public static $why = '';
+
     /**
      * Stalwart's API (mail_api; the installer's: https://127.0.0.1:8443, this server only).
      *
@@ -91,11 +94,13 @@ class sys_winmail
         $body = json_encode(array('using' => array('urn:ietf:params:jmap:core', 'urn:stalwart:jmap'), 'methodCalls' => array(array($method, (object) $args, 'c0'))));
         list($code, $r) = self::Http('/jmap/', $body);
         if ($code !== 200 || !isset($r['methodResponses'][0]) || $r['methodResponses'][0][0] === 'error') {
+            self::$why = substr($code . ' ' . json_encode(isset($r['methodResponses'][0][1]) ? $r['methodResponses'][0][1] : $r), 0, 300);
             return null;
         }
         $x = (array) $r['methodResponses'][0][1];
         foreach (array('notCreated', 'notUpdated', 'notDestroyed') as $k) {
             if (!empty($x[$k])) {
+                self::$why = substr(json_encode($x[$k]), 0, 300);
                 return null;
             }
         }
@@ -172,8 +177,9 @@ class sys_winmail
                 $out[] = 'Mail: ' . $a . ' has no password the panel can pass on yet (reset it on the Mailboxes page)';
                 continue;
             }
-            // (switched off: a random secret nobody knows; on again: the mailbox's own hash)
-            $secret = $w['on'] ? $w['hash'] : bin2hex(random_bytes(24));
+            // (switched off: a random secret nobody knows; on again: the mailbox's own hash, in the form Stalwart takes:
+            // with the scheme first, as Dovecot writes it, or the crypt hash alone)
+            $secrets = $w['on'] ? array('{SHA512-CRYPT}' . $w['hash'], $w['hash']) : array(bin2hex(random_bytes(24)));
             $sum = hash('sha256', $w['hash'] . '|' . ($w['on'] ? 1 : 0));
             if (isset($accts[$a]) && !isset($mine[$a])) {
                 continue;   // (made with mailuser.ps1: not the panel's)
@@ -188,19 +194,36 @@ class sys_winmail
                     $doms[$domain] = (string) $r['created']['d']['id'];
                     $out[] = 'Mail: domain ' . $domain . ' added';
                 }
-                $r = self::Call('x:Account/set', array('create' => array('u' => array('@type' => 'User', 'name' => $local, 'domainId' => $doms[$domain],
-                    'credentials' => array('0' => array('@type' => 'Password', 'secret' => $secret))))));
-                if ($r === null || empty($r['created']['u']['id'])) {
-                    $out[] = 'Mail: Stalwart refused the mailbox ' . $a;
+                $r = null;
+                $whys = array();
+                foreach ($secrets as $secret) {
+                    $r = self::Call('x:Account/set', array('create' => array('u' => array('@type' => 'User', 'name' => $local, 'domainId' => $doms[$domain],
+                        'credentials' => array('0' => array('@type' => 'Password', 'secret' => $secret))))));
+                    if ($r !== null && !empty($r['created']['u']['id'])) {
+                        break;
+                    }
+                    $whys[] = self::$why;
+                    $r = null;
+                }
+                if ($r === null) {
+                    $out[] = 'Mail: Stalwart refused the mailbox ' . $a . ': ' . implode(' | ', $whys);
                     continue;
                 }
                 $mine[$a] = true;
                 $sums[$a] = $sum;
                 $made++;
             } elseif (!isset($sums[$a]) || $sums[$a] !== $sum) {
-                $r = self::Call('x:Account/set', array('update' => array($accts[$a] => array('credentials' => array('0' => array('@type' => 'Password', 'secret' => $secret))))));
+                $r = null;
+                $whys = array();
+                foreach ($secrets as $secret) {
+                    $r = self::Call('x:Account/set', array('update' => array($accts[$a] => array('credentials' => array('0' => array('@type' => 'Password', 'secret' => $secret))))));
+                    if ($r !== null) {
+                        break;
+                    }
+                    $whys[] = self::$why;
+                }
                 if ($r === null) {
-                    $out[] = 'Mail: Stalwart refused the change of ' . $a;
+                    $out[] = 'Mail: Stalwart refused the change of ' . $a . ': ' . implode(' | ', $whys);
                     continue;
                 }
                 $sums[$a] = $sum;
@@ -210,7 +233,7 @@ class sys_winmail
         foreach (array_keys($mine) as $a) {
             if (!isset($want[$a])) {
                 if (isset($accts[$a]) && self::Call('x:Account/set', array('destroy' => array($accts[$a]))) === null) {
-                    $out[] = 'Mail: Stalwart refused to remove ' . $a;
+                    $out[] = 'Mail: Stalwart refused to remove ' . $a . ': ' . self::$why;
                     continue;
                 }
                 unset($mine[$a], $sums[$a]);
