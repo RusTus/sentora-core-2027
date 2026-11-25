@@ -125,6 +125,18 @@ class module_controller extends ctrl_module
     }
 
     /**
+     * The settings form's fields: Spec()'s, and on Linux also any other setting of the module (under Other); on Windows
+     * only Spec()'s (the others are Linux's).
+     *
+     * @return array<string, array<string, mixed>>
+     */
+    static function Fields()
+    {
+        $fields = ui_settingsform::Fields(ui_module::GetModuleName(), self::Spec());
+        return sys_versions::IsWindows() ? array_intersect_key($fields, self::Spec()) : $fields;
+    }
+
+    /**
      * Set the apache_changed setting to 'true' so the daemon rewrites the Apache config.
      *
      * @global db_driver $zdbh The panel's database connection.
@@ -342,7 +354,7 @@ class module_controller extends ctrl_module
      */
     static function getSettingsForm()
     {
-        $fields = self::$fields !== null ? self::$fields : ui_settingsform::Fields(ui_module::GetModuleName(), self::Spec());
+        $fields = self::$fields !== null ? self::$fields : self::Fields();
         return ui_settingsform::Render($fields, './?module=apache_admin&action=UpdateApacheConfig', 'Save settings',
             '<label class="aa-force"><input type="checkbox" name="inForce" value="1"> ' . self::t('Also write the configuration again without a change') . '</label>');
     }
@@ -358,7 +370,7 @@ class module_controller extends ctrl_module
         global $controller;
         runtime_csfr::Protect();
         $form = $controller->GetAllControllerRequests('FORM');
-        $fields = ui_settingsform::Fields(ui_module::GetModuleName(), self::Spec());
+        $fields = self::Fields();
         $changes = ui_settingsform::Read($fields, $form);
         $saved = ui_settingsform::Write($changes);
         foreach (array('global_vhcustom', 'global_zpcustom') as $k) {
