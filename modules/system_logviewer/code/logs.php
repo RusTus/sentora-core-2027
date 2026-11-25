@@ -17,20 +17,33 @@ class system_logviewer_logs
         // A file is listed under the first group that matches it
         // errors, warnings and bans from the logs the panel can not read itself (the daemon gathers
         // them: code/problems.php), and what the panel asked root to do (zsudo's queue)
-        'Problems (mail, scanners, bans)' => array('/var/sentora/logs/problems.log', '/var/sentora/logs/problems.log.1'),
-        'PHP-FPM (extra PHP versions)' => array('/var/sentora/logs/php*-fpm.log'),
-        'Sentora panel' => array('/var/sentora/logs/*.log'),
+        'Problems (mail, scanners, bans)' => array('{log_dir}/problems.log', '{log_dir}/problems.log.1'),
+        'PHP-FPM (extra PHP versions)' => array('{log_dir}/php*-fpm.log'),
+        'Sentora panel' => array('{log_dir}/*.log'),
         // the panel's own records: who logged in as whom (Shadowing), two-factor resets and recovery
         // codes used, and passwords shown (MySQL Users, Mailboxes ...)
         'Panel security' => array('/var/lib/sentora/shadowing.log', '/var/lib/sentora/twofactor.log', '/var/lib/sentora/password-reveal.log', '/var/lib/sentora/panel-update.log'),
-        'Hosted domains' => array('/var/sentora/logs/domains/*/*.log'),
-        'FTP (ProFTPD)' => array('/var/sentora/logs/proftpd/*.log'),
-        'DNS (BIND)' => array('/var/sentora/logs/bind/*.log'),
+        'Hosted domains' => array('{log_dir}/domains/*/*.log'),
+        'FTP (ProFTPD)' => array('{log_dir}/proftpd/*.log'),
+        'DNS (BIND)' => array('{log_dir}/bind/*.log'),
         // ({apache_log_dir}: Apache's own log folder on this system, sys_platform)
         'Apache' => array('{apache_log_dir}/*log'),
         'Mail' => array('/var/log/dovecot*.log', '/var/log/mail.log', '/var/log/mail.err', '/var/log/maillog'),
         'MySQL' => array('/var/log/mysql/*.log', '/var/log/mariadb/*.log'),
         'System' => array('/var/log/syslog', '/var/log/auth.log', '/var/log/kern.log', '/var/log/messages', '/var/log/secure'),
+    );
+
+    /** @var array<string, string[]> The same on Windows (the Windows installer's folders under log_dir). */
+    static $windows = array(
+        'Sentora panel' => array('{log_dir}/panel/*.log'),
+        'Panel security' => array('/var/lib/sentora/shadowing.log', '/var/lib/sentora/twofactor.log', '/var/lib/sentora/password-reveal.log', '/var/lib/sentora/panel-update.log'),
+        'Hosted domains' => array('{log_dir}/domains/*/*.log'),
+        'Apache' => array('{log_dir}/apache/*.log'),
+        'PHP' => array('{log_dir}/php/*.log'),
+        'FTP (SFTPGo)' => array('{log_dir}/sftpgo/*.log'),
+        'Mail (Stalwart, ClamAV, webmail)' => array('{log_dir}/stalwart/*', '{log_dir}/clamav/*.log', '{log_dir}/roundcube/*', '{log_dir}/z-push/*.log'),
+        'DNS (CoreDNS)' => array('{log_dir}/coredns/*.log'),
+        'MySQL' => array('{log_dir}/mysql/*.log'),
     );
 
     /**
@@ -42,9 +55,12 @@ class system_logviewer_logs
     static function All()
     {
         $list = array();
-        foreach (self::$sources as $group => $patterns) {
+        // (the panel's log folder from the settings: /var/sentora/logs on Linux)
+        $logDir = rtrim(str_replace('\\', '/', (string) ctrl_options::GetSystemOption('log_dir')), '/');
+        $logDir = $logDir !== '' ? $logDir : '/var/sentora/logs';
+        foreach (sys_versions::IsWindows() ? self::$windows : self::$sources as $group => $patterns) {
             foreach ($patterns as $pattern) {
-                $pattern = str_replace('{apache_log_dir}', rtrim(sys_platform::Get('apache_log_dir'), '/'), $pattern);
+                $pattern = str_replace(array('{log_dir}', '{apache_log_dir}'), array($logDir, rtrim(sys_platform::Get('apache_log_dir'), '/')), $pattern);
                 // A folder the panel may not list (SELinux keeps BIND's and the FTP server's logs from
                 // the web server) is not tried: access() is asked first, which SELinux does not log
                 $dir = dirname($pattern);

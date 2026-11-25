@@ -827,6 +827,9 @@ DNS, FTP, mailboxes and cron on Windows (2026-11-25, tested in the Windows insta
 - Widget Admin (2026-11-25): works on Windows as on Linux (queue and results in the state folder through the junction; the
   daemon installs into panel\etc\dashboard-widgets as SYSTEM); its PHP syntax check now uses the daemon's own PHP
   (PHP_BINARY), as "php" is not on Windows' path. Tested: a widget uploaded on the page is installed.
+- System Log Viewer (2026-11-25): its log folders come from log_dir ({log_dir} in its list; /var/sentora/logs on Linux as
+  before), with a Windows list: panel, panel security (state folder), sites, Apache, PHP, SFTPGo, Stalwart/ClamAV/webmail,
+  CoreDNS, MySQL (the ones Apache's account may not read are listed as locked). The problems log hook stays Linux's.
 Where Windows lives (owner, 2026-11-25): the native installer moved from RusTus/sentora-windows-2027 (left with a note) to
 sentora-installers-2027/windows/server (install-zpanel-stack.ps1; install-web-stack.ps1 = the same file with
 $Edition = 'stack', kept for other uses; README.txt; tests/), tested by .github/workflows/windows-server-test.yml there (a
