@@ -39,12 +39,30 @@ class sys_winvhosts
             // (the administrator's own file is never written; an older install named it here)
             return array('Websites: the apache_vhost setting names no file of the panel\'s own');
         }
-        if (strtolower((string) ctrl_options::GetSystemOption('apache_changed')) !== 'true' && is_file($file)) {
+        if (strtolower((string) ctrl_options::GetSystemOption('apache_changed')) !== 'true' && is_file($file) && is_file(dirname($file) . '/sentora-fallback.conf')) {
             return $out;
         }
         $made = self::Folders();
         if ($made) {
             $out[] = 'Websites: ' . $made . ' folder(s) made';
+        }
+        // "Site not found falls back to panel login" (panel_fallback): its own file, read before the other sites
+        $fbFile = dirname($file) . '/sentora-fallback.conf';
+        $fbText = self::Fallback();
+        $fbOld = is_file($fbFile) ? (string) @file_get_contents($fbFile) : null;
+        if ($fbOld !== $fbText) {
+            @file_put_contents($fbFile, $fbText);
+            $test = self::Test();
+            if ($test !== '') {
+                if ($fbOld === null) {
+                    @unlink($fbFile);
+                } else {
+                    @file_put_contents($fbFile, $fbOld);
+                }
+                $out[] = 'Websites: Apache refused the "site not found" setting, the old one is kept: ' . $test;
+            } else {
+                $out[] = 'Websites: names no site claims now ' . (self::FallbackOn() ? 'open the panel' : 'get Not Found') . ', Apache restarts: ' . self::Restart();
+            }
         }
         $text = self::Build();
         $old = is_file($file) ? (string) @file_get_contents($file) : null;
@@ -69,6 +87,50 @@ class sys_winvhosts
         }
         self::Done();
         return $out;
+    }
+
+    /**
+     * Whether a name no site claims opens the panel (panel_fallback: on unless set to an off value, as on Linux).
+     *
+     * @return bool
+     */
+    static function FallbackOn()
+    {
+        $v = strtolower(trim((string) ctrl_options::GetSystemOption('panel_fallback')));
+        return !in_array($v, array('false', '0', 'no', 'off'), true);
+    }
+
+    /**
+     * The file read before every other site (configs/apache/sentora-fallback.conf): empty while names no site claims
+     * open the panel (the first site in httpd-vhosts.conf); else the first site on each port, which answers those names
+     * with Not Found, but still opens the panel on this server's own addresses and localhost while panel_ip_access is on.
+     *
+     * @return string
+     */
+    static function Fallback()
+    {
+        $nl = "\r\n";
+        $t = '# Made by the Sentora panel (sys_winvhosts) from "Site not found falls back to panel login" (Sentora Config).' . $nl;
+        if (self::FallbackOn()) {
+            return $t . '# On: names no site claims open the panel (the first site in httpd-vhosts.conf).' . $nl;
+        }
+        $v = strtolower(trim((string) ctrl_options::GetSystemOption('panel_ip_access')));
+        $ipOk = !in_array($v, array('false', '0', 'no', 'off'), true);
+        $panel = rtrim(self::Fwd(ctrl_options::GetSystemOption('sentora_root')), '/');
+        $port = (int) ctrl_options::GetSystemOption('apache_port');
+        $port = $port > 0 ? $port : 80;
+        $body = '    ServerName sentora-not-found.invalid' . $nl . '    DocumentRoot "' . $panel . '"' . $nl . '    RewriteEngine On' . $nl
+            . ($ipOk ? '    RewriteCond %{HTTP_HOST} !^(\[[0-9a-fA-F:]+\]|[0-9.]+|localhost)(:[0-9]+)?$ [NC]' . $nl : '')
+            . '    RewriteRule ^ - [R=404,L]' . $nl;
+        $t .= '# Off: names no site claims get Not Found' . ($ipOk ? ' (this server\'s addresses and localhost still open the panel)' : '') . '.' . $nl
+            . '<VirtualHost *:' . $port . '>' . $nl . $body . '</VirtualHost>' . $nl;
+        $ssl = dirname(dirname((string) ctrl_options::GetSystemOption('apache_vhost'))) . '/ssl/';
+        if (is_file($ssl . 'server.crt') && is_file($ssl . 'server.key')) {
+            $t .= '<VirtualHost *:' . self::HttpsPort() . '>' . $nl . $body . '    SSLEngine on' . $nl
+                . '    SSLCertificateFile "' . str_replace('\\', '/', $ssl) . 'server.crt"' . $nl . '    SSLCertificateKeyFile "' . str_replace('\\', '/', $ssl) . 'server.key"' . $nl
+                . '</VirtualHost>' . $nl;
+        }
+        return $t;
     }
 
     /**
