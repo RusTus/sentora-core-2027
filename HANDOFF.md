@@ -843,6 +843,11 @@ DNS, FTP, mailboxes and cron on Windows (2026-11-25, tested in the Windows insta
   lets Apache's account read data\sentora\sitehealth.
 - Note for tests: an upload sent with curl and a copy of the session cookie renews the panel session, so the test logs in
   again after it (four checks once failed only because of that).
+- Still Linux-only, each needing its own Windows way (2026-11-25): File Manager (it runs as Apache's account, which may
+  not write in hostdata on Windows, on purpose; the way would be to run it as the account's own PHP), Mail Config (its
+  settings are SOGo's and Postfix's; Windows would need Stalwart's), Backup Config (the off-server backup is a bash/rsync/SSH
+  job), Forwarders (Stalwart forwards only by a Sieve script per mailbox), PHP Versions (one PHP on Windows), Branding's
+  addresses (Linux's vhost writer), SpamAV, GoAccess and Matomo stats, AutoIP, Repo Browser (add-ons are Linux's).
 Where Windows lives (owner, 2026-11-25): the native installer moved from RusTus/sentora-windows-2027 (left with a note) to
 sentora-installers-2027/windows/server (install-zpanel-stack.ps1; install-web-stack.ps1 = the same file with
 $Edition = 'stack', kept for other uses; README.txt; tests/), tested by .github/workflows/windows-server-test.yml there (a
