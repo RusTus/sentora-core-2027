@@ -838,6 +838,11 @@ DNS, FTP, mailboxes and cron on Windows (2026-11-25, tested in the Windows insta
   installer now sets db_service, mail_service, clamd_service, freshclam_service). "Load" is the processor queue length
   (Windows has no load average). The daemon's alerts use the same figures (disks, stopped services); the Hardening card is
   Linux's and hidden on Windows. The panel's PHP gets no access to Windows' counters (no COM): less to misuse.
+- Site Health (2026-11-25): on Windows the daemon (SYSTEM) counts as root for its hourly check; its JSON is written as on
+  Linux (tempnam's backslash path compared by real path, no chgrp), old account files found with scandir; the installer
+  lets Apache's account read data\sentora\sitehealth.
+- Note for tests: an upload sent with curl and a copy of the session cookie renews the panel session, so the test logs in
+  again after it (four checks once failed only because of that).
 Where Windows lives (owner, 2026-11-25): the native installer moved from RusTus/sentora-windows-2027 (left with a note) to
 sentora-installers-2027/windows/server (install-zpanel-stack.ps1; install-web-stack.ps1 = the same file with
 $Edition = 'stack', kept for other uses; README.txt; tests/), tested by .github/workflows/windows-server-test.yml there (a

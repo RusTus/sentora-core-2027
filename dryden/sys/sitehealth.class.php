@@ -204,7 +204,9 @@ class sys_sitehealth
     {
         global $zdbh;
         $say = array();
-        if (!function_exists('posix_geteuid') || posix_geteuid() !== 0) {
+        // (root's job: on Windows the daemon, which runs as SYSTEM)
+        $root = sys_versions::IsWindows() ? PHP_SAPI === 'cli' : (function_exists('posix_geteuid') && posix_geteuid() === 0);
+        if (!$root) {
             return array('Skipped (needs root).');
         }
         if (!self::PrepareDir()) {
@@ -254,9 +256,9 @@ class sys_sitehealth
             self::WriteJson(self::AccountFile($uid), $sum, 0640);
         }
         // accounts that are gone, and their logs' read positions
-        foreach ((array) glob(self::DIR . '/acct-*.json') as $f) {
-            if (!isset($keep[basename($f)]) && !is_link($f)) {
-                @unlink($f);
+        foreach ((array) @scandir(self::DIR) as $f) {
+            if (preg_match('/^acct-.+\.json$/', (string) $f) && !isset($keep[$f]) && !is_link(self::DIR . '/' . $f)) {
+                @unlink(self::DIR . '/' . $f);
             }
         }
         foreach (array_keys($state) as $f) {
@@ -305,14 +307,16 @@ class sys_sitehealth
     static function WriteJson($file, $data, $mode)
     {
         $tmp = @tempnam(self::DIR, 'sh.');
-        if ($tmp === false || dirname($tmp) !== self::DIR) {
+        // (on Windows tempnam names the folder with backslashes and the drive)
+        $same = $tmp !== false && (dirname($tmp) === self::DIR || (sys_versions::IsWindows() && class_exists('sys_winvhosts') && sys_winvhosts::SamePath(realpath(dirname($tmp)), realpath(self::DIR))));
+        if (!$same) {
             if ($tmp !== false) {
                 @unlink($tmp);
             }
             return false;
         }
         $ok = @file_put_contents($tmp, json_encode($data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PARTIAL_OUTPUT_ON_ERROR)) !== false
-            && @chmod($tmp, $mode) && ($mode === 0600 || @chgrp($tmp, 'sentora')) && @rename($tmp, $file);
+            && @chmod($tmp, $mode) && ($mode === 0600 || sys_versions::IsWindows() || @chgrp($tmp, 'sentora')) && @rename($tmp, $file);
         if (!$ok) {
             @unlink($tmp);
         }
