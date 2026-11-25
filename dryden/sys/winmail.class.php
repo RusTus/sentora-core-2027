@@ -5,7 +5,8 @@
  * sentora_postfix: its domain and mailbox tables, through mailserver_php = postfix.php), and the daemon (SYSTEM) brings
  * Stalwart's domains and accounts in line with it through Stalwart's own API, as the administrator whose password only
  * root's jobs can read (configs/stalwart/admin.txt). The mailbox's SHA-512 crypt hash is Stalwart's secret as it is (no
- * plain password is kept anywhere); a mailbox switched off gets a random secret nobody knows until it is on again. Only
+ * plain password is kept anywhere); a mailbox switched off has signing in, receiving and sending switched off by Stalwart's
+ * own permissions (its password kept, as with active = 0 on Linux). Only
  * the accounts the panel made (listed in its state file) are changed or removed: mailboxes added with mailuser.ps1 are
  * left alone. Not built yet: aliases, forwarders and lists. Nothing here runs on Linux.
  *
@@ -177,9 +178,11 @@ class sys_winmail
                 $out[] = 'Mail: ' . $a . ' has no password the panel can pass on yet (reset it on the Mailboxes page)';
                 continue;
             }
-            // (switched off: a random secret nobody knows; on again: the mailbox's own hash, in the form Stalwart takes:
-            // with the scheme first, as Dovecot writes it, or the crypt hash alone)
-            $secrets = $w['on'] ? array('{SHA512-CRYPT}' . $w['hash'], $w['hash']) : array(bin2hex(random_bytes(24)));
+            // (the crypt hash alone, which Stalwart keeps as it is; switched off: signing in, receiving and sending
+            // switched off by Stalwart's own permissions, the password kept, as Dovecot/Postfix do with active = 0)
+            $secrets = array($w['hash']);
+            $perm = $w['on'] ? array('@type' => 'Inherit')
+                : array('@type' => 'Merge', 'enabledPermissions' => (object) array(), 'disabledPermissions' => (object) array('authenticate' => true, 'emailReceive' => true, 'emailSend' => true));
             $sum = hash('sha256', $w['hash'] . '|' . ($w['on'] ? 1 : 0));
             if (isset($accts[$a]) && !isset($mine[$a])) {
                 continue;   // (made with mailuser.ps1: not the panel's)
@@ -198,7 +201,7 @@ class sys_winmail
                 $whys = array();
                 foreach ($secrets as $secret) {
                     $r = self::Call('x:Account/set', array('create' => array('u' => array('@type' => 'User', 'name' => $local, 'domainId' => $doms[$domain],
-                        'credentials' => array('0' => array('@type' => 'Password', 'secret' => $secret))))));
+                        'credentials' => (object) array('0' => array('@type' => 'Password', 'secret' => $secret)), 'permissions' => $perm))));
                     if ($r !== null && !empty($r['created']['u']['id'])) {
                         break;
                     }
@@ -216,7 +219,7 @@ class sys_winmail
                 $r = null;
                 $whys = array();
                 foreach ($secrets as $secret) {
-                    $r = self::Call('x:Account/set', array('update' => array($accts[$a] => array('credentials' => array('0' => array('@type' => 'Password', 'secret' => $secret))))));
+                    $r = self::Call('x:Account/set', array('update' => (object) array($accts[$a] => array('credentials' => (object) array('0' => array('@type' => 'Password', 'secret' => $secret)), 'permissions' => $perm))));
                     if ($r !== null) {
                         break;
                     }
