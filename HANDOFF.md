@@ -783,7 +783,7 @@ DNS, FTP, mailboxes and cron on Windows (2026-11-25, tested in the Windows insta
 - Mailboxes: the Windows installer makes the mail database (mailserver_db, sentora_postfix, from the Linux SQL), so the page
   and its postfix.php driver work as on Linux; sys_winmail (the daemon) brings Stalwart's domains and accounts in line through
   its JMAP management API (mail_api, administrator from mail_admin), only the accounts it made (its state file); the hash is
-  Stalwart's secret, a switched-off mailbox gets a random one. Aliases, forwarders and lists are not on Windows yet.
+  Stalwart's secret as it is (the crypt hash alone, $6$...; Stalwart keeps a $-hash as given; credentials go as a JSON object {"0": ...}, not a list); a switched-off mailbox has Stalwart's authenticate, emailReceive and emailSend permissions switched off (permissions @type Merge), its password kept. Aliases, forwarders and lists are not on Windows yet.
 - Cron Manager: the task 'Sentora cron' (SYSTEM, every minute) runs bin/sentora-cron.php, which starts each task due now in
   its own process and hands the script to the account's own PHP over FastCGI with the account's key (as Apache does), so it
   runs as NT SERVICE\SentoraPHP-NAME inside its fences; never two runs at once, cron_min_interval and cron_max_runtime as on
