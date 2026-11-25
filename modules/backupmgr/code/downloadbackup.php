@@ -10,7 +10,7 @@
  * @package Sentora
  * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
  *
- * Updated by RusTus, 2026-11-07
+ * Updated by RusTus, 2026-11-25
  */
 // The panel's own class loader, from the panel's folder (this file's own place: Windows' DocumentRoot has no slash
 // at the end, and a request can not change it); the list of files this once included by hand missed classes the

@@ -21,7 +21,7 @@
  * @package Sentora
  * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
  *
- * Written by RusTus, 2026-11-24
+ * Written by RusTus, 2026-11-25
  */
 
 // (only from the command line: the panel's folder is served by Apache, and this file must never run as a page)
