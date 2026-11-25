@@ -68,13 +68,26 @@ class module_controller extends ctrl_module
     }
 
     /**
+     * Where Roundcube opens (<@ WebmailUrl @>): inside the panel on Linux, /webmail on Windows (the mail part of the
+     * Windows installer serves it over HTTPS).
+     *
+     * @return string
+     */
+    static function getWebmailUrl()
+    {
+        return sys_versions::IsWindows() ? '/webmail/' : 'etc/apps/webmail/';
+    }
+
+    /**
      * The Roundcube version from its own source (<@ RoundcubeVersion @>).
      *
      * @return string For example '1.7.5', or ''.
      */
     static function getRoundcubeVersion()
     {
-        $src = @file_get_contents('etc/apps/webmail/program/include/iniset.php');
+        $src = sys_versions::IsWindows()
+            ? @file_get_contents(dirname(rtrim(str_replace('\\', '/', (string) ctrl_options::GetSystemOption('hosted_dir')), '/')) . '/apps/roundcube/program/include/iniset.php')
+            : @file_get_contents('etc/apps/webmail/program/include/iniset.php');
         return ($src !== false && preg_match("/RCMAIL_VERSION', '([0-9.]+)'/", $src, $m)) ? self::h($m[1]) : '';
     }
 

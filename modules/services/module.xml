@@ -3,6 +3,7 @@
     <name>Services</name>
     <version>200</version>
     <defaultcat>Advanced</defaultcat>
+    <windows>yes</windows>
     <desc>Here you can check the current status of our services and see what services are up and running and which are down and not.</desc>
     <authorname>Sentora Project</authorname>
     <authoremail>info@sentora.org</authoremail>

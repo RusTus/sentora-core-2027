@@ -54,7 +54,7 @@ class module_controller extends ctrl_module
 	 */
 	static function LogPath($username, $domain, $kind)
 	{
-		return '/var/sentora/logs/domains/' . $username . '/' . $domain . '-' . ($kind === 'access' ? 'access' : 'error') . '.log';
+		return rtrim(str_replace('\\', '/', (string) ctrl_options::GetSystemOption('log_dir')), '/') . '/domains/' . $username . '/' . $domain . '-' . ($kind === 'access' ? 'access' : 'error') . '.log';
 	}
 
 	/**

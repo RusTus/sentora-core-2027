@@ -3,6 +3,7 @@
     <name>WebMail</name>
     <version>200</version>
     <defaultcat>Mail</defaultcat>
+    <windows>yes</windows>
     <desc>Webmail is a convenient way for you to check your email accounts online without the need to configure an email client.</desc>
     <authorname>Sentora Project</authorname>
     <authoremail>info@sentora.org</authoremail>

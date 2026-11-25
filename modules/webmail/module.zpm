@@ -14,7 +14,7 @@
                     <h3><: Webmail :> <span class="wm-ver">Roundcube <@ RoundcubeVersion @></span></h3>
                     <p><: Read and send mail in the browser, from anywhere. Log in with the full mailbox address and its password. :></p>
                 </div>
-                <a href="etc/apps/webmail/" class="btn btn-primary btn-lg wm-open" target="_blank" rel="noopener"><svg class="wm-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6"/><path d="M20 4 10 14"/><path d="M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/></svg><@ LaunchWebMail @></a>
+                <a href="<@ WebmailUrl @>" class="btn btn-primary btn-lg wm-open" target="_blank" rel="noopener"><svg class="wm-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6"/><path d="M20 4 10 14"/><path d="M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/></svg><@ LaunchWebMail @></a>
             </div>
             <% if HasSOGo %>
             <div class="wm-app wm-app-sogo">

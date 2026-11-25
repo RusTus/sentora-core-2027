@@ -5,6 +5,7 @@
 	<type>user</type>
 	<ostype>all</ostype>
 	<defaultcat>Advanced</defaultcat>
+    <windows>yes</windows>
 	<desc>Follow your websites' error and access logs live, and download them.</desc>
 	<authorname>samt2497 maintained by Sentora team</authorname>
 	<authoremail>samt2497@hotmail.com</authoremail>

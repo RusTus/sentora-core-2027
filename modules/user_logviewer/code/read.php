@@ -66,7 +66,7 @@ $domain = $q->fetchColumn();
 if (!$domain) {
     ulv_fail(404, 'Unknown log.');
 }
-$path = '/var/sentora/logs/domains/' . $user['username'] . '/' . $domain . '-' . $m[2] . '.log';
+$path = rtrim(str_replace('\\', '/', (string) ctrl_options::GetSystemOption('log_dir')), '/') . '/domains/' . $user['username'] . '/' . $domain . '-' . $m[2] . '.log';
 if (!is_file($path) || is_link($path)) {
     ulv_fail(404, 'This log does not exist yet.');
 }
