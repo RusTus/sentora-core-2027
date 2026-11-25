@@ -64,7 +64,8 @@ foreach ((array) glob('/var/lib/sentora/tmp/widget-queue-*.json') as $waJob) {
     // the PHP must at least be valid PHP before it goes anywhere near the panel
     $tmp = tempnam('/var/lib/sentora/tmp', 'widgetlint');
     file_put_contents($tmp, $files['widget.php']);
-    exec('php -l ' . escapeshellarg($tmp) . ' 2>&1', $lint, $rc);
+    // (the daemon's own PHP: on Windows "php" is not on the path)
+    exec(escapeshellarg(PHP_BINARY !== '' ? PHP_BINARY : 'php') . ' -l ' . escapeshellarg($tmp) . ' 2>&1', $lint, $rc);
     @unlink($tmp);
     if ($rc !== 0) {
         $waReport(false, 'Widget ' . $id . ' not installed: widget.php has a PHP error (' . substr(preg_replace('/\s+/', ' ', implode(' ', $lint)), 0, 160) . ').', $by);

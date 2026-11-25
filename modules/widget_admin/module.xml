@@ -9,4 +9,5 @@
     <updateurl></updateurl>
     <type>user</type>
     <defaultcat>Server Admin</defaultcat>
+    <windows>yes</windows>
 </module>

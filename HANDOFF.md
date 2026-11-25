@@ -824,6 +824,9 @@ DNS, FTP, mailboxes and cron on Windows (2026-11-25, tested in the Windows insta
   the passive ports from ftp_passive_ports (the Windows installer sets 50000-50100; without it ProFTPD's 60000-65535) and
   hides ProFTPD's database setting under SFTPGo. Module Admin on Windows marks the modules not ready there ("not on Windows
   yet") and has no add-on upload (add-ons are installed by Linux's daemon job; none is ready for Windows yet).
+- Widget Admin (2026-11-25): works on Windows as on Linux (queue and results in the state folder through the junction; the
+  daemon installs into panel\etc\dashboard-widgets as SYSTEM); its PHP syntax check now uses the daemon's own PHP
+  (PHP_BINARY), as "php" is not on Windows' path. Tested: a widget uploaded on the page is installed.
 Where Windows lives (owner, 2026-11-25): the native installer moved from RusTus/sentora-windows-2027 (left with a note) to
 sentora-installers-2027/windows/server (install-zpanel-stack.ps1; install-web-stack.ps1 = the same file with
 $Edition = 'stack', kept for other uses; README.txt; tests/), tested by .github/workflows/windows-server-test.yml there (a
