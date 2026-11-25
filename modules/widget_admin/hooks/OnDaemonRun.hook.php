@@ -23,7 +23,14 @@ $waReport = function ($ok, $text, $by) use ($waResults) {
 if (!is_dir($waRoot)) {
     @mkdir($waRoot, 0755, true);
 }
-foreach ((array) glob('/var/lib/sentora/tmp/widget-queue-*.json') as $waJob) {
+// (the queue's files by their names: scandir, which reads a junction's folder on Windows as on Linux)
+$waQueue = array();
+foreach ((array) @scandir('/var/lib/sentora/tmp') as $waName) {
+    if (preg_match('/^widget-queue-[0-9a-f]{16}\.json$/', (string) $waName)) {
+        $waQueue[] = '/var/lib/sentora/tmp/' . $waName;
+    }
+}
+foreach ($waQueue as $waJob) {
     $j = json_decode((string) @file_get_contents($waJob), true);
     $zip = substr($waJob, 0, -5) . '.zip';
     @unlink($waJob);
