@@ -12,6 +12,11 @@
  *
  * Updated by RusTus, 2026-11-25
  */
+if (sys_versions::IsWindows()) {
+    // (Windows: sys_winvhosts writes the sites, with this page's settings and entries, from the Domains module's
+    // hook; Linux's users, PHP-FPM pools and vhost file below do not apply)
+    return;
+}
 defined('SENTORA_PANEL_FPM_SOCKET') || define('SENTORA_PANEL_FPM_SOCKET', sys_accountphp::PanelSocket());
 
 echo fs_filehandler::NewLine() . "START Apache Config Hook." . fs_filehandler::NewLine();

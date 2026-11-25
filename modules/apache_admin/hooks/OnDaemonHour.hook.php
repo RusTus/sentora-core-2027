@@ -7,6 +7,9 @@
  *
  * Written by RusTus, 2026-11-05
  */
+if (sys_versions::IsWindows()) {
+    return; // (Linux's account users and their files; on Windows each account's rights come from phpaccount.ps1)
+}
 echo fs_filehandler::NewLine() . "START Account file ownership." . fs_filehandler::NewLine();
 $checked = 0;
 $fixedTotal = 0;

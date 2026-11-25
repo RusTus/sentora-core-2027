@@ -198,7 +198,8 @@ class sys_apachecustom
      */
     static function Culprit($config, $output, $file = '')
     {
-        if (!preg_match_all('/on line (\d+) of ([^:\s]+)/', $output, $all, PREG_SET_ORDER)) {
+        // (a Windows path starts with its drive: "on line 12 of C:/zpanel/configs/apache/sentora-vhosts.conf:")
+        if (!preg_match_all('/on line (\d+) of ((?:[A-Za-z]:)?[^:\s]+)/', $output, $all, PREG_SET_ORDER)) {
             return null;
         }
         $n = 0;

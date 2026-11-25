@@ -12,7 +12,10 @@
  */
 
 SetWriteApacheConfigTrue();
-DeleteApacheClientFiles();
+if (!sys_versions::IsWindows()) {
+    // (on Windows a page may not write in hostdata: a deleted client's files stay, as Manage Clients says)
+    DeleteApacheClientFiles();
+}
 
 /**
  * Set the apache_changed setting to 'true' so the daemon rewrites the Apache config.

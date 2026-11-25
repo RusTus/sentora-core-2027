@@ -96,7 +96,7 @@ class module_controller extends ctrl_module
             $why = sys_apachecustom::Test($v);
             return $why === '' ? '' : array('Apache refuses this: %s', $why);
         };
-        return array(
+        $spec = array(
             'apache_port' => array('section' => $w, 'label' => 'Port', 'help' => 'The port Apache serves websites on.', 'type' => 'number', 'min' => 1, 'max' => 65535),
             'dir_index' => array('section' => $w, 'label' => 'Start pages', 'help' => 'The files Apache looks for when a folder is asked for, in order.', 'type' => 'text',
                 'pattern' => '/^DirectoryIndex( [A-Za-z0-9._-]+)+$/', 'pattern_help' => 'DirectoryIndex, then the file names, such as: DirectoryIndex index.html index.php'),
@@ -116,6 +116,12 @@ class module_controller extends ctrl_module
             'global_vhcustom' => array('section' => $c, 'label' => 'For every website', 'help' => 'Apache directives added to every website\'s configuration.', 'type' => 'code', 'check' => $noSymlinks),
             'global_zpcustom' => array('section' => $c, 'label' => 'For the panel', 'help' => 'Apache directives added to the panel\'s own site.', 'type' => 'code', 'check' => $noSymlinks),
         );
+        if (sys_versions::IsWindows()) {
+            // (Windows: what sys_winvhosts uses; the port, PHP's processes and folders are the installer's and
+            // phpaccount.ps1's, the panel's own site is in httpd-vhosts.conf, the hosts file is left alone)
+            $spec = array_intersect_key($spec, array_flip(array('dir_index', 'access_log_format', 'apache_allow_disabled', 'shared_domains', 'global_vhcustom')));
+        }
+        return $spec;
     }
 
     /**
@@ -462,6 +468,13 @@ class module_controller extends ctrl_module
         $sw = function ($k) use ($chk) { return '<label class="sf-switch"><input type="checkbox" name="' . $k . '" id="' . $k . '" value="1"' . $chk($k) . '><span class="sf-toggle"></span></label>'; };
         $num = function ($k) use ($val) { return '<input class="form-control" type="number" name="' . $k . '" id="' . $k . '" min="1" max="65535" value="' . self::h($val($k)) . '" style="max-width:160px">'; };
         $code = function ($k) use ($val) { return '<textarea class="form-control sf-code" name="' . $k . '" id="' . $k . '" rows="7" spellcheck="false">' . self::h($val($k)) . '</textarea>'; };
+        if (sys_versions::IsWindows()) {
+            // (Windows: the site's PHP is its account's own, fenced to the account's folder; HTTPS comes from Sencrypt)
+            return '<section class="sf-pane">'
+                . $row('vh_enabled_in', 'Website answers', 'Off: Apache does not serve this domain.', $sw('vh_enabled_in'))
+                . $row('vh_custom_tx', 'Extra directives', 'Apache directives added to this domain\'s configuration.', $code('vh_custom_tx'), true)
+                . '</section>';
+        }
         return '<section class="sf-pane">'
             . $row('vh_enabled_in', 'Website answers', 'Off: Apache does not serve this domain.', $sw('vh_enabled_in'))
             . $row('vh_obasedir_in', 'Limit PHP to this site\'s folder', 'open_basedir. Off: PHP may use the whole account\'s folder (never other accounts\' or the system\'s), for a program that keeps files beside its site folder, such as OpenCart\'s storage.', $sw('vh_obasedir_in'))
@@ -504,6 +517,10 @@ class module_controller extends ctrl_module
      */
     static function getSymlinksHelp()
     {
+        if (sys_versions::IsWindows()) {
+            return '<h4>' . self::t('A moved site gives error 500?') . '</h4>'
+                . '<p>' . self::t('On Windows a site\'s .htaccess may not use "Options +FollowSymLinks": a junction would lead into another website\'s files, so Apache answers the site with error 500. In the site\'s .htaccess files (File Manager), change it to "Options +SymLinksIfOwnerMatch"; it works the same for the site.') . '</p>';
+        }
         $steps = array(
             'Switch on "Allow FollowSymLinks" for this domain and save: the site works again within 5 minutes.',
             'Finish moving the site and check that it works.',
@@ -553,6 +570,20 @@ class module_controller extends ctrl_module
         $r = self::Vhost($f['vh_id_pk'] ?? 0);
         if (!$r) {
             return false;
+        }
+        if (sys_versions::IsWindows()) {
+            // (Windows: the two settings it has; FollowSymLinks never, junctions would lead into other accounts)
+            if (sys_symlinks::Offending((string) ($f['vh_custom_tx'] ?? ''))) {
+                self::$errors['vh_custom_tx'] = 'A line here would switch FollowSymLinks on: not allowed on Windows.';
+                return false;
+            }
+            $custom = rtrim(str_replace("\r\n", "\n", (string) ($f['vh_custom_tx'] ?? '')));
+            $zdbh->prepare("UPDATE x_vhosts SET vh_enabled_in = ?, vh_custom_tx = ? WHERE vh_id_pk = ? AND vh_deleted_ts IS NULL")
+                ->execute(array(!empty($f['vh_enabled_in']) ? 1 : 0, $custom === '' ? null : $custom, (int) $r['vh_id_pk']));
+            sys_apachecustom::Clear('vh:' . (int) $r['vh_id_pk'] . ':custom');
+            self::SetWriteApacheConfigTrue();
+            header('location: ./?module=apache_admin&saved=' . rawurlencode($r['vh_name_vc']));
+            exit;
         }
         $port = function ($k) use ($f) {
             $v = trim((string) ($f[$k] ?? ''));

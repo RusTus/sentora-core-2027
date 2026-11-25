@@ -72,6 +72,19 @@ class sys_winvhosts
                 return $out;
             }
             $test = self::Test();
+            // an administrator's entry Apache refuses is switched off (kept in the database, Apache Config says why), and
+            // the rest goes live; at most a few times
+            for ($try = 0; $test !== '' && $try < 5; $try++) {
+                $culprit = sys_apachecustom::Culprit($text, $test, $file);
+                if ($culprit === null || sys_apachecustom::IsOff($culprit)) {
+                    break;
+                }
+                sys_apachecustom::SwitchOff($culprit, isset(self::$names[$culprit]) ? self::$names[$culprit] : $culprit, $test);
+                $out[] = 'Websites: Apache refused ' . (isset(self::$names[$culprit]) ? self::$names[$culprit] : $culprit) . '\'s extra directives: switched off (' . $test . ')';
+                $text = self::Build();
+                @file_put_contents($file, $text);
+                $test = self::Test();
+            }
             if ($test !== '') {
                 // (Apache would not start with it: the file as it was, and the panel asks again at the next change)
                 if ($old === null) {
@@ -79,10 +92,12 @@ class sys_winvhosts
                 } else {
                     @file_put_contents($file, $old);
                 }
+                sys_apachecustom::SwitchOff('apache', 'Apache', $test);
                 $out[] = 'Websites: Apache refused the new sites, the old ones are kept: ' . $test;
                 self::Done();
                 return $out;
             }
+            sys_apachecustom::Clear('apache');
             $out[] = 'Websites: ' . substr_count($text, '<VirtualHost ') . ' site(s) written, Apache restarts: ' . self::Restart();
         }
         self::Done();
@@ -151,6 +166,12 @@ class sys_winvhosts
         $https = self::HttpsPort();
         $acme = self::AcmeDir();
         $allowDisabled = strtolower((string) ctrl_options::GetSystemOption('apache_allow_disabled')) === 'true';
+        // Apache Config's settings: start pages, log format, and the administrator's lines for every website
+        $index = trim((string) ctrl_options::GetSystemOption('dir_index'));
+        $index = preg_match('/^DirectoryIndex( [A-Za-z0-9._-]+)+$/', $index) ? '    ' . $index . $nl : '';
+        $format = (string) ctrl_options::GetSystemOption('access_log_format') === 'common' ? 'common' : 'combined';
+        $every = self::Custom('global_vhcustom', (string) ctrl_options::GetSystemOption('global_vhcustom'), $nl);
+        self::$names = array('global_vhcustom' => 'For every website');
         $t = '# Made by the Sentora panel (sys_winvhosts) from its domains: changes here are written over at the next change.' . $nl
             . '# Your own sites go in httpd-vhosts.conf.' . $nl . $nl
             . '# Let\'s Encrypt\'s check files, for every site (written by Sencrypt; plain files only)' . $nl
@@ -159,7 +180,7 @@ class sys_winvhosts
             . '    Options None' . $nl . '    AllowOverride None' . $nl . '    Require all granted' . $nl . '    ForceType text/plain' . $nl
             . '    <IfModule php_module>' . $nl . '        php_admin_flag engine Off' . $nl . '    </IfModule>' . $nl
             . '</Directory>' . $nl . $nl;
-        $q = $zdbh->query("SELECT v.vh_id_pk, v.vh_name_vc, v.vh_directory_vc, v.vh_type_in, v.vh_enabled_in, v.vh_ssl_tx, a.ac_id_pk, a.ac_user_vc
+        $q = $zdbh->query("SELECT v.vh_id_pk, v.vh_name_vc, v.vh_directory_vc, v.vh_type_in, v.vh_enabled_in, v.vh_ssl_tx, v.vh_custom_tx, a.ac_id_pk, a.ac_user_vc
             FROM x_vhosts v JOIN x_accounts a ON a.ac_id_pk = v.vh_acc_fk
             WHERE v.vh_deleted_ts IS NULL AND a.ac_deleted_ts IS NULL ORDER BY v.vh_name_vc");
         $active = $zdbh->prepare("UPDATE x_vhosts SET vh_active_in = 1 WHERE vh_id_pk = :id");
@@ -182,10 +203,13 @@ class sys_winvhosts
                 $root = $hosted . $user . '/public_html' . $dir;
             }
             $names = '    ServerName ' . $name . $nl . ((int) $v['vh_type_in'] === 2 ? '' : '    ServerAlias www.' . $name . $nl);
-            $body = '    DocumentRoot "' . rtrim($root, '/') . '"' . $nl
+            $key = 'vh:' . (int) $v['vh_id_pk'] . ':custom';
+            self::$names[$key] = $name;
+            $body = '    DocumentRoot "' . rtrim($root, '/') . '"' . $nl . $index
                 . '    ErrorLog "' . $logs . 'domains/' . $user . '/' . $name . '-error.log"' . $nl
-                . '    CustomLog "' . $logs . 'domains/' . $user . '/' . $name . '-access.log" combined' . $nl
-                . self::ErrorPages($hosted . $user . '/public_html' . $dir, $enabled && (int) $v['vh_type_in'] !== 3);
+                . '    CustomLog "' . $logs . 'domains/' . $user . '/' . $name . '-access.log" ' . $format . $nl
+                . self::ErrorPages($hosted . $user . '/public_html' . $dir, $enabled && (int) $v['vh_type_in'] !== 3)
+                . ($enabled ? $every . self::Custom($key, (string) $v['vh_custom_tx'], $nl) : '');
             $cert = self::Cert($v['vh_ssl_tx'], $user);
             if ($cert === null) {
                 $t .= '# ' . $name . ' (' . $user . ')' . $nl . '<VirtualHost *:' . $port . '>' . $nl . $names . $body . '</VirtualHost>' . $nl . $nl;
@@ -198,7 +222,7 @@ class sys_winvhosts
                     . '    RewriteCond %{REQUEST_URI} !^/\.well-known/acme-challenge/' . $nl
                     . '    RewriteRule ^/?(.*) https://%{SERVER_NAME}' . ($https === 443 ? '' : ':' . $https) . '/$1 [R=301,L]' . $nl
                     . '    ErrorLog "' . $logs . 'domains/' . $user . '/' . $name . '-error.log"' . $nl
-                    . '    CustomLog "' . $logs . 'domains/' . $user . '/' . $name . '-access.log" combined' . $nl
+                    . '    CustomLog "' . $logs . 'domains/' . $user . '/' . $name . '-access.log" ' . $format . $nl
                     . '</VirtualHost>' . $nl
                     . '<VirtualHost *:' . $https . '>' . $nl . $names . $body
                     . '    SSLEngine on' . $nl
@@ -210,6 +234,24 @@ class sys_winvhosts
             $active->execute(array(':id' => (int) $v['vh_id_pk']));
         }
         return $t;
+    }
+
+    /** @var array<string, string> What each custom entry in the last Build() is (for a switched-off entry's note). */
+    private static $names = array();
+
+    /**
+     * An administrator's entry (Apache Config) for the file, between sys_apachecustom's markers so a line Apache refuses
+     * leads back to it; FollowSymLinks never (a junction would lead into another account's folder).
+     *
+     * @param string $key 'global_vhcustom' or 'vh:<id>:custom'.
+     * @param string $text The entry.
+     * @param string $nl The line end.
+     * @return string
+     */
+    static function Custom($key, $text, $nl)
+    {
+        $b = sys_apachecustom::Block($key, $text, false, false);
+        return $b === '' ? '' : str_replace("\n", $nl, str_replace("\r\n", "\n", $b));
     }
 
     /**

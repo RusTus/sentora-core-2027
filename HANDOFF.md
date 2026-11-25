@@ -814,6 +814,12 @@ DNS, FTP, mailboxes and cron on Windows (2026-11-25, tested in the Windows insta
   data\sentora\update (only root's jobs write, Apache's account reads), so the page shows its 5 steps. No going back from
   the panel on Windows: the update keeps a copy of the settings, and the installer of the release before, run as a repair,
   goes back. The install test now updates through the page (Check now, a wrong password refused, Update now, steps seen).
+- Apache Config (2026-11-25): on Windows the page offers what sys_winvhosts uses: start pages (dir_index), the access log
+  format, keeping switched-off clients' sites online, shared domains, the lines for every website (global_vhcustom) and, per
+  domain, "Website answers" and its Extra directives (the port, IP, SSL box, open_basedir, FollowSymLinks and PHP settings
+  are Linux's; on Windows FollowSymLinks is never allowed). The entries go into sentora-vhosts.conf between
+  sys_apachecustom's markers, filtered as on Linux; when httpd -t refuses the file, the entry it names is switched off (the
+  page shows it) and the rest goes live. Linux's Apache Config hooks do nothing on Windows (a deleted client's files stay).
 Where Windows lives (owner, 2026-11-25): the native installer moved from RusTus/sentora-windows-2027 (left with a note) to
 sentora-installers-2027/windows/server (install-zpanel-stack.ps1; install-web-stack.ps1 = the same file with
 $Edition = 'stack', kept for other uses; README.txt; tests/), tested by .github/workflows/windows-server-test.yml there (a
