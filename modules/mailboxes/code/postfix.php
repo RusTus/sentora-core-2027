@@ -207,4 +207,8 @@ if (!fs_director::CheckForEmptyValue(self::$update)) {
     $sql->bindParam(':mb_address_vc', $rowmailbox['mb_address_vc']);
     $sql->execute();
 }
+// (Windows: Stalwart follows the mail database at the daemon run, sys_winmail::Sync; ask for it now)
+if (sys_versions::IsWindows() && class_exists('sys_winphp')) {
+    sys_winphp::Soon();
+}
 ?>

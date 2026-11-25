@@ -8,6 +8,15 @@
  * Written by RusTus, 2026-11-10
  */
 global $zdbh; // hooks are included inside a function
+if (sys_versions::IsWindows()) {
+    // (Windows: Stalwart's domains and mailboxes follow the mail database; a mailbox removed there takes its mail with it)
+    echo fs_filehandler::NewLine() . "START Mailboxes (Stalwart)" . fs_filehandler::NewLine();
+    foreach (sys_winmail::Sync() as $mailLine) {
+        echo $mailLine . fs_filehandler::NewLine();
+    }
+    echo "END Mailboxes (Stalwart)" . fs_filehandler::NewLine();
+    return;
+}
 $has = (int) $zdbh->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'x_mailboxes' AND COLUMN_NAME = 'mb_passenc_tx'")->fetchColumn();
 if ($has > 0) {
     $n = $zdbh->exec("UPDATE x_mailboxes SET mb_passenc_tx = NULL WHERE mb_passenc_tx IS NOT NULL");

@@ -3,6 +3,7 @@
     <name>Mail Boxes</name>
     <version>200</version>
     <defaultcat>Mail</defaultcat>
+    <windows>yes</windows>
     <desc>Using this module you have the ability to create IMAP and POP3 Mailboxes.</desc>
     <authorname>Sentora Project</authorname>
     <authoremail>info@sentora.org</authoremail>
