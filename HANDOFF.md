@@ -761,7 +761,7 @@ for Apache. On Windows PHP has no openssl.cnf of its own, so key and request cal
 (sys_winvhosts::OpensslArgs). The panel's own certificate is not offered on Windows yet (it uses configs\ssl\server.crt;
 the page says so). Tested in the Windows install test with a self-signed certificate (served with its own name, PHP the
 account's own over HTTPS, 301 from HTTP, check files served and never run, the account's PHP refused the key); Let's
-Encrypt itself is not tested there (no public name). (The panel refuses a parked domain that looks like a subdomain of another account's domain, e.g. one sharing
+Encrypt itself is not tested there (no public name). An older install's mail.conf opened 443 itself: the installer takes its Listen and TLS lines out (they are ssl.conf's), or Apache would refuse the port twice on a repair or update. The test also deletes the certificate on the Sencrypt page (files go, the domain is back on plain HTTP). (The panel refuses a parked domain that looks like a subdomain of another account's domain, e.g. one sharing
 example.net with a domain already there: an old rule, not Windows'.)
 Where Windows lives (owner, 2026-11-25): the native installer moved from RusTus/sentora-windows-2027 (left with a note) to
 sentora-installers-2027/windows/server (install-zpanel-stack.ps1; install-web-stack.ps1 = the same file with
