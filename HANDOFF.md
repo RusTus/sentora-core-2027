@@ -849,8 +849,17 @@ DNS, FTP, mailboxes and cron on Windows (2026-11-25, tested in the Windows insta
   "sentora-forward" on the mailbox (Blob/upload, SieveScript/set, onSuccessActivateScript): redirect, or redirect :copy.
   Two or more addresses go through a Stalwart list of the panel's, sentora-fwd-<hash>@the domain. A script the mailbox's
   owner switched on (their own filters) is never replaced: the daemon's log says so. Removed with the forwarder.
-- Still Linux-only, each needing its own Windows way (2026-11-25): File Manager (it runs as Apache's account, which may
-  not write in hostdata on Windows, on purpose; the way would be to run it as the account's own PHP), Mail Config (its
+- File Manager (2026-11-25): on Windows it runs as the account's own PHP, never the panel's (Apache's account may not write
+  in hostdata, on purpose). phpaccount.ps1 gives each account an address /sentora-fm/NAME/ (Alias to
+  panel/modules/file_manager/app, a LocationMatch handing [a-z]+.php there to NAME's php-cgi with NAME's key and the
+  script's own SCRIPT_FILENAME), adds the app folder to the account's open_basedir and lets the SentoraPHP group read that
+  folder (and only list the three above it). The panel's code/open.php reads the account's key from
+  configs/apache/php-accounts/NAME.conf and sends a pass (account, one minute, a one-time number, HMAC-SHA256 with the key);
+  app/winaccount.inc.php checks it against getenv('SENTORA_KEY'), the address and the account's folder (open_basedir's first
+  entry), refuses a number used before, and starts the file manager's own session (cookie only for /sentora-fm/NAME/,
+  SameSite Strict, 2 hours idle). The account's own scripts know the key too: it opens nothing but the account's own files.
+  On Windows the panel's own PHP refuses app/index.php. raw.php compares paths with forward slashes on Windows.
+- Still Linux-only, each needing its own Windows way (2026-11-25): Mail Config (its
   settings are SOGo's and Postfix's; Windows would need Stalwart's), Backup Config (the off-server backup is a bash/rsync/SSH
   job), PHP Versions (one PHP on Windows), Branding's
   addresses (Linux's vhost writer), SpamAV, GoAccess and Matomo stats, AutoIP, Repo Browser (add-ons are Linux's).
