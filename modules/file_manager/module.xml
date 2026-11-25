@@ -8,4 +8,5 @@
     <authoremail></authoremail>
     <authorurl>https://tinyfilemanager.github.io/</authorurl>
     <updateurl></updateurl>
+    <windows>yes</windows>
 </module>

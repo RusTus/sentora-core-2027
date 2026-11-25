@@ -25,6 +25,11 @@ function sentora_fm_deny($status, $message)
     exit;
 }
 
+// Windows: the hosting account's own PHP runs the file manager (only its key comes with such a request: Apache's setting
+// for /sentora-fm/NAME/); the panel's PHP never does there (it may not write in the accounts' folders, on purpose)
+if ((string) getenv('SENTORA_KEY') !== '') {
+    require __DIR__ . '/winaccount.inc.php';
+} else {
 $sentora_fm_app = __DIR__;
 chdir(dirname(dirname(dirname(__DIR__)))); // the panel root, /etc/sentora/panel
 require_once 'dryden/loader.inc.php';
@@ -39,6 +44,9 @@ $sentora_fm_user = ($sentora_fm_uid > 0) ? ctrl_users::GetUserDetail($sentora_fm
 session_write_close();
 if (!$sentora_fm_user || !preg_match('/^[A-Za-z0-9_-]{1,64}$/', (string) $sentora_fm_user['username'])) {
     sentora_fm_deny(403, 'Please log in to the control panel first.');
+}
+if (sys_versions::IsWindows()) {
+    sentora_fm_deny(403, 'Open the File Manager from the control panel.');
 }
 
 // --- The user's own folder: /var/sentora/hostdata/<username>/
@@ -70,6 +78,7 @@ ini_set('upload_tmp_dir', $sentora_fm_temp);
 unset($host, $user, $pass, $dbname, $sql_charset);
 $zdbh = null;
 $GLOBALS['zdbh'] = null;
+}
 
 // Defence in depth for everything the file manager sends
 header('X-Content-Type-Options: nosniff');

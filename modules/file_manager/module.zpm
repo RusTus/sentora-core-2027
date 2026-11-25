@@ -30,9 +30,9 @@
             <div class="fm-item"><span><: Disk space :></span><@ DiskUse @></div>
             <div class="fm-item"><span><: Largest upload :></span><span><@ UploadLimit @></span></div>
             <span class="fm-tip"><: Websites are in public_html. :><% if FtpOn %> <: For many or large files, use :> <a href="./?module=ftp_management"><: an FTP account :></a>.<% endif %></span>
-            <a class="btn btn-default btn-sm fm-open" id="fm-open" href="modules/file_manager/app/index.php" target="_blank" rel="noopener"><svg class="fm-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6"/><path d="M20 4 10 14"/><path d="M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/></svg><: Open in a new window :></a>
+            <a class="btn btn-default btn-sm fm-open" id="fm-open" href="<@ AppUrl @>" target="_blank" rel="noopener"><svg class="fm-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6"/><path d="M20 4 10 14"/><path d="M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/></svg><: Open in a new window :></a>
         </div>
-        <iframe class="fm-frame" id="fm-frame" data-src="modules/file_manager/app/index.php" title="<: File Manager :>"></iframe>
+        <iframe class="fm-frame" id="fm-frame" data-src="<@ AppUrl @>" title="<: File Manager :>"></iframe>
     </div>
 </div>
 <script>

@@ -92,6 +92,17 @@ class module_controller extends ctrl_module
     }
 
     /**
+     * Where the file manager opens (<@ AppUrl @>): on Windows through the panel's pass to the account's own PHP
+     * (code/open.php), on Linux directly.
+     *
+     * @return string
+     */
+    static function getAppUrl()
+    {
+        return sys_versions::IsWindows() ? 'modules/file_manager/code/open.php' : 'modules/file_manager/app/index.php';
+    }
+
+    /**
      * Template flag <% if FtpOn %>: FTP Accounts is switched on, for its link.
      *
      * @global db_driver $zdbh The panel's database connection.

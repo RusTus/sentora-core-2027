@@ -16,6 +16,9 @@ if ($rel === '' || strpos($rel, "\0") !== false || preg_match('#(^|/)\.\.(/|$)#'
     sentora_fm_deny(400, 'Invalid file.');
 }
 $file = realpath($sentora_fm_root . '/' . ltrim($rel, '/'));
+if ($file !== false && DIRECTORY_SEPARATOR === '\\') {
+    $file = str_replace('\\', '/', $file);   // (Windows: realpath gives backslashes)
+}
 if ($file === false || !is_file($file) || strpos($file, $sentora_fm_root . '/') !== 0) {
     sentora_fm_deny(404, 'File not found.');
 }
