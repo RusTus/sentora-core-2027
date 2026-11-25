@@ -3,6 +3,7 @@
     <name>DNS Admin</name>
     <version>200</version>
     <defaultcat>Admin</defaultcat>
+    <windows>yes</windows>
     <desc>This module enables you to configure DNS settings for the DNS Manager</desc>
     <authorname>Sentora Project</authorname>
     <authoremail>info@sentora.org</authoremail>

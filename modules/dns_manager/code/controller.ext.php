@@ -1446,6 +1446,11 @@ class module_controller extends ctrl_module
     static function CheckZoneRecord($domainID)
     {
         global $zdbh;
+        if (sys_versions::IsWindows()) {
+            // (no BIND checker on Windows: the records are checked as they are saved, and CoreDNS skips a zone it can
+            // not read, keeping the others)
+            return '';
+        }
         $hasrecords = false;
         $sql = 'SELECT COUNT(*) FROM x_dns WHERE dn_vhost_fk=:domainID AND dn_deleted_ts IS NULL';
         $numrows = $zdbh->prepare($sql);

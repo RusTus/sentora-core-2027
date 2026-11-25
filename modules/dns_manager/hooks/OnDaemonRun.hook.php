@@ -24,6 +24,17 @@ function SentoraZoneValue($v)
     return preg_replace('/[\x00-\x1F\x7F]/', '', (string) $v);
 }
 
+/**
+ * The first line of every zone file the panel writes on Windows (CoreDNS's db.DOMAIN files): only these are written over
+ * or removed by the panel.
+ *
+ * @return string
+ */
+function SentoraZoneMark()
+{
+    return '; Made by the Sentora panel (DNS Manager): changes here are written over at the next change.';
+}
+
 
 echo fs_filehandler::NewLine() . "START DNS Manager Hook" . fs_filehandler::NewLine();
 if (ui_module::CheckModuleEnabled('DNS Config')) {
@@ -31,10 +42,17 @@ if (ui_module::CheckModuleEnabled('DNS Config')) {
     if (!fs_director::CheckForEmptyValue(ctrl_options::GetSystemOption('dns_hasupdates'))) {
         echo "DNS Records have changed... Writing new/updated records..." . fs_filehandler::NewLine();
         WriteDNSZoneRecordsHook();
-        WriteDNSNamedHook();
-        ResetDNSRecordsUpatedHook();
-        PurgeOldZoneDNSRecordsHook();
-        ReloadBindHook();
+        if (sys_versions::IsWindows()) {
+            // (Windows: CoreDNS reads every db.DOMAIN file in zone_dir by itself and takes a zone again when its
+            // serial goes up, within 15 seconds: no named.conf, no checker, no reload)
+            ResetDNSRecordsUpatedHook();
+            PurgeOldZoneDNSRecordsHook();
+        } else {
+            WriteDNSNamedHook();
+            ResetDNSRecordsUpatedHook();
+            PurgeOldZoneDNSRecordsHook();
+            ReloadBindHook();
+        }
     } else {
         echo "DNS Records have not changed...nothing to do." . fs_filehandler::NewLine();
     }
@@ -95,6 +113,16 @@ function WriteDNSZoneRecordsHook()
         }
         $zone_file = (ctrl_options::GetSystemOption('zone_dir')) . $DomainName . ".txt";
         $line = "$" . "TTL 10800" . fs_filehandler::NewLine();
+        if (sys_versions::IsWindows()) {
+            // (CoreDNS's name for a zone file; the first line marks it as the panel's, so a zone the administrator made
+            // with dnszone.ps1 is never written over nor removed)
+            $zone_file = ctrl_options::GetSystemOption('zone_dir') . 'db.' . $DomainName;
+            if (is_file($zone_file) && strpos((string) @file_get_contents($zone_file, false, null, 0, 200), SentoraZoneMark()) !== 0) {
+                echo 'Kept the administrator\'s own zone file for ' . $DomainName . ' (not made by the panel): ' . $zone_file . fs_filehandler::NewLine();
+                continue;
+            }
+            $line = SentoraZoneMark() . fs_filehandler::NewLine() . '$ORIGIN ' . $DomainName . '.' . fs_filehandler::NewLine() . $line;
+        }
         $line .= "@ IN SOA ns1." . $DomainName . ".    postmaster." . $DomainName . ". (" . fs_filehandler::NewLine();
         $line .= "    " . $SoaSerial . "  ;serial" . fs_filehandler::NewLine();
         $line .= "    " . ctrl_options::GetSystemOption('refresh_ttl') . "    ;refresh after 6 hours" . fs_filehandler::NewLine();
@@ -135,6 +163,15 @@ function WriteDNSZoneRecordsHook()
             }
         }
         echo 'Updating zone record: ' . $DomainName . fs_filehandler::NewLine();
+        if (sys_versions::IsWindows()) {
+            // (written whole, then put in place: CoreDNS never reads half a file; the temporary name is not db.*)
+            $tmp = ctrl_options::GetSystemOption('zone_dir') . 'zone-' . bin2hex(random_bytes(6)) . '.tmp';
+            if (@file_put_contents($tmp, $line) === false || !@rename($tmp, $zone_file)) {
+                @unlink($tmp);
+                echo 'Could not write ' . $zone_file . fs_filehandler::NewLine();
+            }
+            continue;
+        }
         fs_filehandler::UpdateFile($zone_file, 0777, $line);
     }
 }
@@ -230,6 +267,18 @@ function PurgeOldZoneDNSRecordsHook()
         }
     }
     $zonefiles = scandir(ctrl_options::GetSystemOption('zone_dir'));
+    if (sys_versions::IsWindows()) {
+        // (only the panel's own db.DOMAIN files, never one the administrator made)
+        foreach ($zonefiles as $zonefile) {
+            $f = ctrl_options::GetSystemOption('zone_dir') . $zonefile;
+            if (strncmp($zonefile, 'db.', 3) === 0 && !in_array(substr($zonefile, 3), $domains) && is_file($f)
+                && strpos((string) @file_get_contents($f, false, null, 0, 200), SentoraZoneMark()) === 0) {
+                echo "Purging old zone record from disk: " . substr($zonefile, 3) . fs_filehandler::NewLine();
+                @unlink($f);
+            }
+        }
+        return;
+    }
     foreach ($zonefiles as $zonefile) {
         if (!in_array(substr($zonefile, 0, -4), $domains) && $zonefile != "." && $zonefile != "..") {
             if (file_exists(ctrl_options::GetSystemOption('zone_dir') . $zonefile)) {

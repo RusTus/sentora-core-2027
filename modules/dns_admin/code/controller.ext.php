@@ -337,6 +337,24 @@ class module_controller extends ctrl_module
     }
 
     /**
+     * Windows: ask SentoraZsudo to start, stop or restart the DNS service (bind_service: CoreDNS, which takes a changed
+     * zone by itself; a restart reads every zone again).
+     *
+     * @param string $verb start, stop or restart.
+     * @return void
+     */
+    static function WinService($verb)
+    {
+        $zsudo = (string) ctrl_options::GetSystemOption('zsudo');
+        $svc = (string) ctrl_options::GetSystemOption('bind_service');
+        if ($zsudo !== '' && sys_versions::CanRun($zsudo) && preg_match('/^[A-Za-z0-9-]{1,40}$/', $svc) && in_array($verb, array('start', 'stop', 'restart'), true)) {
+            $out = array();
+            exec(escapeshellcmd($zsudo) . ' service ' . $svc . ' ' . $verb . ' 2>&1', $out, $rc);
+            sleep(2);
+        }
+    }
+
+    /**
      * Start the BIND service (through zsudo on Linux; waits 2 seconds).
      *
      * @return void
@@ -344,8 +362,7 @@ class module_controller extends ctrl_module
     static function StartBind()
     {
         if (sys_versions::ShowOSPlatformVersion() == "Windows") {
-            /** @todo this needs changing to use the system command */
-            exec('net start ' . ctrl_options::GetSystemOption('bind_service') . '', $out);
+            self::WinService('start');
         } else {
             $out = ctrl_system::systemCommand(ctrl_options::GetSystemOption('zsudo'), array('service', ctrl_options::GetSystemOption('bind_service'), 'start'));
             sleep(2);
@@ -360,8 +377,7 @@ class module_controller extends ctrl_module
     static function StopBind()
     {
         if (sys_versions::ShowOSPlatformVersion() == "Windows") {
-            /** @todo this needs changing to use the system command */
-            exec('net stop ' . ctrl_options::GetSystemOption('bind_service') . '', $out);
+            self::WinService('stop');
         } else {
             $out = ctrl_system::systemCommand(ctrl_options::GetSystemOption('zsudo'), array('service', ctrl_options::GetSystemOption('bind_service'), 'stop'));
             sleep(2);
@@ -376,9 +392,7 @@ class module_controller extends ctrl_module
     static function ReloadBind()
     {
         if (sys_versions::ShowOSPlatformVersion() == "Windows") {
-            /** @todo this needs changing to use the system command */
-            $reload_bind = ctrl_options::GetSystemOption('bind_dir') . 'rndc.exe reload';
-            pclose(popen($reload_bind, 'r'));
+            self::WinService('restart');
         } else {
             $out = ctrl_system::systemCommand(ctrl_options::GetSystemOption('zsudo'), array('service', ctrl_options::GetSystemOption('bind_service'), 'reload'));
         }
