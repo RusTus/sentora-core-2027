@@ -77,6 +77,13 @@ class sys_backup
             if (!$create || !@mkdir($dir, 0750)) {
                 return false;
             }
+            if (sys_versions::IsWindows()) {
+                // (made by SYSTEM: the panel (Apache's account) may list, download and delete the backups here)
+                $svc = (string) ctrl_options::GetSystemOption('apache_sn');
+                if (preg_match('/^[A-Za-z0-9-]{1,40}$/', $svc)) {
+                    exec('icacls "' . str_replace('/', '\\', $dir) . '" /grant "NT SERVICE\\' . $svc . ':(OI)(CI)M" 2>&1');
+                }
+            }
             if (function_exists('posix_geteuid') && posix_geteuid() === 0) {
                 $id = (int) $GLOBALS['zdbh']->query("SELECT ac_id_pk FROM x_accounts WHERE ac_user_vc = " . $GLOBALS['zdbh']->quote($username) . " AND ac_deleted_ts IS NULL")->fetchColumn();
                 if ($id > 0 && posix_getpwnam(sys_accountphp::UserName($id)) !== false) {
@@ -85,7 +92,8 @@ class sys_backup
             }
         }
         clearstatcache(true, $dir);
-        return (!is_link($dir) && is_dir($dir) && realpath($dir) === $dir) ? $dir . '/' : false;
+        $same = realpath($dir) === $dir || (sys_versions::IsWindows() && sys_winvhosts::SamePath(realpath($dir), $dir));
+        return (!is_link($dir) && is_dir($dir) && $same) ? $dir . '/' : false;
     }
 
     /**
@@ -145,7 +153,8 @@ class sys_backup
             return false;
         }
         $fs = fstat($fh);
-        if ($fs['dev'] !== $st['dev'] || $fs['ino'] !== $st['ino']) {
+        // (Windows gives no inode for an open file: there the name checked above is a plain file in the real folder)
+        if (!sys_versions::IsWindows() && ($fs['dev'] !== $st['dev'] || $fs['ino'] !== $st['ino'])) {
             fclose($fh);
             return false;
         }
@@ -294,8 +303,59 @@ class sys_backup
         @file_put_contents($file . '.new', json_encode(array('state' => 'starting', 'started' => time())));
         @chmod($file . '.new', 0660);
         @rename($file . '.new', $file);
+        if (sys_versions::IsWindows()) {
+            // (Windows: Apache's account may not write in the account's folder; SentoraZsudo starts the worker as SYSTEM)
+            $zsudo = (string) ctrl_options::GetSystemOption('zsudo');
+            if ($zsudo === '' || !sys_versions::CanRun($zsudo)) {
+                return 'failed';
+            }
+            exec(escapeshellcmd($zsudo) . ' account-backup ' . (int) $accountId . ' 2>&1', $o, $rc);
+            return (int) $rc === 0 ? 'started' : 'failed';
+        }
         ctrl_system::Background('php ' . escapeshellarg($worker) . ' ' . (int) $accountId . ' > /dev/null 2>&1');
         return 'started';
+    }
+
+    /**
+     * Zip a folder with PHP's own zip (Windows has no zip program): links and junctions are left out, so only what is
+     * really inside the folder goes in.
+     *
+     * @param string $dir The folder.
+     * @param string $as Its name in the zip.
+     * @param string $zipFile The zip file (made or added to).
+     * @return bool
+     */
+    static function ZipFolder($dir, $as, $zipFile)
+    {
+        $z = new ZipArchive();
+        if ($z->open($zipFile, ZipArchive::CREATE) !== true) {
+            return false;
+        }
+        $z->addEmptyDir($as);
+        $root = str_replace('\\', '/', (string) realpath($dir));
+        $walk = function ($d, $rel) use (&$walk, $z, $root) {
+            foreach ((array) @scandir($d) as $f) {
+                if ($f === '.' || $f === '..') {
+                    continue;
+                }
+                $p = $d . '/' . $f;
+                // (a link or junction is never followed: only what is really inside the site)
+                $real = str_replace('\\', '/', (string) realpath($p));
+                if (is_link($p) || $real === '' || strncasecmp($real, $root . '/', strlen($root) + 1) !== 0) {
+                    continue;
+                }
+                if (is_dir($p)) {
+                    $z->addEmptyDir($rel . '/' . $f);
+                    $walk($p, $rel . '/' . $f);
+                } elseif (is_file($p)) {
+                    $z->addFile($p, $rel . '/' . $f);
+                }
+            }
+        };
+        if ($root !== '') {
+            $walk($dir, $as);
+        }
+        return $z->close();
     }
 
     /**
@@ -344,7 +404,12 @@ class sys_backup
         // Web files. -y stores symbolic links as links: zip follows them otherwise, so a
         // site could link to any file the panel (or root, for the daily job) can read
         // and have it copied into its own backup
-        exec('cd ' . escapeshellarg($home) . ' && ' . escapeshellarg($zip) . ' -qr9y ' . escapeshellarg($work . '/' . $name) . ' public_html 2>&1', $out, $rc);
+        if (sys_versions::IsWindows()) {
+            // (Windows: PHP's own zip; links and junctions are left out, so only the site's own files go in)
+            self::ZipFolder($home . '/public_html', 'public_html', $work . '/' . $name);
+        } else {
+            exec('cd ' . escapeshellarg($home) . ' && ' . escapeshellarg($zip) . ' -qr9y ' . escapeshellarg($work . '/' . $name) . ' public_html 2>&1', $out, $rc);
+        }
 
         // Databases: credentials in an option file, never on the command line
         include ctrl_options::GetSystemOption('sentora_root') . 'cnf/db.php';
@@ -362,9 +427,19 @@ class sys_backup
                 continue;
             }
             $file = $db . '_' . date('dmy_Gi') . '.sql';
-            exec(escapeshellarg($dump) . ' --defaults-extra-file=' . escapeshellarg($cnf) . ' --no-create-db ' . escapeshellarg($db)
-                . ' > ' . escapeshellarg($work . '/' . $file) . ' 2> /dev/null');
-            exec('cd ' . escapeshellarg($work) . ' && ' . escapeshellarg($zip) . ' -q ' . escapeshellarg($name) . ' ' . escapeshellarg($file));
+            if (sys_versions::IsWindows()) {
+                exec('"' . str_replace('/', '\\', $dump) . '" --defaults-extra-file="' . str_replace('/', '\\', $cnf) . '" --no-create-db ' . $db
+                    . ' > "' . str_replace('/', '\\', $work . '/' . $file) . '" 2> NUL');
+                $z = new ZipArchive();
+                if ($z->open($work . '/' . $name, ZipArchive::CREATE) === true) {
+                    $z->addFile($work . '/' . $file, $file);
+                    $z->close();
+                }
+            } else {
+                exec(escapeshellarg($dump) . ' --defaults-extra-file=' . escapeshellarg($cnf) . ' --no-create-db ' . escapeshellarg($db)
+                    . ' > ' . escapeshellarg($work . '/' . $file) . ' 2> /dev/null');
+                exec('cd ' . escapeshellarg($work) . ' && ' . escapeshellarg($zip) . ' -q ' . escapeshellarg($name) . ' ' . escapeshellarg($file));
+            }
             @unlink($work . '/' . $file);
         }
         @unlink($cnf);

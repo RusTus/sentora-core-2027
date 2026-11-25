@@ -15,6 +15,8 @@
  *   daemon-run
  *   phpaccount-sync   each hosting account's PHP in line with the list the daemon wrote where only root's jobs write
  *                     (\var\lib\sentora\phpaccounts\wanted.txt): bin\phpaccount.ps1 sync beside the panel
+ *   account-backup ID a backup of hosting account ID (Backup Manager's button): bin\sentora-account-backup, in the
+ *                     background; it writes in the account's own backups folder, which Apache's account may not
  *
  * @package Sentora
  * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
@@ -67,6 +69,9 @@ function zs_command(array $w)
             return null;
         }
         return 'powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' . str_replace('/', '\\', $tool) . '" sync';
+    }
+    if (count($w) === 2 && $w[0] === 'account-backup' && preg_match('/^[1-9][0-9]{0,8}$/', $w[1])) {
+        return '"' . $php . '" -q "' . $panel . '\\bin\\sentora-account-backup" ' . (int) $w[1];
     }
     if (count($w) === 1 && $w[0] === 'daemon-run') {
         // (the daemon's own lock keeps it from overlapping a scheduled run; its report for the panel)
@@ -163,7 +168,7 @@ function zs_run_queue($once)
                 continue;
             }
             zs_log('running: ' . implode(' ', $w));
-            if ($w[0] === 'daemon-run') {
+            if ($w[0] === 'daemon-run' || $w[0] === 'account-backup') {
                 // (in the background: a long run does not hold up the queue)
                 pclose(popen('start "" /B ' . $cmd, 'r'));
             } else {
