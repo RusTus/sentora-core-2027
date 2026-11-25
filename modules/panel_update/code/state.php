@@ -30,6 +30,31 @@ class panel_update_state
     const BACKUPS = '/var/sentora/backups/';
 
     /**
+     * Where the update's files are: sentora-update's folder on Linux; on Windows sentora-update.ps1 writes the same
+     * files in the panel's state folder (update\, only root's jobs write there, the panel reads).
+     *
+     * @return string With a slash at the end.
+     */
+    static function Dir()
+    {
+        return sys_versions::IsWindows() ? sys_statedir::DIR . '/update/' : self::DIR;
+    }
+
+    /**
+     * The console command that updates (sentora-update; on Windows sentora-update.ps1 beside the panel, as Administrator).
+     *
+     * @return string
+     */
+    static function UpdateCommand()
+    {
+        if (!sys_versions::IsWindows()) {
+            return 'sentora-update';
+        }
+        $top = dirname(rtrim(str_replace('\\', '/', (string) ctrl_options::GetSystemOption('sentora_root')), '/'));
+        return str_replace('/', '\\', $top) . '\\bin\\sentora-update.ps1';
+    }
+
+    /**
      * Allow only panel administrators (for the JSON endpoint); ends the request otherwise.
      *
      * @return array<string, mixed> The administrator's details.
@@ -60,7 +85,7 @@ class panel_update_state
      */
     static function Installed()
     {
-        $line = trim((string) @file_get_contents(self::INSTALLED));
+        $line = trim((string) @file_get_contents(sys_versions::IsWindows() ? self::Dir() . 'installed' : self::INSTALLED));
         $parts = explode(' ', $line, 2);
         return isset($parts[1]) ? $parts[1] : '';
     }
@@ -97,7 +122,7 @@ class panel_update_state
     static function Available()
     {
         $r = array('state' => 'never', 'checked' => 0, 'tag' => '', 'date' => '', 'repo' => '');
-        $line = trim((string) @file_get_contents(self::DIR . 'available'));
+        $line = trim((string) @file_get_contents(self::Dir() . 'available'));
         if (!preg_match('/^(\d+) (available|current|unknown)(?: (\S+) (\S+) (\S+))?$/', $line, $m)) {
             return $r;
         }
@@ -119,6 +144,9 @@ class panel_update_state
     static function Backups()
     {
         $out = array();
+        if (sys_versions::IsWindows()) {
+            return $out; // (an update on Windows keeps a copy of the settings; there is no going back from the panel)
+        }
         foreach (preg_split('/\n/', (string) @file_get_contents(self::DIR . 'backups'), -1, PREG_SPLIT_NO_EMPTY) as $line) {
             $f = explode("\t", $line);
             if (count($f) === 3 && self::IsBackupName($f[0])) {
@@ -149,7 +177,7 @@ class panel_update_state
      */
     static function Run()
     {
-        $file = self::DIR . 'status';
+        $file = self::Dir() . 'status';
         $text = (string) @file_get_contents($file);
         if ($text === '') {
             return null;
@@ -212,6 +240,9 @@ class panel_update_state
      */
     static function RollbackCommand($backup = '')
     {
+        if (sys_versions::IsWindows()) {
+            return '';
+        }
         return 'sentora-update --rollback' . (self::IsBackupName($backup) ? ' ' . self::BACKUPS . $backup : '');
     }
 

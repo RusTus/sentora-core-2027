@@ -91,6 +91,9 @@ class panel_update_view
     {
         $lead = $lead !== '' ? $lead : 'If the panel stops answering, go back to the version before from the server\'s console, as root:';
         $cmd = panel_update_state::RollbackCommand($backup);
+        if ($cmd === '') {
+            return ''; // (Windows: no going back from the console; the update kept a copy of the settings)
+        }
         return '<div class="pu-console">' . self::Icon('term') . '<div><span>' . self::t($lead) . '</span>'
             . '<code class="pu-cmd" data-copy="' . self::h($cmd) . '">' . self::h($cmd) . '</code>'
             . ($backup === '' ? '<small>' . self::t('It lists the backups, newest first; run it again with the newest one.') . '</small>' : '')
@@ -134,7 +137,7 @@ class panel_update_view
                     . '<div><b>' . self::t('Starting') . '</b><span>' . self::t('The server starts the job within a few seconds.') . '</span></div></div></div>');
             }
             return array('live' => false, 'html' => '<div class="pu-box pu-run"><div class="pu-end fail">' . self::Icon('fail', 'pu-ico-lg')
-                . '<div><b>' . self::t('The job did not start') . '</b><span>' . self::t('Nothing was changed. Check that the queue of root actions runs (systemctl status sentora-zsudo.path), or run sentora-update from the server\'s console.') . '</span></div></div></div>');
+                . '<div><b>' . self::t('The job did not start') . '</b><span>' . self::t(sys_versions::IsWindows() ? 'Nothing was changed. Check that the service SentoraZsudo runs, or run the update on the server as Administrator.' : 'Nothing was changed. Check that the queue of root actions runs (systemctl status sentora-zsudo.path), or run sentora-update from the server\'s console.') . '</span></div></div></div>');
         }
         if (!$run) {
             return array('live' => false, 'html' => '');

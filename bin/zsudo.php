@@ -17,6 +17,8 @@
  *                     (\var\lib\sentora\phpaccounts\wanted.txt): bin\phpaccount.ps1 sync beside the panel
  *   account-backup ID a backup of hosting account ID (Backup Manager's button): bin\sentora-account-backup, in the
  *                     background; it writes in the account's own backups folder, which Apache's account may not
+ *   panel-check       Panel Update's Check now: starts the task 'Sentora update check' (sentora-update.ps1 -Check)
+ *   panel-update      Panel Update's Update now: starts the task 'Sentora update' (sentora-update.ps1 -FromPanel)
  *
  * @package Sentora
  * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
@@ -72,6 +74,11 @@ function zs_command(array $w)
     }
     if (count($w) === 2 && $w[0] === 'account-backup' && preg_match('/^[1-9][0-9]{0,8}$/', $w[1])) {
         return '"' . $php . '" -q "' . $panel . '\\bin\\sentora-account-backup" ' . (int) $w[1];
+    }
+    if (count($w) === 1 && ($w[0] === 'panel-check' || $w[0] === 'panel-update')) {
+        // (Panel Update: the installer's tasks run sentora-update.ps1 as SYSTEM, apart from this service, which an
+        // update stops while it works)
+        return 'schtasks.exe /Run /TN "' . ($w[0] === 'panel-check' ? 'Sentora update check' : 'Sentora update') . '"';
     }
     if (count($w) === 1 && $w[0] === 'daemon-run') {
         // (the daemon's own lock keeps it from overlapping a scheduled run; its report for the panel)

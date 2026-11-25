@@ -799,6 +799,21 @@ DNS, FTP, mailboxes and cron on Windows (2026-11-25, tested in the Windows insta
   zsudo account-backup ID: the worker as SYSTEM, the site zipped with PHP's ZipArchive without following links or junctions,
   mysqldump as on Linux; the backups folder gives Apache's account change rights so the page downloads and deletes; the
   download script uses the panel's class loader, as Windows' DocumentRoot has no slash at the end).
+- Sentora Config (2026-11-25): the daemon report's path comes from log_dir (not written in), and on Windows the page names
+  SentoraZsudo and leaves out the Linux-only sentora-change-domain hint. "Site not found falls back to panel login" works on
+  Windows: sys_winvhosts writes configs/apache/sentora-fallback.conf (included right after ssl.conf, before every site); off,
+  it is a first *:80 and *:443 site that answers unknown names 404 (with panel_ip_access on, the server's own addresses and
+  localhost still reach the login).
+- Protected Directories (2026-11-25): the page saves x_htpasswd_file / x_htpasswd_user as on Linux and asks for a daemon run;
+  the daemon (SYSTEM, Apache's account may not write in hostdata) writes the folder's .htaccess block (AuthUserFile quoted)
+  and its password file (bcrypt), and takes both away when the protection is deleted.
+- Panel Update (2026-11-25): Check now and Update now work on Windows. The page asks zsudo panel-check / panel-update;
+  SentoraZsudo starts the task 'Sentora update check' (now every hour, sentora-update.ps1 -Check) or 'Sentora update'
+  (sentora-update.ps1 -FromPanel, no schedule; a task of its own because the update stops SentoraZsudo). sentora-update.ps1
+  writes the same files as Linux's sentora-update (available, status with start/step/end/done/fail lines, installed) in
+  data\sentora\update (only root's jobs write, Apache's account reads), so the page shows its 5 steps. No going back from
+  the panel on Windows: the update keeps a copy of the settings, and the installer of the release before, run as a repair,
+  goes back. The install test now updates through the page (Check now, a wrong password refused, Update now, steps seen).
 Where Windows lives (owner, 2026-11-25): the native installer moved from RusTus/sentora-windows-2027 (left with a note) to
 sentora-installers-2027/windows/server (install-zpanel-stack.ps1; install-web-stack.ps1 = the same file with
 $Edition = 'stack', kept for other uses; README.txt; tests/), tested by .github/workflows/windows-server-test.yml there (a

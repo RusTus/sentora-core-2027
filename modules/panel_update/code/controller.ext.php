@@ -65,10 +65,11 @@ class module_controller extends ctrl_module
      */
     static function FlashRefused($rc)
     {
-        if ($rc === 2) {
+        if ($rc === 2 && !sys_versions::IsWindows()) {
             self::Flash('fail', 'This server\'s zsudo does not know this action yet. Run sentora-update once on the server\'s console, as root: it builds the new zsudo, and then this works from here.', 'sentora-update');
         } else {
-            self::Flash('fail', 'The server did not take the job (zsudo answered %s). Nothing was changed. Check that the queue of root actions runs (systemctl status sentora-zsudo.path), or use the console.', '', (string) (int) $rc);
+            self::Flash('fail', sys_versions::IsWindows() ? 'The server did not take the job (zsudo answered %s). Nothing was changed. Check that the service SentoraZsudo runs, or run the update on the server as Administrator.'
+                : 'The server did not take the job (zsudo answered %s). Nothing was changed. Check that the queue of root actions runs (systemctl status sentora-zsudo.path), or use the console.', '', (string) (int) $rc);
         }
     }
 
@@ -222,7 +223,7 @@ class module_controller extends ctrl_module
             'available' => array('warn', 'cloud', 'Update available', ''),
             'current' => array('ok', 'ok', 'Up to date', 'the newest release is installed'),
             'unknown' => array('bad', 'warn', 'Could not check', 'GitHub did not answer; it tries again within the hour'),
-            'never' => array('', 'clock', 'Not checked yet', 'the daemon checks once an hour'),
+            'never' => array('', 'clock', 'Not checked yet', sys_versions::IsWindows() ? 'the task Sentora update check asks once an hour' : 'the daemon checks once an hour'),
         );
         $p = $pub[$a['state']];
         // the published release is a value (tag and date): shown as it is, not translated as a whole
@@ -316,13 +317,17 @@ class module_controller extends ctrl_module
             $out .= '<p class="pu-lead">' . $v::t('It is not known yet whether a newer panel is published. Updating anyway is safe: when the newest release is already installed, nothing is changed.') . '</p>';
         }
         if ($a['state'] !== 'current') {
-            $out .= '<ul class="pu-what"><li>' . $v::t('The panel is backed up first; the last 5 backups are kept.') . '</li>'
-                . '<li>' . $v::t('It takes about a minute. PHP and Apache reload at the end, so the panel may not answer for a few seconds; this page keeps watching.') . '</li>'
-                . '<li>' . $v::t('Only the panel changes: websites, mail, databases and this server\'s settings are not touched.') . '</li></ul>'
+            $out .= (sys_versions::IsWindows()
+                ? '<ul class="pu-what"><li>' . $v::t('A copy of the settings is kept first (in the backups folder), and the download must match its checksum.') . '</li>'
+                    . '<li>' . $v::t('The new release\'s installer then runs as a repair, with the answers of this install: Apache, PHP, the mail, FTP and DNS programs and the panel are brought up to date.') . '</li>'
+                    . '<li>' . $v::t('It takes several minutes, and the services restart one by one: the panel does not answer for a while; this page keeps watching. Websites, mail, databases, passwords and zones are kept.') . '</li></ul>'
+                : '<ul class="pu-what"><li>' . $v::t('The panel is backed up first; the last 5 backups are kept.') . '</li>'
+                    . '<li>' . $v::t('It takes about a minute. PHP and Apache reload at the end, so the panel may not answer for a few seconds; this page keeps watching.') . '</li>'
+                    . '<li>' . $v::t('Only the panel changes: websites, mail, databases and this server\'s settings are not touched.') . '</li></ul>')
                 . $v::Console('', 'If the panel does not answer after the update, go back to the version before from the server\'s console, as root:')
                 . $v::ActionForm('UpdatePanel', 'Update now', 'btn-primary');
         }
-        return $out . '<p class="pu-sub">' . $v::t('The same from the server\'s console, as root:') . ' <code>sentora-update</code></p></div>';
+        return $out . '<p class="pu-sub">' . $v::t(sys_versions::IsWindows() ? 'The same on the server, in PowerShell as Administrator:' : 'The same from the server\'s console, as root:') . ' <code>' . $v::h(panel_update_state::UpdateCommand()) . '</code></p></div>';
     }
 
     /**
@@ -333,6 +338,9 @@ class module_controller extends ctrl_module
     static function getBackupsCard()
     {
         $v = 'panel_update_view';
+        if (sys_versions::IsWindows()) {
+            return '<div class="pu-box"><h4>' . $v::t('Go back') . '</h4><p class="pu-sub">' . $v::t('On Windows an update keeps a copy of the settings in the backups folder before it starts. To go back, run the installer of the release before as a repair: data, mailboxes, passwords and zones are kept.') . '</p></div>';
+        }
         $list = panel_update_state::Backups();
         $out = '<div class="pu-box"><h4>' . $v::t('Go back') . '</h4><p class="pu-sub">' . $v::t('Each update keeps a backup of the panel as it was before. Going back puts the panel\'s files back from it; websites, mail, databases and this server\'s settings are not touched.') . '</p>';
         if (!$list) {

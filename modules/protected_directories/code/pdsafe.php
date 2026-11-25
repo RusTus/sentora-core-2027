@@ -144,8 +144,13 @@ class pd_safe
         if (is_link($home) || !is_dir($home) || is_link($dir)) {
             return false;
         }
-        if (!is_dir($dir) && !@mkdir($dir, 0750)) {
-            return false;
+        if (!is_dir($dir)) {
+            if (self::Deferred()) {
+                return $dir; // (Windows: the daemon makes it, with the password file)
+            }
+            if (!@mkdir($dir, 0750)) {
+                return false;
+            }
         }
         clearstatcache(true, $dir);
         $same = realpath($dir) === $dir || (sys_versions::IsWindows() && strcasecmp(str_replace('\\', '/', (string) realpath($dir)), $dir) === 0);
