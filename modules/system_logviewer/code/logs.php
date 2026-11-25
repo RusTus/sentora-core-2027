@@ -47,6 +47,39 @@ class system_logviewer_logs
     );
 
     /**
+     * The files a pattern matches, folder by folder with scandir and fnmatch (Windows: glob() there finds nothing with
+     * these absolute paths). Links are never followed into.
+     *
+     * @param string $pattern An absolute pattern with / between its parts; * and ? only.
+     * @return string[]
+     */
+    static function Expand($pattern)
+    {
+        $parts = explode('/', $pattern);
+        $paths = array(array_shift($parts));   // ('C:' or '' for a path from the drive's root)
+        foreach ($parts as $n => $part) {
+            $next = array();
+            foreach ($paths as $base) {
+                if (strpbrk($part, '*?') === false) {
+                    $next[] = $base . '/' . $part;
+                    continue;
+                }
+                $dir = $base === '' ? '/' : $base . '/';
+                if (!is_dir($dir) || is_link(rtrim($dir, '/')) || !is_readable($dir)) {
+                    continue;
+                }
+                foreach ((array) @scandir($dir) as $name) {
+                    if ($name !== '.' && $name !== '..' && fnmatch($part, $name)) {
+                        $next[] = $base . '/' . $name;
+                    }
+                }
+            }
+            $paths = $next;
+        }
+        return $paths;
+    }
+
+    /**
      * Return every log file found, keyed by id.
      *
      * Only real files (no symlinks); the id is the first 16 hex characters of sha1(path).
@@ -67,7 +100,7 @@ class system_logviewer_logs
                 if (strpbrk(basename($pattern), '*?[') !== false && strpbrk($dir, '*?[') === false && !is_readable($dir)) {
                     continue;
                 }
-                foreach ((array) glob($pattern) as $path) {
+                foreach (sys_versions::IsWindows() ? self::Expand($pattern) : (array) glob($pattern) as $path) {
                     // Only real files; a symlink can not point the viewer somewhere else
                     if (!is_file($path) || is_link($path)) {
                         continue;
