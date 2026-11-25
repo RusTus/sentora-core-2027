@@ -134,6 +134,111 @@ class sys_winmail
         return $doms[$domain];
     }
 
+    /** The name of the panel's Sieve script on a mailbox with a forwarder. */
+    const FWD_SCRIPT = 'sentora-forward';
+
+    /**
+     * The list address a forwarder to several addresses goes through (Stalwart redirects once per script).
+     *
+     * @param string $addr The mailbox.
+     * @return string
+     */
+    static function ForwardList($addr)
+    {
+        return 'sentora-fwd-' . substr(hash('sha256', 'sentora-forward:' . $addr), 0, 12) . '@' . substr($addr, strpos($addr, '@') + 1);
+    }
+
+    /**
+     * The Sieve script of a forwarder (the addresses were checked: no quotes or line breaks can be in them).
+     *
+     * @param string $addr The mailbox.
+     * @param array{keep: bool, to: string[]} $f
+     * @return string
+     */
+    static function ForwardScript($addr, $f)
+    {
+        $to = count($f['to']) === 1 ? $f['to'][0] : self::ForwardList($addr);
+        return "# Made by the Sentora panel (Forwarders): written over at the next change\r\n"
+            . ($f['keep'] ? "require [\"copy\"];\r\nredirect :copy \"" . $to . "\";\r\n" : "redirect \"" . $to . "\";\r\n");
+    }
+
+    /**
+     * One JMAP request with several calls (standard JMAP, here Blob and Sieve), as Stalwart's administrator.
+     *
+     * @param string[] $using
+     * @param array<int, array> $calls
+     * @return array<int, array>|null The method responses, or null when the request failed.
+     */
+    static function Jmap($using, $calls)
+    {
+        list($code, $r) = self::Http('/jmap/', json_encode(array('using' => $using, 'methodCalls' => $calls)));
+        if ($code !== 200 || !isset($r['methodResponses']) || !is_array($r['methodResponses'])) {
+            self::$why = substr($code . ' ' . json_encode($r), 0, 300);
+            return null;
+        }
+        return $r['methodResponses'];
+    }
+
+    /**
+     * Put a forwarder's script on a mailbox and switch it on, or (script null) switch it off and remove it. A script the
+     * mailbox's owner made (their own filters) and switched on is never replaced.
+     *
+     * @param string $acctId The mailbox's Stalwart id (its JMAP account).
+     * @param string|null $script
+     * @return string '' when done, else why not.
+     */
+    static function SetForward($acctId, $script)
+    {
+        $sieve = array('urn:ietf:params:jmap:core', 'urn:ietf:params:jmap:sieve');
+        $r = self::Jmap($sieve, array(array('SieveScript/get', (object) array('accountId' => $acctId), 'g')));
+        if ($r === null || $r[0][0] !== 'SieveScript/get') {
+            return 'Stalwart did not list its scripts (' . ($r === null ? self::$why : json_encode($r[0])) . ')';
+        }
+        $ours = null;
+        $other = false;
+        foreach ((array) (isset($r[0][1]['list']) ? $r[0][1]['list'] : array()) as $x) {
+            if ((string) $x['name'] === self::FWD_SCRIPT) {
+                $ours = $x;
+            } elseif (!empty($x['isActive'])) {
+                $other = true;
+            }
+        }
+        if ($script === null) {
+            if ($ours === null) {
+                return '';
+            }
+            $args = array('accountId' => $acctId, 'destroy' => array($ours['id']));
+            if (!empty($ours['isActive'])) {
+                $args['onSuccessDeactivateScript'] = true;
+            }
+            $r = self::Jmap($sieve, array(array('SieveScript/set', (object) $args, 's')));
+            return ($r !== null && $r[0][0] === 'SieveScript/set' && empty($r[0][1]['notDestroyed'])) ? '' : 'Stalwart refused (' . json_encode($r === null ? self::$why : $r[0]) . ')';
+        }
+        if ($other) {
+            return 'the mailbox has its own Sieve script switched on (its filters): it is not replaced';
+        }
+        $set = array('accountId' => $acctId);
+        if ($ours === null) {
+            $set['create'] = (object) array('s' => array('name' => self::FWD_SCRIPT, 'blobId' => '#b'));
+            $set['onSuccessActivateScript'] = '#s';
+        } else {
+            $set['update'] = (object) array($ours['id'] => array('blobId' => '#b'));
+            $set['onSuccessActivateScript'] = $ours['id'];
+        }
+        $r = self::Jmap(array('urn:ietf:params:jmap:core', 'urn:ietf:params:jmap:blob', 'urn:ietf:params:jmap:sieve'), array(
+            array('Blob/upload', (object) array('accountId' => $acctId, 'create' => (object) array('b' => array('data' => array(array('data:asText' => $script)), 'type' => 'application/sieve'))), 'u'),
+            array('SieveScript/set', (object) $set, 's')));
+        if ($r === null) {
+            return 'Stalwart did not answer (' . self::$why . ')';
+        }
+        foreach ($r as $x) {
+            if ($x[0] === 'error' || !empty($x[1]['notCreated']) || !empty($x[1]['notUpdated'])) {
+                return 'Stalwart refused (' . substr(json_encode($x), 0, 300) . ')';
+            }
+        }
+        return '';
+    }
+
     /**
      * The daemon's part: Stalwart's domains and the panel's mailboxes in line with the mail database.
      *
@@ -171,7 +276,7 @@ class sys_winmail
         }
         $aliasesFor = array();
         $lists = array();
-        $fwd = 0;
+        $fwds = array();
         $re = '/^([a-z0-9][a-z0-9._+-]{0,63})@(([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{0,62})$/';
         try {
             $rows = $zdbh->query("SELECT address, goto, active FROM `" . $db . "`.alias")->fetchAll(PDO::FETCH_ASSOC);
@@ -193,8 +298,14 @@ class sys_winmail
             $to = array_keys($to);
             sort($to);
             if (isset($want[$addr])) {
-                if (array_diff($to, array($addr))) {
-                    $fwd++;   // (a forwarder: not on Windows yet)
+                // a forwarder (Forwarders page): the mailbox's own address in goto keeps a copy
+                $dest = array_values(array_diff($to, array($addr)));
+                if ($dest) {
+                    $fwds[$addr] = array('keep' => in_array($addr, $to, true), 'to' => $dest);
+                    if (count($dest) > 1) {
+                        // (Stalwart lets a script redirect once: more addresses go through a list of the panel's)
+                        $lists[self::ForwardList($addr)] = $dest;
+                    }
                 }
                 continue;
             }
@@ -366,13 +477,42 @@ class sys_winmail
                 }
             }
         }
-        if ($fwd) {
-            $out[] = 'Mail: ' . $fwd . ' forwarder(s) in the panel are not passed on to Stalwart yet (forwarders are not on Windows yet)';
+        // forwarders: a Sieve script on the mailbox (its own JMAP account, which Stalwart's administrator may manage)
+        $fstate = isset($state['fwd']) ? (array) $state['fwd'] : array();
+        $fnew = array();
+        $fset = $fgone = 0;
+        foreach (array_unique(array_merge(array_keys($fwds), array_keys($fstate))) as $addr) {
+            if (!isset($accts[$addr]) || !isset($mine[$addr])) {
+                continue;   // (only the panel's mailboxes; a new one gets its forwarder at the next run)
+            }
+            $script = isset($fwds[$addr]) ? self::ForwardScript($addr, $fwds[$addr]) : null;
+            $sum = $script === null ? null : hash('sha256', $script);
+            if ($sum !== null && isset($fstate[$addr]) && $fstate[$addr] === $sum) {
+                $fnew[$addr] = $sum;
+                continue;
+            }
+            $why = self::SetForward($accts[$addr], $script);
+            if ($why !== '') {
+                $out[] = 'Mail: the forwarder of ' . $addr . ' was not ' . ($script === null ? 'removed' : 'set') . ': ' . $why;
+                if (isset($fstate[$addr])) {
+                    $fnew[$addr] = $fstate[$addr];
+                }
+                continue;
+            }
+            if ($script === null) {
+                $fgone++;
+            } else {
+                $fnew[$addr] = $sum;
+                $fset++;
+            }
+        }
+        if ($fset || $fgone) {
+            $out[] = 'Mail: forwarders set ' . $fset . ', removed ' . $fgone;
         }
         if ($lmade || $lchanged || $lgone) {
             $out[] = 'Mail: Stalwart lists made ' . $lmade . ', changed ' . $lchanged . ', removed ' . $lgone;
         }
-        $new = array('mine' => $mine, 'sums' => $sums, 'lists' => $lmine);
+        $new = array('mine' => $mine, 'sums' => $sums, 'lists' => $lmine, 'fwd' => $fnew);
         if ($new != $state) {
             if (!is_dir(dirname(self::STATE))) {
                 @mkdir(dirname(self::STATE), 0700, true);

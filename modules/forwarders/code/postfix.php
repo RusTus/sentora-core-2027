@@ -122,4 +122,9 @@ if (!fs_director::CheckForEmptyValue(self::$create)) {
         SentoraForwardersGoto($mail_db, $zdbh, $address, array(array($destination, (int) $keepmessage)), 0);
     }
 }
+
+// (Windows: Stalwart follows the mail database at the daemon run, sys_winmail::Sync; ask for it now)
+if (sys_versions::IsWindows() && class_exists('sys_winphp')) {
+    sys_winphp::Soon();
+}
 ?>
