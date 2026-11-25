@@ -24,6 +24,7 @@
             <@ ConfigModules @>
         </div>
 
+        <% if CanInstall %>
         <div class="mo-card">
             <h4><: Install a module :></h4>
             <form class="mo-upload" action="./?module=moduleadmin&amp;action=InstallModule" method="post" enctype="multipart/form-data">
@@ -34,6 +35,7 @@
                 <button class="btn btn-primary" type="submit" name="submit"><: Install :></button>
             </form>
         </div>
+        <% endif %>
     <% endif %>
     </div>
     <script src="modules/moduleadmin/assets/moduleadmin.js"></script>

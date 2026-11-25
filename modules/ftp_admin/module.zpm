@@ -2,7 +2,7 @@
     <div class="panel-heading">
         <img src="<@ ModuleIcon @>" width="35" height="35" border="0" alt="<@ ModuleName @>">
         <div class="zmodule_title"><@ ModuleName @></div>
-        <div class="zmodule_desc" id="zmodule_desc_<@ ModuleName @>"><: The FTP server (ProFTPD): whether it runs, every FTP account on the server, and how clients connect. :></div>
+        <div class="zmodule_desc" id="zmodule_desc_<@ ModuleName @>"><: The FTP server: whether it runs, every FTP account on the server, and how clients connect. :></div>
     </div>
     <@ Result @>
     <link rel="stylesheet" href="modules/ftp_admin/assets/ftpadmin.css">
@@ -24,15 +24,17 @@
                 <div class="fa-box">
                     <h4><: How clients connect :></h4>
                     <dl class="fa-dl"><dt><: Server :></dt><dd><code><@ Server @></code></dd><dt><: Port :></dt><dd><code>21</code></dd>
-                        <dt><: Encryption :></dt><dd><: Explicit FTP over TLS (FTPS), with the panel's certificate :></dd><dt><: Passive ports :></dt><dd><code>60000-65535</code></dd></dl>
-                    <p class="fa-sub"><: Read only and Upload only are applied by the daemon within 5 minutes of a change, as rules in ProFTPD's ftp-access.conf. The FTP logs are in the System Log Viewer. :></p>
+                        <dt><: Encryption :></dt><dd><: Explicit FTP over TLS (FTPS), with the panel's certificate :></dd><dt><: Passive ports :></dt><dd><code><@ PassivePorts @></code></dd></dl>
+                    <p class="fa-sub"><@ RulesNote @></p>
                 </div>
+                <% if HasSettings %>
                 <form class="fa-box" action="./?module=ftp_admin&amp;action=UpdateConfig" method="post">
                     <h4><: Settings :></h4>
                     <@ SettingFields @>
                     <button class="btn btn-primary" type="submit" name="inSaveSystem"><: Save settings :></button>
                     <@ CSFR_Tag @>
                 </form>
+                <% endif %>
             </aside>
         </div>
     </div>

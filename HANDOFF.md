@@ -820,6 +820,10 @@ DNS, FTP, mailboxes and cron on Windows (2026-11-25, tested in the Windows insta
   are Linux's; on Windows FollowSymLinks is never allowed). The entries go into sentora-vhosts.conf between
   sys_apachecustom's markers, filtered as on Linux; when httpd -t refuses the file, the entry it names is switched off (the
   page shows it) and the rest goes live. Linux's Apache Config hooks do nothing on Windows (a deleted client's files stay).
+- FTP Config and Module Admin (2026-11-25): FTP Config names the FTP program from the ftp_php driver (SFTPGo / ProFTPD),
+  the passive ports from ftp_passive_ports (the Windows installer sets 50000-50100; without it ProFTPD's 60000-65535) and
+  hides ProFTPD's database setting under SFTPGo. Module Admin on Windows marks the modules not ready there ("not on Windows
+  yet") and has no add-on upload (add-ons are installed by Linux's daemon job; none is ready for Windows yet).
 Where Windows lives (owner, 2026-11-25): the native installer moved from RusTus/sentora-windows-2027 (left with a note) to
 sentora-installers-2027/windows/server (install-zpanel-stack.ps1; install-web-stack.ps1 = the same file with
 $Edition = 'stack', kept for other uses; README.txt; tests/), tested by .github/workflows/windows-server-test.yml there (a

@@ -167,6 +167,62 @@ class module_controller extends ctrl_module
     }
 
     /**
+     * Whether the FTP server is SFTPGo (the ftp_php driver the settings name: Windows) rather than ProFTPD.
+     *
+     * @return bool
+     */
+    static function IsSftpgo()
+    {
+        return (string) ctrl_options::GetSystemOption('ftp_php') === 'sftpgo.php';
+    }
+
+    /**
+     * The FTP server's name (<@ FtpSoftware @>), from the driver the settings name.
+     *
+     * @return string
+     */
+    static function getFtpSoftware()
+    {
+        return self::IsSftpgo() ? 'SFTPGo' : 'ProFTPD';
+    }
+
+    /**
+     * The passive ports (<@ PassivePorts @>): the ftp_passive_ports setting where the installer set one, else ProFTPD's.
+     *
+     * @return string
+     */
+    static function getPassivePorts()
+    {
+        $p = (string) ctrl_options::GetSystemOption('ftp_passive_ports');
+        return self::h(preg_match('/^\d{1,5}-\d{1,5}$/', $p) ? $p : '60000-65535');
+    }
+
+    /**
+     * How access types are applied and where the logs are (<@ RulesNote @>).
+     *
+     * @return string
+     */
+    static function getRulesNote()
+    {
+        if (self::IsSftpgo()) {
+            $logs = rtrim(str_replace('\\', '/', (string) ctrl_options::GetSystemOption('log_dir')), '/') . '/sftpgo';
+            return str_replace('%s', '<code>' . self::h(sys_versions::IsWindows() ? str_replace('/', '\\', $logs) : $logs) . '</code>',
+                self::t('Read only and Upload only are applied by the daemon within 5 minutes of a change, as SFTPGo permissions; a switched-off client\'s logins are switched off and their sessions ended. SFTPGo\'s log is in %s.'));
+        }
+        return self::t('Read only and Upload only are applied by the daemon within 5 minutes of a change, as rules in ProFTPD\'s ftp-access.conf. The FTP logs are in the System Log Viewer.');
+    }
+
+    /**
+     * Whether the page has settings to show (<% if HasSettings %>): ProFTPD's database name means nothing to SFTPGo.
+     *
+     * @return bool
+     */
+    static function getHasSettings()
+    {
+        return trim(self::getSettingFields()) !== '';
+    }
+
+    /**
      * Returns the module's user-editable settings, as fields (<@ SettingFields @>).
      *
      * @global db_driver $zdbh The panel's database connection.
@@ -179,6 +235,9 @@ class module_controller extends ctrl_module
         $q->execute(array(':m' => ui_module::GetModuleName()));
         $out = '';
         foreach ($q->fetchAll(PDO::FETCH_ASSOC) as $r) {
+            if ($r['so_name_vc'] === 'ftp_db' && self::IsSftpgo()) {
+                continue; // (ProFTPD's database; SFTPGo keeps its own)
+            }
             $name = self::h($r['so_name_vc']);
             if (ctrl_options::CheckForPredefinedOptions($r['so_defvalues_tx'])) {
                 $field = '<select class="form-control" name="' . $name . '" id="' . $name . '">';
@@ -233,6 +292,9 @@ class module_controller extends ctrl_module
         $set = $zdbh->prepare("UPDATE x_settings SET so_value_tx = :v WHERE so_name_vc = :n");
         foreach ($q->fetchAll(PDO::FETCH_ASSOC) as $r) {
             $v = trim((string) $controller->GetControllerRequest('FORM', $r['so_name_vc']));
+            if ($r['so_name_vc'] === 'ftp_db' && self::IsSftpgo()) {
+                continue;
+            }
             if ($v === '' || ($r['so_name_vc'] === 'ftp_db' && !preg_match('/^[A-Za-z0-9_]{1,64}$/', $v))) {
                 continue;
             }

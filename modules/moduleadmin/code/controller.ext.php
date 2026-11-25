@@ -169,7 +169,7 @@ class module_controller extends ctrl_module
                 $rows .= '<tr class="mo-row' . ($on ? '' : ' off') . '" data-s="' . self::h(strtolower(ui_language::translate($m['mo_name_vc']) . ' ' . $m['mo_folder_vc'])) . '">'
                     . '<td><div class="mo-name"><img src="' . self::h(self::IconOf($m['mo_folder_vc'])) . '" alt="" width="26" height="26"><div>'
                     . '<a href="./?module=moduleadmin&amp;showinfo=' . rawurlencode($m['mo_folder_vc']) . '">' . self::h(ui_language::translate($m['mo_name_vc'])) . '</a>'
-                    . '<span>' . self::h($m['mo_folder_vc']) . '</span></div></div></td>';
+                    . '<span>' . self::h($m['mo_folder_vc']) . (ui_module::ReadyHere($m['mo_folder_vc']) ? '' : ' &middot; ' . self::t('not on Windows yet')) . '</span></div></div></td>';
                 // on / off: a switch that sends "false" when off; Module Admin can not be switched off
                 if ($system) {
                     $rows .= '<td class="mo-c"><span class="mo-lock" title="' . self::t('System modules are always on') . '">' . self::t('always') . '</span></td>';
@@ -326,6 +326,16 @@ class module_controller extends ctrl_module
     }
 
     /**
+     * Whether a package may be installed here (<% if CanInstall %>): not on Windows yet.
+     *
+     * @return bool
+     */
+    static function getCanInstall()
+    {
+        return !sys_versions::IsWindows();
+    }
+
+    /**
      * Template flag: the URL asks for a module's information (?showinfo=).
      *
      * @global runtime_controller $controller The request controller.
@@ -360,6 +370,12 @@ class module_controller extends ctrl_module
     {
         global $controller;
         runtime_csfr::Protect();
+        if (sys_versions::IsWindows()) {
+            // (the add-ons are installed by Linux's daemon job; none is ready for Windows yet)
+            self::$error = true;
+            self::$error_message = "Add-on modules can not be installed on Windows yet.";
+            return;
+        }
         require_once ctrl_options::GetSystemOption('sentora_root') . 'modules/repo_browser/code/repohelper.php';
         self::$error_message = "";
         self::$error = false;
