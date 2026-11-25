@@ -12,28 +12,14 @@
  *
  * Updated by RusTus, 2026-11-07
  */
-// (the panel's folder from this file's own place: Windows' DocumentRoot has no slash at the end, and a request can not
-// change it)
-$zroot = dirname(__DIR__, 3) . '/';
-include($zroot . 'cnf/db.php');
-include($zroot . 'dryden/db/driver.class.php');
-include($zroot . 'dryden/debug/logger.class.php');
-include($zroot . 'dryden/runtime/dataobject.class.php');
-include($zroot . 'dryden/sys/versions.class.php');
-include($zroot . 'dryden/ctrl/options.class.php');
-include($zroot . 'dryden/ctrl/auth.class.php');
-include($zroot . 'dryden/ctrl/users.class.php');
-include($zroot . 'dryden/fs/director.class.php');
-include($zroot . 'inc/dbc.inc.php');
-include($zroot . 'dryden/sys/winvhosts.class.php');
-include($zroot . 'dryden/sys/backup.class.php');
-include($zroot . 'dryden/ui/language.class.php');
+// The panel's own class loader, from the panel's folder (this file's own place: Windows' DocumentRoot has no slash
+// at the end, and a request can not change it); the list of files this once included by hand missed classes the
+// session check uses
+chdir(dirname(__DIR__, 3));
+require_once 'dryden/loader.inc.php';
+require_once 'cnf/db.php';
+require_once 'inc/dbc.inc.php';
 
-try {
-    $zdbh = new db_driver("mysql:host=" . $host . ";dbname=" . $dbname . "", $user, $pass);
-} catch (PDOException $e) {
-    exit();
-}
 
 if (isset($_GET['id'])) {
     $userid = $_GET['id'];
