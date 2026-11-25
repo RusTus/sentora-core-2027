@@ -22,6 +22,7 @@ include($_SERVER["DOCUMENT_ROOT"] . 'dryden/ctrl/auth.class.php');
 include($_SERVER["DOCUMENT_ROOT"] . 'dryden/ctrl/users.class.php');
 include($_SERVER["DOCUMENT_ROOT"] . 'dryden/fs/director.class.php');
 include($_SERVER["DOCUMENT_ROOT"] . 'inc/dbc.inc.php');
+include($_SERVER["DOCUMENT_ROOT"] . 'dryden/sys/winvhosts.class.php');
 include($_SERVER["DOCUMENT_ROOT"] . 'dryden/sys/backup.class.php');
 include($_SERVER["DOCUMENT_ROOT"] . 'dryden/ui/language.class.php');
 
