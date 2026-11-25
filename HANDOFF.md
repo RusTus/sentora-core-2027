@@ -789,6 +789,16 @@ DNS, FTP, mailboxes and cron on Windows (2026-11-25, tested in the Windows insta
   runs as NT SERVICE\SentoraPHP-NAME inside its fences; never two runs at once, cron_min_interval and cron_max_runtime as on
   Linux, the output in tmp/cron-<id>.log. Limits: the site's own max_execution_time applies, and php-cgi reports exit code 0.
 - Settings the Windows installer adds when missing (hidden): ftp_php, ftp_api, ftp_env, mail_api, mail_admin, server_ip.
+- Mail aliases and distribution lists (2026-11-25): from the mail database's alias table, as on Linux: an address that delivers
+  to one of the panel's mailboxes becomes an alias of that Stalwart account (its aliases, an object keyed by position), any
+  other address with its recipients a Stalwart mailing list (x:MailingList, recipients as {address: true}; only the lists the
+  panel made). Forwarders are not on Windows yet (Stalwart forwards from a live mailbox only by a Sieve script).
+- Webmail (Roundcube at /webmail on Windows), Services, Domain Logs (the logs folder from log_dir, not /var/sentora/logs written
+  in), phpMyAdmin (shipped in the panel; the installer writes its config.inc.php as preconf/phpmyadmin on Linux: cookie login,
+  127.0.0.1, its secret in configs\panel, TempDir in the state folder, no setup folder) and Backup Manager ("Back up now" asks
+  zsudo account-backup ID: the worker as SYSTEM, the site zipped with PHP's ZipArchive without following links or junctions,
+  mysqldump as on Linux; the backups folder gives Apache's account change rights so the page downloads and deletes; the
+  download script uses the panel's class loader, as Windows' DocumentRoot has no slash at the end).
 Where Windows lives (owner, 2026-11-25): the native installer moved from RusTus/sentora-windows-2027 (left with a note) to
 sentora-installers-2027/windows/server (install-zpanel-stack.ps1; install-web-stack.ps1 = the same file with
 $Edition = 'stack', kept for other uses; README.txt; tests/), tested by .github/workflows/windows-server-test.yml there (a
