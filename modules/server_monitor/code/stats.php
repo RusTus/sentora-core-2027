@@ -40,6 +40,33 @@ function sm_read($f)
     return $s === false ? '' : $s;
 }
 
+// Windows: the collector's figures (bin/sentora-winstats.ps1, the service SentoraStats, as SYSTEM)
+if (sys_versions::IsWindows()) {
+    $w = json_decode(sm_read(sys_statedir::DIR . '/monitor/winstats.json'), true);
+    if (!is_array($w) || (float) ($w['t'] ?? 0) < time() - 30) {
+        http_response_code(503);
+        exit('{"error":"The service SentoraStats gives no figures (is it running?)."}');
+    }
+    // the panel's services, by the names in its settings (only the ones this server has)
+    $have = is_array($w['services'] ?? null) ? $w['services'] : array();
+    $want = array('Apache' => (string) ctrl_options::GetSystemOption('apache_sn'), 'MySQL' => sys_platform::Get('db_service'),
+        'FTP (SFTPGo)' => (string) ctrl_options::GetSystemOption('ftp_service'), 'DNS (CoreDNS)' => (string) ctrl_options::GetSystemOption('bind_service'),
+        'Mail (Stalwart)' => (string) ctrl_options::GetSystemOption('mail_service'), 'ClamAV' => sys_platform::Get('clamd_service'),
+        'Panel root jobs' => 'SentoraZsudo');
+    $w['services'] = array();
+    foreach ($want as $label => $name) {
+        if ($name !== '' && array_key_exists($name, $have)) {
+            $w['services'][$label] = (bool) $have[$name];
+        }
+    }
+    $w['t'] = (float) $w['t'];
+    if (!isset($_GET['info'])) {
+        unset($w['info']);
+    }
+    echo json_encode($w);
+    exit;
+}
+
 $out = array('t' => microtime(true));
 
 // CPU time per state, for all CPUs together and for each one

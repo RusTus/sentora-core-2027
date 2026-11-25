@@ -39,6 +39,16 @@ class module_controller extends ctrl_module
     }
 
     /**
+     * Whether the Hardening card is shown (<% if Hardening %>): its checks are Linux's (SSH, kernel, firewall).
+     *
+     * @return bool
+     */
+    static function getHardening()
+    {
+        return !sys_versions::IsWindows();
+    }
+
+    /**
      * Template value <@ HardeningForm @>: the "Run the check now" button (a form with the panel's
      * protection against forged requests).
      *

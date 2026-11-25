@@ -25,6 +25,7 @@
                 <button type="button" id="sm-pause"><: Pause :></button>
             </div>
         </div>
+        <% if Hardening %>
         <div class="smh" id="sm-hard" data-url="modules/server_monitor/code/hardening.php"
              data-t-ok="<: OK :>" data-t-warn="<: Warning :>" data-t-fail="<: Failed :>" data-t-none="<: No report yet: the daemon asks for the first one within 5 minutes, or press Run the check now. :>"
              data-t-checking="<: Checking now (about a minute)… :>" data-t-checked="<: Checked %s :>" data-t-passed="<: Show the %d checks that passed :>"
@@ -42,6 +43,7 @@
             <div id="smh-issues"></div>
             <div id="smh-passed"></div>
         </div>
+        <% endif %>
         <div class="sm-cards">
             <div class="sm-card" style="--c:#447fb3"><div class="sm-card-label"><: CPU :></div><div class="sm-card-value" id="sm-cpu">…</div><div class="sm-card-detail" id="sm-cpu-d"></div><div id="sm-cpu-s"></div></div>
             <div class="sm-card" style="--c:#8e6bd8"><div class="sm-card-label"><: Load :></div><div class="sm-card-value" id="sm-load">…</div><div class="sm-card-detail" id="sm-load-d"></div><div id="sm-load-s"></div></div>

@@ -133,7 +133,32 @@ function SentoraServerAlerts()
     // --- what is wrong now -------------------------------------------------------------
     $now = array();
     $seen = array();
-    foreach ((array) @file('/proc/mounts', FILE_IGNORE_NEW_LINES) as $line) {
+    if (sys_versions::IsWindows()) {
+        // (Windows: the disks and services from Server Monitor's collector, the service SentoraStats; the service
+        // names are the settings')
+        $w = json_decode((string) @file_get_contents(sys_statedir::DIR . '/monitor/winstats.json'), true);
+        if (!is_array($w) || (float) ($w['t'] ?? 0) < time() - 120) {
+            $now['service:SentoraStats'] = 'Server Monitor\'s collector (the service SentoraStats) gives no figures: disks and services are not checked.';
+            $w = array();
+        }
+        foreach ((array) ($w['fs'] ?? array()) as $fs) {
+            if (is_array($fs) && (int) ($fs['total'] ?? 0) > 0) {
+                $used = (int) round(100 * ($fs['total'] - $fs['free']) / $fs['total']);
+                if ($used >= $limit) {
+                    $now['disk:' . $fs['mount']] = 'Disk ' . $fs['mount'] . ' is ' . $used . '% full (' . round($fs['free'] / 1073741824, 1) . ' GB free).';
+                }
+            }
+        }
+        $have = (array) ($w['services'] ?? array());
+        foreach (array('Apache' => (string) ctrl_options::GetSystemOption('apache_sn'), 'MySQL' => sys_platform::Get('db_service'),
+            'SFTPGo' => (string) ctrl_options::GetSystemOption('ftp_service'), 'CoreDNS' => (string) ctrl_options::GetSystemOption('bind_service'),
+            'Stalwart' => (string) ctrl_options::GetSystemOption('mail_service'), 'ClamAV' => sys_platform::Get('clamd_service'), 'Sentora root jobs' => 'SentoraZsudo') as $label => $name) {
+            if ($name !== '' && array_key_exists($name, $have) && !$have[$name]) {
+                $now['service:' . $name] = $label . ' is not running (Get-Service ' . $name . ').';
+            }
+        }
+    }
+    foreach (sys_versions::IsWindows() ? array() : (array) @file('/proc/mounts', FILE_IGNORE_NEW_LINES) as $line) {
         $f = explode(' ', $line);
         if (count($f) < 4 || !in_array($f[2], array('ext4', 'ext3', 'xfs', 'btrfs', 'zfs', 'f2fs'), true) || isset($seen[$f[0]])) {
             continue;
@@ -152,7 +177,7 @@ function SentoraServerAlerts()
             }
         }
     }
-    if (!$seen && @disk_total_space('/') > 0) {
+    if (!$seen && !sys_versions::IsWindows() && @disk_total_space('/') > 0) {
         // no ordinary disk file system listed (containers and the like): at least /
         $total = disk_total_space('/');
         $free = disk_free_space('/');
@@ -175,7 +200,7 @@ function SentoraServerAlerts()
         $services['SOGo'] = array(sys_platform::Get('sogo_service'), 'sogod');
         $services['memcached'] = array('memcached', 'memcached');
     }
-    foreach ($services as $label => $s) {
+    foreach (sys_versions::IsWindows() ? array() : $services as $label => $s) {
         $rc = 1;
         if ($systemd) {
             exec('systemctl is-active --quiet ' . escapeshellarg($s[0]) . ' 2>/dev/null', $o, $rc);

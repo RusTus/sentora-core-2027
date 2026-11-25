@@ -830,6 +830,14 @@ DNS, FTP, mailboxes and cron on Windows (2026-11-25, tested in the Windows insta
 - System Log Viewer (2026-11-25): its log folders come from log_dir ({log_dir} in its list; /var/sentora/logs on Linux as
   before), with a Windows list: panel, panel security (state folder), sites, Apache, PHP, SFTPGo, Stalwart/ClamAV/webmail,
   CoreDNS, MySQL (the ones Apache's account may not read are listed as locked). The problems log hook stays Linux's.
+- Server Monitor (2026-11-25): on Windows the service SentoraStats (NSSM, SYSTEM) runs bin/sentora-winstats.ps1, which
+  writes the page's figures every 3 seconds to the state folder's monitor\winstats.json (CPU time from the raw processor
+  counters in 10 ms ticks, memory, page file as swap, network and disk byte totals, local disks, processes with owner, every
+  service's state, the system's name); Apache's account reads that folder only. stats.php hands it on and picks the panel's
+  services by the names in the settings (apache_sn, db_service, ftp_service, bind_service, mail_service, clamd_service; the
+  installer now sets db_service, mail_service, clamd_service, freshclam_service). "Load" is the processor queue length
+  (Windows has no load average). The daemon's alerts use the same figures (disks, stopped services); the Hardening card is
+  Linux's and hidden on Windows. The panel's PHP gets no access to Windows' counters (no COM): less to misuse.
 Where Windows lives (owner, 2026-11-25): the native installer moved from RusTus/sentora-windows-2027 (left with a note) to
 sentora-installers-2027/windows/server (install-zpanel-stack.ps1; install-web-stack.ps1 = the same file with
 $Edition = 'stack', kept for other uses; README.txt; tests/), tested by .github/workflows/windows-server-test.yml there (a
