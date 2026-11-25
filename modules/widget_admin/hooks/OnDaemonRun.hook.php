@@ -6,7 +6,7 @@
  * (dashboard_widgets::CheckPackage, then a PHP syntax check); its files are written by
  * this hook from their contents, never unpacked to paths taken from the zip.
  *
- * Written by RusTus, 2026-11-05
+ * Written by RusTus, 2026-11-25
  */
 global $zdbh; // hooks are included inside a function
 require_once rtrim((string) ctrl_options::GetSystemOption('sentora_root'), '/') . '/modules/dashboard/code/widgets.php';

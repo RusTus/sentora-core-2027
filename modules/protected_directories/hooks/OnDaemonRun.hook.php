@@ -7,7 +7,7 @@
  * user failed exactly when someone else already used that password. Both unique
  * indexes are dropped here; the module keeps names unique per folder itself.
  *
- * Written by RusTus, 2026-11-05
+ * Written by RusTus, 2026-11-25
  */
 global $zdbh; // hooks are included inside a function
 if (sys_versions::IsWindows()) {

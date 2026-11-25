@@ -5,7 +5,7 @@
  * the account's own Linux user (sys_accountphp::FixOwnership), and its folder
  * stays closed to other accounts whatever a site changed (sys_accountphp::Safeguard).
  *
- * Written by RusTus, 2026-11-05
+ * Written by RusTus, 2026-11-25
  */
 if (sys_versions::IsWindows()) {
     return; // (Linux's account users and their files; on Windows each account's rights come from phpaccount.ps1)
