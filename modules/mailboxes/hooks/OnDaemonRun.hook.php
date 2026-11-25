@@ -5,7 +5,7 @@
  * can set a new one (Edit) but never read it, so the panel keeps no copy: copies an
  * earlier version kept for "Show password" are removed here.
  *
- * Written by RusTus, 2026-11-10
+ * Written by RusTus, 2026-11-25
  */
 global $zdbh; // hooks are included inside a function
 if (sys_versions::IsWindows()) {

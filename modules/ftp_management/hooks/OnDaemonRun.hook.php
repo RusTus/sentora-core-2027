@@ -6,7 +6,7 @@
  * password columns if needed, and hash any password still stored as plain text
  * (accounts made before this change), in the panel's table and ProFTPD's.
  *
- * Written by RusTus, 2026-11-12
+ * Written by RusTus, 2026-11-25
  */
 if (sys_versions::IsWindows()) {
     // (Windows: SFTPGo's users follow the panel's FTP accounts through its API; no ProFTPD files or tables)

@@ -6,7 +6,7 @@
  * real folder inside the account's public_html (pd_safe::ResolveDir: no links, no
  * hidden folders, no ".."), whose path the cron line can carry as it is.
  *
- * Written by RusTus, 2026-11-07
+ * Written by RusTus, 2026-11-25
  */
 require_once dirname(__FILE__) . '/../../protected_directories/code/pdsafe.php';
 

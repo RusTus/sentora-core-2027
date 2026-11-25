@@ -5,7 +5,7 @@
 	* Author : TGates
 	* Additional work by Diablo925, Jettaman
  *
- * Updated by RusTus, 2026-11-08
+ * Updated by RusTus, 2026-11-24
  */
  
 // Lescript automatic updating script.
