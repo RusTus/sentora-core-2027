@@ -770,6 +770,25 @@ the page says so). Tested in the Windows install test with a self-signed certifi
 account's own over HTTPS, 301 from HTTP, check files served and never run, the account's PHP refused the key); Let's
 Encrypt itself is not tested there (no public name). An older install's mail.conf opened 443 itself: the installer takes its Listen and TLS lines out (they are ssl.conf's), or Apache would refuse the port twice on a repair or update. The test also deletes the certificate on the Sencrypt page (files go, the domain is back on plain HTTP). (The panel refuses a parked domain that looks like a subdomain of another account's domain, e.g. one sharing
 example.net with a domain already there: an old rule, not Windows'.)
+DNS, FTP, mailboxes and cron on Windows (2026-11-25, tested in the Windows install test):
+- DNS Manager / DNS Config: the daemon writes each zone as CoreDNS's db.DOMAIN in zone_dir, its first line marking it as the
+  panel's (only those are written over or removed; zones made with dnszone.ps1 are left alone); CoreDNS takes a raised serial
+  within 15 seconds, so there is no named.conf, checker or reload on Windows. DNS Config's start/stop/reload go to zsudo
+  (service CoreDNS). New records point at server_ip, which the Windows installer now sets.
+- FTP Accounts (ftp_php = sftpgo.php): the page saves x_ftpaccounts as on Linux and asks for a daemon run; sys_winftp (the
+  daemon, SYSTEM) keeps SFTPGo's users in line through its API (ftp_api, administrator from ftp_env, root's jobs only), only
+  users whose description says the panel made them; the SHA-512 crypt hash goes over as it is; access types become SFTPGo
+  permissions; a switched-off client's logins get status 0 and their sessions are ended; a new home folder is made by the
+  daemon (Apache's account may not write in hostdata).
+- Mailboxes: the Windows installer makes the mail database (mailserver_db, sentora_postfix, from the Linux SQL), so the page
+  and its postfix.php driver work as on Linux; sys_winmail (the daemon) brings Stalwart's domains and accounts in line through
+  its JMAP management API (mail_api, administrator from mail_admin), only the accounts it made (its state file); the hash is
+  Stalwart's secret, a switched-off mailbox gets a random one. Aliases, forwarders and lists are not on Windows yet.
+- Cron Manager: the task 'Sentora cron' (SYSTEM, every minute) runs bin/sentora-cron.php, which starts each task due now in
+  its own process and hands the script to the account's own PHP over FastCGI with the account's key (as Apache does), so it
+  runs as NT SERVICE\SentoraPHP-NAME inside its fences; never two runs at once, cron_min_interval and cron_max_runtime as on
+  Linux, the output in tmp/cron-<id>.log. Limits: the site's own max_execution_time applies, and php-cgi reports exit code 0.
+- Settings the Windows installer adds when missing (hidden): ftp_php, ftp_api, ftp_env, mail_api, mail_admin, server_ip.
 Where Windows lives (owner, 2026-11-25): the native installer moved from RusTus/sentora-windows-2027 (left with a note) to
 sentora-installers-2027/windows/server (install-zpanel-stack.ps1; install-web-stack.ps1 = the same file with
 $Edition = 'stack', kept for other uses; README.txt; tests/), tested by .github/workflows/windows-server-test.yml there (a
