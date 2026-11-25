@@ -746,7 +746,14 @@ welcome page as SYSTEM (Apache's account may not write in hostdata), tests with 
 "service Apache2 graceful" (httpd -k restart); a refused file is put back. A site's PHP is its account's own with nothing in
 the vhost (phpaccount.ps1's <Directory hostdata/NAME>). A disabled account's sites show static/disabled; parked domains
 the parking page; logs in logs/domains/<user>/. Domains, Sub Domains and Parked Domains are ready for Windows; zPanel's
-dead setroute.exe calls are gone. Not built yet on Windows: the quota pages, custom vhost entries, port forwarding.
+dead setroute.exe calls are gone. (ZPanel X 10.1.0's Windows installer, the owner's copy, 2026-11-25, kept out of the repositories: bin\zpss held
+configurex.bat (copy the ms_windows config pack, import the SQL, put zppy/setso/setzadmin in %windir%, run
+enviroment_configure.php, restart Apache, hMailServer and BIND), MySQL_User_Cleanup.sql (drop anonymous users), and
+enviroment_configure.php (databases, hMailServer.ini, passwords, login_details.txt); setroute.exe, not in the copy, only
+added a hosts-file entry so the server reached its own panel and new domains. Its Windows settings, for the drivers still to
+come: FileZilla Server (ftp_service_root, ftp_config_file "FileZilla Server.xml"), BIND (bind_dir, named_dir, named_check*),
+hMailServer (its own database zpanel_hmail), cron_file c:/windows/system32/crontab (a cron service for Windows), zip_exe 7-Zip.
+Sentora 2027 uses SFTPGo, Stalwart, CoreDNS and Task Scheduler instead.) Not built yet on Windows: the quota pages, custom vhost entries, port forwarding.
 HTTPS per website (2026-11-25): the Sencrypt page works on Windows (self-signed, your own certificate, Let's Encrypt).
 Certificates and keys are kept in C:\zpanel\data\sentora\certs\<user>\ssl\sencrypt\ (sys_winvhosts::CertHome; on Linux it
 is still hostdata/<user>), a folder only Administrators, SYSTEM and Apache's account may use, so the accounts' own PHP can
