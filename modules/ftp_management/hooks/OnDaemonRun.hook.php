@@ -8,6 +8,15 @@
  *
  * Written by RusTus, 2026-11-12
  */
+if (sys_versions::IsWindows()) {
+    // (Windows: SFTPGo's users follow the panel's FTP accounts through its API; no ProFTPD files or tables)
+    echo fs_filehandler::NewLine() . "START FTP accounts (SFTPGo)" . fs_filehandler::NewLine();
+    foreach (sys_winftp::Sync() as $ftpLine) {
+        echo $ftpLine . fs_filehandler::NewLine();
+    }
+    echo "END FTP accounts (SFTPGo)" . fs_filehandler::NewLine();
+    return;
+}
 echo fs_filehandler::NewLine() . "START FTP password hashes" . fs_filehandler::NewLine();
 FtpHashStoredPasswords();
 echo "END FTP password hashes" . fs_filehandler::NewLine();

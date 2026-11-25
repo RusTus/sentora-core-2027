@@ -533,6 +533,10 @@ class module_controller extends ctrl_module
         if ((int) $home === 1) {
             $dir = '/' . str_replace('.', '_', $username);
             $full = ctrl_options::GetSystemOption('hosted_dir') . $u['username'] . $dir . '/';
+            if (sys_versions::IsWindows()) {
+                // (Windows: Apache's account may not write in hostdata; the daemon makes the folder with the SFTPGo user)
+                return ctrl_ownership::SafeSubFolder($dir) === false ? false : '/' . trim($dir, '/');
+            }
             if (!file_exists($full)) {
                 @mkdir($full, 0770);
                 fs_director::SetFileSystemPermissions($full, 0770);
@@ -544,6 +548,14 @@ class module_controller extends ctrl_module
         }
         $base = ctrl_options::GetSystemOption('hosted_dir') . $u['username'];
         $real = realpath($base . $dir);
+        if (sys_versions::IsWindows() && $real !== false) {
+            // (Windows: realpath gives backslashes and any case)
+            $real = str_replace('\\', '/', $real);
+            $base = str_replace('\\', '/', $base);
+            if (strtolower($real) === strtolower($base) || strpos(strtolower($real), strtolower($base) . '/') === 0) {
+                $real = $base . substr($real, strlen($base));
+            }
+        }
         if (ctrl_ownership::SafeSubFolder($dir) === false || $real === false || ($real !== $base && strpos($real, $base . '/') !== 0)) {
             self::$invalidPath = true;
             return false;

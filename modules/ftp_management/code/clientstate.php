@@ -33,6 +33,10 @@ if (!function_exists('FtpSyncClientState')) {
     function FtpSyncClientState()
     {
         global $zdbh;
+        if (sys_versions::IsWindows()) {
+            // (Windows: SFTPGo's users follow the client's state at the daemon run, sys_winftp::Sync)
+            return array('off' => 0, 'on' => 0);
+        }
         $ftpDb = (string) ctrl_options::GetSystemOption('ftp_db');
         if (!preg_match('/^[A-Za-z0-9_]{1,64}$/', $ftpDb)) {
             $ftpDb = 'sentora_proftpd';
@@ -111,6 +115,11 @@ if (!function_exists('FtpSyncClientState')) {
      */
     function FtpEndSessionsNow()
     {
+        if (sys_versions::IsWindows()) {
+            // (Windows: the daemon switches the logins off in SFTPGo and ends their sessions)
+            sys_winftp::Soon();
+            return;
+        }
         if (function_exists('posix_geteuid') && posix_geteuid() === 0) {
             FtpEndSwitchedOffSessions();
             return;
