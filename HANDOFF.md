@@ -851,9 +851,11 @@ DNS, FTP, mailboxes and cron on Windows (2026-11-25, tested in the Windows insta
   owner switched on (their own filters) is never replaced: the daemon's log says so. Removed with the forwarder.
 - File Manager (2026-11-25): on Windows it runs as the account's own PHP, never the panel's (Apache's account may not write
   in hostdata, on purpose). phpaccount.ps1 gives each account an address /sentora-fm/NAME/ (Alias to
-  panel/modules/file_manager/app, a LocationMatch handing [a-z]+.php there to NAME's php-cgi with NAME's key and the
-  script's own SCRIPT_FILENAME), adds the app folder to the account's open_basedir and lets the SentoraPHP group read that
-  folder (and only list the three above it). The panel's code/open.php reads the account's key from
+  C:\zpanel\filemanager, a copy of panel/modules/file_manager/app made by phpaccount.ps1 at each run (robocopy /MIR;
+  Administrators and SYSTEM write, the SentoraPHP group and Apache read): the panel's folder stays closed to the accounts
+  (giving them "list" on it failed the isolation test, so it is not done); a LocationMatch hands only index.php and
+  raw.php there to NAME's php-cgi with NAME's key and the script's own SCRIPT_FILENAME, its other PHP and JSON files are
+  denied, the copy is in the account's open_basedir. The panel's code/open.php reads the account's key from
   configs/apache/php-accounts/NAME.conf and sends a pass (account, one minute, a one-time number, HMAC-SHA256 with the key);
   app/winaccount.inc.php checks it against getenv('SENTORA_KEY'), the address and the account's folder (open_basedir's first
   entry), refuses a number used before, and starts the file manager's own session (cookie only for /sentora-fm/NAME/,
