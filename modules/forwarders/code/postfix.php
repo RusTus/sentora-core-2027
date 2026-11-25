@@ -25,7 +25,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
- * Updated by RusTus, 2026-11-07
+ * Updated by RusTus, 2026-11-25
  */
 $mailserver_db = ctrl_options::GetSystemOption('mailserver_db');
 include('cnf/db.php');
