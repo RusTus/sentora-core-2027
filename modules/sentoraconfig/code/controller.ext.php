@@ -342,6 +342,21 @@ class module_controller extends ctrl_module
     }
 
     /**
+     * Where "Run the daemon now" writes its report (from the log_dir setting).
+     *
+     * @return string
+     */
+    static function DaemonReport()
+    {
+        $logs = rtrim(str_replace('\\', '/', (string) ctrl_options::GetSystemOption('log_dir')), '/');
+        if ($logs === '') {
+            $logs = '/var/sentora/logs';
+        }
+        // (Windows: SentoraZsudo writes it with the panel's own logs; Linux: zsudo beside the others)
+        return sys_versions::IsWindows() ? str_replace('/', '\\', $logs . '/panel/daemon-panel-run.log') : $logs . '/daemon-panel-run.log';
+    }
+
+    /**
      * The panel's address, and the console command that moves it to another name (<@ PanelAddress @>).
      *
      * @return string HTML.
@@ -350,6 +365,10 @@ class module_controller extends ctrl_module
     {
         $h = function ($s) { return htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8'); };
         $domain = (string) ctrl_options::GetSystemOption('sentora_domain');
+        if (sys_versions::IsWindows()) {
+            // (sentora-change-domain is a Linux command; on Windows the panel's name is the installer's -ServerName)
+            return sprintf($h(ui_language::translate('The panel\'s address: %s.')), '<b>' . $h($domain) . '</b>');
+        }
         return sprintf($h(ui_language::translate('The panel\'s address: %s. To move it to another name, run this on the server as root: %s')),
             '<b>https://' . $h($domain) . '</b>', '<code>sentora-change-domain panel.example.com</code>');
     }
@@ -533,11 +552,13 @@ class module_controller extends ctrl_module
         } elseif (self::$done === 'daemon') {
             $out .= ui_sysmessage::shout(ui_language::translate('A full daemon run is queued: every daily, weekly and monthly job runs within 5 minutes.'), 'zannounceok');
         } elseif (self::$done === 'daemonnow') {
-            $out .= ui_sysmessage::shout(ui_language::translate('The daemon is starting now. It usually takes under a minute (longer while another run is busy); reload this page to see the new run times. Its report: /var/sentora/logs/daemon-panel-run.log'), 'zannounceok');
+            $out .= ui_sysmessage::shout(sprintf(ui_language::translate('The daemon is starting now. It usually takes under a minute (longer while another run is busy); reload this page to see the new run times. Its report: %s'), htmlspecialchars(self::DaemonReport(), ENT_QUOTES, 'UTF-8')), 'zannounceok');
         } elseif (self::$done === 'daemonnow-old') {
             $out .= ui_sysmessage::shout(ui_language::translate('This server\'s zsudo does not know this action yet. Run sentora-update once on the server\'s console, as root: it builds the new zsudo, and then this works from here.'), 'zannounceerror');
         } elseif (self::$done === 'daemonnow-fail') {
-            $out .= ui_sysmessage::shout(ui_language::translate('The daemon could not be started from here (check that the queue of root actions runs: systemctl status sentora-zsudo.path). It still runs within 5 minutes.'), 'zannounceerror');
+            $out .= ui_sysmessage::shout(ui_language::translate(sys_versions::IsWindows()
+                ? 'The daemon could not be started from here (check that the service SentoraZsudo runs). It still runs within 5 minutes.'
+                : 'The daemon could not be started from here (check that the queue of root actions runs: systemctl status sentora-zsudo.path). It still runs within 5 minutes.'), 'zannounceerror');
         }
         return $out === '' ? null : $out;
     }
