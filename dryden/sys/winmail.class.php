@@ -8,7 +8,10 @@
  * plain password is kept anywhere); a mailbox switched off has signing in, receiving and sending switched off by Stalwart's
  * own permissions (its password kept, as with active = 0 on Linux). Only
  * the accounts the panel made (listed in its state file) are changed or removed: mailboxes added with mailuser.ps1 are
- * left alone. Not built yet: aliases, forwarders and lists. Nothing here runs on Linux.
+ * left alone. Aliases and distribution lists come from the same database's alias table: an address that delivers to one of
+ * the panel's mailboxes becomes an alias of that Stalwart account, any other address with its recipients a Stalwart
+ * mailing list (only the lists the panel made are changed or removed). Not built yet: forwarders (a mailbox's own row
+ * with outside addresses: Stalwart forwards from a mailbox only by a Sieve script). Nothing here runs on Linux.
  *
  * @package Sentora
  * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
@@ -109,6 +112,29 @@ class sys_winmail
     }
 
     /**
+     * Stalwart's id of a domain, added when it is not there yet.
+     *
+     * @param string $domain
+     * @param array<string, string> $doms Stalwart's domains (name => id), kept up to date.
+     * @param string[] $out Lines for the daemon's log.
+     * @return string|null
+     */
+    static function Domain($domain, &$doms, &$out)
+    {
+        if (isset($doms[$domain])) {
+            return $doms[$domain];
+        }
+        $r = self::Call('x:Domain/set', array('create' => array('d' => array('name' => $domain))));
+        if ($r === null || empty($r['created']['d']['id'])) {
+            $out[] = 'Mail: Stalwart refused the domain ' . $domain . ': ' . self::$why;
+            return null;
+        }
+        $doms[$domain] = (string) $r['created']['d']['id'];
+        $out[] = 'Mail: domain ' . $domain . ' added';
+        return $doms[$domain];
+    }
+
+    /**
      * The daemon's part: Stalwart's domains and the panel's mailboxes in line with the mail database.
      *
      * @return string[] Lines for the daemon's log.
@@ -143,7 +169,43 @@ class sys_winmail
             $hash = preg_replace('/^\{SHA512-CRYPT\}/', '', (string) $b['password']);
             $want[$a] = array('hash' => strpos($hash, '$6$') === 0 ? $hash : '', 'on' => (int) $b['active'] === 1);
         }
-        if (!$want && !$mine) {
+        $aliasesFor = array();
+        $lists = array();
+        $fwd = 0;
+        $re = '/^([a-z0-9][a-z0-9._+-]{0,63})@(([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{0,62})$/';
+        try {
+            $rows = $zdbh->query("SELECT address, goto, active FROM `" . $db . "`.alias")->fetchAll(PDO::FETCH_ASSOC);
+        } catch (Exception $e) {
+            $rows = array();
+        }
+        foreach ((array) $rows as $row) {
+            $addr = strtolower(trim((string) $row['address']));
+            if ((int) $row['active'] !== 1 || !preg_match($re, $addr)) {
+                continue;
+            }
+            $to = array();
+            foreach (explode(',', strtolower((string) $row['goto'])) as $g) {
+                $g = trim($g);
+                if ($g !== '' && preg_match($re, $g)) {
+                    $to[$g] = true;
+                }
+            }
+            $to = array_keys($to);
+            sort($to);
+            if (isset($want[$addr])) {
+                if (array_diff($to, array($addr))) {
+                    $fwd++;   // (a forwarder: not on Windows yet)
+                }
+                continue;
+            }
+            if (count($to) === 1 && isset($want[$to[0]])) {
+                $aliasesFor[$to[0]][] = $addr;
+            } elseif ($to) {
+                $lists[$addr] = $to;
+            }
+        }
+        $lmine = isset($state['lists']) ? (array) $state['lists'] : array();
+        if (!$want && !$mine && !$lists && !$lmine) {
             return $out;
         }
         self::$admin = self::Admin();
@@ -183,25 +245,31 @@ class sys_winmail
             $secrets = array($w['hash']);
             $perm = $w['on'] ? array('@type' => 'Inherit')
                 : array('@type' => 'Merge', 'enabledPermissions' => (object) array(), 'disabledPermissions' => (object) array('authenticate' => true, 'emailReceive' => true, 'emailSend' => true));
-            $sum = hash('sha256', $w['hash'] . '|' . ($w['on'] ? 1 : 0));
             if (isset($accts[$a]) && !isset($mine[$a])) {
                 continue;   // (made with mailuser.ps1: not the panel's)
             }
+            // its aliases (an object keyed by position, as Stalwart writes them)
+            $al = isset($aliasesFor[$a]) ? $aliasesFor[$a] : array();
+            sort($al);
+            $amap = array();
+            foreach ($al as $x) {
+                list($an, $ad) = explode('@', $x, 2);
+                $adId = self::Domain($ad, $doms, $out);
+                if ($adId !== null) {
+                    $amap[(string) count($amap)] = array('name' => $an, 'domainId' => $adId);
+                }
+            }
+            $amap = (object) $amap;
+            $sum = hash('sha256', $w['hash'] . '|' . ($w['on'] ? 1 : 0) . '|' . implode(',', $al));
             if (!isset($accts[$a])) {
-                if (!isset($doms[$domain])) {
-                    $r = self::Call('x:Domain/set', array('create' => array('d' => array('name' => $domain))));
-                    if ($r === null || empty($r['created']['d']['id'])) {
-                        $out[] = 'Mail: Stalwart refused the domain ' . $domain;
-                        continue;
-                    }
-                    $doms[$domain] = (string) $r['created']['d']['id'];
-                    $out[] = 'Mail: domain ' . $domain . ' added';
+                if (self::Domain($domain, $doms, $out) === null) {
+                    continue;
                 }
                 $r = null;
                 $whys = array();
                 foreach ($secrets as $secret) {
                     $r = self::Call('x:Account/set', array('create' => array('u' => array('@type' => 'User', 'name' => $local, 'domainId' => $doms[$domain],
-                        'credentials' => (object) array('0' => array('@type' => 'Password', 'secret' => $secret)), 'permissions' => $perm))));
+                        'credentials' => (object) array('0' => array('@type' => 'Password', 'secret' => $secret)), 'permissions' => $perm, 'aliases' => $amap))));
                     if ($r !== null && !empty($r['created']['u']['id'])) {
                         break;
                     }
@@ -219,7 +287,7 @@ class sys_winmail
                 $r = null;
                 $whys = array();
                 foreach ($secrets as $secret) {
-                    $r = self::Call('x:Account/set', array('update' => (object) array($accts[$a] => array('credentials' => (object) array('0' => array('@type' => 'Password', 'secret' => $secret)), 'permissions' => $perm))));
+                    $r = self::Call('x:Account/set', array('update' => (object) array($accts[$a] => array('credentials' => (object) array('0' => array('@type' => 'Password', 'secret' => $secret)), 'permissions' => $perm, 'aliases' => $amap))));
                     if ($r !== null) {
                         break;
                     }
@@ -243,7 +311,68 @@ class sys_winmail
                 $gone++;
             }
         }
-        $new = array('mine' => $mine, 'sums' => $sums);
+        // distribution lists: Stalwart mailing lists, only the ones the panel made
+        $lmade = $lchanged = $lgone = 0;
+        if ($lists || $lmine) {
+            $have = array();
+            $r = self::Call('x:MailingList/get', array('properties' => array('name', 'emailAddress')));
+            if ($r === null) {
+                $out[] = 'Mail: Stalwart did not list its mailing lists: ' . self::$why;
+            } else {
+                foreach ((array) (isset($r['list']) ? $r['list'] : array()) as $x) {
+                    if (!empty($x['emailAddress'])) {
+                        $have[strtolower((string) $x['emailAddress'])] = (string) $x['id'];
+                    }
+                }
+                foreach ($lists as $addr => $to) {
+                    $sum = hash('sha256', implode(',', $to));
+                    if (isset($have[$addr]) && !isset($lmine[$addr])) {
+                        continue;   // (not the panel's)
+                    }
+                    if (isset($accts[$addr]) || isset($want[$addr])) {
+                        continue;   // (an address is a mailbox or a list, never both)
+                    }
+                    $rcpt = (object) array_fill_keys($to, true);
+                    if (!isset($have[$addr])) {
+                        list($ln, $ld) = explode('@', $addr, 2);
+                        $ldId = self::Domain($ld, $doms, $out);
+                        if ($ldId === null) {
+                            continue;
+                        }
+                        $r = self::Call('x:MailingList/set', array('create' => array('l' => array('name' => $ln, 'domainId' => $ldId, 'recipients' => $rcpt))));
+                        if ($r === null || empty($r['created']['l']['id'])) {
+                            $out[] = 'Mail: Stalwart refused the list ' . $addr . ': ' . self::$why;
+                            continue;
+                        }
+                        $lmade++;
+                    } elseif ($lmine[$addr] !== $sum) {
+                        if (self::Call('x:MailingList/set', array('update' => (object) array($have[$addr] => array('recipients' => $rcpt)))) === null) {
+                            $out[] = 'Mail: Stalwart refused the change of the list ' . $addr . ': ' . self::$why;
+                            continue;
+                        }
+                        $lchanged++;
+                    }
+                    $lmine[$addr] = $sum;
+                }
+                foreach (array_keys($lmine) as $addr) {
+                    if (!isset($lists[$addr])) {
+                        if (isset($have[$addr]) && self::Call('x:MailingList/set', array('destroy' => array($have[$addr]))) === null) {
+                            $out[] = 'Mail: Stalwart refused to remove the list ' . $addr . ': ' . self::$why;
+                            continue;
+                        }
+                        unset($lmine[$addr]);
+                        $lgone++;
+                    }
+                }
+            }
+        }
+        if ($fwd) {
+            $out[] = 'Mail: ' . $fwd . ' forwarder(s) in the panel are not passed on to Stalwart yet (forwarders are not on Windows yet)';
+        }
+        if ($lmade || $lchanged || $lgone) {
+            $out[] = 'Mail: Stalwart lists made ' . $lmade . ', changed ' . $lchanged . ', removed ' . $lgone;
+        }
+        $new = array('mine' => $mine, 'sums' => $sums, 'lists' => $lmine);
         if ($new != $state) {
             if (!is_dir(dirname(self::STATE))) {
                 @mkdir(dirname(self::STATE), 0700, true);
