@@ -56,7 +56,8 @@ function BrandingSyncApache()
     if (ctrl_options::GetSystemOption('apache_changed') === 'true') {
         return;
     }
-    $file = (string) @file_get_contents((string) ctrl_options::GetSystemOption('apache_vhost'));
+    // (Windows writes the file with \r\n)
+    $file = str_replace("\r\n", "\n", (string) @file_get_contents((string) ctrl_options::GetSystemOption('apache_vhost')));
     preg_match_all('/^# BRANDING: (\S+)$/m', $file, $m);
     $inFile = $m[1];
     $want = array();
@@ -80,7 +81,7 @@ function BrandingCertificates()
 {
     global $zdbh;
     $nl = fs_filehandler::NewLine();
-    $dir = ctrl_branding::CERT_DIR;
+    $dir = ctrl_branding::CertDir();
     if (!is_dir($dir)) {
         @mkdir($dir, 0700, true);
     }
@@ -91,7 +92,7 @@ function BrandingCertificates()
     @chown($dir, 0);
     @chmod($dir, 0700);
     $addresses = ctrl_branding::Addresses();
-    $vhosts = (string) @file_get_contents((string) ctrl_options::GetSystemOption('apache_vhost'));
+    $vhosts = str_replace("\r\n", "\n", (string) @file_get_contents((string) ctrl_options::GetSystemOption('apache_vhost')));
     $pending = ctrl_options::GetSystemOption('apache_changed') === 'true';
     $used = array();
     foreach ($addresses as $a) {
@@ -102,7 +103,7 @@ function BrandingCertificates()
         $have = ctrl_branding::CertUsable($certDir);
         require_once 'modules/sencrypt/code/Lescript.php';
         $due = !$have || \Analogic\ACME\Lescript::renewalDue($certDir . 'cert.pem');
-        if ($have && strpos($vhosts, 'SSLCertificateFile ' . $certDir . 'fullchain.pem') === false && !$pending) {
+        if ($have && strpos($vhosts, $certDir . 'fullchain.pem') === false && !$pending) {
             // issued, but Apache's settings do not have the https site yet
             $zdbh->exec("UPDATE x_settings SET so_value_tx = 'true' WHERE so_name_vc = 'apache_changed'");
         }
@@ -153,7 +154,9 @@ function BrandingCertificates()
                     echo "   [" . $name . "] " . (isset($args[0]) ? $args[0] : '') . fs_filehandler::NewLine();
                 }
             };
-            $le = new \Analogic\ACME\Lescript($dir, $certDir, rtrim((string) ctrl_options::GetSystemOption('sentora_root'), '/'), $logger, $country, $region);
+            // (Let's Encrypt's check files: on Windows the folder every site serves them from, as Sencrypt's)
+            $webroot = sys_versions::IsWindows() ? rtrim(sys_winvhosts::AcmeDir(), '/') : rtrim((string) ctrl_options::GetSystemOption('sentora_root'), '/');
+            $le = new \Analogic\ACME\Lescript($dir, $certDir, $webroot, $logger, $country, $region);
             $le->initAccount();
             $le->signDomains(array($host));
             foreach (array('cert.pem', 'fullchain.pem', 'chain.pem', 'private.pem', 'public.pem', 'last.csr') as $f) {

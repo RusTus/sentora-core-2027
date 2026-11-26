@@ -902,8 +902,13 @@ DNS, FTP, mailboxes and cron on Windows (2026-11-25, tested in the Windows insta
   the installer; a moved file takes the folder's rights with icacls /reset, and its folder's again when put back), and a
   folder whose real path leads out of the account (a junction) is never followed. Not on Windows yet: the mail figures
   (Postfix's log), senders lists, subject tag, mailbox owners' own settings (Mail > SpamAV).
-- Still Linux-only, each needing its own Windows way (2026-11-25): PHP Versions (one PHP on Windows), Branding's
-  addresses (Linux's vhost writer), GoAccess and Matomo stats, AutoIP, Repo Browser (add-ons are Linux's).
+- Branding (2026-11-26): on Windows too. The look is the database's (as on Linux; GD is in the Windows PHP). Panel
+  addresses: sys_winvhosts::Branding writes each one's sites between "# BRANDING: host" lines (plain HTTP: Let's
+  Encrypt's check through the folder every site serves, else HTTPS or "being set up"; HTTPS: the panel's folder, run by
+  the panel's own PHP); certificates in data\sentora\certs\branding (ctrl_branding::CertDir), got by Branding's daemon
+  part with Lescript and sys_winvhosts::AcmeDir as the check folder; saving an address asks for a daemon run at once.
+  The daemon part reads the sites file with its \r\n line ends.
+- Still Linux-only, each needing its own Windows way (2026-11-25): PHP Versions (one PHP on Windows), GoAccess and Matomo stats, AutoIP, Repo Browser (add-ons are Linux's).
 Where Windows lives (owner, 2026-11-25): the native installer moved from RusTus/sentora-windows-2027 (left with a note) to
 sentora-installers-2027/windows/server (install-zpanel-stack.ps1; install-web-stack.ps1 = the same file with
 $Edition = 'stack', kept for other uses; README.txt; tests/), tested by .github/workflows/windows-server-test.yml there (a

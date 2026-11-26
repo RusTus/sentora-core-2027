@@ -315,6 +315,9 @@ class ctrl_branding
         if ($hostChanged) {
             // the daemon writes (or removes) the address's web server settings
             $zdbh->exec("UPDATE x_settings SET so_value_tx = 'true' WHERE so_name_vc = 'apache_changed'");
+            if (sys_versions::IsWindows()) {
+                sys_winphp::Soon();   // (Windows: within a minute, not at the next 5-minute run)
+            }
         }
         return '';
     }
@@ -604,6 +607,17 @@ class ctrl_branding
     }
 
     /**
+     * Where the addresses' certificates are: Linux's folder, or on Windows the panel's certificate folder (Apache reads
+     * it, the accounts' own PHP can not), in branding/.
+     *
+     * @return string With a slash at the end.
+     */
+    static function CertDir()
+    {
+        return sys_versions::IsWindows() ? sys_winvhosts::CertBase() . 'branding/' : self::CERT_DIR;
+    }
+
+    /**
      * The panel addresses the web server should answer on, with their certificate files when they have
      * one (for the Apache config; modules/apache_admin/hooks/OnDaemonRun.hook.php).
      *
@@ -624,7 +638,7 @@ class ctrl_branding
             if (!$host || !self::CanSet((int) $r['br_acc_fk'])) {
                 continue;
             }
-            $dir = self::CERT_DIR . $host . '/';
+            $dir = self::CertDir() . $host . '/';
             $ok = self::CertUsable($dir);
             $out[] = array('uid' => (int) $r['br_acc_fk'], 'host' => $host, 'cert' => $ok ? $dir . 'fullchain.pem' : '', 'key' => $ok ? $dir . 'private.pem' : '');
         }

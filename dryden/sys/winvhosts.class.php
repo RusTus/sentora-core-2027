@@ -235,6 +235,67 @@ class sys_winvhosts
             }
             $active->execute(array(':id' => (int) $v['vh_id_pk']));
         }
+        return $t . self::Branding($port, $https, $logs, $format, $nl);
+    }
+
+    /**
+     * Resellers' own panel addresses (Branding: panel.theirhosting.com), as on Linux: plain HTTP answers Let's Encrypt's
+     * check (the folder every site serves) and sends the rest to HTTPS, or says "being set up" until the address has
+     * its certificate; with it, HTTPS runs the panel as its main address does (its folder and PHP). Between
+     * "# BRANDING: host" lines, which Branding's daemon part reads.
+     *
+     * @param int $port Apache's plain-HTTP port.
+     * @param int $https Its HTTPS port.
+     * @param string $logs The log folder (forward slashes, with a slash at the end).
+     * @param string $format The access log format.
+     * @param string $nl The line end.
+     * @return string
+     */
+    static function Branding($port, $https, $logs, $format, $nl)
+    {
+        if (!class_exists('ctrl_branding')) {
+            return '';
+        }
+        try {
+            $addresses = ctrl_branding::Addresses();
+        } catch (Exception $e) {
+            return '';
+        }
+        if (!$addresses) {
+            return '';
+        }
+        $panel = rtrim(self::Fwd(ctrl_options::GetSystemOption('sentora_root')), '/');
+        $t = '# Panel addresses of resellers (Branding)' . $nl;
+        foreach ($addresses as $a) {
+            $host = strtolower((string) $a['host']);
+            if (!self::IsDomain($host)) {
+                continue;
+            }
+            $cert = str_replace('\\', '/', (string) $a['cert']);
+            $key = str_replace('\\', '/', (string) $a['key']);
+            $t .= '# BRANDING: ' . $host . $nl
+                . '<VirtualHost *:' . $port . '>' . $nl
+                . '    ServerName ' . $host . $nl
+                . '    DocumentRoot "' . $panel . '"' . $nl
+                . '    ErrorLog "' . $logs . 'apache/panel-error.log"' . $nl
+                . '    RewriteEngine On' . $nl
+                . '    RewriteCond %{REQUEST_URI} !^/\.well-known/acme-challenge/[A-Za-z0-9_-]+$' . $nl
+                . ($cert !== '' ? '    RewriteRule ^/?(.*) https://' . $host . ($https === 443 ? '' : ':' . $https) . '/$1 [R=301,L]' . $nl
+                    : '    RewriteRule ^ - [R=503,L]' . $nl . '    ErrorDocument 503 "This panel address is being set up: it works within a few minutes, once its certificate is ready."' . $nl)
+                . '</VirtualHost>' . $nl;
+            if ($cert !== '') {
+                $t .= '<VirtualHost *:' . $https . '>' . $nl
+                    . '    ServerName ' . $host . $nl
+                    . '    DocumentRoot "' . $panel . '"' . $nl
+                    . '    ErrorLog "' . $logs . 'apache/panel-error.log"' . $nl
+                    . '    CustomLog "' . $logs . 'apache/panel-access.log" ' . $format . $nl
+                    . '    SSLEngine on' . $nl
+                    . '    SSLCertificateFile "' . $cert . '"' . $nl
+                    . '    SSLCertificateKeyFile "' . $key . '"' . $nl
+                    . '</VirtualHost>' . $nl;
+            }
+            $t .= '# END BRANDING: ' . $host . $nl . $nl;
+        }
         return $t;
     }
 
