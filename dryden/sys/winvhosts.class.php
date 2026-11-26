@@ -102,6 +102,7 @@ class sys_winvhosts
             }
             sys_apachecustom::Clear('apache');
             $out[] = 'Websites: ' . substr_count($text, '<VirtualHost ') . ' site(s) written, Apache restarts: ' . self::Restart();
+            sys_phpversions::RecordLive($text);
         }
         return $out;
     }
@@ -182,7 +183,9 @@ class sys_winvhosts
             . '    Options None' . $nl . '    AllowOverride None' . $nl . '    Require all granted' . $nl . '    ForceType text/plain' . $nl
             . '    <IfModule php_module>' . $nl . '        php_admin_flag engine Off' . $nl . '    </IfModule>' . $nl
             . '</Directory>' . $nl . $nl;
-        $q = $zdbh->query("SELECT v.vh_id_pk, v.vh_name_vc, v.vh_directory_vc, v.vh_type_in, v.vh_enabled_in, v.vh_ssl_tx, v.vh_custom_tx, a.ac_id_pk, a.ac_user_vc
+        $phpOn = sys_phpversions::Enabled();
+        $phpConf = dirname((string) ctrl_options::GetSystemOption('apache_vhost')) . '/php-accounts/';
+        $q = $zdbh->query("SELECT v.vh_id_pk, v.vh_name_vc, v.vh_directory_vc, v.vh_type_in, v.vh_enabled_in, v.vh_ssl_tx, v.vh_custom_tx, v.vh_php_version_vc, a.ac_id_pk, a.ac_user_vc
             FROM x_vhosts v JOIN x_accounts a ON a.ac_id_pk = v.vh_acc_fk
             WHERE v.vh_deleted_ts IS NULL AND a.ac_deleted_ts IS NULL ORDER BY v.vh_name_vc");
         $active = $zdbh->prepare("UPDATE x_vhosts SET vh_active_in = 1 WHERE vh_id_pk = :id");
@@ -207,7 +210,15 @@ class sys_winvhosts
             $names = '    ServerName ' . $name . $nl . ((int) $v['vh_type_in'] === 2 ? '' : '    ServerAlias www.' . $name . $nl);
             $key = 'vh:' . (int) $v['vh_id_pk'] . ':custom';
             self::$names[$key] = $name;
-            $body = '    DocumentRoot "' . rtrim($root, '/') . '"' . $nl . $index
+            // (another PHP version chosen on the Domains page: the account's pool for it, once phpaccount.ps1 has made it)
+            $pv = (string) $v['vh_php_version_vc'];
+            $pool = 'php' . str_replace('.', '', $pv) . '-' . $user;
+            $phpLine = '';
+            if ($enabled && (int) $v['vh_type_in'] !== 3 && in_array($pv, $phpOn, true) && strpos((string) @file_get_contents($phpConf . $user . '.conf'), 'balancer://' . $pool . '"') !== false) {
+                $phpLine = '    <Directory "' . rtrim($root, '/') . '">' . $nl . '        <FilesMatch "\.php$">' . $nl . '            SetHandler "proxy:balancer://' . $pool . '/"' . $nl
+                    . '        </FilesMatch>' . $nl . '    </Directory>' . $nl;
+            }
+            $body = '    DocumentRoot "' . rtrim($root, '/') . '"' . $nl . $index . $phpLine
                 . '    ErrorLog "' . $logs . 'domains/' . $user . '/' . $name . '-error.log"' . $nl
                 . '    CustomLog "' . $logs . 'domains/' . $user . '/' . $name . '-access.log" ' . $format . $nl
                 . self::ErrorPages($hosted . $user . '/public_html' . $dir, $enabled && (int) $v['vh_type_in'] !== 3)

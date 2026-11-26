@@ -75,6 +75,17 @@ class sys_phpversions
     static function Installed()
     {
         $versions = array();
+        if (sys_versions::IsWindows()) {
+            // (Windows: the installer's bin\php-X.Y beside the panel's own bin\php)
+            foreach ((array) glob(self::WinBin() . 'php-*/php-cgi.exe') as $cgi) {
+                $v = substr(basename(dirname($cgi)), 4);
+                if (preg_match('/^\d+\.\d+$/', $v) && $v !== self::DefaultVersion()) {
+                    $versions[] = $v;
+                }
+            }
+            usort($versions, 'version_compare');
+            return $versions;
+        }
         foreach ((array) glob(self::BASE_DIR . '*/sbin/php-fpm') as $binary) {
             $version = basename(dirname(dirname($binary)));
             if (preg_match('/^\d+\.\d+$/', $version) && $version !== self::DefaultVersion()) {
@@ -132,6 +143,9 @@ class sys_phpversions
      */
     static function IsRunning($version)
     {
+        if (sys_versions::IsWindows()) {
+            return in_array((string) $version, self::Installed(), true);   // (each account's own service runs it)
+        }
         $v = trim((string) $version);
         return preg_match('/^[0-9]+\.[0-9]+$/', $v) === 1 && file_exists(self::SOCKET_DIR . 'php' . $v . '-idle.sock');
     }
@@ -308,6 +322,9 @@ class sys_phpversions
      */
     static function SyncServices()
     {
+        if (sys_versions::IsWindows()) {
+            return;   // (Windows: each account's PHP service runs the versions its domains use: phpaccount.ps1)
+        }
         $enabled = self::Enabled();
         foreach (self::Installed() as $version) {
             $service = escapeshellarg(self::Service($version));
@@ -360,6 +377,16 @@ class sys_phpversions
     static function RecordLive($config)
     {
         $map = array();
+        if (sys_versions::IsWindows()) {
+            // (Windows: a domain whose site names a version's pool, php84-NAME, runs that version; the others the panel's)
+            foreach (preg_split('/<virtualhost\b/i', (string) $config) as $block) {
+                if (preg_match('/^\s*ServerName\s+(\S+)/mi', $block, $n)) {
+                    $map[strtolower($n[1])] = preg_match('#proxy:balancer://php(\d)(\d+)-[a-z0-9-]+/#', $block, $h) ? 'php:' . $h[1] . '.' . $h[2] : 'php:' . self::DefaultVersion();
+                }
+            }
+            @file_put_contents(self::LIVE_FILE, json_encode(array('domains' => $map, 'time' => time())));
+            return;
+        }
         foreach (preg_split('/<virtualhost\b/i', (string) $config) as $block) {
             if (preg_match('/^\s*ServerName\s+(\S+)/mi', $block, $n) && preg_match('#SetHandler\s+"proxy:unix:([^|"]+)\|#i', $block, $h)) {
                 $map[strtolower($n[1])] = $h[1];
@@ -396,6 +423,9 @@ class sys_phpversions
         if ($version === self::DefaultVersion()) {
             return PHP_VERSION;
         }
+        if (sys_versions::IsWindows()) {
+            return $version;
+        }
         $info = @file_get_contents(self::BASE_DIR . $version . '/BUILD-INFO', false, null, 0, 200);
         return ($info !== false && preg_match('/PHP (' . preg_quote($version, '/') . '\.\d+)/', $info, $m)) ? $m[1] : $version;
     }
@@ -420,6 +450,12 @@ class sys_phpversions
         if ($sock === '') {
             return array('state' => 'unknown', 'text' => '');
         }
+        if (strpos($sock, 'php:') === 0) {
+            // (Windows: the version its site names)
+            $runs = substr($sock, 4);
+            return $runs !== $want ? array('state' => 'pending', 'text' => str_replace('%s', $runs, ui_language::translate('Changing within 5 minutes (PHP %s until then)')))
+                : array('state' => 'ok', 'text' => str_replace('%s', self::ExactVersion($runs), ui_language::translate('Running PHP %s')));
+        }
         if (preg_match('#^' . preg_quote(rtrim(sys_platform::Get('php_fpm_socket_dir'), '/') . '/', '#') . 'web\d+\.sock$#', $sock)) {
             $runs = self::DefaultVersion();
         } elseif (preg_match('#^' . preg_quote(self::SOCKET_DIR, '#') . 'web\d+-(\d+\.\d+)\.sock$#', $sock, $m)) {
@@ -436,6 +472,13 @@ class sys_phpversions
         return array('state' => 'ok', 'text' => str_replace('%s', self::ExactVersion($runs), ui_language::translate('Running PHP %s')));
     }
 
+    /**
+     * Windows: the folder the PHPs are in (the panel's bin, beside php_exer's bin\php), with a slash at the end.
+     *
+     * @return string
+     */
+    static function WinBin()
+    {
+        return rtrim(str_replace('\\', '/', dirname(dirname(str_replace('\\', '/', (string) ctrl_options::GetSystemOption('php_exer'))))), '/') . '/';
+    }
 }
-
-?>

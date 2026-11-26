@@ -709,6 +709,8 @@ class module_controller extends ctrl_module
         $sql->bindParam(':uid', $currentuser['userid']);
         $sql->execute();
         self::SetWriteApacheConfigTrue();
+        // (Windows: the account's PHP service gets the version's pool at the daemon run: asked now, not in 5 minutes)
+        sys_winphp::Soon();
         self::$ok = true;
         return true;
     }

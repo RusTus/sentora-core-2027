@@ -64,15 +64,21 @@ class sys_winphp
         if (!is_dir(self::DIR) && !@mkdir(self::DIR, 0700, true)) {
             return 'PHP per account: ' . self::DIR . ' is not there';
         }
+        // each account, then the other PHP versions its domains use (Domains page; the installer's, switched on)
         $names = array();
-        foreach ($zdbh->query("SELECT ac_user_vc FROM x_accounts WHERE ac_deleted_ts IS NULL")->fetchAll(PDO::FETCH_COLUMN) as $u) {
-            $n = self::Name($u);
-            if ($n !== '') {
-                $names[$n] = true;
+        $on = sys_phpversions::Enabled();
+        $q = $zdbh->prepare("SELECT DISTINCT vh_php_version_vc FROM x_vhosts WHERE vh_acc_fk = :a AND vh_deleted_ts IS NULL AND vh_php_version_vc IS NOT NULL AND vh_php_version_vc <> ''");
+        foreach ($zdbh->query("SELECT ac_id_pk, ac_user_vc FROM x_accounts WHERE ac_deleted_ts IS NULL")->fetchAll(PDO::FETCH_ASSOC) as $u) {
+            $n = self::Name($u['ac_user_vc']);
+            if ($n === '') {
+                continue;
             }
+            $q->execute(array(':a' => (int) $u['ac_id_pk']));
+            $v = array_values(array_intersect($on, $q->fetchAll(PDO::FETCH_COLUMN)));
+            sort($v);
+            $names[$n] = $n . ($v ? ' ' . implode(',', $v) : '');
         }
-        $names = array_keys($names);
-        sort($names);
+        ksort($names);
         $text = implode("\r\n", $names) . "\r\n";
         $file = self::DIR . '/wanted.txt';
         $stamp = self::DIR . '/asked';
@@ -93,6 +99,10 @@ class sys_winphp
             return 'PHP per account: zsudo said ' . implode(' ', $out);
         }
         @touch($stamp);
+        if (!$same) {
+            // (a domain's other PHP version needs its account's pool, which the sync has just made: the sites again)
+            $zdbh->exec("UPDATE x_settings SET so_value_tx = 'true' WHERE so_name_vc = 'apache_changed'");
+        }
         return 'PHP per account: ' . count($names) . ' account(s) asked for' . ($same ? ' (the daily check)' : '');
     }
 }

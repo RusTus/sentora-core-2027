@@ -927,7 +927,15 @@ DNS, FTP, mailboxes and cron on Windows (2026-11-25, tested in the Windows insta
   matomo_helper::AppDir/Url/Console have Windows branches (sentora_root; plain http on apache_port; the console as
   SYSTEM with the daemon's PHP); the hourly import writes its Python script to a file (cmd.exe takes no lines in -c).
   The panel's own log on Windows is logs\apache\panel-access.log (ctrl_statsdomains::PanelLog).
-- Still Linux-only, each needing its own Windows way (2026-11-25): PHP Versions (one PHP on Windows), GoAccess (no
+- PHP versions on Windows (2026-11-26): the installer adds PHP 8.4.28 and 8.3.37 (pinned, -PhpVersions '8.4,8.3') in
+  bin\php-X.Y with the main php.ini (its own extension_dir, only the extensions it ships) and sets php_versions_enabled.
+  sys_winphp::Sync writes wanted.txt lines "NAME 8.4,8.3" (the enabled versions an account's domains use); phpaccount.ps1
+  keeps them in the account's json (each version its own port block, "extra"), writes NAME-84.ini and NAME.pool.json, and
+  the account's one service (same Windows account) runs every version's php-cgi (sentora-php-pool.php reads pool.json);
+  Apache's part has a pool per version (balancer://php84-NAME). sys_winvhosts names that pool in the domain's own
+  Directory once NAME.conf has it (the sync asks for the sites again). sys_phpversions has Windows branches (Installed
+  from bin\php-*, RecordLive/LiveState from the pool names). The PHP Versions page itself (extensions, updates) is Linux's.
+- Still Linux-only, each needing its own Windows way (2026-11-25): PHP Versions page (extensions, updates), GoAccess (no
   native Windows build), Repo Browser (add-ons are Linux's).
 Where Windows lives (owner, 2026-11-25): the native installer moved from RusTus/sentora-windows-2027 (left with a note) to
 sentora-installers-2027/windows/server (install-zpanel-stack.ps1; install-web-stack.ps1 = the same file with
