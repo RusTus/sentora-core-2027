@@ -698,9 +698,8 @@ class sys_winmail
             array('x:Security', array('authBanRate' => $ban > 0 ? array('count' => $ban, 'period' => 86400000) : null)),
         );
         foreach ($sets as $x) {
-            $r = self::Call($x[0] . '/get', array('properties' => array_keys($x[1])));
-            $id = isset($r['list'][0]['id']) ? (string) $r['list'][0]['id'] : 'singleton';
-            if (self::Call($x[0] . '/set', array('update' => (object) array($id => $x[1]))) === null) {
+            // (a settings object Stalwart has once, by the id "singleton")
+            if (self::Call($x[0] . '/set', array('update' => (object) array('singleton' => $x[1]))) === null) {
                 $out[] = 'Mail Config: Stalwart refused ' . $x[0] . ': ' . self::$why;
                 return $out;
             }

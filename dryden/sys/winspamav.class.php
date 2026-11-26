@@ -239,10 +239,8 @@ class sys_winspamav
             if ($why !== '') {
                 $out[] = $why;
             } else {
-                $r = sys_winmail::Call('x:SpamSettings/get', array('properties' => array('enable')));
-                $id = isset($r['list'][0]['id']) ? (string) $r['list'][0]['id'] : 'singleton';
                 $set = array('enable' => $want['on'], 'scoreSpam' => $want['spam'], 'scoreReject' => $want['reject']);
-                if (sys_winmail::Call('x:SpamSettings/set', array('update' => (object) array($id => $set))) === null) {
+                if (sys_winmail::Call('x:SpamSettings/set', array('update' => (object) array('singleton' => $set))) === null) {
                     $out[] = 'SpamAV: Stalwart refused its spam settings: ' . sys_winmail::$why;
                 } else {
                     $state['sent'] = $want;
