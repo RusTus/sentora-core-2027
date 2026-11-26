@@ -870,6 +870,10 @@ DNS, FTP, mailboxes and cron on Windows (2026-11-25, tested in the Windows insta
   up-to-date copy (robocopy /MIR /XJ; Stalwart stops for the mail copy); nights beyond "Nights kept" go. Same state file as
   Linux (offsite-backup.json). Never inside C:\zpanel. Restore is Linux's (sentora-panel-restore): the tab is hidden on
   Windows; copying back is by hand (plain SQL dumps).
+- The daemon's "one more run" (a page asked while a run was busy: daemon-again) is now a process of its own, started when
+  the run is done (2026-11-26): it was a second pass in the same process, which stopped with "Cannot redeclare function"
+  at the first hook that declares functions (12 do), on Linux as on Windows. The off-server job's output goes to its log
+  (a background job writing to the daemon's closed output stopped at its first line).
 - Still Linux-only, each needing its own Windows way (2026-11-25): Mail Config (its
   settings are SOGo's and Postfix's; Windows would need Stalwart's), PHP Versions (one PHP on Windows), Branding's
   addresses (Linux's vhost writer), SpamAV, GoAccess and Matomo stats, AutoIP, Repo Browser (add-ons are Linux's).

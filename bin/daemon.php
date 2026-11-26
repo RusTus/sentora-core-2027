@@ -126,11 +126,11 @@ if (time() >= ctrl_options::GetSystemOption('daemon_monthrun') + 30*24*3600) {
     runtime_hook::Execute("OnDaemonMonth");
     runtime_hook::Execute("OnEndDaemonMonth");
 }
-if (is_file($daemonAgain) && !is_link($daemonAgain) && @unlink($daemonAgain)) {
-    echo "\nA page asked for a run while this one was busy: the regular jobs once more\n";
-    runtime_hook::Execute("OnStartDaemonRun");
-    runtime_hook::Execute("OnDaemonRun");
-    runtime_hook::Execute("OnEndDaemonRun");
+// (the run once more is a process of its own, started below once this one is done: a hook declares its functions as it
+// is read, and PHP can not read the same hook twice in one process: the second pass stopped with "Cannot redeclare")
+$daemonOnceMore = is_file($daemonAgain) && !is_link($daemonAgain);
+if ($daemonOnceMore) {
+    echo "\nA page asked for a run while this one was busy: one more run follows, in a process of its own\n";
 }
 echo "\nDaemon run complete! (" . date($dateformat) . ")\n";
 
@@ -141,4 +141,12 @@ $daemonLog->writeLog();
 
 if (!runtime_controller::IsCLI())
     echo "</pre>";
+if ($daemonOnceMore && runtime_controller::IsCLI() && PHP_BINARY !== '') {
+    // (this run's lock first: the next one takes it; it serves the note left during this run)
+    if ($daemonLock !== false) {
+        flock($daemonLock, LOCK_UN);
+        fclose($daemonLock);
+    }
+    passthru(escapeshellarg(PHP_BINARY) . ' -q ' . escapeshellarg(__FILE__));
+}
 exit;
