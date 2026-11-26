@@ -1,7 +1,7 @@
 <?php
 
 /**
- * Mail Config: applies the SOGo settings (Admin > Mail Config, "SOGo: ...") to
+ * Mail Config: on Windows, sys_winmail::ApplyConfig (webmail, ActiveSync, Stalwart). Elsewhere, applies the SOGo settings (Admin > Mail Config, "SOGo: ...") to
  * /etc/sogo/sogo.conf, the ActiveSync switch in Apache and SOGo's cron jobs,
  * and restarts SOGo when something changed. Runs as root every 5 minutes.
  *
@@ -10,6 +10,15 @@
  *
  * Written by RusTus, 2026-11-13
  */
+if (sys_versions::IsWindows()) {
+    // (Windows: the webmail, ActiveSync and Stalwart's limits; nothing of SOGo or Postfix)
+    echo fs_filehandler::NewLine() . "START Mail Config (Windows)" . fs_filehandler::NewLine();
+    foreach (sys_winmail::ApplyConfig() as $mailLine) {
+        echo $mailLine . fs_filehandler::NewLine();
+    }
+    echo "END Mail Config (Windows)" . fs_filehandler::NewLine();
+    return;
+}
 echo fs_filehandler::NewLine() . "START SOGo settings." . fs_filehandler::NewLine();
 SentoraApplySOGoSettings();
 SentoraSOGoPasswordView();

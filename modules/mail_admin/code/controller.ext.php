@@ -25,7 +25,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
- * Updated by RusTus, 2026-11-09
+ * Updated by RusTus, 2026-11-09; Windows (Roundcube, Z-Push, Stalwart) 2026-11-26
  */
 /**
  * Mail Admin module (administrators): the mail settings in x_settings (mailbox size, what happens to
@@ -48,6 +48,27 @@ class module_controller extends ctrl_module
      */
     static function Spec()
     {
+        if (sys_versions::IsWindows()) {
+            // (Windows: Roundcube's webmail, Z-Push's ActiveSync and Stalwart, applied by sys_winmail::ApplyConfig)
+            $m = 'Mailboxes';
+            $w = 'Webmail';
+            $s = 'Mail server';
+            $tz = array('auto' => 'The browser\'s');
+            foreach (timezone_identifiers_list() as $z) {
+                $tz[$z] = $z;
+            }
+            return array(
+                'max_mail_size' => array('section' => $m, 'label' => 'Largest mailbox', 'help' => 'The most mail a new mailbox may hold.', 'type' => 'number', 'min' => 1, 'max' => 1048576, 'unit' => 'MB'),
+                'webmail_language' => array('section' => $w, 'label' => 'Language', 'help' => 'For users who have not chosen one.', 'type' => 'select', 'options' => sys_winmail::WebmailLanguages()),
+                'webmail_timezone' => array('section' => $w, 'label' => 'Time zone', 'help' => 'For users who have not chosen one.', 'type' => 'select', 'options' => $tz),
+                'webmail_refresh' => array('section' => $w, 'label' => 'Check for new mail', 'help' => 'How often the mail list looks for new mail. 0: only when asked.', 'type' => 'number', 'min' => 0, 'max' => 3600, 'unit' => 'seconds'),
+                'webmail_max_message_mb' => array('section' => $w, 'label' => 'Largest message to send', 'help' => 'With its attachments (the mail server\'s limit still applies).', 'type' => 'number', 'min' => 1, 'max' => 2048, 'unit' => 'MB'),
+                'webmail_session_minutes' => array('section' => $w, 'label' => 'Log out after', 'help' => 'Without activity.', 'type' => 'number', 'min' => 1, 'max' => 1440, 'unit' => 'minutes'),
+                'mail_activesync' => array('section' => $s, 'label' => 'ActiveSync', 'help' => 'Phones, tablets and Outlook sync mail, calendars and contacts (Z-Push). Off closes its address.', 'type' => 'switch'),
+                'mail_max_message_mb' => array('section' => $s, 'label' => 'Largest message', 'help' => 'The largest message the mail server takes, with its attachments.', 'type' => 'number', 'min' => 1, 'max' => 2048, 'unit' => 'MB'),
+                'mail_ban_logins' => array('section' => $s, 'label' => 'Wrong passwords before a block', 'help' => 'From one address in a day: the mail server then refuses that address. 0: never blocked.', 'type' => 'number', 'min' => 0, 'max' => 1000000),
+            );
+        }
         $langs = array();
         foreach (array('English', 'French', 'German', 'SpanishSpain', 'SpanishArgentina', 'Italian', 'Dutch', 'BrazilianPortuguese', 'Portuguese', 'Polish', 'Swedish', 'Danish', 'NorwegianBokmal',
             'Finnish', 'Czech', 'Russian', 'Ukrainian', 'Japanese', 'ChineseChina', 'Hungarian', 'TurkishTurkey', 'Catalan') as $l) {
@@ -94,7 +115,7 @@ class module_controller extends ctrl_module
      */
     static function getSettingsForm()
     {
-        $fields = self::$fields !== null ? self::$fields : ui_settingsform::Fields(ui_module::GetModuleName(), self::Spec());
+        $fields = self::$fields !== null ? self::$fields : self::Fields();
         return ui_settingsform::Render($fields, './?module=mail_admin&action=UpdateConfig', 'Save settings');
     }
 
@@ -108,11 +129,46 @@ class module_controller extends ctrl_module
     {
         global $controller;
         runtime_csfr::Protect();
-        $fields = ui_settingsform::Fields(ui_module::GetModuleName(), self::Spec());
+        $fields = self::Fields();
         $changes = ui_settingsform::Read($fields, $controller->GetAllControllerRequests('FORM'));
         $saved = ui_settingsform::Write($changes);
         self::$fields = $fields;
+        if (sys_versions::IsWindows()) {
+            if ($saved) {
+                sys_winphp::Soon();
+            }
+            self::$result = ui_settingsform::Result($fields, $saved, 'The daemon applies the settings within a minute.');
+            return;
+        }
         self::$result = ui_settingsform::Result($fields, $saved, 'The daemon applies SOGo settings within 5 minutes.');
+    }
+
+    /**
+     * The form's settings. On Windows only the ones of Spec() (Linux's SOGo settings mean nothing there), added to
+     * x_settings first when this panel has none of them yet.
+     *
+     * @return array<string, array<string, mixed>> See ui_settingsform.
+     */
+    static function Fields()
+    {
+        $spec = self::Spec();
+        if (!sys_versions::IsWindows()) {
+            return ui_settingsform::Fields(ui_module::GetModuleName(), $spec);
+        }
+        sys_winmail::EnsureSettings();
+        return array_intersect_key(ui_settingsform::Fields(ui_module::GetModuleName(), $spec), $spec);
+    }
+
+    /**
+     * The page's description (<@ Intro @>).
+     *
+     * @return string
+     */
+    static function getIntro()
+    {
+        return htmlspecialchars(ui_language::translate(sys_versions::IsWindows()
+            ? 'The mail server\'s settings: mailbox size, the webmail, ActiveSync for phones, and the mail server\'s limits.'
+            : 'The mail server\'s settings: mailbox size, and the SOGo groupware\'s language, features, security and performance.'), ENT_QUOTES, 'UTF-8');
     }
 
     /**
@@ -150,8 +206,12 @@ class module_controller extends ctrl_module
     static function getServices()
     {
         global $zdbh;
+        $win = sys_versions::IsWindows();
         $list = array(array('Incoming mail (SMTP)', 25), array('Sending (submission)', 587), array('IMAP', 993), array('POP3', 995));
-        if (is_file(sys_platform::Get('sogo_bin'))) {
+        if ($win && (string) ctrl_options::GetSystemOption('clamd_service') !== '') {
+            $list[] = array('Virus check (ClamAV)', 3310);
+        }
+        if (!$win && is_file(sys_platform::Get('sogo_bin'))) {
             $list[] = array('SOGo groupware', 20000);
         }
         $out = '';
@@ -163,7 +223,7 @@ class module_controller extends ctrl_module
         $boxes = (int) $zdbh->query("SELECT COUNT(*) FROM x_mailboxes WHERE mb_deleted_ts IS NULL")->fetchColumn();
         return '<ul class="ma-svc">' . $out . '</ul><p class="ma-sub">' . ($boxes === 1 ? htmlspecialchars(ui_language::translate('1 mailbox on the server.'), ENT_QUOTES, 'UTF-8')
                 : str_replace('%d', (string) $boxes, htmlspecialchars(ui_language::translate('%d mailboxes on the server.'), ENT_QUOTES, 'UTF-8')))
-            . (is_file(sys_platform::Get('sogo_bin')) ? '' : ' ' . htmlspecialchars(ui_language::translate('SOGo is not installed: its settings apply when it is.'), ENT_QUOTES, 'UTF-8')) . '</p>';
+            . (($win || is_file(sys_platform::Get('sogo_bin'))) ? '' : ' ' . htmlspecialchars(ui_language::translate('SOGo is not installed: its settings apply when it is.'), ENT_QUOTES, 'UTF-8')) . '</p>';
     }
 
 }

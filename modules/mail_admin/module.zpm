@@ -2,7 +2,7 @@
     <div class="panel-heading">
         <img src="<@ ModuleIcon @>" width="35" height="35" border="0" alt="<@ ModuleName @>">
         <div class="zmodule_title"><@ ModuleName @></div>
-        <div class="zmodule_desc" id="zmodule_desc_<@ ModuleName @>"><: The mail server's settings: mailbox size, and the SOGo groupware's language, features, security and performance. :></div>
+        <div class="zmodule_desc" id="zmodule_desc_<@ ModuleName @>"><@ Intro @></div>
     </div>
     <@ Result @>
     <style>

@@ -874,8 +874,17 @@ DNS, FTP, mailboxes and cron on Windows (2026-11-25, tested in the Windows insta
   the run is done (2026-11-26): it was a second pass in the same process, which stopped with "Cannot redeclare function"
   at the first hook that declares functions (12 do), on Linux as on Windows. The off-server job's output goes to its log
   (a background job writing to the daemon's closed output stopped at its first line).
-- Still Linux-only, each needing its own Windows way (2026-11-25): Mail Config (its
-  settings are SOGo's and Postfix's; Windows would need Stalwart's), PHP Versions (one PHP on Windows), Branding's
+- Mail Config (2026-11-26): on Windows its own settings (added to x_settings by sys_winmail::EnsureSettings, defaults
+  = what Roundcube and Stalwart do by themselves): the webmail's language, time zone, new-mail check, largest message and
+  log-out (the daemon writes configs\stalwart\roundcube-panel.inc.php in place, setting webmail_panel_conf; Roundcube's
+  settings include it), ActiveSync on or off (configs\apache\mail-panel.conf, setting mail_apache_conf, included in
+  mail.conf's site: off = Require all denied on /Microsoft-Server-ActiveSync; tested with httpd -t, put back when refused),
+  and Stalwart's largest message (x:MtaStageData and x:Email maxMessageSize) and wrong passwords before a block
+  (x:Security authBanRate, per address per day), set through its API only when the panel's value changed
+  (phpaccounts\mail-config.json), so a change in Stalwart's own admin pages stays. A mailbox's size (its quota in MB, as
+  Dovecot reads it on Linux) is its Stalwart disk quota (x:Account quotas.maxDiskQuota). Names found in Stalwart 1.1.1's
+  schema (resources/schema). Linux's SOGo settings are not shown on Windows.
+- Still Linux-only, each needing its own Windows way (2026-11-25): PHP Versions (one PHP on Windows), Branding's
   addresses (Linux's vhost writer), SpamAV, GoAccess and Matomo stats, AutoIP, Repo Browser (add-ons are Linux's).
 Where Windows lives (owner, 2026-11-25): the native installer moved from RusTus/sentora-windows-2027 (left with a note) to
 sentora-installers-2027/windows/server (install-zpanel-stack.ps1; install-web-stack.ps1 = the same file with

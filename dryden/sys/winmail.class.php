@@ -10,8 +10,9 @@
  * the accounts the panel made (listed in its state file) are changed or removed: mailboxes added with mailuser.ps1 are
  * left alone. Aliases and distribution lists come from the same database's alias table: an address that delivers to one of
  * the panel's mailboxes becomes an alias of that Stalwart account, any other address with its recipients a Stalwart
- * mailing list (only the lists the panel made are changed or removed). Not built yet: forwarders (a mailbox's own row
- * with outside addresses: Stalwart forwards from a mailbox only by a Sieve script). Nothing here runs on Linux.
+ * mailing list (only the lists the panel made are changed or removed). Forwarders (a mailbox's own row with outside
+ * addresses) become a Sieve script on the mailbox. A mailbox's size (its quota, in MB) is its Stalwart disk quota. Mail
+ * Config's Windows settings (webmail, ActiveSync, Stalwart's limits) are applied by ApplyConfig. Nothing here runs on Linux.
  *
  * @package Sentora
  * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
@@ -256,7 +257,7 @@ class sys_winmail
             return $out;
         }
         try {
-            $boxes = $zdbh->query("SELECT username, password, active FROM `" . $db . "`.mailbox")->fetchAll(PDO::FETCH_ASSOC);
+            $boxes = $zdbh->query("SELECT username, password, active, quota FROM `" . $db . "`.mailbox")->fetchAll(PDO::FETCH_ASSOC);
         } catch (Exception $e) {
             return array('Mail: no mail database ' . $db);
         }
@@ -272,7 +273,8 @@ class sys_winmail
                 continue;
             }
             $hash = preg_replace('/^\{SHA512-CRYPT\}/', '', (string) $b['password']);
-            $want[$a] = array('hash' => strpos($hash, '$6$') === 0 ? $hash : '', 'on' => (int) $b['active'] === 1);
+            // (its size, in MB as on Linux, where Dovecot reads it: 0 is no limit)
+            $want[$a] = array('hash' => strpos($hash, '$6$') === 0 ? $hash : '', 'on' => (int) $b['active'] === 1, 'mb' => max(0, min(1048576, (int) $b['quota'])));
         }
         $aliasesFor = array();
         $lists = array();
@@ -319,14 +321,9 @@ class sys_winmail
         if (!$want && !$mine && !$lists && !$lmine) {
             return $out;
         }
-        self::$admin = self::Admin();
-        if (self::$admin === null) {
-            return array('Mail: no Stalwart administrator in its settings file');
-        }
-        list($code, $s) = self::Http('/jmap/session');
-        self::$acct = ($code === 200 && isset($s['primaryAccounts']['urn:stalwart:jmap'])) ? (string) $s['primaryAccounts']['urn:stalwart:jmap'] : null;
-        if (self::$acct === null) {
-            return array('Mail: Stalwart does not answer (' . $code . '): nothing changed');
+        $why = self::Connect();
+        if ($why !== '') {
+            return array($why);
         }
         $doms = array();
         $r = self::Call('x:Domain/get', array('properties' => array('name')));
@@ -371,7 +368,8 @@ class sys_winmail
                 }
             }
             $amap = (object) $amap;
-            $sum = hash('sha256', $w['hash'] . '|' . ($w['on'] ? 1 : 0) . '|' . implode(',', $al));
+            $quotas = (object) ($w['mb'] > 0 ? array('maxDiskQuota' => $w['mb'] * 1048576) : array());
+            $sum = hash('sha256', $w['hash'] . '|' . ($w['on'] ? 1 : 0) . '|' . implode(',', $al) . '|' . $w['mb']);
             if (!isset($accts[$a])) {
                 if (self::Domain($domain, $doms, $out) === null) {
                     continue;
@@ -380,7 +378,7 @@ class sys_winmail
                 $whys = array();
                 foreach ($secrets as $secret) {
                     $r = self::Call('x:Account/set', array('create' => array('u' => array('@type' => 'User', 'name' => $local, 'domainId' => $doms[$domain],
-                        'credentials' => (object) array('0' => array('@type' => 'Password', 'secret' => $secret)), 'permissions' => $perm, 'aliases' => $amap))));
+                        'credentials' => (object) array('0' => array('@type' => 'Password', 'secret' => $secret)), 'permissions' => $perm, 'aliases' => $amap, 'quotas' => $quotas))));
                     if ($r !== null && !empty($r['created']['u']['id'])) {
                         break;
                     }
@@ -398,7 +396,7 @@ class sys_winmail
                 $r = null;
                 $whys = array();
                 foreach ($secrets as $secret) {
-                    $r = self::Call('x:Account/set', array('update' => (object) array($accts[$a] => array('credentials' => (object) array('0' => array('@type' => 'Password', 'secret' => $secret)), 'permissions' => $perm, 'aliases' => $amap))));
+                    $r = self::Call('x:Account/set', array('update' => (object) array($accts[$a] => array('credentials' => (object) array('0' => array('@type' => 'Password', 'secret' => $secret)), 'permissions' => $perm, 'aliases' => $amap, 'quotas' => $quotas))));
                     if ($r !== null) {
                         break;
                     }
@@ -522,6 +520,197 @@ class sys_winmail
         if ($made || $changed || $gone) {
             $out[] = 'Mail: Stalwart mailboxes made ' . $made . ', changed ' . $changed . ', removed ' . $gone . ' (' . count($want) . ' in the panel)';
         }
+        return $out;
+    }
+
+    /**
+     * Sign in to Stalwart's API for this run.
+     *
+     * @return string '' when Stalwart answers, else the line for the daemon's log.
+     */
+    static function Connect()
+    {
+        self::$admin = self::Admin();
+        if (self::$admin === null) {
+            return 'Mail: no Stalwart administrator in its settings file';
+        }
+        list($code, $s) = self::Http('/jmap/session');
+        self::$acct = ($code === 200 && isset($s['primaryAccounts']['urn:stalwart:jmap'])) ? (string) $s['primaryAccounts']['urn:stalwart:jmap'] : null;
+        return self::$acct === null ? 'Mail: Stalwart does not answer (' . $code . '): nothing changed' : '';
+    }
+
+    /** What Mail Config last applied on Windows (root's jobs only). */
+    const CONFIG_STATE = '/var/lib/sentora/phpaccounts/mail-config.json';
+
+    /**
+     * Mail Config's own settings on Windows (Linux's are SOGo's): name => array(label, default, help). The defaults are
+     * what Roundcube and Stalwart do by themselves, so adding them changes nothing.
+     *
+     * @return array<string, array{0: string, 1: string, 2: string}>
+     */
+    static function ConfigSettings()
+    {
+        return array(
+            'webmail_language' => array('Webmail: language', 'auto', 'For users who have not chosen one (auto: the browser\'s).'),
+            'webmail_timezone' => array('Webmail: time zone', 'auto', 'For users who have not chosen one (auto: the browser\'s).'),
+            'webmail_refresh' => array('Webmail: check for new mail', '60', 'How often the mail list looks for new mail, in seconds.'),
+            'webmail_max_message_mb' => array('Webmail: largest message to send', '100', 'With its attachments.'),
+            'webmail_session_minutes' => array('Webmail: log out after', '10', 'Without activity.'),
+            'mail_activesync' => array('ActiveSync', 'true', 'Phones, tablets and Outlook sync mail, calendars and contacts.'),
+            'mail_max_message_mb' => array('Largest message', '100', 'The largest message the mail server takes, with its attachments.'),
+            'mail_ban_logins' => array('Wrong passwords before a block', '100', 'From one address in a day.'),
+        );
+    }
+
+    /**
+     * Adds Mail Config's Windows settings to x_settings when they are missing (a panel installed before them).
+     *
+     * @return void
+     */
+    static function EnsureSettings()
+    {
+        global $zdbh;
+        if (!sys_versions::IsWindows()) {
+            return;
+        }
+        $have = array();
+        foreach ($zdbh->query("SELECT so_name_vc FROM x_settings WHERE so_module_vc = 'Mail Config'")->fetchAll(PDO::FETCH_COLUMN) as $n) {
+            $have[(string) $n] = true;
+        }
+        $q = null;
+        foreach (self::ConfigSettings() as $name => $x) {
+            if (isset($have[$name])) {
+                continue;
+            }
+            if ($q === null) {
+                $q = $zdbh->prepare("INSERT INTO x_settings (so_name_vc, so_cleanname_vc, so_value_tx, so_defvalues_tx, so_desc_tx, so_module_vc, so_usereditable_en)
+                    SELECT :n, :c, :v, NULL, :d, 'Mail Config', 'true' FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM x_settings WHERE so_name_vc = :n2)");
+            }
+            $q->execute(array(':n' => $name, ':c' => $x[0], ':v' => $x[1], ':d' => $x[2], ':n2' => $name));
+        }
+    }
+
+    /**
+     * A Mail Config setting, checked: a whole number in range, else its default.
+     *
+     * @param string $name
+     * @param int $min
+     * @param int $max
+     * @return int
+     */
+    static function ConfigInt($name, $min, $max)
+    {
+        $all = self::ConfigSettings();
+        $v = trim((string) ctrl_options::GetSystemOption($name));
+        $v = preg_match('/^\d{1,9}$/', $v) ? (int) $v : (int) $all[$name][1];
+        return max($min, min($max, $v));
+    }
+
+    /**
+     * The webmail's languages Mail Config offers (Roundcube's names).
+     *
+     * @return array<string, string>
+     */
+    static function WebmailLanguages()
+    {
+        return array('auto' => 'The browser\'s', 'en_US' => 'English (US)', 'en_GB' => 'English (UK)', 'fr_FR' => 'French', 'de_DE' => 'German',
+            'es_ES' => 'Spanish', 'es_AR' => 'Spanish (Argentina)', 'it_IT' => 'Italian', 'nl_NL' => 'Dutch', 'pt_BR' => 'Portuguese (Brazil)',
+            'pt_PT' => 'Portuguese', 'pl_PL' => 'Polish', 'sv_SE' => 'Swedish', 'da_DK' => 'Danish', 'nb_NO' => 'Norwegian (Bokmål)', 'fi_FI' => 'Finnish',
+            'cs_CZ' => 'Czech', 'ru_RU' => 'Russian', 'uk_UA' => 'Ukrainian', 'ja_JP' => 'Japanese', 'zh_CN' => 'Chinese (China)', 'hu_HU' => 'Hungarian',
+            'tr_TR' => 'Turkish', 'ca_ES' => 'Catalan');
+    }
+
+    /**
+     * The daemon's part of Mail Config on Windows (SYSTEM): the webmail's settings (a file of the panel's that Roundcube's
+     * own settings read, webmail_panel_conf), ActiveSync on or off (a file of the panel's in the mail site of Apache,
+     * mail_apache_conf, tested before Apache restarts), and Stalwart's largest message and login block (through its API,
+     * only when the panel's value changed, so a change made in Stalwart's own admin pages stays until the panel's changes).
+     *
+     * @return string[] Lines for the daemon's log.
+     */
+    static function ApplyConfig()
+    {
+        $out = array();
+        if (!sys_versions::IsWindows()) {
+            return $out;
+        }
+        self::EnsureSettings();
+        // the webmail: written in place (the installer made the file and let Apache read it)
+        $rc = (string) ctrl_options::GetSystemOption('webmail_panel_conf');
+        if ($rc !== '' && is_file($rc)) {
+            $lang = (string) ctrl_options::GetSystemOption('webmail_language');
+            $tz = (string) ctrl_options::GetSystemOption('webmail_timezone');
+            $cfg = array();
+            if ($lang !== 'auto' && array_key_exists($lang, self::WebmailLanguages())) {
+                $cfg['language'] = $lang;
+            }
+            $cfg['timezone'] = in_array($tz, timezone_identifiers_list(), true) ? $tz : 'auto';
+            $cfg['refresh_interval'] = self::ConfigInt('webmail_refresh', 0, 3600);
+            $cfg['max_message_size'] = self::ConfigInt('webmail_max_message_mb', 1, 2048) . 'M';
+            $cfg['session_lifetime'] = self::ConfigInt('webmail_session_minutes', 1, 1440);
+            $text = "<?php\n// Made by the panel's daemon from Admin > Mail Config: change the values there (this file is written again).\n";
+            foreach ($cfg as $k => $v) {
+                $text .= '$config[' . var_export($k, true) . '] = ' . var_export($v, true) . ";\n";
+            }
+            if ((string) @file_get_contents($rc) !== $text) {
+                $out[] = @file_put_contents($rc, $text) === strlen($text) ? 'Mail Config: webmail settings written' : 'Mail Config: could not write ' . $rc;
+            }
+        }
+        // ActiveSync: only Z-Push's address is closed when it is off
+        $ap = (string) ctrl_options::GetSystemOption('mail_apache_conf');
+        if ($ap !== '' && is_dir(dirname($ap))) {
+            $on = strtolower(trim((string) ctrl_options::GetSystemOption('mail_activesync'))) !== 'false';
+            $text = "# Made by the panel's daemon from Admin > Mail Config: change it there (this file is written again).\n"
+                . ($on ? "# ActiveSync is on.\n" : "# ActiveSync is off.\n<Location \"/Microsoft-Server-ActiveSync\">\n    Require all denied\n</Location>\n");
+            $old = is_file($ap) ? (string) @file_get_contents($ap) : null;
+            if ($old !== $text) {
+                if (@file_put_contents($ap, $text) !== strlen($text)) {
+                    $out[] = 'Mail Config: could not write ' . $ap;
+                } elseif (($why = sys_winvhosts::Test()) !== '') {
+                    if ($old === null) {
+                        @unlink($ap);
+                    } else {
+                        @file_put_contents($ap, $old);
+                    }
+                    $out[] = 'Mail Config: Apache refused the ActiveSync switch, kept as it was: ' . $why;
+                } else {
+                    $out[] = 'Mail Config: ActiveSync ' . ($on ? 'on' : 'off') . ', Apache restarts: ' . sys_winvhosts::Restart();
+                }
+            }
+        }
+        // Stalwart: largest message (when it arrives and when it is saved by a mail program), wrong passwords before a block
+        $mb = self::ConfigInt('mail_max_message_mb', 1, 2048);
+        $ban = self::ConfigInt('mail_ban_logins', 0, 1000000);
+        $want = array('mb' => $mb, 'ban' => $ban);
+        $state = is_file(self::CONFIG_STATE) ? (array) json_decode((string) @file_get_contents(self::CONFIG_STATE), true) : array();
+        $done = isset($state['stalwart']) ? (array) $state['stalwart'] : array();
+        if ($done == $want) {
+            return $out;
+        }
+        $why = self::Connect();
+        if ($why !== '') {
+            $out[] = $why;
+            return $out;
+        }
+        $sets = array(
+            array('x:MtaStageData', array('maxMessageSize' => array('else' => (string) ($mb * 1048576), 'match' => (object) array()))),
+            array('x:Email', array('maxMessageSize' => $mb * 1048576)),
+            array('x:Security', array('authBanRate' => $ban > 0 ? array('count' => $ban, 'period' => 86400000) : null)),
+        );
+        foreach ($sets as $x) {
+            $r = self::Call($x[0] . '/get', array('properties' => array_keys($x[1])));
+            $id = isset($r['list'][0]['id']) ? (string) $r['list'][0]['id'] : 'singleton';
+            if (self::Call($x[0] . '/set', array('update' => (object) array($id => $x[1]))) === null) {
+                $out[] = 'Mail Config: Stalwart refused ' . $x[0] . ': ' . self::$why;
+                return $out;
+            }
+        }
+        $state['stalwart'] = $want;
+        if (!is_dir(dirname(self::CONFIG_STATE))) {
+            @mkdir(dirname(self::CONFIG_STATE), 0700, true);
+        }
+        @file_put_contents(self::CONFIG_STATE, json_encode($state));
+        $out[] = 'Mail Config: Stalwart takes messages up to ' . $mb . ' MB, ' . ($ban > 0 ? 'blocks an address after ' . $ban . ' wrong passwords in a day' : 'never blocks for wrong passwords');
         return $out;
     }
 }
