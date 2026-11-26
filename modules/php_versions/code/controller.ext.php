@@ -71,6 +71,10 @@ class module_controller extends ctrl_module
      */
     static function getLegacyHint()
     {
+        if (sys_versions::IsWindows()) {
+            // (Windows: the installer's versions only; there is no sentora-php-install)
+            return '<p class="pv-sub">' . self::t('On Windows the installer adds the other versions (its -PhpVersions option, 8.4 and 8.3 by default). Each runs in the hosting account\'s own PHP service, as the account\'s own Windows account.') . '</p>';
+        }
         $have = sys_phpversions::Installed();
         $out = '';
         if (!in_array('7.1', $have, true)) {
@@ -120,7 +124,8 @@ class module_controller extends ctrl_module
                     : self::t('A step for websites whose apps are upgraded on their way to a supported PHP. It gets no security fixes: switch it on while a site needs it, then move the site on and switch it off again.')) . '</p>' : '')
                 . '<p>' . self::t($on ? 'Domains may choose it.' : 'Not offered to domains.') . ' '
                 . ($n ? ($n === 1 ? self::t('1 domain has chosen it') : str_replace('%d', (string) $n, self::t('%d domains have chosen it'))) . ($on ? '.' : ': ' . self::t($n === 1 ? 'it runs on the default until this is offered again.' : 'they run on the default until this is offered again.')) : self::t('No domain uses it.')) . '</p>'
-                . '<div class="pv-meta">' . self::Support($v) . '<span class="pv-svc ' . ($running ? 'ok' : ($on ? 'bad' : '')) . '"><i></i>sentora-php' . self::h($v) . '-fpm ' . self::t($running ? 'running' : 'stopped') . '</span></div></div>';
+                . '<div class="pv-meta">' . self::Support($v) . (sys_versions::IsWindows() ? '<span>' . self::t('in the accounts\' own PHP services') . '</span>'
+                    : '<span class="pv-svc ' . ($running ? 'ok' : ($on ? 'bad' : '')) . '"><i></i>sentora-php' . self::h($v) . '-fpm ' . self::t($running ? 'running' : 'stopped') . '</span>') . '</div></div>';
         }
         return $out;
     }
@@ -182,6 +187,7 @@ class module_controller extends ctrl_module
         $q->execute(array(':value' => implode(',', $chosen)));
         // Rewrite the vhosts and start/stop PHP-FPM services at the next daemon run
         $zdbh->prepare("UPDATE x_settings SET so_value_tx = 'true' WHERE so_name_vc = 'apache_changed'")->execute();
+        sys_winphp::Soon();   // (Windows: the accounts' PHP services follow at once)
         self::$ok = true;
         return true;
     }
@@ -195,6 +201,9 @@ class module_controller extends ctrl_module
      */
     static function getOldLogins()
     {
+        if (sys_versions::IsWindows()) {
+            return '';   // (MySQL's older login method: Linux's moved servers)
+        }
         $tok = runtime_csfr::Token();
         $users = sys_oldlogins::NativeUsers();
         $active = sys_oldlogins::NativeActive();
@@ -287,6 +296,9 @@ class module_controller extends ctrl_module
      */
     static function getBundleUpdates()
     {
+        if (sys_versions::IsWindows()) {
+            return '';   // (Windows: a new installer brings new PHP builds)
+        }
         $state = sys_phpbundles::State();
         if (!sys_phpversions::Installed()) {
             return '';
@@ -362,6 +374,9 @@ class module_controller extends ctrl_module
      */
     static function getExtensions()
     {
+        if (sys_versions::IsWindows()) {
+            return '';   // (Windows: each version's extensions are the installer's)
+        }
         $inv = sys_phpext::Inventory();
         $wanted = sys_phpext::Wanted();
         $cat = sys_phpext::Catalog();

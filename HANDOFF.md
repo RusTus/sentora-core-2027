@@ -935,7 +935,9 @@ DNS, FTP, mailboxes and cron on Windows (2026-11-25, tested in the Windows insta
   Apache's part has a pool per version (balancer://php84-NAME). sys_winvhosts names that pool in the domain's own
   Directory once NAME.conf has it (the sync asks for the sites again). sys_phpversions has Windows branches (Installed
   from bin\php-*, RecordLive/LiveState from the pool names). The PHP Versions page itself (extensions, updates) is Linux's.
-- Still Linux-only, each needing its own Windows way (2026-11-25): PHP Versions page (extensions, updates), GoAccess (no
+- The PHP Versions page on Windows (2026-11-26): the versions and their switches (php_versions_enabled); its daemon hook
+  returns at once there; older logins, PHP updates and extensions are hidden (Linux's).
+- Still Linux-only, each needing its own Windows way (2026-11-25): PHP extensions and updates per version, GoAccess (no
   native Windows build), Repo Browser (add-ons are Linux's).
 Where Windows lives (owner, 2026-11-25): the native installer moved from RusTus/sentora-windows-2027 (left with a note) to
 sentora-installers-2027/windows/server (install-zpanel-stack.ps1; install-web-stack.ps1 = the same file with

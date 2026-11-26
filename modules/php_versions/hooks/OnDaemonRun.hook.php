@@ -8,6 +8,9 @@
  *
  * Written by RusTus, 2026-11-13
  */
+if (sys_versions::IsWindows()) {
+    return;   // (Windows: older logins, PHP builds and extensions are Linux's; the accounts' services follow sys_winphp)
+}
 sys_oldlogins::DaemonSwitchOff();
 
 // The extra PHP versions' updates: installs one asked for in PHP Versions, and once a day checks the
