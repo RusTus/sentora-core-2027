@@ -75,10 +75,18 @@
 							echo "IP Address has changed: Updating server IP and all DNS zone records now..." . fs_filehandler::NewLine();
 			        		// bound values, not pasted into the SQL
 			        		$zdbh->prepare("UPDATE x_settings SET so_value_tx = :new WHERE so_name_vc = 'server_ip'")->execute(array(':new' => $detectedip));
+			        		// (the zones of the domains whose records change: each by its ID, which is what the DNS
+			        		// writer reads; "0" for all zones was never one, so no zone was written again)
+			        		$aiZones = $zdbh->prepare("SELECT DISTINCT dn_vhost_fk FROM x_dns WHERE dn_target_vc = :old AND dn_deleted_ts IS NULL");
+			        		$aiZones->execute(array(':old' => (string) $oldip['so_value_tx']));
+			        		$aiZones = $aiZones->fetchAll(PDO::FETCH_COLUMN);
 			        		$zdbh->prepare("UPDATE x_dns SET dn_target_vc = :new WHERE dn_target_vc = :old")->execute(array(':new' => $detectedip, ':old' => (string) $oldip['so_value_tx']));
 			        		$zdbh->prepare("UPDATE x_autoip SET ai_newip_vc = :new, ai_oldip_vc = :old, ai_lastupdate_ts = :ts WHERE ai_id_pk = 1")
 			        			->execute(array(':new' => $detectedip, ':old' => (string) $oldip['so_value_tx'], ':ts' => (string) time()));
-							TriggerDNSUpdateAutoIPHook("0");
+							foreach ($aiZones as $aiZone) {
+								TriggerDNSUpdateAutoIPHook((string) (int) $aiZone);
+							}
+							echo count($aiZones) . " DNS zone(s) to write again." . fs_filehandler::NewLine();
 							//TriggerApacheUpdateAutoIPHook();
 							if ($autoipsettings['ai_email_vc'] != ""){
 								include(ctrl_options::GetOption('sentora_root') . 'dryden/sys/email.class.php');
