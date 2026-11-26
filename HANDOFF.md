@@ -552,6 +552,13 @@ the node (https://<node>/, `sentora-elk-node kibana-from` limits who reaches it)
 
 ## Recent releases (newest first; every change is in CHANGELOG.md)
 
+- **Released 2027.103 (2026-11-26, ordinary):** Mail > SpamAV for mailbox owners on Windows (one Sieve script per mailbox
+  with its forwarder; the score compared by its whole part, since Stalwart's numeric compare does not read "9.10"). The
+  Windows test sends real messages: no choice -> Junk Mail, inbox choice, blocked and allowed senders, sensitivity 10 on
+  both sides (11.6 to Junk, 9.1 to the inbox), filter off. Stalwart's log has "message-ingest.spam/ham" lines with from, to,
+  accountId and mailboxId (the next step: the SpamAV figures on Windows from that log).
+- **Released 2027.102 (2026-11-26, ordinary):** each domain's PHP version on Windows, AutoIP zones, the release waits for the
+  Windows test.
 - **Released 2027.101 (2026-11-26, ordinary, owner: "get everything released"):** on Windows Mail Config, SpamAV Admin
   (ClamAV, Stalwart's spam filter, website file scanning), Branding, AutoIP, Restore, Matomo, PHP 8.4/8.3 per domain and
   the PHP Versions page; the parked-domain timing fix. Linux install test passed on all five; the release's Windows test
