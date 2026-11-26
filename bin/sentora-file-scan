@@ -12,7 +12,7 @@
  * @package Sentora
  * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
  *
- * Written by RusTus, 2026-11-13
+ * Written by RusTus, 2026-11-26
  */
 // (Windows: started by the daemon, which runs as SYSTEM; or by an administrator)
 if (PHP_SAPI !== 'cli' || (DIRECTORY_SEPARATOR === '/' && (!function_exists('posix_geteuid') || posix_geteuid() !== 0))) {

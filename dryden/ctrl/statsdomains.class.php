@@ -6,7 +6,7 @@
  * its traffic (/var/sentora/logs/sentora-access.log) is reported under the main
  * administrator account created at install (account 1, zadmin).
  *
- * Written by RusTus, 2026-11-12
+ * Written by RusTus, 2026-11-26
  */
 class ctrl_statsdomains
 {

@@ -26,6 +26,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
  * Updated by RusTus, 2026-11-09; Windows (Roundcube, Z-Push, Stalwart) 2026-11-26
+ *
+ * Updated by RusTus, 2026-11-26
  */
 /**
  * Mail Admin module (administrators): the mail settings in x_settings (mailbox size, what happens to

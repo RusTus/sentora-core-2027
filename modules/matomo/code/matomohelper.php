@@ -9,7 +9,7 @@
  * Visits come from the web server logs (imported every hour) or, per domain,
  * from the tracking code the site owner adds to their pages.
  *
- * Written by RusTus, 2026-11-13
+ * Written by RusTus, 2026-11-26
  */
 class matomo_helper
 {
@@ -318,7 +318,7 @@ class matomo_helper
     {
         if (sys_versions::IsWindows()) {
             // (Windows: as the daemon itself, SYSTEM, with its own PHP; the files Matomo writes take its folders' rights)
-            $cmd = 'cd /d "' . str_replace('/', '\\', self::AppDir()) . '" && "' . PHP_BINARY . '" console';
+            $cmd = 'cd /d "' . rtrim(str_replace('/', '\\', self::AppDir()), '\\') . '" && "' . PHP_BINARY . '" console';
             foreach ($args as $a) {
                 $cmd .= ' "' . str_replace('"', '', (string) $a) . '"';
             }

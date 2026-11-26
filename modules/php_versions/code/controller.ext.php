@@ -6,7 +6,7 @@
  * @package Sentora
  * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
  *
- * Written by RusTus, 2026-11-12
+ * Written by RusTus, 2026-11-26
  */
 /**
  * PHP Versions module (administrators): the PHP versions on the server (the default one Apache runs,

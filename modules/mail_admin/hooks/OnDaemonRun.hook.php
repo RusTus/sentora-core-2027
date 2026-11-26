@@ -8,7 +8,7 @@
  * Every value is checked (yes/no, a number in range, one of a list, a real
  * time zone) before it is written, and a bad value falls back to the default.
  *
- * Written by RusTus, 2026-11-13
+ * Written by RusTus, 2026-11-26
  */
 if (sys_versions::IsWindows()) {
     // (Windows: the webmail, ActiveSync and Stalwart's limits; nothing of SOGo or Postfix)

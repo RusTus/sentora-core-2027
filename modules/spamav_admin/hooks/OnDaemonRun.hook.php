@@ -5,7 +5,7 @@
  * SpamAssassin, ClamAV, Postfix and Dovecot, and reads the mail log into the activity
  * that users see. See dryden/sys/spamav.class.php for how mail flows.
  *
- * Written by RusTus, 2026-11-13
+ * Written by RusTus, 2026-11-26
  */
 global $zdbh; // hooks are included inside a function
 if (sys_versions::IsWindows()) {

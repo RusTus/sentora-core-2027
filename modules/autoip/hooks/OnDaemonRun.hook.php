@@ -4,7 +4,7 @@
  *
  * ZPanel - AutoIP, written by RusTus: www.zpanelcp.com.
  *
- * Updated by RusTus, 2026-11-06
+ * Updated by RusTus, 2026-11-26
  */
 
 	echo fs_filehandler::NewLine() . "START AutoIP Update Hook." . fs_filehandler::NewLine();
