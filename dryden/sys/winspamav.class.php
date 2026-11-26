@@ -38,7 +38,7 @@ class sys_winspamav
             'clam_max_files' => null, 'clam_scan_archive' => null, 'clam_scan_pdf' => null, 'clam_scan_ole2' => null, 'clam_block_macros' => null,
             'clam_scan_html' => null, 'clam_phishing_sigs' => null, 'clam_phishing_urls' => null, 'clam_heuristic' => null, 'clam_alert_encrypted' => null,
             'clam_db_checks' => null, 'clam_threads' => '8',
-            'sa_enabled' => null, 'sa_required_score' => null, 'sa_reject_score' => '0',
+            'sa_enabled' => null, 'sa_required_score' => null, 'sa_reject_score' => '0', 'sa_user_settings' => null,
             'fs_enabled' => null, 'fs_hour' => null, 'fs_full_day' => null, 'fs_max_file_size' => null, 'fs_backups' => null, 'fs_quarantine' => null,
             'fs_notify_owner' => null,
         );
@@ -66,6 +66,7 @@ class sys_winspamav
         $out['clam_on_fail'][4] = 'Accept: mail is delivered unscanned. Try later: the sender\'s server is asked to try again later (the mail is not lost).';
         $out['sa_enabled'] = array('spamassassin', 'Check mail for spam', 'bool', $out['sa_enabled'][3], 'The mail server\'s own spam filter scores incoming mail; mail at or above the spam score goes to the Junk Mail folder.', null);
         $out['sa_required_score'][4] = 'Mail scoring this or more is spam. Lower catches more spam but also more good mail.';
+        $out['sa_user_settings'][4] = 'In Mail > SpamAV: spam filter on or off, sensitivity, Junk Mail folder or inbox, allowed and blocked senders, for their own mailboxes (a filter on the mailbox; one the owner made and switched on in webmail is left alone).';
         return $out;
     }
 

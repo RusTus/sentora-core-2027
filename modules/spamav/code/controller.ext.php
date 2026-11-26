@@ -142,6 +142,11 @@ class module_controller extends ctrl_module
             ':e' => !empty($f['inEnabled']) ? 1 : 0, ':s' => $score === '' ? null : $score, ':ac' => $action === '' ? null : $action,
             ':d' => !empty($f['inDeleteHigh']) ? 1 : 0, ':al' => $lists['inAllow'], ':bl' => $lists['inBlock']));
         self::$posted = null;
+        if (sys_versions::IsWindows()) {
+            sys_winphp::Soon();   // (the daemon puts them on the mail server now)
+            self::$msg[] = array('ok', str_replace('%s', $box, self::t('Spam settings for %s saved. They apply within a minute.')), true);
+            return;
+        }
         self::$msg[] = array('ok', str_replace('%s', $box, self::t('Spam settings for %s saved. They apply within 5 minutes.')), true);
     }
 
@@ -224,6 +229,17 @@ class module_controller extends ctrl_module
     }
 
     /**
+     * Where spam goes for a mailbox whose owner has not chosen.
+     *
+     * @return string 'folder' or 'inbox'.
+     */
+    static function DefaultAction()
+    {
+        // (Windows: the mail server files spam into Junk Mail; there is no server-wide "inbox" choice)
+        return sys_versions::IsWindows() ? 'folder' : (string) sys_spamav::Get('sa_default_action');
+    }
+
+    /**
      * Whether spam filtering and virus scanning are on for the server (<@ ServerState @>), as two pills.
      *
      * @return string The HTML.
@@ -275,14 +291,14 @@ class module_controller extends ctrl_module
             $p = sys_spamav::Prefs($b);
             $q->execute(array(':a' => (int) self::Me()['userid'], ':m' => $b, ':d' => date('Y-m-d', time() - 6 * 86400)));
             $c = $q->fetch(PDO::FETCH_NUM);
-            $action = $p['action'] !== '' ? $p['action'] : sys_spamav::Get('sa_default_action');
+            $action = $p['action'] !== '' ? $p['action'] : self::DefaultAction();
             $isopen = $b === $open;
             $out .= '<div class="sv-box' . ($isopen ? ' open' : '') . '" data-s="' . self::h($b) . '">'
                 . '<div class="sv-box-row">'
                 . '<div class="sv-box-name"><b>' . self::h($b) . '</b>'
                 . '<span class="sv-pill ' . ($p['enabled'] ? 'on' : 'off') . '">' . self::h(self::t($p['enabled'] ? 'Filter on' : 'Filter off')) . '</span></div>'
                 . '<div class="sv-box-facts"><span>' . self::h(self::t($sens[$p['score']] ?? $p['score'])) . '</span>'
-                . '<span>' . self::h(self::t($action === 'inbox' ? 'Spam stays in the inbox, marked' : 'Spam goes to the Spam folder')) . '</span>'
+                . '<span>' . self::h(self::t($action === 'inbox' ? 'Spam stays in the inbox, marked' : (sys_versions::IsWindows() ? 'Spam goes to the Junk Mail folder' : 'Spam goes to the Spam folder'))) . '</span>'
                 . ($p['delete_high'] ? '<span>' . self::h(self::t('Very high scores deleted')) . '</span>' : '') . '</div>'
                 . '<div class="sv-box-count" title="' . self::h(self::t('Last 7 days')) . '"><span class="sv-c-spam"><b>' . number_format((int) $c[0]) . '</b> ' . self::h(self::t('spam')) . '</span>'
                 . '<span class="sv-c-virus"><b>' . number_format((int) $c[1]) . '</b> ' . self::h(self::t((int) $c[1] === 1 ? 'virus' : 'viruses')) . '</span></div>'
@@ -314,11 +330,12 @@ class module_controller extends ctrl_module
         foreach (sys_spamav::Sensitivities() as $k => $l) {
             $opts .= '<option value="' . self::h($k) . '"' . ((string) $k === (string) $p['score'] ? ' selected' : '') . '>' . self::h(self::t($l)) . '</option>';
         }
-        $def = sys_spamav::Get('sa_default_action') === 'inbox' ? 'the inbox' : 'the Spam folder';
-        // translated here: the subject tag is the administrator's setting, not translated with the text
-        $tag = (string) sys_spamav::Get('sa_subject_tag') !== '' ? self::t('The subject starts with') . ' ' . sys_spamav::Get('sa_subject_tag') : self::t('Marked in its headers only');
+        $win = sys_versions::IsWindows();
+        $def = self::DefaultAction() === 'inbox' ? 'the inbox' : ($win ? 'the Junk Mail folder' : 'the Spam folder');
+        // translated here: the subject tag is the administrator's setting, not translated with the text (Windows: none)
+        $tag = !$win && (string) sys_spamav::Get('sa_subject_tag') !== '' ? self::t('The subject starts with') . ' ' . sys_spamav::Get('sa_subject_tag') : self::t('Marked in its headers only');
         $where = '';
-        foreach (array('' => array('Server default', self::t('Now ' . $def)), 'folder' => array('Spam folder', self::t('Out of the way, still there to check')), 'inbox' => array('Inbox, marked', $tag)) as $k => $l) {
+        foreach (array('' => array('Server default', self::t('Now ' . $def)), 'folder' => array($win ? 'Junk Mail folder' : 'Spam folder', self::t('Out of the way, still there to check')), 'inbox' => array('Inbox, marked', $tag)) as $k => $l) {
             $where .= '<label class="sv-choice"><input type="radio" name="inAction" value="' . self::h($k) . '"' . ((string) $k === (string) $p['action'] ? ' checked' : '') . $dis . '>'
                 . '<span><b>' . self::h(self::t($l[0])) . '</b><small>' . self::h($l[1]) . '</small></span></label>';
         }
@@ -348,7 +365,7 @@ class module_controller extends ctrl_module
             . '</div></div>'
             . '<div class="sv-form-foot">' . runtime_csfr::Token() . ($can ? '<button class="btn btn-primary" type="submit">' . self::h(self::t('Save')) . '</button>' : '')
             . '<button class="btn btn-default sv-close" type="button">' . self::h(self::t('Close')) . '</button>'
-            . ($can ? '<span class="sv-note">' . self::h(self::t('Changes apply within 5 minutes.')) . '</span>' : '') . '</div></form>';
+            . ($can ? '<span class="sv-note">' . self::h(self::t($win ? 'Changes apply within a minute.' : 'Changes apply within 5 minutes.')) . '</span>' : '') . '</div></form>';
     }
 
     /**

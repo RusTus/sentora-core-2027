@@ -9,4 +9,5 @@
     <updateurl></updateurl>
     <type>user</type>
     <defaultcat>Mail</defaultcat>
+    <windows>yes</windows>
 </module>

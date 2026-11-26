@@ -158,9 +158,99 @@ class sys_winmail
      */
     static function ForwardScript($addr, $f)
     {
-        $to = count($f['to']) === 1 ? $f['to'][0] : self::ForwardList($addr);
-        return "# Made by the Sentora panel (Forwarders): written over at the next change\r\n"
-            . ($f['keep'] ? "require [\"copy\"];\r\nredirect :copy \"" . $to . "\";\r\n" : "redirect \"" . $to . "\";\r\n");
+        return self::PanelScript($addr, $f, null);
+    }
+
+    /**
+     * A mailbox's spam choices (Mail > SpamAV) as Sieve rules, or null when they are Stalwart's own handling (spam to
+     * Junk Mail). Stalwart marks mail with X-Spam-Status (Yes/No) and X-Spam-Score ("spam, score=11.60").
+     * The sender patterns were checked when saved (letters, digits, . * ? _ + = - and @: nothing that ends a string).
+     *
+     * @param string $addr The mailbox.
+     * @return array{need: string[], body: string}|null
+     */
+    static function SpamRules($addr)
+    {
+        $p = sys_spamav::Prefs($addr);
+        $user = sys_spamav::On('sa_user_settings');
+        $score = $user ? (string) $p['score'] : '';
+        $allow = $block = array();
+        if ($user) {
+            foreach (array('allow', 'block') as $k) {
+                foreach (explode("\n", (string) $p[$k]) as $l) {
+                    $l = trim($l);
+                    if ($l !== '' && sys_spamav::ValidSenderPattern($l)) {
+                        ${$k}[] = '"' . $l . '"';
+                    }
+                }
+            }
+        }
+        if (!$p['saved'] || ($p['enabled'] && $score === '' && $p['action'] !== 'inbox' && !$p['delete_high'] && !$allow && !$block)) {
+            return null;
+        }
+        $n = "\r\n";
+        if (!$p['enabled']) {
+            return array('need' => array('fileinto'), 'body' => '# SpamAV: the spam filter is off for this mailbox' . $n . 'fileinto "INBOX";' . $n);
+        }
+        $need = array('fileinto', 'mailbox');
+        $b = '# SpamAV' . $n;
+        if ($allow) {
+            $b .= 'if address :all :matches "from" [' . implode(', ', $allow) . '] { fileinto "INBOX"; stop; }' . $n;
+        }
+        if ($block) {
+            $b .= 'if address :all :matches "from" [' . implode(', ', $block) . '] { fileinto :create "Junk Mail"; stop; }' . $n;
+        }
+        $num = function ($at) {
+            // the score's whole part, compared as a number (a negative score is never at or above)
+            return 'allof(not string :matches "${score}" "-*", string :value "ge" :comparator "i;ascii-numeric" "${score}" "' . (int) $at . '")';
+        };
+        if ($score !== '' || $p['delete_high']) {
+            $need = array_merge($need, array('variables', 'relational', 'comparator-i;ascii-numeric'));
+            $b .= 'set "score" "0";' . $n . 'if header :matches "X-Spam-Score" "*score=*" { set "score" "${2}"; }' . $n;
+        }
+        if ($p['delete_high']) {
+            $b .= 'if ' . $num(15) . ' { discard; stop; }' . $n;
+        }
+        $spam = $score !== '' ? $num((int) $score) : 'header :matches "X-Spam-Status" "Yes*"';
+        $b .= 'if ' . $spam . ' { ' . ($p['action'] === 'inbox' ? 'fileinto "INBOX";' : 'fileinto :create "Junk Mail";') . ' stop; }' . $n
+            . 'fileinto "INBOX";' . $n;
+        return array('need' => $need, 'body' => $b);
+    }
+
+    /**
+     * The panel's Sieve script of a mailbox: its forwarder and its spam choices (the addresses were checked: no quotes
+     * or line breaks can be in them).
+     *
+     * @param string $addr The mailbox.
+     * @param array{keep: bool, to: string[]}|null $f Its forwarder, or null.
+     * @param array{need: string[], body: string}|null $spam Its spam rules (SpamRules), or null.
+     * @return string|null Null when the mailbox needs no script.
+     */
+    static function PanelScript($addr, $f, $spam)
+    {
+        if ($f === null && $spam === null) {
+            return null;
+        }
+        $n = "\r\n";
+        $need = $spam !== null ? $spam['need'] : array();
+        $body = '';
+        if ($f !== null) {
+            $to = count($f['to']) === 1 ? $f['to'][0] : self::ForwardList($addr);
+            if ($f['keep']) {
+                $need[] = 'copy';
+                $body .= 'redirect :copy "' . $to . '";' . $n;
+            } else {
+                // (forwarded only: nothing is kept, so the spam rules below have nothing to file)
+                $body .= 'redirect "' . $to . '";' . $n . ($spam !== null ? 'stop;' . $n : '');
+            }
+        }
+        if ($spam !== null) {
+            $body .= $spam['body'];
+        }
+        $need = array_values(array_unique($need));
+        return '# Made by the Sentora panel (' . ($f !== null ? 'Forwarders' . ($spam !== null ? ', ' : '') : '') . ($spam !== null ? 'SpamAV' : '')
+            . '): written over at the next change' . $n
+            . ($need ? 'require ["' . implode('", "', $need) . '"];' . $n : '') . $body;
     }
 
     /**
@@ -475,15 +565,32 @@ class sys_winmail
                 }
             }
         }
-        // forwarders: a Sieve script on the mailbox (its own JMAP account, which Stalwart's administrator may manage)
+        // forwarders and spam choices (Mail > SpamAV): one Sieve script on the mailbox (its own JMAP account, which
+        // Stalwart's administrator may manage)
         $fstate = isset($state['fwd']) ? (array) $state['fwd'] : array();
+        $spam = array();
+        try {
+            sys_spamav::Ensure();
+            foreach ($zdbh->query("SELECT LOWER(sp_mailbox_vc) FROM x_spamav_prefs")->fetchAll(PDO::FETCH_COLUMN) as $a) {
+                if (isset($want[$a]) && ($r = self::SpamRules($a)) !== null) {
+                    $spam[$a] = $r;
+                }
+            }
+        } catch (Exception $e) {
+            $out[] = 'Mail: the spam choices were not read: ' . $e->getMessage();
+            $spam = null;
+        }
         $fnew = array();
         $fset = $fgone = 0;
-        foreach (array_unique(array_merge(array_keys($fwds), array_keys($fstate))) as $addr) {
+        foreach (array_unique(array_merge(array_keys($fwds), array_keys((array) $spam), array_keys($fstate))) as $addr) {
             if (!isset($accts[$addr]) || !isset($mine[$addr])) {
-                continue;   // (only the panel's mailboxes; a new one gets its forwarder at the next run)
+                continue;   // (only the panel's mailboxes; a new one gets its script at the next run)
             }
-            $script = isset($fwds[$addr]) ? self::ForwardScript($addr, $fwds[$addr]) : null;
+            if ($spam === null && isset($fstate[$addr])) {
+                $fnew[$addr] = $fstate[$addr];   // (not known this run: left as it is)
+                continue;
+            }
+            $script = self::PanelScript($addr, isset($fwds[$addr]) ? $fwds[$addr] : null, isset($spam[$addr]) ? $spam[$addr] : null);
             $sum = $script === null ? null : hash('sha256', $script);
             if ($sum !== null && isset($fstate[$addr]) && $fstate[$addr] === $sum) {
                 $fnew[$addr] = $sum;
@@ -491,7 +598,7 @@ class sys_winmail
             }
             $why = self::SetForward($accts[$addr], $script);
             if ($why !== '') {
-                $out[] = 'Mail: the forwarder of ' . $addr . ' was not ' . ($script === null ? 'removed' : 'set') . ': ' . $why;
+                $out[] = 'Mail: the filter (forwarder, spam choices) of ' . $addr . ' was not ' . ($script === null ? 'removed' : 'set') . ': ' . $why;
                 if (isset($fstate[$addr])) {
                     $fnew[$addr] = $fstate[$addr];
                 }
@@ -505,7 +612,7 @@ class sys_winmail
             }
         }
         if ($fset || $fgone) {
-            $out[] = 'Mail: forwarders set ' . $fset . ', removed ' . $fgone;
+            $out[] = 'Mail: mailbox filters (forwarders, spam choices) set ' . $fset . ', removed ' . $fgone;
         }
         if ($lmade || $lchanged || $lgone) {
             $out[] = 'Mail: Stalwart lists made ' . $lmade . ', changed ' . $lchanged . ', removed ' . $lgone;
