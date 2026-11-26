@@ -1222,7 +1222,7 @@ return array(
     'Mailbox owners' => 'Titulaires de boîtes aux lettres',
     'Mailboxes' => 'Boîtes aux lettres',
     'Mailboxes forwarded' => 'Boîtes aux lettres redirigées',
-    'Mailboxes like info@example.com; read them in webmail, SOGo or any mail app.' => 'Boîtes aux lettres comme info@example.com ; consultez-les dans le webmail, SOGo ou n\'importe quelle application de messagerie.',
+    'Mailboxes like info@example.com; read them in webmail or any mail app.' => 'Boîtes aux lettres comme info@example.com ; consultez-les dans le webmail ou n\'importe quelle application de messagerie.',
     'Mailboxes with the most spam' => 'Boîtes aux lettres recevant le plus de spam',
     'Mailboxes: older password hashes' => 'Boîtes aux lettres : anciens hachages de mot de passe',
     'Maintenance' => 'Maintenance',

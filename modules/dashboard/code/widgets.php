@@ -373,7 +373,7 @@ class dashboard_widgets
             array('dns_manager', 'Check its DNS', 'Point your domain at this server: the DNS Manager shows the records, and the nameservers to set where you registered the domain.', null),
             array('sub_domains', 'Add subdomains', 'Extra names like shop.example.com or blog.example.com, each with its own folder.',
                 self::Count("SELECT COUNT(*) FROM x_vhosts WHERE vh_acc_fk = :u AND vh_type_in = 2 AND vh_deleted_ts IS NULL", $uid) > 0),
-            array('mailboxes', 'Create email addresses', 'Mailboxes like info@example.com; read them in webmail, SOGo or any mail app.',
+            array('mailboxes', 'Create email addresses', 'Mailboxes like info@example.com; read them in webmail or any mail app.',
                 self::Count("SELECT COUNT(*) FROM x_mailboxes WHERE mb_acc_fk = :u AND mb_deleted_ts IS NULL", $uid) > 0),
             array('mysql_databases', 'Create a database', 'Most website software (WordPress, shops, forums) needs a MySQL database.',
                 self::Count("SELECT COUNT(*) FROM x_mysql_databases WHERE my_acc_fk = :u AND my_deleted_ts IS NULL", $uid) > 0),

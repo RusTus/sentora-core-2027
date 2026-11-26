@@ -1222,7 +1222,7 @@ return array(
     'Mailbox owners' => 'Владельцы почтовых ящиков',
     'Mailboxes' => 'Почтовые ящики',
     'Mailboxes forwarded' => 'Ящики с пересылкой',
-    'Mailboxes like info@example.com; read them in webmail, SOGo or any mail app.' => 'Почтовые ящики вида info@example.com; читайте их в веб-почте, SOGo или любом почтовом клиенте.',
+    'Mailboxes like info@example.com; read them in webmail or any mail app.' => 'Почтовые ящики вида info@example.com; читайте их в веб-почте или любом почтовом клиенте.',
     'Mailboxes with the most spam' => 'Почтовые ящики с наибольшим количеством спама',
     'Mailboxes: older password hashes' => 'Почтовые ящики: старые хеши паролей',
     'Maintenance' => 'Обслуживание',

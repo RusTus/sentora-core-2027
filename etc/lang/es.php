@@ -1222,7 +1222,7 @@ return array(
     'Mailbox owners' => 'Titulares de buzones',
     'Mailboxes' => 'Buzones',
     'Mailboxes forwarded' => 'Buzones reenviados',
-    'Mailboxes like info@example.com; read them in webmail, SOGo or any mail app.' => 'Buzones como info@example.com; léalos en el webmail, en SOGo o en cualquier aplicación de correo.',
+    'Mailboxes like info@example.com; read them in webmail or any mail app.' => 'Buzones como info@example.com; léalos en el webmail o en cualquier aplicación de correo.',
     'Mailboxes with the most spam' => 'Buzones con más spam',
     'Mailboxes: older password hashes' => 'Buzones: hashes de contraseña antiguos',
     'Maintenance' => 'Mantenimiento',

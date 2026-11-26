@@ -1222,7 +1222,7 @@ return array(
     'Mailbox owners' => 'Postfachinhaber',
     'Mailboxes' => 'Postfächer',
     'Mailboxes forwarded' => 'Weitergeleitete Postfächer',
-    'Mailboxes like info@example.com; read them in webmail, SOGo or any mail app.' => 'Postfächer wie info@example.com; lesen Sie sie per Webmail, in SOGo oder in jedem E-Mail-Programm.',
+    'Mailboxes like info@example.com; read them in webmail or any mail app.' => 'Postfächer wie info@example.com; lesen Sie sie per Webmail oder in jedem E-Mail-Programm.',
     'Mailboxes with the most spam' => 'Postfächer mit dem meisten Spam',
     'Mailboxes: older password hashes' => 'Postfächer: ältere Passwort-Hashes',
     'Maintenance' => 'Wartung',

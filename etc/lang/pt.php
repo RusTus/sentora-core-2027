@@ -1222,7 +1222,7 @@ return array(
     'Mailbox owners' => 'Donos de caixas de correio',
     'Mailboxes' => 'Caixas de correio',
     'Mailboxes forwarded' => 'Caixas de correio encaminhadas',
-    'Mailboxes like info@example.com; read them in webmail, SOGo or any mail app.' => 'Caixas de correio como info@example.com; leia-as no webmail, no SOGo ou em qualquer aplicativo de e-mail.',
+    'Mailboxes like info@example.com; read them in webmail or any mail app.' => 'Caixas de correio como info@example.com; leia-as no webmail ou em qualquer aplicativo de e-mail.',
     'Mailboxes with the most spam' => 'Caixas de correio com mais spam',
     'Mailboxes: older password hashes' => 'Caixas de correio: hashes de senha antigos',
     'Maintenance' => 'Manutenção',
