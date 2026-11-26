@@ -76,9 +76,10 @@ class sys_phpversions
     {
         $versions = array();
         if (sys_versions::IsWindows()) {
-            // (Windows: the installer's bin\php-X.Y beside the panel's own bin\php)
-            foreach ((array) glob(self::WinBin() . 'php-*/php-cgi.exe') as $cgi) {
-                $v = substr(basename(dirname($cgi)), 4);
+            // (Windows: the installer's bin\php-X.Y beside the panel's own bin\php; by the folders' names only, as the
+            // panel's pages run as Apache's account, which may list bin but not look inside those folders)
+            foreach ((array) glob(self::WinBin() . 'php-*', GLOB_ONLYDIR) as $dir) {
+                $v = substr(basename($dir), 4);
                 if (preg_match('/^\d+\.\d+$/', $v) && $v !== self::DefaultVersion()) {
                     $versions[] = $v;
                 }
