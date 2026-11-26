@@ -315,7 +315,11 @@ class sys_phpext
     static function DaemonRun()
     {
         if (sys_versions::IsWindows()) {
-            return self::WinDaemonRun();
+            try {
+                return self::WinDaemonRun();
+            } catch (Throwable $e) {
+                return array('PHP extensions: ' . $e->getMessage());   // (never stops the daemon's other jobs)
+            }
         }
         $report = array();
         $wanted = self::Wanted();

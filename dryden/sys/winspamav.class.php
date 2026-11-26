@@ -319,7 +319,13 @@ class sys_winspamav
         }
         $status['memory_mb'] = self::MemoryMB();
         // the figures: what Stalwart delivered (spam or not) and what the virus check refused
-        $n = self::ReadMail();
+        // (a problem with the logs is reported, never stops the daemon's other jobs)
+        try {
+            $n = self::ReadMail();
+        } catch (Throwable $e) {
+            $n = 0;
+            $out[] = 'SpamAV: the mail logs were not read: ' . $e->getMessage();
+        }
         if ($n > 0) {
             $out[] = 'SpamAV: ' . $n . ' new spam / virus event(s) from the mail log';
         }
@@ -410,6 +416,9 @@ class sys_winspamav
         }
         if ($pos < 0 || $pos > $size) {
             return array(array(), $pos < 0 ? $size : 0);   // (first run: from now on; a shorter file: it was started again)
+        }
+        if ($pos === $size) {
+            return array(array(), $pos);   // (nothing new; PHP 8 refuses to read 0 bytes)
         }
         $h = @fopen($file, 'rb');
         if (!$h) {
