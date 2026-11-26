@@ -49,7 +49,9 @@ if (sys_versions::IsWindows()) {
             $obS = array_merge($obS, array('copy_started' => time(), 'step' => 'Starting', 'progress_pct' => 0, 'progress_bytes' => 0, 'progress_rate' => ''));
         }
         @file_put_contents($obSf, json_encode($obS));
-        pclose(popen('start "" /B "' . PHP_BINARY . '" -q "' . $obWin . '" ' . $obArg, 'r'));
+        // (its output and any error go to its log beside the panel's)
+        $obLog = str_replace('/', '\\', rtrim(str_replace('\\', '/', (string) ctrl_options::GetSystemOption('log_dir')), '/') . '/panel/offsite-backup.log');
+        pclose(popen('start "" /B cmd.exe /c ""' . PHP_BINARY . '" -q "' . $obWin . '" ' . $obArg . ' >> "' . $obLog . '" 2>&1"', 'r'));
         echo "Off-server backup: " . ($obArg === '--check' ? 'connection test' : 'copy') . " started" . fs_filehandler::NewLine();
     }
     return;

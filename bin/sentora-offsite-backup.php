@@ -73,6 +73,17 @@ function ob_say($t)
     echo $t, "\n";
 }
 
+// a fatal error is written where the page and the log show it (the job runs in the background, nobody sees its output)
+register_shutdown_function(function () use ($mode) {
+    $e = error_get_last();
+    if ($e !== null && in_array($e['type'], array(E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR), true)) {
+        $why = 'stopped: ' . $e['message'] . ' (line ' . $e['line'] . ')';
+        ob_say('FAILED: ' . $why);
+        ob_state($mode === '--check' ? array('check_time' => time(), 'check_ok' => false, 'check_message' => $why)
+            : array('last_run' => time(), 'result' => 'failed', 'message' => $why, 'step' => ''));
+    }
+});
+
 $o = array();
 foreach (array('offsite_enabled', 'offsite_path', 'offsite_user', 'offsite_password', 'offsite_keep', 'offsite_mail') as $k) {
     $o[$k] = (string) ctrl_options::GetSystemOption($k);
@@ -190,10 +201,12 @@ try {
 } catch (Exception $e) {
     $problems[] = 'the database list could not be read (' . $e->getMessage() . ')';
 }
+ob_say(count($dbs) . ' database(s) to dump');
 $cnf = sys_get_temp_dir() . '\\sentora-offsite-' . bin2hex(random_bytes(6)) . '.cnf';
 file_put_contents($cnf, "[client]\r\nuser=root\r\npassword=\"" . addcslashes($rootPw, "\"\\") . "\"\r\nhost=127.0.0.1\r\n");
 foreach ($dbs as $i => $db) {
     ob_state(array('step' => 'Databases: ' . $db, 'progress_pct' => (int) (30 * $i / max(1, count($dbs)))));
+    ob_say('database ' . $db);
     $sql = sys_get_temp_dir() . '\\sentora-offsite-' . $db . '.sql';
     exec('"' . $dump . '" --defaults-extra-file="' . $cnf . '" --single-transaction --routines --events --databases ' . $db . ' > "' . $sql . '" 2> NUL', $o2, $rc);
     if ($rc !== 0 || !is_file($sql)) {
