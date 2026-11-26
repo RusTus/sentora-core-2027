@@ -206,7 +206,9 @@ class sys_winmail
         };
         if ($score !== '' || $p['delete_high']) {
             $need = array_merge($need, array('variables', 'relational', 'comparator-i;ascii-numeric'));
-            $b .= 'set "score" "0";' . $n . 'if header :matches "X-Spam-Score" "*score=*" { set "score" "${2}"; }' . $n;
+            // (only the whole part: Stalwart's comparator does not read "6.10" as a number)
+            $b .= 'set "score" "0";' . $n . 'if header :matches "X-Spam-Score" "*score=*.*" { set "score" "${2}"; }' . $n
+                . 'elsif header :matches "X-Spam-Score" "*score=*" { set "score" "${2}"; }' . $n;
         }
         if ($p['delete_high']) {
             $b .= 'if ' . $num(15) . ' { discard; stop; }' . $n;
