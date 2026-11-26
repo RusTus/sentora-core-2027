@@ -116,6 +116,9 @@ class module_controller extends ctrl_module {
             return false;
         }
         $inScript = trim((string) $inScript);
+        if (sys_versions::IsWindows()) {
+            $inScript = '';   // (no scripts on Windows: there is no file only root can change)
+        }
         $inCommand = trim((string) $inCommand);
         $emails = array();
         foreach (explode(',', strtolower(str_replace(' ', '', (string) $inEmail))) as $email) {
@@ -330,7 +333,7 @@ class module_controller extends ctrl_module {
 			} else {
 				$enabled = 0;
 			}
-        	self::ExecuteUpdateAutoIP($formvars['inScript'], $formvars['inEmail'], $formvars['inCommand'], $enabled);
+        	self::ExecuteUpdateAutoIP($formvars['inScript'] ?? '', $formvars['inEmail'] ?? '', $formvars['inCommand'] ?? '', $enabled);
 		} else {
         	return false;
 		}
@@ -363,5 +366,25 @@ class module_controller extends ctrl_module {
         return;
     }
 
+    /**
+     * Whether a script can be set (template <% if Scripts %>): not on Windows, where the daemon runs as SYSTEM and no
+     * file is only root's to change.
+     *
+     * @return bool
+     */
+    static function getScripts()
+    {
+        return !sys_versions::IsWindows();
+    }
+
+    /**
+     * The last step of "How it works" (<@ AfterChange @>).
+     *
+     * @return string Escaped.
+     */
+    static function getAfterChange()
+    {
+        return htmlspecialchars(ui_language::translate(sys_versions::IsWindows() ? 'Then the email alert is sent, if you set one.'
+            : 'Then the email alert is sent and the script is run, if you set them.'), ENT_QUOTES, 'UTF-8');
+    }
 }
-?>

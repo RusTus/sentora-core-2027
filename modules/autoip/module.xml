@@ -4,6 +4,7 @@
 <version>102</version>
 <type>user</type>
 <defaultcat>Server Admin</defaultcat>
+<windows>yes</windows>
 <desc>Automatically update your control panel IP address.</desc>
 <authorname>RusTus</authorname>
 <authoremail>rustus@zpanelcp.com</authoremail>

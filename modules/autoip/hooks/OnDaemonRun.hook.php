@@ -12,6 +12,14 @@
 	// resellers and clients too; the module refuses them either way)
 	global $zdbh;
 	$zdbh->exec("DELETE p FROM x_permissions p JOIN x_modules m ON m.mo_id_pk = p.pe_module_fk WHERE m.mo_folder_vc = 'autoip' AND p.pe_group_fk <> 1");
+	// (Windows: switched off the first time, as a server behind a router would otherwise have its DNS records changed to
+	// the router's public address without being asked; the administrator switches it on on the page)
+	if (sys_versions::IsWindows() && ctrl_options::GetSystemOption('autoip_windows_off') === false) {
+		$zdbh->exec("UPDATE x_autoip SET ai_enabled_in = 0");
+		$zdbh->exec("INSERT INTO x_settings (so_name_vc, so_cleanname_vc, so_value_tx, so_defvalues_tx, so_desc_tx, so_module_vc, so_usereditable_en)
+			VALUES ('autoip_windows_off', 'autoip_windows_off', '1', NULL, 'AutoIP switched off once on Windows (it is switched on on its page)', 'Sentora Config', 'false')");
+		echo "AutoIP: switched off on Windows until it is switched on on its page." . fs_filehandler::NewLine();
+	}
 		if (ui_module::CheckModuleEnabled('AutoIP Updater')){
 			UpdateServerIPHook();
 		} else {
@@ -175,6 +183,9 @@
      * @return bool
      */
     function AutoIPScriptIsSafe($path) {
+        if (sys_versions::IsWindows()) {
+            return false;   // (no file on Windows is only root's to change)
+        }
         if (!preg_match('#^/[A-Za-z0-9._/-]+$#', $path) || strpos($path, '..') !== false) {
             return false;
         }

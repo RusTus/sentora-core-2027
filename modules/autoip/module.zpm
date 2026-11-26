@@ -23,8 +23,10 @@
                 <div class="ai-chips"><span><: Pick one: :></span><@ Services @></div>
                 <label class="ai-field"><span><: Email alert :></span><input class="form-control" type="text" name="inEmail" value="<& ai_email_vc &>" maxlength="255" placeholder="you@example.com, noc@example.com">
                     <small><: Who is told when the IP address changes. Separate several addresses with commas; leave it empty for none. :></small></label>
+                <% if Scripts %>
                 <label class="ai-field"><span><: Script to run after a change :> <small><: (optional) :></small></span><input class="form-control" type="text" name="inScript" value="<& ai_script_vc &>" maxlength="255" placeholder="/usr/local/bin/ip-changed.sh">
                     <small><: The full path of a file owned by root that only root may change. It is run with the new and the old IP address as its two arguments. :></small></label>
+                <% endif %>
                 <div class="ai-foot"><@ CSFR_Tag @><button class="btn btn-primary" type="submit" name="inUpdate" value="1"><: Save settings :></button></div>
             </form>
             <% endloop %>
@@ -34,7 +36,7 @@
                 <ol>
                     <li><: Every 5 minutes the daemon asks the IP service for this server's public address. :></li>
                     <li><: When it differs from the panel's IP address, the panel's address is changed, and so is every DNS record that has the old address. The DNS zones are written again. :></li>
-                    <li><: Then the email alert is sent and the script is run, if you set them. :></li>
+                    <li><@ AfterChange @></li>
                 </ol>
                 <p class="ai-note"><: Useful on a home or office connection whose address changes now and then. On a server with a fixed address, leave it off. :></p>
             </aside>
