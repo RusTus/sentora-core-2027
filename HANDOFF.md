@@ -909,7 +909,17 @@ DNS, FTP, mailboxes and cron on Windows (2026-11-25, tested in the Windows insta
   StreamMaxLength), results in data\sentora\filescan.json, quarantine filescan_quarantine (data\quarantine, locked by
   the installer; a moved file takes the folder's rights with icacls /reset, and its folder's again when put back), and a
   folder whose real path leads out of the account (a junction) is never followed. Not on Windows yet: the mail figures
-  (Postfix's log), senders lists, subject tag, mailbox owners' own settings (Mail > SpamAV).
+  (Postfix's log), the server-wide senders lists, subject tag and "where spam goes" (Stalwart files spam into Junk Mail).
+- Mail > SpamAV for mailbox owners (2026-11-26): on Windows too. Stalwart marks mail with X-Spam-Status (Yes/No) and
+  X-Spam-Score ("spam, score=11.60") and files spam into "Junk Mail" by itself (seen with GTUBE in the Windows test).
+  A mailbox's saved choices (x_spamav_prefs; sys_winmail::SpamRules) become Sieve rules in the panel's one script on the
+  mailbox (sentora-forward, shared with its forwarder; PanelScript): allowed senders -> INBOX, blocked -> Junk Mail,
+  delete at 15+, the sensitivity compares the score's whole part (variables, relational, i;ascii-numeric; a negative
+  score never counts), spam -> Junk Mail or INBOX, else INBOX; filter off -> INBOX. Choices that are Stalwart's own
+  handling need no script. As with forwarders, a script the owner made and switched on (webmail filters) is never
+  replaced (the daemon log says so). Saving asks for a daemon run (sys_winphp::Soon). "Let users change their spam
+  settings" (sa_user_settings) is on the Windows SpamAV Admin page. The 7-day counts and Activity stay empty on Windows
+  until the mail figures are read from Stalwart.
 - Branding (2026-11-26): on Windows too. The look is the database's (as on Linux; GD is in the Windows PHP). Panel
   addresses: sys_winvhosts::Branding writes each one's sites between "# BRANDING: host" lines (plain HTTP: Let's
   Encrypt's check through the folder every site serves, else HTTPS or "being set up"; HTTPS: the panel's folder, run by
