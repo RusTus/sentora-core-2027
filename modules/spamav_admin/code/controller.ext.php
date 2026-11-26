@@ -984,4 +984,17 @@ class module_controller extends ctrl_module
     {
         return sys_versions::IsWindows() ? 'Stalwart' : 'SpamAssassin';
     }
+
+    /**
+     * The page's description (<@ Intro @>): the module's own, or on Windows what Windows has.
+     *
+     * @return string Escaped.
+     */
+    static function getIntro()
+    {
+        if (sys_versions::IsWindows()) {
+            return self::h(self::t('Virus scanning (ClamAV) for all mail and the websites\' files, and the mail server\'s spam filter: settings, status and updates.'));
+        }
+        return self::h(self::t('Virus scanning (ClamAV) and spam filtering (SpamAssassin) for all mail on this server: settings, status and updates.'));
+    }
 }
