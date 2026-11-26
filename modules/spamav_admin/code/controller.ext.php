@@ -74,7 +74,7 @@ class module_controller extends ctrl_module
             return;
         }
         $section = (string) $controller->GetControllerRequest('FORM', 'inSection');
-        if (!in_array($section, array('clamav', 'spamassassin', 'filescan'), true)) {
+        if (!in_array($section, sys_versions::IsWindows() ? array('clamav', 'spamassassin') : array('clamav', 'spamassassin', 'filescan'), true)) {
             return;
         }
         self::$section = $section;
@@ -112,6 +112,11 @@ class module_controller extends ctrl_module
         $up = $zdbh->prepare("UPDATE x_settings SET so_value_tx = :v WHERE so_name_vc = :n AND so_module_vc = '" . sys_spamav::MODULE . "'");
         foreach ($clean as $name => $val) {
             $up->execute(array(':v' => $val, ':n' => $name));
+        }
+        if (sys_versions::IsWindows()) {
+            sys_winphp::Soon();
+            self::$msg[] = array('ok', ($section === 'clamav' ? 'ClamAV' : 'Spam filter') . ' settings saved. The daemon applies them within a minute.');
+            return;
         }
         self::$msg[] = array('ok', $section === 'filescan' ? 'File scanning settings saved.' : ($section === 'clamav' ? 'ClamAV' : 'SpamAssassin') . ' settings saved. The daemon applies them within 5 minutes.');
     }
@@ -174,10 +179,13 @@ class module_controller extends ctrl_module
             return;
         }
         $what = (string) $controller->GetControllerRequest('FORM', 'inWhat');
-        if (!in_array($what, array('signatures', 'rules', 'restart'), true)) {
+        if (!in_array($what, sys_versions::IsWindows() ? array('signatures', 'restart') : array('signatures', 'rules', 'restart'), true)) {
             return;
         }
         file_put_contents(sys_spamav::REQUEST, json_encode(array('action' => $what, 'by' => ctrl_users::GetUserDetail()['username'], 'time' => time())));
+        if (sys_versions::IsWindows()) {
+            sys_winphp::Soon();
+        }
         self::$msg[] = array('ok', array('signatures' => 'Virus signature update', 'rules' => 'Spam rule update', 'restart' => 'Restart of the scanners')[$what] . ' queued: it starts within 5 minutes.');
     }
 
@@ -409,6 +417,9 @@ class module_controller extends ctrl_module
             return '<p class="sa-empty">' . self::h(self::t('The daemon has not checked the scanners yet (within 5 minutes after installing).')) . '</p>';
         }
         $u = isset($s['units']) ? $s['units'] : array();
+        if (sys_versions::IsWindows()) {
+            return self::WinScanners($s, $u);
+        }
         $svc = function ($unit, $label, $wanted) use ($u) {
             if (!$wanted) {
                 return '<li><span class="sa-dot off"></span>' . self::h(self::t($label)) . '<em>' . self::h(self::t('switched off')) . '</em></li>';
@@ -846,6 +857,9 @@ class module_controller extends ctrl_module
      */
     static function getRestartConfirm()
     {
+        if (sys_versions::IsWindows()) {
+            return self::h(self::t('Restart ClamAV? Mail waits a moment while it starts again.'));
+        }
         return self::h(self::t('Restart ClamAV and SpamAssassin? Mail waits a moment while they start again.'));
     }
 
@@ -856,6 +870,9 @@ class module_controller extends ctrl_module
      */
     static function getSpamIntro()
     {
+        if (sys_versions::IsWindows()) {
+            return self::h(self::t('Spam filtering for incoming mail by the mail server (Stalwart). Spam goes to each mailbox\'s Junk Mail folder.'));
+        }
         return self::h(self::t('Spam filtering for incoming mail. Mailbox owners can fine-tune it for their own mailboxes in Mail > SpamAV if you allow it.'));
     }
 
@@ -891,5 +908,78 @@ class module_controller extends ctrl_module
             $out .= ui_sysmessage::shout(self::h(!empty($m[2]) ? $m[1] : self::t($m[1])), $m[0] === 'ok' ? 'zannounceok' : 'zannounceerror');
         }
         return $out;
+    }
+
+    /**
+     * The scanner cards on Windows: ClamAV's two services and its signatures, and Stalwart's spam filter (<@ Scanners @>).
+     *
+     * @param array<string, mixed> $s The daemon's status.
+     * @param array<string, bool> $u Each service: running.
+     * @return string The HTML.
+     */
+    static function WinScanners($s, $u)
+    {
+        // (the daemon lists only the services that are installed)
+        $clamSvc = (string) ctrl_options::GetSystemOption('clamd_service');
+        $freshSvc = (string) ctrl_options::GetSystemOption('freshclam_service');
+        $clamSvc = array_key_exists($clamSvc, $u) ? $clamSvc : '';
+        $freshSvc = array_key_exists($freshSvc, $u) ? $freshSvc : '';
+        $clam = sys_spamav::On('clam_enabled');
+        $sa = sys_spamav::On('sa_enabled');
+        $svc = function ($unit, $label, $wanted) use ($u) {
+            if (!$wanted) {
+                return '<li><span class="sa-dot off"></span>' . self::h(self::t($label)) . '<em>' . self::h(self::t('switched off')) . '</em></li>';
+            }
+            $up = !empty($u[$unit]);
+            return '<li><span class="sa-dot ' . ($up ? 'up' : 'down') . '"></span>' . self::h(self::t($label)) . ' <code>' . self::h($unit) . '</code><em class="' . ($up ? '' : 'bad') . '">' . self::h(self::t($up ? 'running' : 'not running')) . '</em></li>';
+        };
+        $state = function ($on, $up) {
+            return !$on ? '<span class="sa-pill off">' . self::h(self::t('Off')) . '</span>'
+                : ($up ? '<span class="sa-pill on">' . self::h(self::t('Working')) . '</span>' : '<span class="sa-pill bad">' . self::h(self::t('Needs attention')) . '</span>');
+        };
+        if ($clamSvc === '') {
+            $clamCard = '<div class="sa-warn">' . self::h(self::t('ClamAV is not installed on this server (the Windows installer\'s mail part installs it).')) . '</div>';
+            $clamUp = false;
+        } else {
+            $clamUp = !$clam || (!empty($u[$clamSvc]) && ($freshSvc === '' || !empty($u[$freshSvc])));
+            $sig = '';
+            foreach (array('daily', 'main') as $db) {
+                if (isset($s['sigs'][$db])) {
+                    $x = $s['sigs'][$db];
+                    $sig .= '<div><b>' . self::h($db) . '</b> ' . self::h(self::t('version')) . ' ' . self::h($x['version'] ?? '?') . (!empty($x['built']) ? ' &middot; ' . self::h($x['built']) : '')
+                        . (!empty($x['signatures']) ? ' &middot; ' . number_format((int) $x['signatures']) . ' ' . self::h(self::t('signatures')) : '') . '</div>';
+                }
+            }
+            $clamCard = '<ul class="sa-svcs">' . $svc($clamSvc, 'Scanner', $clam) . ($freshSvc !== '' ? $svc($freshSvc, 'Signature updates', $clam) : '') . '</ul>'
+                . '<div class="sa-facts"><span>' . self::h(self::t('Signatures')) . '</span>' . ($sig !== '' ? $sig : '<div>-</div>') . '</div>'
+                . '<div class="sa-sc-foot">' . self::JobButton('signatures', 'Update signatures now', '<path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/>') . '</div>';
+        }
+        $out = '<div class="sa-scanner"><div class="sa-sc-head"><svg class="sa-ico-lg sa-ico-clam" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><circle cx="12" cy="11" r="3"/><path d="M12 6v2M12 14v2M7 11h2M15 11h2"/></svg>'
+            . '<div><h4>' . self::h(self::t('Virus scanning')) . '</h4><span>ClamAV ' . self::h($s['versions']['clamav'] ?? '') . '</span></div>' . $state($clam && $clamSvc !== '', $clamUp) . '</div>' . $clamCard . '</div>';
+        $out .= '<div class="sa-scanner"><div class="sa-sc-head"><svg class="sa-ico-lg sa-ico-spam" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16v16H4z"/><path d="m4 7 8 6 8-6"/><path d="M3 21 21 3"/></svg>'
+            . '<div><h4>' . self::h(self::t('Spam filtering')) . '</h4><span>Stalwart</span></div>' . $state($sa, true) . '</div>'
+            . '<div class="sa-facts"><span>' . self::h(self::t('Spam score')) . '</span><div>' . self::h(sys_spamav::Get('sa_required_score')) . '</div></div>'
+            . '<div class="sa-facts"><span>' . self::h(self::t('Reject at score')) . '</span><div>' . self::h((float) sys_spamav::Get('sa_reject_score') > 0 ? sys_spamav::Get('sa_reject_score') : self::t('never')) . '</div></div></div>';
+        return $out;
+    }
+
+    /**
+     * Whether this server keeps the mail figures and scans the websites (template <% if Linux %>: not on Windows yet).
+     *
+     * @return bool
+     */
+    static function getLinux()
+    {
+        return !sys_versions::IsWindows();
+    }
+
+    /**
+     * The spam filter's name on the tab (<@ SpamEngine @>).
+     *
+     * @return string
+     */
+    static function getSpamEngine()
+    {
+        return sys_versions::IsWindows() ? 'Stalwart' : 'SpamAssassin';
     }
 }

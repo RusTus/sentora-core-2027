@@ -43,7 +43,7 @@ class sys_spamav
     static function Definitions()
     {
         $mem = self::MemoryMB();
-        return array(
+        $defs = array(
             // --- ClamAV ---
             'clam_enabled' => array('clamav', 'Scan mail for viruses', 'bool', $mem >= 1900 ? 'true' : 'false',
                 // (%s: this server's memory in GB, filled in after translating)
@@ -103,6 +103,8 @@ class sys_spamav
             'sa_default_action' => array('spamassassin', 'Where spam goes', 'select', 'folder', 'For mailboxes whose owner has not chosen.', array('folder' => 'The Spam folder', 'inbox' => 'The inbox, marked as spam')),
             'spamav_keep_days' => array('spamassassin', 'Keep activity for (days)', 'int', '30', 'How long the spam and virus activity shown in SpamAV is kept.', array(1, 365)),
         );
+        // (Windows: the settings its ClamAV and Stalwart take, sys_winspamav)
+        return sys_versions::IsWindows() ? sys_winspamav::Definitions($defs) : $defs;
     }
 
     /**
@@ -112,6 +114,9 @@ class sys_spamav
      */
     static function MemoryMB()
     {
+        if (sys_versions::IsWindows()) {
+            return sys_winspamav::MemoryMB();
+        }
         $m = @file_get_contents('/proc/meminfo');
         return ($m && preg_match('/MemTotal:\s+(\d+)/', $m, $x)) ? (int) round($x[1] / 1024) : 0;
     }

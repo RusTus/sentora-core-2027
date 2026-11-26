@@ -887,8 +887,19 @@ DNS, FTP, mailboxes and cron on Windows (2026-11-25, tested in the Windows insta
   (phpaccounts\mail-config.json), so a change in Stalwart's own admin pages stays. A mailbox's size (its quota in MB, as
   Dovecot reads it on Linux) is its Stalwart disk quota (x:Account quotas.maxDiskQuota). Names found in Stalwart 1.1.1's
   schema (resources/schema). Linux's SOGo settings are not shown on Windows.
+- SpamAV Admin (2026-11-26): on Windows sys_winspamav. The same x_settings, cut to what Windows has (Definitions() keeps
+  the Windows ones, with the installer's values as defaults: largest file 64 MB, most data 200 MB, 8 threads, "try later"
+  when ClamAV does not answer, never refuse spam). The daemon (SYSTEM) sets only the named lines of clamd.conf and
+  freshclam.conf (clamd_conf, freshclam_conf; line ends do not count as a change) and restarts ClamAV or FreshClam when
+  one changed; starts or stops both with "Scan mail for viruses"; writes apps\mailscan\options.json (mailscan_options:
+  enabled, on_fail), which the virus check page scan.php reads; sets Stalwart's x:SpamSettings (enable, scoreSpam,
+  scoreReject) when the panel's values changed (phpaccounts\spamav-stalwart.json); handles Restart and Update signatures
+  (freshclam_exe); writes spamav-status.json (services by sc query, signatures from the .cvd/.cld headers in
+  clamav_db_dir, clamd_exe --version). A service the installer did not make (ClamAV's list not downloaded) is left out.
+  Not on Windows yet: website file scanning, the mail figures (Postfix's log), senders lists, subject tag, mailbox
+  owners' own settings (Mail > SpamAV).
 - Still Linux-only, each needing its own Windows way (2026-11-25): PHP Versions (one PHP on Windows), Branding's
-  addresses (Linux's vhost writer), SpamAV, GoAccess and Matomo stats, AutoIP, Repo Browser (add-ons are Linux's).
+  addresses (Linux's vhost writer), GoAccess and Matomo stats, AutoIP, Repo Browser (add-ons are Linux's).
 Where Windows lives (owner, 2026-11-25): the native installer moved from RusTus/sentora-windows-2027 (left with a note) to
 sentora-installers-2027/windows/server (install-zpanel-stack.ps1; install-web-stack.ps1 = the same file with
 $Edition = 'stack', kept for other uses; README.txt; tests/), tested by .github/workflows/windows-server-test.yml there (a

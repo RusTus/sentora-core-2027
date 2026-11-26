@@ -8,5 +8,6 @@
     </authors>
     <updateurl></updateurl>
     <type>user</type>
+    <windows>yes</windows>
     <defaultcat>Server Admin</defaultcat>
 </module>

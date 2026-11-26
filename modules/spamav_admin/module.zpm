@@ -12,13 +12,16 @@
         <div class="sa-tabs" role="tablist">
             <button type="button" class="sa-tab" role="tab" data-tab="overview"><svg class="sa-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg><: Overview :></button>
             <button type="button" class="sa-tab" role="tab" data-tab="clamav"><@ ClamState @><: Virus scanning :> <small>ClamAV</small></button>
-            <button type="button" class="sa-tab" role="tab" data-tab="spamassassin"><@ SpamState @><: Spam filtering :> <small>SpamAssassin</small></button>
+            <button type="button" class="sa-tab" role="tab" data-tab="spamassassin"><@ SpamState @><: Spam filtering :> <small><@ SpamEngine @></small></button>
+            <% if Linux %>
             <button type="button" class="sa-tab" role="tab" data-tab="files"><@ FileState @><: File scanning :> <small>ClamAV</small></button>
+            <% endif %>
         </div>
 
         <section class="sa-pane" data-pane="overview" role="tabpanel">
             <@ JobBar @>
             <div class="sa-scanners"><@ Scanners @></div>
+            <% if Linux %>
             <@ FileSummary @>
             <h3 class="sa-h"><: All mail on this server :></h3>
             <div class="sa-row">
@@ -29,6 +32,7 @@
                 </div>
             </div>
             <div class="sa-tops"><@ TopLists @></div>
+            <% endif %>
         </section>
 
         <section class="sa-pane" data-pane="clamav" role="tabpanel">
@@ -38,6 +42,7 @@
             </div>
         </section>
 
+        <% if Linux %>
         <section class="sa-pane" data-pane="files" role="tabpanel">
             <@ FileScan @>
             <div class="sa-card sa-fs-settings">
@@ -45,6 +50,7 @@
                 <@ FileForm @>
             </div>
         </section>
+        <% endif %>
 
         <section class="sa-pane" data-pane="spamassassin" role="tabpanel">
             <div class="sa-card">
@@ -70,7 +76,7 @@
     each(sa, '.sa-tab', function (b) { b.addEventListener('click', function () { show(b.getAttribute('data-tab')); }); });
     var start = sa.getAttribute('data-open');
     if (!start) { try { start = sessionStorage.getItem('sa-tab'); } catch (e) {} }
-    show(['overview', 'clamav', 'spamassassin', 'files'].indexOf(start) >= 0 ? start : 'overview');
+    show(start && /^[a-z]+$/.test(start) && sa.querySelector('.sa-tab[data-tab="' + start + '"]') ? start : 'overview');
     each(sa, '[data-goto]', function (b) { b.addEventListener('click', function () { show(b.getAttribute('data-goto')); }); });
     each(sa, '.sa-fs-form[data-confirm]', function (f) { f.addEventListener('submit', function (e) { if (!window.confirm(f.getAttribute('data-confirm'))) { e.preventDefault(); } }); });
 

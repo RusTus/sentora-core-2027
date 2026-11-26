@@ -8,6 +8,15 @@
  * Written by RusTus, 2026-11-13
  */
 global $zdbh; // hooks are included inside a function
+if (sys_versions::IsWindows()) {
+    // (Windows: ClamAV's settings files, the mail virus check's options and Stalwart's spam filter, sys_winspamav)
+    echo fs_filehandler::NewLine() . "START SpamAV (Windows)" . fs_filehandler::NewLine();
+    foreach (sys_winspamav::Apply() as $svLine) {
+        echo $svLine . fs_filehandler::NewLine();
+    }
+    echo "END SpamAV (Windows)" . fs_filehandler::NewLine();
+    return;
+}
 if (!is_file(sys_platform::Get('spamd_bin')) && !is_file(sys_platform::Get('clamd_bin'))) {
     return; // not installed on this server
 }
