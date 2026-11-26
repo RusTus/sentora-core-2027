@@ -41,14 +41,27 @@ class matomo_helper
         $done = true;
     }
 
-    /**
+        /**
+     * Matomo's folder: the panel's etc/apps/matomo (on Windows under sentora_root).
+     *
+     * @return string With a slash at the end.
+     */
+    static function AppDir()
+    {
+        if (sys_versions::IsWindows()) {
+            return rtrim(str_replace('\\', '/', (string) ctrl_options::GetSystemOption('sentora_root')), '/') . '/etc/apps/matomo/';
+        }
+        return self::APP_DIR;
+    }
+
+/**
      * Check that Matomo and its SentoraSync plugin are installed.
      *
      * @return bool
      */
     static function Installed()
     {
-        return is_file(self::APP_DIR . 'config/config.ini.php') && is_dir(self::APP_DIR . 'plugins/SentoraSync');
+        return is_file(self::AppDir() . 'config/config.ini.php') && is_dir(self::AppDir() . 'plugins/SentoraSync');
     }
 
     /**
@@ -97,6 +110,11 @@ class matomo_helper
      */
     static function Url()
     {
+        if (sys_versions::IsWindows()) {
+            // (Windows: the panel's own site is plain HTTP on apache_port; HTTPS only comes with the mail part)
+            $port = (int) ctrl_options::GetSystemOption('apache_port');
+            return 'http://' . ctrl_options::GetSystemOption('sentora_domain') . ($port > 0 && $port !== 80 ? ':' . $port : '') . '/etc/apps/matomo/';
+        }
         return 'https://' . ctrl_options::GetSystemOption('sentora_domain') . '/etc/apps/matomo/';
     }
 
@@ -188,7 +206,7 @@ class matomo_helper
      */
     static function TrustHosts($want = null, $file = null)
     {
-        $file = $file === null ? self::APP_DIR . 'config/config.ini.php' : $file;
+        $file = $file === null ? self::AppDir() . 'config/config.ini.php' : $file;
         if ($want === null) {
             $want = array(ctrl_statsdomains::PanelDomain(), ctrl_options::GetSystemOption('server_ip'), '127.0.0.1', 'localhost');
             if (class_exists('sys_serverip')) {
@@ -259,7 +277,7 @@ class matomo_helper
      */
     static function PluginActive()
     {
-        $c = (string) @file_get_contents(self::APP_DIR . 'config/config.ini.php');
+        $c = (string) @file_get_contents(self::AppDir() . 'config/config.ini.php');
         return (bool) preg_match('/^\s*Plugins\[\]\s*=\s*"SentoraSync"/m', $c);
     }
 
@@ -298,7 +316,16 @@ class matomo_helper
      */
     static function Console($args)
     {
-        $cmd = 'cd ' . escapeshellarg(self::APP_DIR) . ' && setpriv --reuid=sentora --regid=sentora --init-groups --reset-env ' . escapeshellarg(sys_platform::Get('php_cli', array('v' => sys_phpversions::DefaultVersion()))) . ' console';
+        if (sys_versions::IsWindows()) {
+            // (Windows: as the daemon itself, SYSTEM, with its own PHP; the files Matomo writes take its folders' rights)
+            $cmd = 'cd /d "' . str_replace('/', '\\', self::AppDir()) . '" && "' . PHP_BINARY . '" console';
+            foreach ($args as $a) {
+                $cmd .= ' "' . str_replace('"', '', (string) $a) . '"';
+            }
+            exec($cmd . ' 2>&1', $out, $rc);
+            return array($rc, implode("\n", $out));
+        }
+        $cmd = 'cd ' . escapeshellarg(self::AppDir()) . ' && setpriv --reuid=sentora --regid=sentora --init-groups --reset-env ' . escapeshellarg(sys_platform::Get('php_cli', array('v' => sys_phpversions::DefaultVersion()))) . ' console';
         foreach ($args as $a) {
             $cmd .= ' ' . escapeshellarg($a);
         }

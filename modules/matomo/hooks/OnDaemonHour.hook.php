@@ -42,8 +42,8 @@ function MatomoImportLogs()
     // a command line (where every user on the server could see it with ps)
     $tokFile = $dir . 'importer.token';
     file_put_contents($tokFile, $token);
-    chown($tokFile, 'sentora');
-    chmod($tokFile, 0600);
+    @chown($tokFile, 'sentora');
+    @chmod($tokFile, 0600);
     $owner = ctrl_statsdomains::OwnerName();
     $panel = ctrl_statsdomains::PanelDomain();
     $sql = $zdbh->prepare("SELECT s.*, a.ac_user_vc FROM x_matomo_sites s JOIN x_accounts a ON a.ac_id_pk = s.ms_acc_fk
@@ -82,8 +82,8 @@ function MatomoImportLogs()
         $chunk = substr($chunk, 0, $end + 1);
         $part = $dir . 'import-' . (int) $s['ms_idsite_in'] . '.log';
         file_put_contents($part, $chunk);
-        chown($part, 'sentora');
-        chmod($part, 0600);
+        @chown($part, 'sentora');
+        @chmod($part, 0600);
         // The importer sends the visits in batches of 50 (its own 200 made a request of
         // over 128 KB, refused with 413 "Request Entity Too Large" on the owner's panel).
         // The importer sends the lines to Matomo on this server: the panel's name is
@@ -96,8 +96,22 @@ function MatomoImportLogs()
             . "t=open(" . var_export($tokFile, true) . ").read().strip()\n"
             . "sys.argv=['import_logs.py','--url=" . matomo_helper::Url() . "','--token-auth='+t,'--idsite=" . (int) $s['ms_idsite_in'] . "',"
             . "'--recorders=2','--recorder-max-payload-size=50','--enable-http-errors','--enable-http-redirects','--accept-invalid-ssl-certificate'," . var_export($part, true) . "]\n"
-            . "runpy.run_path(" . var_export(matomo_helper::APP_DIR . 'misc/log-analytics/import_logs.py', true) . ", run_name='__main__')\n";
-        exec('setpriv --reuid=sentora --regid=sentora --init-groups --reset-env /usr/bin/python3 -c ' . escapeshellarg($py) . ' 2>&1', $out, $rc);
+            . "runpy.run_path(" . var_export(matomo_helper::AppDir() . 'misc/log-analytics/import_logs.py', true) . ", run_name='__main__')\n";
+        if (sys_versions::IsWindows()) {
+            // (Windows: the installer's Python, as SYSTEM; the script in a file, as cmd.exe passes no lines in -c)
+            $pyExe = str_replace('/', '\\', (string) ctrl_options::GetSystemOption('python_exe'));
+            $pyFile = $dir . 'import-' . (int) $s['ms_idsite_in'] . '.py';
+            file_put_contents($pyFile, $py);
+            if ($pyExe !== '' && is_file($pyExe)) {
+                exec('"' . $pyExe . '" "' . str_replace('/', '\\', $pyFile) . '" 2>&1', $out, $rc);
+            } else {
+                $out = array('Fatal error: no Python on this server (setting python_exe; the Windows installer adds it)');
+                $rc = 1;
+            }
+            @unlink($pyFile);
+        } else {
+            exec('setpriv --reuid=sentora --regid=sentora --init-groups --reset-env /usr/bin/python3 -c ' . escapeshellarg($py) . ' 2>&1', $out, $rc);
+        }
         @unlink($part);
         if ($rc === 0) {
             $zdbh->prepare("UPDATE x_matomo_sites SET ms_offset_bi = :o, ms_inode_bi = :i WHERE ms_domain_vc = :d")

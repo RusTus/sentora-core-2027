@@ -29,6 +29,10 @@ class ctrl_statsdomains
      */
     static function PanelLog()
     {
+        if (sys_versions::IsWindows()) {
+            // (Windows: the panel's own site in httpd-vhosts.conf logs here)
+            return rtrim(str_replace('\\', '/', (string) ctrl_options::GetSystemOption('log_dir')), '/') . '/apache/panel-access.log';
+        }
         return rtrim((string) ctrl_options::GetSystemOption('log_dir'), '/') . '/sentora-access.log';
     }
 

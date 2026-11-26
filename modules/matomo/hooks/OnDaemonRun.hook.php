@@ -105,8 +105,8 @@ function MatomoSync()
     }
     $specFile = matomo_helper::SPEC_DIR . 'spec.json';
     file_put_contents($specFile, $json);
-    chown($specFile, 'sentora');
-    chmod($specFile, 0600);
+    @chown($specFile, 'sentora');
+    @chmod($specFile, 0600);
     list($rc, $out) = matomo_helper::Console(array('sentora:sync', '--spec=' . $specFile));
     @unlink($specFile);
     $lines = explode("\n", trim($out));

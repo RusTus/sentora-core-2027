@@ -920,8 +920,15 @@ DNS, FTP, mailboxes and cron on Windows (2026-11-25, tested in the Windows insta
   with the old address, the zones written again), but switched off once at its first Windows run (setting
   autoip_windows_off): a server behind a router would otherwise have its records changed to the router's address
   unasked. No script on Windows (no file there is only root's to change): the page hides it, the daemon refuses it.
-- Still Linux-only, each needing its own Windows way (2026-11-25): PHP Versions (one PHP on Windows), GoAccess and
-  Matomo stats, Repo Browser (add-ons are Linux's).
+- Matomo on Windows (2026-11-26): the installer drives Matomo's own setup pages over http://127.0.0.1 (Host: the panel's
+  name; database sentora_matomo, user matomo, super user sentora_admin with its password in configs\panel), gives Apache
+  write on etc\apps\matomo\tmp and config, runs the console steps (SentoraSync on, framed pages, no browser archiving,
+  no calls home), and unpacks Python 3.13.9 embeddable (pinned SHA-256) into bin\python (setting python_exe).
+  matomo_helper::AppDir/Url/Console have Windows branches (sentora_root; plain http on apache_port; the console as
+  SYSTEM with the daemon's PHP); the hourly import writes its Python script to a file (cmd.exe takes no lines in -c).
+  The panel's own log on Windows is logs\apache\panel-access.log (ctrl_statsdomains::PanelLog).
+- Still Linux-only, each needing its own Windows way (2026-11-25): PHP Versions (one PHP on Windows), GoAccess (no
+  native Windows build), Repo Browser (add-ons are Linux's).
 Where Windows lives (owner, 2026-11-25): the native installer moved from RusTus/sentora-windows-2027 (left with a note) to
 sentora-installers-2027/windows/server (install-zpanel-stack.ps1; install-web-stack.ps1 = the same file with
 $Edition = 'stack', kept for other uses; README.txt; tests/), tested by .github/workflows/windows-server-test.yml there (a
