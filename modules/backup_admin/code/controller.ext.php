@@ -25,7 +25,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
- * Updated by RusTus, 2026-11-24
+ * Updated by RusTus, 2026-11-26
  */
 /**
  * Backup Config module (Admin): backup settings, off-server backup and panel restore.
