@@ -13,16 +13,14 @@
             <button type="button" class="sa-tab" role="tab" data-tab="overview"><svg class="sa-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg><: Overview :></button>
             <button type="button" class="sa-tab" role="tab" data-tab="clamav"><@ ClamState @><: Virus scanning :> <small>ClamAV</small></button>
             <button type="button" class="sa-tab" role="tab" data-tab="spamassassin"><@ SpamState @><: Spam filtering :> <small><@ SpamEngine @></small></button>
-            <% if Linux %>
             <button type="button" class="sa-tab" role="tab" data-tab="files"><@ FileState @><: File scanning :> <small>ClamAV</small></button>
-            <% endif %>
         </div>
 
         <section class="sa-pane" data-pane="overview" role="tabpanel">
             <@ JobBar @>
             <div class="sa-scanners"><@ Scanners @></div>
-            <% if Linux %>
             <@ FileSummary @>
+            <% if Linux %>
             <h3 class="sa-h"><: All mail on this server :></h3>
             <div class="sa-row">
                 <div class="sa-tiles"><@ Totals @></div>
@@ -42,7 +40,6 @@
             </div>
         </section>
 
-        <% if Linux %>
         <section class="sa-pane" data-pane="files" role="tabpanel">
             <@ FileScan @>
             <div class="sa-card sa-fs-settings">
@@ -50,7 +47,6 @@
                 <@ FileForm @>
             </div>
         </section>
-        <% endif %>
 
         <section class="sa-pane" data-pane="spamassassin" role="tabpanel">
             <div class="sa-card">

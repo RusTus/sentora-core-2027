@@ -14,6 +14,10 @@ if (sys_versions::IsWindows()) {
     foreach (sys_winspamav::Apply() as $svLine) {
         echo $svLine . fs_filehandler::NewLine();
     }
+    $svFs = sys_filescan::Daemon();
+    if ($svFs !== '') {
+        echo 'SpamAV: ' . $svFs . fs_filehandler::NewLine();
+    }
     echo "END SpamAV (Windows)" . fs_filehandler::NewLine();
     return;
 }

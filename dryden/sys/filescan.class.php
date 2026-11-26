@@ -12,6 +12,11 @@
  * read (never deleted), to be put back or deleted from the page. The results are a JSON file the
  * page reads (root:<panel user> 0640); the page's buttons are requests the daemon (root) carries out.
  *
+ * On Windows the daemon runs as SYSTEM and starts the scan the same way (PHP's own program); clamd answers on
+ * 127.0.0.1:3310; the results are in the panel's state folder; the quarantine is filescan_quarantine (a folder the
+ * installer locks to Administrators and SYSTEM; a file moved there takes that folder's rights, and its folder's again
+ * when it is put back); a folder that leads outside the account's own (a junction) is never followed.
+ *
  * @package Sentora
  * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
  *
@@ -32,13 +37,62 @@ class sys_filescan
     const FINDINGS = 500;
 
     /**
+     * The results file: Linux's, or on Windows the panel's state folder (the daemon writes it, the page reads it).
+     *
+     * @return string
+     */
+    static function StateFile()
+    {
+        return sys_versions::IsWindows() ? sys_statedir::DIR . '/filescan.json' : self::STATE;
+    }
+
+    /**
+     * Where quarantined files go: Linux's folder, or on Windows the filescan_quarantine setting ('' when not set).
+     *
+     * @return string
+     */
+    static function QuarantineDir()
+    {
+        return sys_versions::IsWindows() ? rtrim(str_replace('\\', '/', (string) ctrl_options::GetSystemOption('filescan_quarantine')), '/') : self::QUARANTINE;
+    }
+
+    /**
+     * A file's own rights from its folder again (Windows: icacls /reset), after it was moved.
+     *
+     * @param string $path
+     * @return void
+     */
+    static function InheritRights($path)
+    {
+        if (sys_versions::IsWindows()) {
+            exec('icacls.exe "' . str_replace('/', '\\', $path) . '" /reset /q 2>&1');
+        }
+    }
+
+    /**
+     * Whether a path is a folder inside another one (case and slashes as Windows compares them there).
+     *
+     * @param string $path
+     * @param string $base
+     * @return bool
+     */
+    static function Inside($path, $base)
+    {
+        $n = function ($x) {
+            $x = rtrim(str_replace('\\', '/', (string) $x), '/') . '/';
+            return sys_versions::IsWindows() ? strtolower($x) : $x;
+        };
+        return strpos($n($path), $n($base)) === 0;
+    }
+
+    /**
      * The results so far ('runs', 'findings', 'running', 'last'...), or an empty set.
      *
      * @return array<string, mixed>
      */
     static function State()
     {
-        $s = json_decode((string) @file_get_contents(self::STATE), true);
+        $s = json_decode((string) @file_get_contents(self::StateFile()), true);
         return is_array($s) ? $s + array('runs' => array(), 'findings' => array()) : array('runs' => array(), 'findings' => array());
     }
 
@@ -50,7 +104,7 @@ class sys_filescan
      */
     static function Save(array $s)
     {
-        $tmp = self::STATE . '.new';
+        $tmp = self::StateFile() . '.new';
         @unlink($tmp);
         if (@file_put_contents($tmp, json_encode($s), LOCK_EX) === false) {
             return;
@@ -58,7 +112,7 @@ class sys_filescan
         @chown($tmp, 0);
         @chgrp($tmp, sys_accountphp::PANEL_USER);
         @chmod($tmp, 0640);
-        @rename($tmp, self::STATE);
+        @rename($tmp, self::StateFile());
     }
 
     /**
@@ -70,7 +124,8 @@ class sys_filescan
      */
     static function Ask($fh, $socket)
     {
-        $c = @stream_socket_client('unix://' . $socket, $errno, $err, 10);
+        // (Windows: clamd on this server's loopback address only)
+        $c = @stream_socket_client(sys_versions::IsWindows() ? 'tcp://127.0.0.1:3310' : 'unix://' . $socket, $errno, $err, 10);
         if ($c === false) {
             return array('error', 'clamd does not answer (' . $err . ')');
         }
@@ -111,6 +166,9 @@ class sys_filescan
         $socket = (string) sys_platform::Get('clamd_socket');
         $maxBytes = max(1, (int) sys_spamav::Get('fs_max_file_size')) * 1048576;
         $streamMax = max(1, (int) sys_spamav::Get('clam_max_scan_size')) * 1048576;
+        if (sys_versions::IsWindows() && preg_match('/^StreamMaxLength\s+(\d+)M/mi', (string) @file_get_contents((string) ctrl_options::GetSystemOption('clamd_conf')), $sm)) {
+            $streamMax = min($streamMax, (int) $sm[1] * 1048576);   // (the installer's clamd.conf)
+        }
         $maxBytes = min($maxBytes, $streamMax);   // (clamd reads no more than its StreamMaxLength)
         $backups = sys_spamav::On('fs_backups');
         $state = self::State();
@@ -133,17 +191,22 @@ class sys_filescan
             if (!is_dir($home) || is_link($home)) {
                 continue;
             }
+            $realHome = (string) realpath($home);
             $run['accounts']++;
             $say('scanning ' . $user);
             $it = new RecursiveIteratorIterator(
                 new RecursiveCallbackFilterIterator(
                     new RecursiveDirectoryIterator($home, FilesystemIterator::SKIP_DOTS | FilesystemIterator::CURRENT_AS_FILEINFO),
-                    function ($f) use ($home, $backups) {
+                    function ($f) use ($home, $backups, $realHome) {
                         if ($f->isLink()) {
                             return false;   // never through a link
                         }
+                        // (Windows: nor through a junction or anything else that leads out of the account's folder)
+                        if (sys_versions::IsWindows() && $f->isDir() && ($realHome === '' || !sys_filescan::Inside((string) realpath($f->getPathname()), $realHome))) {
+                            return false;
+                        }
                         // (the account's backups: zip files of the site, scanned only when chosen)
-                        return $backups || $f->getPathname() !== $home . '/backups';
+                        return $backups || str_replace('\\', '/', $f->getPathname()) !== $home . '/backups';
                     }
                 ),
                 RecursiveIteratorIterator::LEAVES_ONLY,
@@ -153,7 +216,7 @@ class sys_filescan
                 if (!$f->isFile() || $f->isLink()) {
                     continue;
                 }
-                $p = $f->getPathname();
+                $p = str_replace('\\', '/', $f->getPathname());
                 $size = (int) $f->getSize();
                 if (!$full && max((int) $f->getMTime(), (int) $f->getCTime()) < $since) {
                     continue;
@@ -168,7 +231,7 @@ class sys_filescan
                 }
                 $st = fstat($fh);
                 // (the file must still be the one that was listed: not exchanged for something else)
-                if (!$st || ($st['mode'] & 0170000) !== 0100000 || $st['ino'] !== $f->getInode()) {
+                if (!$st || ($st['mode'] & 0170000) !== 0100000 || ($st['ino'] !== $f->getInode() && !(sys_versions::IsWindows() && (!$st['ino'] || !$f->getInode())))) {
                     fclose($fh);
                     continue;
                 }
@@ -232,16 +295,24 @@ class sys_filescan
         if (!is_file($path) || is_link($path)) {
             return '';
         }
-        if (!is_dir(self::QUARANTINE)) {
-            @mkdir(self::QUARANTINE, 0700, true);
-        }
-        @chmod(self::QUARANTINE, 0700);
-        if (is_link(self::QUARANTINE) || fileowner(self::QUARANTINE) !== 0) {
-            return '';
+        $qdir = self::QuarantineDir();
+        if (sys_versions::IsWindows()) {
+            // (the installer made it, locked to Administrators and SYSTEM)
+            if ($qdir === '' || !is_dir($qdir) || is_link($qdir)) {
+                return '';
+            }
+        } else {
+            if (!is_dir($qdir)) {
+                @mkdir($qdir, 0700, true);
+            }
+            @chmod($qdir, 0700);
+            if (is_link($qdir) || fileowner($qdir) !== 0) {
+                return '';
+            }
         }
         $id = bin2hex(random_bytes(8));
         $st = lstat($path);
-        $dst = self::QUARANTINE . '/' . $id;
+        $dst = $qdir . '/' . $id;
         if (!@rename($path, $dst)) {
             if (!@copy($path, $dst) || !@unlink($path)) {
                 @unlink($dst);
@@ -251,6 +322,7 @@ class sys_filescan
         @chown($dst, 0);
         @chgrp($dst, 0);
         @chmod($dst, 0000);
+        self::InheritRights($dst);
         file_put_contents($dst . '.json', json_encode(array('path' => $path, 'uid' => $st['uid'], 'gid' => $st['gid'], 'mode' => $st['mode'] & 07777, 'sig' => $x['sig'], 'time' => time())));
         @chmod($dst . '.json', 0600);
         return $id;
@@ -268,7 +340,7 @@ class sys_filescan
         if (!preg_match('/^[a-f0-9]{16}$/', (string) $id)) {
             return 'unknown file';
         }
-        $f = self::QUARANTINE . '/' . $id;
+        $f = self::QuarantineDir() . '/' . $id;
         $meta = json_decode((string) @file_get_contents($f . '.json'), true);
         if (!is_file($f) || is_link($f) || !is_array($meta)) {
             return 'not in quarantine';
@@ -278,8 +350,16 @@ class sys_filescan
             $hosted = rtrim((string) ctrl_options::GetSystemOption('hosted_dir'), '/') . '/';
             $dir = dirname($to);
             $realDir = realpath($dir);
+            if ($realDir !== false && sys_versions::IsWindows()) {
+                $realDir = str_replace('\\', '/', $realDir);
+                $same = strtolower($realDir) === strtolower($dir);
+                $in = self::Inside($realDir, $hosted);
+            } else {
+                $same = $realDir === $dir;
+                $in = $realDir !== false && strpos($realDir . '/', $hosted) === 0;
+            }
             // only back into the hosting folder, into the folder it came from, never over something
-            if (strpos($to, '..') !== false || $realDir === false || strpos($realDir . '/', $hosted) !== 0 || $realDir !== $dir || file_exists($to) || is_link($to)) {
+            if (strpos($to, '..') !== false || $realDir === false || !$in || !$same || file_exists($to) || is_link($to)) {
                 return 'its folder is gone or something else is there now';
             }
             if (!@rename($f, $to)) {
@@ -288,6 +368,7 @@ class sys_filescan
             @chown($to, (int) $meta['uid']);
             @chgrp($to, (int) $meta['gid']);
             @chmod($to, (int) $meta['mode']);
+            self::InheritRights($to);
         } else {
             @unlink($f);
         }
@@ -348,6 +429,12 @@ class sys_filescan
             return '';
         }
         $start = function ($args) use ($bin) {
+            if (sys_versions::IsWindows()) {
+                // (as SYSTEM, on its own: its output in the panel's log folder)
+                $log = str_replace('/', '\\', rtrim(str_replace('\\', '/', (string) ctrl_options::GetSystemOption('log_dir')), '/') . '/panel/filescan-last.log');
+                pclose(popen('start "" /B cmd.exe /c ""' . PHP_BINARY . '" -q "' . str_replace('/', '\\', $bin) . '" ' . $args . ' > "' . $log . '" 2>&1"', 'r'));
+                return;
+            }
             $php = str_replace('{v}', '', (string) sys_platform::Get('php_cli'));
             $php = is_executable($php) ? $php : 'php';
             ctrl_system::Background(escapeshellarg($php) . ' ' . escapeshellarg($bin) . ' ' . $args . ' > /var/sentora/logs/filescan-last.log 2>&1');

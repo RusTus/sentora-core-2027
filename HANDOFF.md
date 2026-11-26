@@ -896,8 +896,12 @@ DNS, FTP, mailboxes and cron on Windows (2026-11-25, tested in the Windows insta
   scoreReject) when the panel's values changed (phpaccounts\spamav-stalwart.json); handles Restart and Update signatures
   (freshclam_exe); writes spamav-status.json (services by sc query, signatures from the .cvd/.cld headers in
   clamav_db_dir, clamd_exe --version). A service the installer did not make (ClamAV's list not downloaded) is left out.
-  Not on Windows yet: website file scanning, the mail figures (Postfix's log), senders lists, subject tag, mailbox
-  owners' own settings (Mail > SpamAV).
+  Website file scanning (2026-11-26) is sys_filescan on Windows too: bin/sentora-file-scan run by the daemon (SYSTEM,
+  started with start /B, output in logs\panel\filescan-last.log), clamd over 127.0.0.1:3310 (files up to clamd.conf's
+  StreamMaxLength), results in data\sentora\filescan.json, quarantine filescan_quarantine (data\quarantine, locked by
+  the installer; a moved file takes the folder's rights with icacls /reset, and its folder's again when put back), and a
+  folder whose real path leads out of the account (a junction) is never followed. Not on Windows yet: the mail figures
+  (Postfix's log), senders lists, subject tag, mailbox owners' own settings (Mail > SpamAV).
 - Still Linux-only, each needing its own Windows way (2026-11-25): PHP Versions (one PHP on Windows), Branding's
   addresses (Linux's vhost writer), GoAccess and Matomo stats, AutoIP, Repo Browser (add-ons are Linux's).
 Where Windows lives (owner, 2026-11-25): the native installer moved from RusTus/sentora-windows-2027 (left with a note) to

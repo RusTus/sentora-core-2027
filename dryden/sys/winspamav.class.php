@@ -12,7 +12,7 @@
  *   changed (so a change made in Stalwart's own admin pages stays until the panel's changes);
  * - the status the page shows (spamav-status.json: services, signatures, versions), and the jobs asked for on the page
  *   (restart, signature update).
- * Not on Windows (yet): website file scanning, mailbox owners' own spam settings, the mail figures, senders lists.
+ * Website file scanning is Linux's (sys_filescan, Windows paths there). Not on Windows (yet): mailbox owners' own spam settings, the mail figures, senders lists.
  *
  * @package Sentora
  * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
@@ -39,6 +39,8 @@ class sys_winspamav
             'clam_scan_html' => null, 'clam_phishing_sigs' => null, 'clam_phishing_urls' => null, 'clam_heuristic' => null, 'clam_alert_encrypted' => null,
             'clam_db_checks' => null, 'clam_threads' => '8',
             'sa_enabled' => null, 'sa_required_score' => null, 'sa_reject_score' => '0',
+            'fs_enabled' => null, 'fs_hour' => null, 'fs_full_day' => null, 'fs_max_file_size' => null, 'fs_backups' => null, 'fs_quarantine' => null,
+            'fs_notify_owner' => null,
         );
     }
 

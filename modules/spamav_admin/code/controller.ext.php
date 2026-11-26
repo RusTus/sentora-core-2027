@@ -74,7 +74,7 @@ class module_controller extends ctrl_module
             return;
         }
         $section = (string) $controller->GetControllerRequest('FORM', 'inSection');
-        if (!in_array($section, sys_versions::IsWindows() ? array('clamav', 'spamassassin') : array('clamav', 'spamassassin', 'filescan'), true)) {
+        if (!in_array($section, array('clamav', 'spamassassin', 'filescan'), true)) {
             return;
         }
         self::$section = $section;
@@ -113,7 +113,7 @@ class module_controller extends ctrl_module
         foreach ($clean as $name => $val) {
             $up->execute(array(':v' => $val, ':n' => $name));
         }
-        if (sys_versions::IsWindows()) {
+        if (sys_versions::IsWindows() && $section !== 'filescan') {
             sys_winphp::Soon();
             self::$msg[] = array('ok', ($section === 'clamav' ? 'ClamAV' : 'Spam filter') . ' settings saved. The daemon applies them within a minute.');
             return;
@@ -645,7 +645,9 @@ class module_controller extends ctrl_module
         }
         file_put_contents(sys_filescan::REQUEST, json_encode(array('action' => $what, 'id' => $id, 'by' => ctrl_users::GetUserDetail()['username'], 'time' => time())));
         $zsudo = (string) ctrl_options::GetSystemOption('zsudo');
-        if ($zsudo !== '' && sys_versions::CanRun($zsudo) && function_exists('exec')) {
+        if (sys_versions::IsWindows()) {
+            sys_winphp::Soon();
+        } elseif ($zsudo !== '' && sys_versions::CanRun($zsudo) && function_exists('exec')) {
             @touch('/var/lib/sentora/tmp/daemon-again');
             exec(escapeshellcmd($zsudo) . ' daemon-run > /dev/null 2>&1');
         }
@@ -964,7 +966,7 @@ class module_controller extends ctrl_module
     }
 
     /**
-     * Whether this server keeps the mail figures and scans the websites (template <% if Linux %>: not on Windows yet).
+     * Whether this server keeps the mail figures (template <% if Linux %>: not on Windows yet).
      *
      * @return bool
      */
