@@ -9,7 +9,12 @@
  * Written by RusTus, 2026-11-26
  */
 if (sys_versions::IsWindows()) {
-    return;   // (Windows: older logins, PHP builds and extensions are Linux's; the accounts' services follow sys_winphp)
+    // (Windows: older logins and PHP builds are Linux's; the extensions are each version's php.ini, sys_phpext)
+    $pvExt = sys_phpext::DaemonRun();
+    if ($pvExt) {
+        echo fs_filehandler::NewLine() . "START PHP extensions" . fs_filehandler::NewLine() . implode(fs_filehandler::NewLine(), $pvExt) . fs_filehandler::NewLine() . "END PHP extensions" . fs_filehandler::NewLine();
+    }
+    return;
 }
 sys_oldlogins::DaemonSwitchOff();
 

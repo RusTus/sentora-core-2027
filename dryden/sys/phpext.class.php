@@ -83,6 +83,7 @@ class sys_phpext
             'ffi' => array('never' => 'Lets PHP call any program library directly: a site could step around open_basedir and every other fence between accounts. Not offered on a shared server.'),
             'xdebug' => array('never' => 'A debugger: it slows every site on this PHP a lot and can show a site\'s inner details to visitors. Use it on a development server, not here.'),
             'pcntl' => array('never' => 'Lets a web page start processes of its own outside PHP-FPM\'s limits. Only for command-line PHP; not offered for websites.'),
+            'com_dotnet' => array('never' => 'Windows: lets PHP drive any program on the server through COM (WScript.Shell runs commands): a site could step around every fence between accounts. Not offered on a shared server.'),
             'dl_test' => array('never' => 'A test extension of PHP itself; not useful on a server.'),
             'zend_test' => array('never' => 'A test extension of PHP itself; not useful on a server.'),
         );
@@ -299,6 +300,9 @@ class sys_phpext
      */
     static function IsOwn($file, $ext, $v)
     {
+        if (sys_versions::IsWindows()) {
+            return $file === 'php.ini';   // (Windows: each version's php.ini is the installer's and Sentora's)
+        }
         return $file === self::PREFIX . $ext . '.ini' || ($v !== sys_phpversions::DefaultVersion() && $file === '30-' . $ext . '.ini');
     }
 
@@ -310,6 +314,9 @@ class sys_phpext
      */
     static function DaemonRun()
     {
+        if (sys_versions::IsWindows()) {
+            return self::WinDaemonRun();
+        }
         $report = array();
         $wanted = self::Wanted();
         $old = self::Inventory();
@@ -470,5 +477,204 @@ class sys_phpext
             }
         }
         return array('ok' => false, 'tried' => true, 'time' => time(), 'text' => 'could not be added: the system has no package for it (' . implode(', ', $names) . ')');
+    }
+
+    // ----- Windows: each version's php.ini (bin\php for the default, bin\php-X.Y for the others) -----
+
+    /** The block of each php.ini that Sentora writes (the rest is the installer's). */
+    const WIN_START = '; --- Sentora: PHP Versions > Extensions (written by the panel; changes here are overwritten) ---';
+    const WIN_END = '; --- Sentora: end of PHP Versions > Extensions ---';
+
+    /**
+     * Windows: what one PHP has: its add-ons (ext\php_*.dll), what it loads, and which load from its php.ini.
+     *
+     * @param string $dir The PHP's folder.
+     * @param string $ini The php.ini to try (default its own).
+     * @return array{loaded: string[], files: string[], by: array<string, string>, out: string}
+     */
+    static function WinLook($dir, $ini = '')
+    {
+        $ini = $ini === '' ? $dir . '/php.ini' : $ini;
+        $o = array();
+        exec('"' . str_replace('/', '\\', $dir . '/php.exe') . '" -c "' . str_replace('/', '\\', $ini) . '" -m 2>&1', $o, $rc);
+        $r = array('loaded' => array(), 'files' => array(), 'by' => array(), 'out' => '', 'rc' => (int) $rc);
+        foreach ($o as $l) {
+            $l = strtolower(trim($l));
+            if ($l === '' || $l[0] === '[') {
+                continue;
+            }
+            if (preg_match('/^[a-z0-9_ ]{1,40}$/', $l)) {
+                $r['loaded'][$l === 'zend opcache' ? 'opcache' : $l] = true;
+            } else {
+                $r['out'] .= $l . ' ';   // (a warning: "unable to load dynamic library", "already loaded")
+            }
+        }
+        $r['loaded'] = array_keys($r['loaded']);
+        foreach ((array) glob($dir . '/ext/php_*.dll') as $f) {
+            $r['files'][] = strtolower(substr(basename($f, '.dll'), 4));
+        }
+        foreach (preg_split('/\r?\n/', (string) @file_get_contents($ini)) as $l) {
+            if (preg_match('/^\s*(?:zend_)?extension\s*=\s*"?(?:php_)?([A-Za-z0-9_]+)(?:\.dll)?"?\s*$/', $l, $m)) {
+                $r['by'][strtolower($m[1])] = 'php.ini';
+            }
+        }
+        return $r;
+    }
+
+    /**
+     * Windows: a php.ini with one extension switched on or off and its settings in Sentora's block. Off comments out the
+     * installer's line for it too (";extension=NAME", as php.ini-production ships them).
+     *
+     * @param string $text The php.ini.
+     * @param string $ext
+     * @param bool $on
+     * @param array<string, string> $set Its settings.
+     * @return string
+     */
+    static function WinIni($text, $ext, $on, array $set)
+    {
+        $text = str_replace("\r\n", "\n", $text);
+        $block = array();
+        if (($a = strpos($text, self::WIN_START)) !== false && ($b = strpos($text, self::WIN_END, $a)) !== false) {
+            foreach (explode("\n", trim(substr($text, $a + strlen(self::WIN_START), $b - $a - strlen(self::WIN_START)))) as $l) {
+                if (trim($l) !== '') {
+                    $block[] = $l;
+                }
+            }
+            $text = rtrim(substr($text, 0, $a)) . "\n" . ltrim(substr($text, $b + strlen(self::WIN_END)), "\n");
+        }
+        $zend = $ext === 'opcache' || $ext === 'xdebug';
+        $lineRe = '/^\s*(?:zend_)?extension\s*=\s*"?(?:php_)?' . preg_quote($ext, '/') . '(?:\.dll)?"?\s*$/i';
+        // this extension's lines in Sentora's block go (written again below)
+        $block = array_values(array_filter($block, function ($l) use ($lineRe, $ext) {
+            if (preg_match($lineRe, $l)) {
+                return false;
+            }
+            foreach (sys_phpext::Prefixes($ext) as $pre) {
+                if (stripos(ltrim($l), $pre) === 0) {
+                    return false;
+                }
+            }
+            return true;
+        }));
+        $outside = false;
+        $lines = explode("\n", $text);
+        foreach ($lines as $i => $l) {
+            if (preg_match($lineRe, $l)) {
+                if ($on) {
+                    $outside = true;
+                } else {
+                    $lines[$i] = ';' . ltrim($l);   // (off: the installer's line is commented out)
+                }
+            }
+        }
+        $text = rtrim(implode("\n", $lines));
+        if ($on) {
+            if (!$outside) {
+                $block[] = ($zend ? 'zend_extension' : 'extension') . '=' . $ext;
+            }
+            foreach ($set as $k => $v) {
+                $block[] = $k . ' = ' . $v;
+            }
+        }
+        if ($block) {
+            $text .= "\n\n" . self::WIN_START . "\n" . implode("\n", $block) . "\n" . self::WIN_END;
+        }
+        return str_replace("\n", "\r\n", $text) . "\r\n";
+    }
+
+    /**
+     * Windows: the daemon's part (SYSTEM). Lists what every PHP has, tries each change on a copy of its php.ini first
+     * (php.exe -m: it must load, or no longer load, and PHP must not warn), keeps what PHP accepts, and has the accounts'
+     * PHP rebuilt from the new php.ini (phpaccount.ps1 sync rebuilds an account whose php.ini is older).
+     *
+     * @return string[]
+     */
+    static function WinDaemonRun()
+    {
+        $report = array();
+        $wanted = self::Wanted();
+        $old = self::Inventory();
+        $bin = sys_phpversions::WinBin();
+        $sig = sha1(json_encode($wanted) . '|' . implode(',', sys_phpversions::Installed()));
+        $first = $old ? reset($old) : array();
+        if (isset($first['sig'], $first['checked']) && $first['sig'] === $sig && (int) $first['checked'] > time() - 3600) {
+            return array();
+        }
+        $inv = array();
+        $default = sys_phpversions::DefaultVersion();
+        $any = false;
+        foreach (array_unique(array_merge(array($default), sys_phpversions::Installed())) as $v) {
+            $dir = $bin . ($v === $default ? 'php' : 'php-' . $v);
+            $iniFile = $dir . '/php.ini';
+            if (!is_file($dir . '/php.exe') || !is_file($iniFile)) {
+                continue;
+            }
+            $look = self::WinLook($dir);
+            $results = isset($old[$v]['results']) && is_array($old[$v]['results']) ? $old[$v]['results'] : array();
+            $text = (string) file_get_contents($iniFile);
+            $try = $dir . '/php.ini.sentora-try';
+            $baseOut = $look['out'];   // (warnings this PHP already gives are not held against a change)
+            $list = isset($wanted[$v]) && is_array($wanted[$v]) ? $wanted[$v] : array();
+            uksort($list, function ($a, $b) {
+                $first = array('igbinary' => 0, 'msgpack' => 1, 'apcu' => 2);
+                return (isset($first[$a]) ? $first[$a] : 9) - (isset($first[$b]) ? $first[$b] : 9) ?: strcmp($a, $b);
+            });
+            foreach ($list as $ext => $want) {
+                if (!preg_match('/^[a-z0-9_]{1,40}$/', (string) $ext) || self::Never($ext) !== '' || $ext === 'snuffleupagus') {
+                    continue;
+                }
+                if (!in_array($ext, $look['files'], true)) {
+                    continue;   // (built in, or not in this build)
+                }
+                $on = !empty($want['on']);
+                list($set) = self::ParseSettings($ext, isset($want['ini']) ? (string) $want['ini'] : '');
+                $new = self::WinIni($text, $ext, $on, $set);
+                if ($new === $text) {
+                    continue;
+                }
+                if (@file_put_contents($try, $new) === false) {
+                    $report[] = 'PHP ' . $v . ': could not write ' . $try;
+                    break;
+                }
+                $t = self::WinLook($dir, $try);
+                $loaded = in_array($ext, $t['loaded'], true);
+                if ($t['rc'] !== 0 || $t['out'] !== $baseOut || $loaded !== $on) {
+                    $why = trim($t['out']);
+                    $results[$ext] = array('ok' => false, 'time' => time(), 'text' => 'not changed: PHP did not accept it' . ($why !== '' ? ' (' . substr($why, 0, 200) . ')' : ''));
+                    $report[] = 'PHP ' . $v . ': ' . $ext . ' ' . $results[$ext]['text'];
+                    continue;
+                }
+                $text = $new;
+                $baseOut = $t['out'];
+                $results[$ext] = array('ok' => true, 'time' => time(), 'text' => $on ? 'switched on' : 'switched off');
+                $report[] = 'PHP ' . $v . ': ' . $ext . ' ' . $results[$ext]['text'];
+            }
+            @unlink($try);
+            if ($text !== (string) file_get_contents($iniFile)) {
+                if (!is_file($iniFile . '.before-sentora')) {
+                    @copy($iniFile, $iniFile . '.before-sentora');
+                }
+                if (@file_put_contents($iniFile, $text) === false) {
+                    $report[] = 'PHP ' . $v . ': could not write ' . $iniFile;
+                } else {
+                    $any = true;
+                    $look = self::WinLook($dir);
+                }
+            }
+            $inv[$v] = array('checked' => time(), 'loaded' => $look['loaded'], 'files' => $look['files'], 'by' => $look['by'], 'addable' => array(),
+                'results' => $results, 'system' => $v === $default, 'sig' => $sig);
+        }
+        if ($any) {
+            // (the accounts' PHP is built from these files: the sync rebuilds each account whose php.ini is older, and
+            // restarts Apache, which runs the panel's PHP; asked now, or at the next run if the sync came first)
+            @unlink(sys_winphp::DIR . '/asked');
+            @touch('/var/lib/sentora/tmp/daemon-again');
+        }
+        @mkdir(dirname(self::INVENTORY), 0755, true);
+        if (@file_put_contents(self::INVENTORY . '.new', json_encode($inv, JSON_UNESCAPED_SLASHES)) !== false) {
+            @rename(self::INVENTORY . '.new', self::INVENTORY);
+        }
+        return $report;
     }
 }

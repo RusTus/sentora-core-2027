@@ -967,8 +967,17 @@ DNS, FTP, mailboxes and cron on Windows (2026-11-25, tested in the Windows insta
   from bin\php-*, RecordLive/LiveState from the pool names). The PHP Versions page itself (extensions, updates) is Linux's.
 - The PHP Versions page on Windows (2026-11-26): the versions and their switches (php_versions_enabled); its daemon hook
   returns at once there; older logins, PHP updates and extensions are hidden (Linux's).
-- Still Linux-only, each needing its own Windows way (2026-11-25): PHP extensions and updates per version, GoAccess (no
-  native Windows build), Repo Browser (add-ons are Linux's).
+- PHP Versions > Extensions on Windows (2026-11-26): sys_phpext::WinDaemonRun (php_versions daemon hook). Each version's
+  php.ini (bin\php for the default, bin\php-X.Y) gets a block between "; --- Sentora: PHP Versions > Extensions" markers
+  (WinIni: on = extension=NAME there unless the installer's line is on already; off = the installer's line commented out
+  too; settings by sys_phpext::ParseSettings). Each change is tried on php.ini.sentora-try with php.exe -m (it must load or
+  unload, and no new warning) before it is kept; the first change keeps php.ini.before-sentora. Then the stamp of
+  sys_winphp's sync goes, and phpaccount.ps1 sync rebuilds every account whose php.ini is older than its version's
+  (Stale), restarting Apache (the panel's PHP too). The installer keeps the block when it writes php.ini again
+  (Get-ExtBlock). Offered: the ext\php_*.dll the build ships; com_dotnet never (COM runs programs). Windows test: bz2 on
+  for 8.5, the site's PHP has it, the panel's php -m too, then off.
+- Still Linux-only, each needing its own Windows way (2026-11-25): PHP updates per version (a new installer brings new
+  builds), GoAccess (no native Windows build), Repo Browser (add-ons are Linux's).
 Where Windows lives (owner, 2026-11-25): the native installer moved from RusTus/sentora-windows-2027 (left with a note) to
 sentora-installers-2027/windows/server (install-zpanel-stack.ps1; install-web-stack.ps1 = the same file with
 $Edition = 'stack', kept for other uses; README.txt; tests/), tested by .github/workflows/windows-server-test.yml there (a

@@ -374,9 +374,6 @@ class module_controller extends ctrl_module
      */
     static function getExtensions()
     {
-        if (sys_versions::IsWindows()) {
-            return '';   // (Windows: each version's extensions are the installer's)
-        }
         $inv = sys_phpext::Inventory();
         $wanted = sys_phpext::Wanted();
         $cat = sys_phpext::Catalog();
