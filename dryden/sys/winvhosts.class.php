@@ -42,6 +42,9 @@ class sys_winvhosts
         if (strtolower((string) ctrl_options::GetSystemOption('apache_changed')) !== 'true' && is_file($file) && is_file(dirname($file) . '/sentora-fallback.conf')) {
             return $out;
         }
+        // (the request is taken now, before the domains are read: a domain saved while this run works asks again, and the
+        // next run brings it; cleared at the end, it was lost)
+        self::Done();
         $made = self::Folders();
         if ($made) {
             $out[] = 'Websites: ' . $made . ' folder(s) made';
@@ -69,6 +72,7 @@ class sys_winvhosts
         if ($old !== $text) {
             if (@file_put_contents($file . '.new', $text) === false || !@rename($file . '.new', $file)) {
                 $out[] = 'Websites: ' . $file . ' could not be written';
+                self::Done('true');
                 return $out;
             }
             $test = self::Test();
@@ -94,13 +98,11 @@ class sys_winvhosts
                 }
                 sys_apachecustom::SwitchOff('apache', 'Apache', $test);
                 $out[] = 'Websites: Apache refused the new sites, the old ones are kept: ' . $test;
-                self::Done();
                 return $out;
             }
             sys_apachecustom::Clear('apache');
             $out[] = 'Websites: ' . substr_count($text, '<VirtualHost ') . ' site(s) written, Apache restarts: ' . self::Restart();
         }
-        self::Done();
         return $out;
     }
 
@@ -555,13 +557,14 @@ class sys_winvhosts
     }
 
     /**
-     * The panel's request is done.
+     * The panel's request is taken ('false'), or asked again ('true': the file could not be written).
      *
+     * @param string $value
      * @return void
      */
-    static function Done()
+    static function Done($value = 'false')
     {
         global $zdbh;
-        $zdbh->exec("UPDATE x_settings SET so_value_tx = 'false' WHERE so_name_vc = 'apache_changed'");
+        $zdbh->exec("UPDATE x_settings SET so_value_tx = '" . ($value === 'true' ? 'true' : 'false') . "' WHERE so_name_vc = 'apache_changed'");
     }
 }

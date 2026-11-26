@@ -874,6 +874,9 @@ DNS, FTP, mailboxes and cron on Windows (2026-11-25, tested in the Windows insta
   the run is done (2026-11-26): it was a second pass in the same process, which stopped with "Cannot redeclare function"
   at the first hook that declares functions (12 do), on Linux as on Windows. The off-server job's output goes to its log
   (a background job writing to the daemon's closed output stopped at its first line).
+- Websites on Windows (2026-11-26): sys_winvhosts::Run clears apache_changed before it reads the domains (it cleared it
+  at the end, so a parked domain saved during a run stayed out until the next change: the install test's flaky parked
+  domain).
 - Mail Config (2026-11-26): on Windows its own settings (added to x_settings by sys_winmail::EnsureSettings, defaults
   = what Roundcube and Stalwart do by themselves): the webmail's language, time zone, new-mail check, largest message and
   log-out (the daemon writes configs\stalwart\roundcube-panel.inc.php in place, setting webmail_panel_conf; Roundcube's
