@@ -908,7 +908,12 @@ DNS, FTP, mailboxes and cron on Windows (2026-11-25, tested in the Windows insta
   the panel's own PHP); certificates in data\sentora\certs\branding (ctrl_branding::CertDir), got by Branding's daemon
   part with Lescript and sys_winvhosts::AcmeDir as the check folder; saving an address asks for a daemon run at once.
   The daemon part reads the sites file with its \r\n line ends.
-- Still Linux-only, each needing its own Windows way (2026-11-25): PHP Versions (one PHP on Windows), GoAccess and Matomo stats, AutoIP, Repo Browser (add-ons are Linux's).
+- AutoIP (2026-11-26): on Windows as on Linux (the public address from the IP service, server_ip and the x_dns records
+  with the old address, the zones written again), but switched off once at its first Windows run (setting
+  autoip_windows_off): a server behind a router would otherwise have its records changed to the router's address
+  unasked. No script on Windows (no file there is only root's to change): the page hides it, the daemon refuses it.
+- Still Linux-only, each needing its own Windows way (2026-11-25): PHP Versions (one PHP on Windows), GoAccess and
+  Matomo stats, Repo Browser (add-ons are Linux's).
 Where Windows lives (owner, 2026-11-25): the native installer moved from RusTus/sentora-windows-2027 (left with a note) to
 sentora-installers-2027/windows/server (install-zpanel-stack.ps1; install-web-stack.ps1 = the same file with
 $Edition = 'stack', kept for other uses; README.txt; tests/), tested by .github/workflows/windows-server-test.yml there (a
