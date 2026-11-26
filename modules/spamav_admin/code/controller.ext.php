@@ -873,7 +873,7 @@ class module_controller extends ctrl_module
     static function getSpamIntro()
     {
         if (sys_versions::IsWindows()) {
-            return self::h(self::t('Spam filtering for incoming mail by the mail server (Stalwart). Spam goes to each mailbox\'s Junk Mail folder.'));
+            return self::h(self::t('Spam filtering for incoming mail by the mail server (Stalwart). Spam goes to each mailbox\'s Junk Mail folder; mailbox owners can fine-tune it for their own mailboxes in Mail > SpamAV if you allow it.'));
         }
         return self::h(self::t('Spam filtering for incoming mail. Mailbox owners can fine-tune it for their own mailboxes in Mail > SpamAV if you allow it.'));
     }

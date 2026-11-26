@@ -915,8 +915,7 @@ DNS, FTP, mailboxes and cron on Windows (2026-11-25, tested in the Windows insta
   started with start /B, output in logs\panel\filescan-last.log), clamd over 127.0.0.1:3310 (files up to clamd.conf's
   StreamMaxLength), results in data\sentora\filescan.json, quarantine filescan_quarantine (data\quarantine, locked by
   the installer; a moved file takes the folder's rights with icacls /reset, and its folder's again when put back), and a
-  folder whose real path leads out of the account (a junction) is never followed. Not on Windows yet: the mail figures
-  (Postfix's log), the server-wide senders lists, subject tag and "where spam goes" (Stalwart files spam into Junk Mail).
+  folder whose real path leads out of the account (a junction) is never followed. Not on Windows yet: the server-wide senders lists, subject tag and "where spam goes" (Stalwart files spam into Junk Mail).
 - Mail > SpamAV for mailbox owners (2026-11-26): on Windows too. Stalwart marks mail with X-Spam-Status (Yes/No) and
   X-Spam-Score ("spam, score=11.60") and files spam into "Junk Mail" by itself (seen with GTUBE in the Windows test).
   A mailbox's saved choices (x_spamav_prefs; sys_winmail::SpamRules) become Sieve rules in the panel's one script on the
@@ -925,8 +924,14 @@ DNS, FTP, mailboxes and cron on Windows (2026-11-25, tested in the Windows insta
   score never counts), spam -> Junk Mail or INBOX, else INBOX; filter off -> INBOX. Choices that are Stalwart's own
   handling need no script. As with forwarders, a script the owner made and switched on (webmail filters) is never
   replaced (the daemon log says so). Saving asks for a daemon run (sys_winphp::Soon). "Let users change their spam
-  settings" (sa_user_settings) is on the Windows SpamAV Admin page. The 7-day counts and Activity stay empty on Windows
-  until the mail figures are read from Stalwart.
+  settings" (sa_user_settings) is on the Windows SpamAV Admin page.
+- SpamAV figures on Windows (2026-11-26): sys_winspamav::ReadMail (every daemon run, in Apply) reads the new lines of
+  Stalwart's log (mail_log_dir, stalwart.log.DATE, level info) and of the virus check's refusals (mail_refused_log; scan.php
+  writes "DATE refused: VIRUS from SENDER to A,B") into x_spamav_events / x_spamav_daily with sys_spamav::Store, as Linux
+  does from Postfix. A "message-ingest.ham/spam" line counts as checked for each recipient; spam when Stalwart says so or
+  when it was filed into Junk Mail (mailboxId [2], how Stalwart numbers a new account's folders). Spam a mailbox keeps in
+  the inbox by its own choice is logged as ham, so it is not counted. Where the reading got to: phpaccounts\spamav-mailread.json
+  (the first run starts at the end: nothing old is counted). The overview's figures are shown on Windows too.
 - Branding (2026-11-26): on Windows too. The look is the database's (as on Linux; GD is in the Windows PHP). Panel
   addresses: sys_winvhosts::Branding writes each one's sites between "# BRANDING: host" lines (plain HTTP: Let's
   Encrypt's check through the folder every site serves, else HTTPS or "being set up"; HTTPS: the panel's folder, run by

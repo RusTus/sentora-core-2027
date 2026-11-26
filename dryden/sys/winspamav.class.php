@@ -318,8 +318,162 @@ class sys_winspamav
             $status['versions_checked'] = time();
         }
         $status['memory_mb'] = self::MemoryMB();
+        // the figures: what Stalwart delivered (spam or not) and what the virus check refused
+        $n = self::ReadMail();
+        if ($n > 0) {
+            $out[] = 'SpamAV: ' . $n . ' new spam / virus event(s) from the mail log';
+        }
+        $days = max(1, (int) sys_spamav::Get('spamav_keep_days'));
+        global $zdbh;
+        $zdbh->prepare("DELETE FROM x_spamav_events WHERE ev_ts < :t")->execute(array(':t' => time() - $days * 86400));
+        $zdbh->prepare("DELETE FROM x_spamav_daily WHERE dd_day < :d")->execute(array(':d' => date('Y-m-d', time() - $days * 86400)));
+        $status['parsed'] = time();
         $status['time'] = time();
         @file_put_contents(sys_spamav::STATUS, json_encode($status));
         return $out;
+    }
+
+    /** Where the reading of the mail logs got to. */
+    const MAILREAD = '/var/lib/sentora/phpaccounts/spamav-mailread.json';
+
+    /**
+     * Stalwart's log lines as SpamAV's events and counts. A delivery line ("message-ingest.spam" or ".ham") counts as
+     * checked for each recipient; it is spam when Stalwart says so, or when it was filed into Junk Mail (mailbox id 2, as
+     * Stalwart numbers a new account's folders: the panel's rules for blocked senders do that).
+     *
+     * @param string[] $lines
+     * @return array{0: array<int, array<string, mixed>>, 1: array<string, array<string, int>>} array(events, checked by day and mailbox).
+     */
+    static function ParseStalwart(array $lines)
+    {
+        $events = array();
+        $scanned = array();
+        foreach ($lines as $l) {
+            if (strpos($l, 'message-ingest.') === false
+                || !preg_match('/^(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ) \S+ .*?\(message-ingest\.(spam|ham)\) .*?from = "([^"]*)", to = \[([^\]]*)\].*?mailboxId = \[([^\]]*)\]/', $l, $m)) {
+                continue;
+            }
+            $ts = strtotime($m[1]);
+            if ($ts === false) {
+                continue;
+            }
+            $day = date('Y-m-d', $ts);
+            $ids = array_map('trim', explode(',', $m[5]));
+            $spam = $m[2] === 'spam' || $ids === array('2');
+            preg_match_all('/"([^"\s]{1,254})"/', $m[4], $to);
+            foreach (array_unique(array_map('strtolower', $to[1])) as $rcpt) {
+                $scanned[$day][$rcpt] = isset($scanned[$day][$rcpt]) ? $scanned[$day][$rcpt] + 1 : 1;
+                if ($spam) {
+                    $events[] = array('ts' => $ts, 'mailbox' => $rcpt, 'sender' => strtolower($m[3]), 'kind' => 'spam', 'score' => '',
+                        'detail' => $ids === array('2') ? 'Junk Mail' : '', 'action' => 'marked', 'direction' => 'in', 'subject' => '');
+                }
+            }
+        }
+        return array($events, $scanned);
+    }
+
+    /**
+     * The virus check's refusals (mail-refused.log: "DATE refused: VIRUS from SENDER to A,B") as events.
+     *
+     * @param string[] $lines
+     * @return array<int, array<string, mixed>>
+     */
+    static function ParseRefused(array $lines)
+    {
+        $events = array();
+        foreach ($lines as $l) {
+            if (!preg_match('/^(\S+) refused: (\S+) from (\S+)(?: to (\S*))?/', trim($l), $m) || ($ts = strtotime($m[1])) === false) {
+                continue;
+            }
+            $sender = $m[3] === '?' ? '' : strtolower($m[3]);
+            $to = isset($m[4]) && $m[4] !== '' ? array_unique(explode(',', strtolower($m[4]))) : array('');
+            foreach ($to as $rcpt) {
+                $events[] = array('ts' => $ts, 'mailbox' => $rcpt, 'sender' => $sender, 'kind' => 'virus', 'score' => '', 'detail' => substr($m[2], 0, 250),
+                    'action' => 'rejected', 'direction' => ($rcpt !== '' && sys_spamav::AccountFor($rcpt) > 0) ? 'in' : 'out', 'subject' => '');
+            }
+        }
+        return $events;
+    }
+
+    /**
+     * The new lines of a log file since the last run (at most 8 MB at a time; whole lines only).
+     *
+     * @param string $file
+     * @param int $pos Where the last run stopped; -1 for the end (the first run reads nothing old).
+     * @return array{0: string[], 1: int} array(lines, new position).
+     */
+    static function NewLines($file, $pos)
+    {
+        $size = @filesize($file);
+        if ($size === false) {
+            return array(array(), 0);
+        }
+        if ($pos < 0 || $pos > $size) {
+            return array(array(), $pos < 0 ? $size : 0);   // (first run: from now on; a shorter file: it was started again)
+        }
+        $h = @fopen($file, 'rb');
+        if (!$h) {
+            return array(array(), $pos);
+        }
+        fseek($h, $pos);
+        $data = (string) fread($h, (int) min($size - $pos, 8388608));
+        fclose($h);
+        $end = strrpos($data, "\n");
+        if ($end === false) {
+            return array(array(), $pos);
+        }
+        return array(preg_split('/\r?\n/', substr($data, 0, $end)), $pos + $end + 1);
+    }
+
+    /**
+     * Read the new lines of Stalwart's log (stalwart.log.DATE in mail_log_dir) and of the virus check's refusals
+     * (mail_refused_log) into the SpamAV tables (sys_spamav::Store).
+     *
+     * @return int The events stored.
+     */
+    static function ReadMail()
+    {
+        $dir = rtrim((string) ctrl_options::GetSystemOption('mail_log_dir'), '/\\');
+        $ref = (string) ctrl_options::GetSystemOption('mail_refused_log');
+        if ($dir === '' && $ref === '') {
+            return 0;
+        }
+        $st = is_file(self::MAILREAD) ? (array) json_decode((string) @file_get_contents(self::MAILREAD), true) : array();
+        $events = array();
+        $scanned = array();
+        if ($dir !== '' && is_dir($dir)) {
+            $files = glob($dir . '/stalwart.log*');
+            $files = $files ? $files : array();
+            sort($files);   // (stalwart.log.YYYY-MM-DD: by name is by date)
+            $newest = $files ? basename(end($files)) : '';
+            $lines = array();
+            $cur = isset($st['file']) ? (string) $st['file'] : '';
+            $pos = isset($st['pos']) ? (int) $st['pos'] : -1;
+            if ($cur !== '' && $cur !== $newest && is_file($dir . '/' . $cur)) {
+                list($lines) = self::NewLines($dir . '/' . $cur, $pos);   // (the rest of yesterday's file)
+                $pos = 0;
+            } elseif ($cur !== $newest && $cur !== '') {
+                $pos = 0;
+            }
+            if ($newest !== '') {
+                list($more, $pos) = self::NewLines($dir . '/' . $newest, $pos);
+                $lines = array_merge($lines, $more);
+                $st['file'] = $newest;
+                $st['pos'] = $pos;
+            }
+            list($events, $scanned) = self::ParseStalwart($lines);
+        }
+        if ($ref !== '') {
+            list($rl, $st['refused']) = self::NewLines($ref, isset($st['refused']) ? (int) $st['refused'] : -1);
+            $events = array_merge($events, self::ParseRefused($rl));
+        }
+        if ($events || $scanned) {
+            sys_spamav::Store($events, $scanned, array());
+        }
+        if (!is_dir(dirname(self::MAILREAD))) {
+            @mkdir(dirname(self::MAILREAD), 0700, true);
+        }
+        @file_put_contents(self::MAILREAD, json_encode($st));
+        return count($events);
     }
 }

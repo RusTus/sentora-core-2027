@@ -20,7 +20,6 @@
             <@ JobBar @>
             <div class="sa-scanners"><@ Scanners @></div>
             <@ FileSummary @>
-            <% if Linux %>
             <h3 class="sa-h"><: All mail on this server :></h3>
             <div class="sa-row">
                 <div class="sa-tiles"><@ Totals @></div>
@@ -30,7 +29,6 @@
                 </div>
             </div>
             <div class="sa-tops"><@ TopLists @></div>
-            <% endif %>
         </section>
 
         <section class="sa-pane" data-pane="clamav" role="tabpanel">
