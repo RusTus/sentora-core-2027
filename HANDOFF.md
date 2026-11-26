@@ -861,9 +861,17 @@ DNS, FTP, mailboxes and cron on Windows (2026-11-25, tested in the Windows insta
   entry), refuses a number used before, and starts the file manager's own session (cookie only for /sentora-fm/NAME/,
   SameSite Strict, 2 hours idle). The account's own scripts know the key too: it opens nothing but the account's own files.
   On Windows the panel's own PHP refuses app/index.php. raw.php compares paths with forward slashes on Windows.
+- Backup Config (2026-11-26): on Windows the Client backups tab works as on Linux (the daily backup of every account and the
+  purge: sys_backup::Create / Purge, OnDaemonDay). The off-server backup has one destination there, a folder or a network
+  share (with its own user and password, stored encrypted, connected with net use for the run only):
+  bin/sentora-offsite-backup.php (--check, --now, --cron; SYSTEM, started by the daemon at the time set, once a day, and for
+  Test connection / Back up now) writes <folder>\<server>\<date>\databases\<db>.sql.gz (every database, MySQL's root
+  password from configs\mysql), config\configs.zip, manifest.json, and keeps files\hostdata and files\mail as one
+  up-to-date copy (robocopy /MIR /XJ; Stalwart stops for the mail copy); nights beyond "Nights kept" go. Same state file as
+  Linux (offsite-backup.json). Never inside C:\zpanel. Restore is Linux's (sentora-panel-restore): the tab is hidden on
+  Windows; copying back is by hand (plain SQL dumps).
 - Still Linux-only, each needing its own Windows way (2026-11-25): Mail Config (its
-  settings are SOGo's and Postfix's; Windows would need Stalwart's), Backup Config (the off-server backup is a bash/rsync/SSH
-  job), PHP Versions (one PHP on Windows), Branding's
+  settings are SOGo's and Postfix's; Windows would need Stalwart's), PHP Versions (one PHP on Windows), Branding's
   addresses (Linux's vhost writer), SpamAV, GoAccess and Matomo stats, AutoIP, Repo Browser (add-ons are Linux's).
 Where Windows lives (owner, 2026-11-25): the native installer moved from RusTus/sentora-windows-2027 (left with a note) to
 sentora-installers-2027/windows/server (install-zpanel-stack.ps1; install-web-stack.ps1 = the same file with

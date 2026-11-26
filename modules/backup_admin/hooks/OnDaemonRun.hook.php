@@ -24,6 +24,36 @@ foreach ($obDefaults as $obName => $obValue) {
 }
 // the settings belong to Backup Config (a test build had them under Sentora Config)
 $zdbh->exec("UPDATE x_settings SET so_module_vc = 'Backup Config', so_desc_tx = 'Off-server backup (set in Admin > Backup Config)' WHERE so_name_vc LIKE 'offsite\\_%' AND so_module_vc <> 'Backup Config'");
+// Windows: the copy to a folder or network share (bin/sentora-offsite-backup.php, as SYSTEM like the daemon), once a
+// day at the time set, and the page's Test connection / Back up now; Linux's SSH, node, cron and restore parts below
+// do not apply there
+if (sys_versions::IsWindows()) {
+    $obWin = str_replace('/', '\\', rtrim(str_replace('\\', '/', (string) ctrl_options::GetSystemOption('sentora_root')), '/') . '/bin/sentora-offsite-backup.php');
+    $obSf = '/var/lib/sentora/offsite-backup.json';
+    $obS = json_decode((string) @file_get_contents($obSf), true);
+    $obS = is_array($obS) ? $obS : array();
+    $obArg = '';
+    if ($obHave['offsite_request'] !== '') {
+        $obWhat = strtok($obHave['offsite_request'], ' ');
+        $zdbh->exec("UPDATE x_settings SET so_value_tx = '' WHERE so_name_vc = 'offsite_request'");
+        $obArg = $obWhat === 'check' ? '--check' : '--now';
+    } elseif ($obHave['offsite_enabled'] === 'true' && $obHave['offsite_path'] !== '' && preg_match('/^([01][0-9]|2[0-3]):([0-5][0-9])$/', $obHave['offsite_time'], $obT)
+        && date('H:i') >= $obHave['offsite_time'] && (string) ($obS['cron_day'] ?? '') !== date('Y-m-d')) {
+        $obArg = '--cron';
+        $obS['cron_day'] = date('Y-m-d');
+    }
+    if ($obArg !== '' && is_file($obWin)) {
+        if ($obArg === '--check') {
+            $obS['check_started'] = time();
+        } else {
+            $obS = array_merge($obS, array('copy_started' => time(), 'step' => 'Starting', 'progress_pct' => 0, 'progress_bytes' => 0, 'progress_rate' => ''));
+        }
+        @file_put_contents($obSf, json_encode($obS));
+        pclose(popen('start "" /B "' . PHP_BINARY . '" -q "' . $obWin . '" ' . $obArg, 'r'));
+        echo "Off-server backup: " . ($obArg === '--check' ? 'connection test' : 'copy') . " started" . fs_filehandler::NewLine();
+    }
+    return;
+}
 // this panel's backup key (root's SSH key for the backup machine): made when missing, its public half
 // kept in the settings for the page (the command that installs a Sentora backup node carries it)
 $obKey = '/root/.ssh/sentora_offsite';

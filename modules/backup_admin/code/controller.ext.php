@@ -251,6 +251,29 @@ class module_controller extends ctrl_module
     }
 
     /**
+     * The off-server tab's first lines (<@ OffsiteIntro @>).
+     *
+     * @return string
+     */
+    static function getOffsiteIntro()
+    {
+        if (sys_versions::IsWindows()) {
+            return self::t('Every night, copies a dump of every database and the panel\'s settings (one folder per night), and keeps an up-to-date copy of the websites with their own backups and of the mailboxes, on another disk or a network share. To restore, copy back what you need (the databases are plain SQL dumps).');
+        }
+        return self::t('Every night, copies the account backups, a dump of all databases, the configuration and the mailboxes to another machine. Each night is kept as a dated snapshot in which unchanged files take no extra space, and each can be restored (Restore tab).');
+    }
+
+    /**
+     * Whether the Restore tab is offered (<% if CanRestore %>): Linux's sentora-panel-restore, not on Windows yet.
+     *
+     * @return bool
+     */
+    static function getCanRestore()
+    {
+        return !sys_versions::IsWindows();
+    }
+
+    /**
      * Template value: the tab to open (data-tab of the page).
      *
      * @return string
@@ -283,6 +306,9 @@ class module_controller extends ctrl_module
         $out .= $card('cloud', $o['offsite_enabled'] === 'true' ? ($failed ? '#ff6854' : '#1fa2b5') : '#9aa5b1', 'Off-server backup',
             $o['offsite_enabled'] === 'true' ? sprintf(self::t('Nightly at %s'), self::h($o['offsite_time'])) : self::t('Off'),
             $failed ? '<span class="bk-bad">' . self::t('last run failed') . '</span>' : (!empty($st['last_ok']) ? self::t('last good copy') . ' ' . self::h(self::Ago($st['last_ok'])) : self::t('no copy yet')));
+        if (sys_versions::IsWindows()) {
+            return $out;   // (restoring is Linux's sentora-panel-restore; not on Windows yet)
+        }
         $rs = self::RestoreJson(self::RESTORE_STATE);
         if (is_file(self::RESTORE_REQ) || !empty($rs['running']) || !empty($rs['listing'])) {
             $out .= $card('restore', '#8e6bd8', 'Restore', self::t('Working'), self::t('see the Restore tab'));
@@ -377,11 +403,14 @@ class module_controller extends ctrl_module
         $o = self::Offsite();
         // which destination this form is for: only its own fields are posted, the others are kept
         $dest = in_array($get('inDest'), array('node', 'ssh', 'folder'), true) ? $get('inDest') : 'ssh';
+        if (sys_versions::IsWindows()) {
+            $dest = 'folder';
+        }
         if ($dest === 'node' && !self::NodePaired()) {
             self::$offsiteErrors = array('Add the backup node first (its address and key).');
             return;
         }
-        if ($dest !== 'ssh') {
+        if ($dest !== 'ssh' && !sys_versions::IsWindows()) {
             foreach (array('inOffsitePort' => 'offsite_port', 'inOffsiteUser' => 'offsite_user', 'inOffsiteHostkey' => 'offsite_hostkey') as $in => $k) {
                 $f[$in] = $o[$k];
             }
@@ -397,7 +426,7 @@ class module_controller extends ctrl_module
         $server = $get('inOffsiteServer');
         $port = $get('inOffsitePort') === '' ? '22' : $get('inOffsitePort');
         $user = $get('inOffsiteUser');
-        $path = rtrim($get('inOffsitePath'), '/');
+        $path = sys_versions::IsWindows() ? rtrim($get('inOffsitePath'), '\\/') : rtrim($get('inOffsitePath'), '/');
         // ("/" alone: a Sentora backup node, where this panel's folder is the top)
         $path = ($path === '' && $get('inOffsitePath') !== '') ? '/' : $path;
         $hostkey = preg_replace('/\s+/', '', $get('inOffsiteHostkey'));
@@ -411,10 +440,22 @@ class module_controller extends ctrl_module
         if (!preg_match('/^[0-9]{1,5}$/', $port) || (int) $port < 1 || (int) $port > 65535) {
             $e[] = 'The port is a number from 1 to 65535.';
         }
-        if ($server !== '' && !preg_match('/^[a-z_][a-z0-9_.-]{0,31}$/i', $user)) {
+        if (sys_versions::IsWindows()) {
+            // (Windows: a drive path or a network share, never inside the panel's own folder; a share's user)
+            $top = str_replace('/', '\\', dirname(rtrim(str_replace('\\', '/', (string) ctrl_options::GetSystemOption('sentora_root')), '/')));
+            if (!preg_match('#^([A-Za-z]:\\\\|\\\\\\\\[A-Za-z0-9._-]+\\\\[A-Za-z0-9$._-]+)([A-Za-z0-9 ._()-]+\\\\?)*$#', $path . '\\') || strpos($path, '..') !== false
+                || stripos($path . '\\', $top . '\\') === 0) {
+                $e[] = 'The folder is a drive path like D:\\Backups or a network share like \\\\nas\\backups (letters, digits, spaces, dots, dashes), not inside ' . $top . '.';
+            }
+            if ($user !== '' && !preg_match('/^[A-Za-z0-9._\\\\@-]{1,104}$/', $user)) {
+                $e[] = 'The share user has letters, digits, dots, dashes, @ or a backslash (DOMAIN\\user).';
+            }
+            $port = '22';
+            $hostkey = '';
+        } elseif ($server !== '' && !preg_match('/^[a-z_][a-z0-9_.-]{0,31}$/i', $user)) {
             $e[] = 'The username has letters, digits, dots, dashes or underscores.';
         }
-        if (!preg_match('#^/[A-Za-z0-9._/-]{0,250}$#', $path) || strpos($path, '..') !== false) {
+        if (!sys_versions::IsWindows() && (!preg_match('#^/[A-Za-z0-9._/-]{0,250}$#', $path) || strpos($path, '..') !== false)) {
             $e[] = 'The folder is a full path like /srv/sentora-backups (letters, digits, dots, dashes, underscores).';
         }
         if ($hostkey !== '' && !preg_match('#^SHA256:[A-Za-z0-9+/]{43}$#', $hostkey)) {
@@ -514,6 +555,9 @@ class module_controller extends ctrl_module
     static function Target()
     {
         $o = self::Offsite();
+        if (sys_versions::IsWindows()) {
+            return ($o['offsite_enabled'] === 'true' || $o['offsite_path'] !== '/srv/sentora-backups') ? 'folder' : '';
+        }
         if (in_array($o['offsite_target'], array('node', 'ssh', 'folder'), true)) {
             return $o['offsite_target'];
         }
@@ -532,6 +576,9 @@ class module_controller extends ctrl_module
     static function Dest()
     {
         global $controller;
+        if (sys_versions::IsWindows()) {
+            return 'folder';   // (Windows: a folder or a network share; the SSH ways are Linux's)
+        }
         $d = (string) $controller->GetControllerRequest('URL', 'dest');
         if (in_array($d, array('node', 'ssh', 'folder'), true)) {
             return $d;
@@ -659,6 +706,9 @@ class module_controller extends ctrl_module
             'ssh' => array('plug', 'Another SSH server', 'Any server you can reach with SSH and rsync (a NAS, a rented backup server).'),
             'folder' => array('archive', 'A folder on this server', 'For example a disk or a network share (NFS) mounted on this server.'),
         );
+        if (sys_versions::IsWindows()) {
+            $opts = array('folder' => array('archive', 'A folder or a network share', 'Another disk of this server (D:\\Backups) or a share on your network (\\\\nas\\backups).'));
+        }
         $out = '<div class="bk-dest" role="tablist">';
         foreach ($opts as $k => $v) {
             $out .= '<a role="tab" class="bk-dest-opt' . ($k === $show ? ' on' : '') . '" href="./?module=backup_admin&amp;dest=' . $k . '#offsite" aria-selected="' . ($k === $show ? 'true' : 'false') . '">'
@@ -708,6 +758,13 @@ class module_controller extends ctrl_module
                     . '<small>' . self::t('Stored encrypted, never shown again. Without a password the SSH key /root/.ssh/sentora_offsite is used (more secure; sentora-offsite-backup --setup makes it).') . '</small></label>'
                 . $field('Folder', '<input class="form-control" type="text" name="inOffsitePath" value="' . self::h($o['offsite_path']) . '" maxlength="251">', 'Where the copies go there; each server gets its own folder in it, with one folder per night.')
                 . $field('Backup machine\'s key', '<input class="form-control" type="text" name="inOffsiteHostkey" value="' . self::h($o['offsite_hostkey']) . '" placeholder="SHA256:..." maxlength="60" autocomplete="off" spellcheck="false">', 'Its SSH key\'s fingerprint: every copy checks it is talking to that machine and no other, and nothing is sent until it is set. Empty: Test connection shows the key it answers with, to compare and trust.');
+        } elseif ($dest === 'folder' && sys_versions::IsWindows()) {
+            $hasPw = ($o['offsite_password'] !== '');
+            $out .= $field('Folder', '<input class="form-control" type="text" name="inOffsitePath" value="' . self::h($o['offsite_path'] === '/srv/sentora-backups' ? '' : $o['offsite_path']) . '" maxlength="251" placeholder="D:\\Backups or \\\\nas\\backups" required>', 'Another disk, or a network share. Each night gets its own folder there with the databases and the settings; the websites and mailboxes are kept as one up-to-date copy beside them.')
+                . $field('Share user', '<input class="form-control" type="text" name="inOffsiteUser" value="' . self::h($o['offsite_user'] === 'sentora-backup' ? '' : $o['offsite_user']) . '" maxlength="104" autocomplete="off">', 'Only for a network share that wants its own login (for example NAS\\backup). Empty: this server\'s own account is used.')
+                . '<label class="bk-field"><span>' . self::t('Share password') . '</span><input class="form-control" type="password" name="inOffsitePassword" value="" maxlength="256" autocomplete="new-password" placeholder="' . ($hasPw ? self::t('stored: leave empty to keep it') : '') . '">'
+                    . ($hasPw ? '<span class="bk-check"><input type="checkbox" name="inOffsiteClearPassword" value="1"> ' . self::t('Remove the password') . '</span>' : '')
+                    . '<small>' . self::t('Stored encrypted, never shown again.') . '</small></label>';
         } elseif ($dest === 'folder') {
             $out .= $field('Folder', '<input class="form-control" type="text" name="inOffsitePath" value="' . self::h($o['offsite_path']) . '" maxlength="251" required>', 'A folder on this server, for example where a disk or a network share is mounted; one folder per night.');
         }

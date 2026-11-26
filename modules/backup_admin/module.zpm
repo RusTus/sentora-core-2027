@@ -15,7 +15,7 @@
         <nav class="bk-tabs" role="tablist">
             <button type="button" role="tab" class="bk-tab" data-tab="settings"><: Client backups :></button>
             <button type="button" role="tab" class="bk-tab" data-tab="offsite"><: Off-server backup :></button>
-            <button type="button" role="tab" class="bk-tab" data-tab="restore"><: Restore :></button>
+            <% if CanRestore %><button type="button" role="tab" class="bk-tab" data-tab="restore"><: Restore :></button><% endif %>
         </nav>
 
         <!-- Client backups -->
@@ -40,7 +40,7 @@
         <section class="bk-pane" data-pane="offsite">
             <div class="bk-panel">
                 <div class="bk-panel-head"><div><h4><: Off-server backup :></h4>
-                    <p><: Every night, copies the account backups, a dump of all databases, the configuration and the mailboxes to another machine. Each night is kept as a dated snapshot in which unchanged files take no extra space, and each can be restored (Restore tab). :></p></div></div>
+                    <p><@ OffsiteIntro @></p></div></div>
                 <h5 class="bk-dest-title"><: Where the backups go :></h5>
                 <@ OffsiteDest @>
                 <div class="bk-ftp-grid">
@@ -51,6 +51,7 @@
         </section>
 
         <!-- Restore -->
+        <% if CanRestore %>
         <section class="bk-pane" data-pane="restore" id="restore">
             <div class="bk-panel">
                 <div class="bk-panel-head"><div><h4><: Restore :></h4>
@@ -58,6 +59,7 @@
                 <@ Restore @>
             </div>
         </section>
+        <% endif %>
     </div>
     <script>
     (function () {
