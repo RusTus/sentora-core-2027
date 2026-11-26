@@ -258,19 +258,20 @@ class module_controller extends ctrl_module
     static function getOffsiteIntro()
     {
         if (sys_versions::IsWindows()) {
-            return self::t('Every night, copies a dump of every database and the panel\'s settings (one folder per night), and keeps an up-to-date copy of the websites with their own backups and of the mailboxes, on another disk or a network share. To restore, copy back what you need (the databases are plain SQL dumps).');
+            return self::t('Every night, copies a dump of every database and the panel\'s settings (one folder per night), and keeps an up-to-date copy of the websites with their own backups and of the mailboxes, on another disk or a network share. An account\'s websites and databases are restored on the Restore tab; the rest is copied back by hand (the databases are plain SQL dumps).');
         }
         return self::t('Every night, copies the account backups, a dump of all databases, the configuration and the mailboxes to another machine. Each night is kept as a dated snapshot in which unchanged files take no extra space, and each can be restored (Restore tab).');
     }
 
     /**
-     * Whether the Restore tab is offered (<% if CanRestore %>): Linux's sentora-panel-restore, not on Windows yet.
+     * Whether the Restore tab is offered (<% if CanRestore %>): Linux's sentora-panel-restore, Windows'
+     * bin/sentora-offsite-restore.php (one account: its websites and databases).
      *
      * @return bool
      */
     static function getCanRestore()
     {
-        return !sys_versions::IsWindows();
+        return true;
     }
 
     /**
@@ -306,9 +307,6 @@ class module_controller extends ctrl_module
         $out .= $card('cloud', $o['offsite_enabled'] === 'true' ? ($failed ? '#ff6854' : '#1fa2b5') : '#9aa5b1', 'Off-server backup',
             $o['offsite_enabled'] === 'true' ? sprintf(self::t('Nightly at %s'), self::h($o['offsite_time'])) : self::t('Off'),
             $failed ? '<span class="bk-bad">' . self::t('last run failed') . '</span>' : (!empty($st['last_ok']) ? self::t('last good copy') . ' ' . self::h(self::Ago($st['last_ok'])) : self::t('no copy yet')));
-        if (sys_versions::IsWindows()) {
-            return $out;   // (restoring is Linux's sentora-panel-restore; not on Windows yet)
-        }
         $rs = self::RestoreJson(self::RESTORE_STATE);
         if (is_file(self::RESTORE_REQ) || !empty($rs['running']) || !empty($rs['listing'])) {
             $out .= $card('restore', '#8e6bd8', 'Restore', self::t('Working'), self::t('see the Restore tab'));
@@ -1211,6 +1209,9 @@ class module_controller extends ctrl_module
     {
         global $controller;
         runtime_csfr::Protect();
+        if (sys_versions::IsWindows()) {
+            return;   // (Windows: one account at a time; the whole server is restored by hand)
+        }
         $f = $controller->GetAllControllerRequests('FORM');
         $snap = self::RestoreSnapshot($f['inServer'] ?? '', $f['inDate'] ?? '');
         if (!$snap || (int) $snap['format'] < 2) {
@@ -1247,7 +1248,7 @@ class module_controller extends ctrl_module
             $out .= '<div class="bk-job"><span class="bk-spinner" aria-hidden="true"></span><div class="bk-job-text"><b>' . self::h(!empty($st['listing']) ? ui_language::translate('Reading the backups') : ui_language::translate('Restoring') . ' ' . ($st['snapshot'] ?? '')) . '…</b>'
                 . '<span data-bk="step">' . self::h($st['step'] ?? '') . '</span>'
                 . (empty($st['listing']) ? '<div class="bk-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' . $pct . '"' . (empty($st['progress_bytes']) ? ' hidden' : '') . '><i style="width: ' . $pct . '%"></i></div><span class="bk-sub" data-bk="copied"></span>' : '')
-                . '<span class="bk-sub">' . self::t('This page follows it by itself. The log: /var/sentora/logs/panel-restore.log') . '</span></div></div>';
+                . '<span class="bk-sub">' . (sys_versions::IsWindows() ? self::t('This page follows it by itself. The log: logs\\panel\\panel-restore.log') : self::t('This page follows it by itself. The log: /var/sentora/logs/panel-restore.log')) . '</span></div></div>';
         } elseif (!empty($st['result'])) {
             $ok = $st['result'] === 'ok';
             $out .= '<div class="bk-state ' . ($ok ? 'ok' : 'bad') . ' bk-last">' . self::Icon($ok ? 'check' : ($st['result'] === 'partial' ? 'alert' : 'x')) . '<div><b>'
@@ -1325,12 +1326,18 @@ class module_controller extends ctrl_module
             . '<form method="post" action="./?module=backup_admin&amp;action=RestoreAccount&amp;snap=' . rawurlencode($chosen) . '#restore" class="bk-restore" data-confirm="' . self::t('Restore this account? What it has now is saved first.') . '">'
             . '<h4>' . self::Icon('users') . self::t('Restore one account') . '</h4>'
             . '<label class="bk-field"><span>' . self::t('Account') . '</span><select class="form-control" name="inAccount">' . $opts . '</select></label>'
-            . '<div class="bk-parts"><span class="bk-check"><input type="checkbox" name="inPart_files" value="1" checked> ' . self::t('Websites (copied as the account\'s own user)') . '</span>'
+            . '<div class="bk-parts"><span class="bk-check"><input type="checkbox" name="inPart_files" value="1" checked> ' . (!empty($snap['windows']) ? self::t('Websites (the latest copy: the backup keeps one, brought up to date each night)') : self::t('Websites (copied as the account\'s own user)')) . '</span>'
             . '<span class="bk-check bk-indent"><input type="checkbox" name="inExact" value="1"> ' . self::t('Also remove files the backup does not have') . '</span>'
-            . '<span class="bk-check"><input type="checkbox" name="inPart_databases" value="1" checked> ' . self::t('Databases and MySQL users') . '</span>'
-            . '<span class="bk-check"><input type="checkbox" name="inPart_mail" value="1"' . ($snap['mail'] ? ' checked' : ' disabled') . '> ' . self::t('Mailboxes') . '</span></div>'
+            . '<span class="bk-check"><input type="checkbox" name="inPart_databases" value="1" checked> ' . (!empty($snap['windows']) ? self::t('Databases (of that night)') : self::t('Databases and MySQL users')) . '</span>'
+            . (!empty($snap['windows']) ? '' : '<span class="bk-check"><input type="checkbox" name="inPart_mail" value="1"' . ($snap['mail'] ? ' checked' : ' disabled') . '> ' . self::t('Mailboxes') . '</span>') . '</div>'
             . '<p class="bk-sub">' . self::t('The account must exist on this server with the same username (make it in Manage Clients first). What it has now is saved before anything is changed.') . '</p>'
-            . $hidden . '<button class="btn btn-primary" type="submit">' . self::t('Restore this account') . '</button></form>'
+            . $hidden . '<button class="btn btn-primary" type="submit">' . self::t('Restore this account') . '</button></form>';
+        if (!empty($snap['windows'])) {
+            // (Windows: the mailboxes are one copy of the mail server's whole store, and the whole server is put back by hand)
+            return $out . '<div class="bk-restore"><h4>' . self::Icon('alert') . self::t('Mailboxes and the whole server') . '</h4><p class="bk-sub">'
+                . self::t('The mailboxes are one copy of the mail server\'s whole store (files\\mail in the backup folder): to put them back, stop the Stalwart service, copy that folder over C:\\zpanel\\data\\mail and start it again. The panel\'s settings are in each night\'s config\\configs.zip, every database in its databases folder.') . '</p></div></div></div>';
+        }
+        $out .= ''
             // the whole panel
             . '<form method="post" action="./?module=backup_admin&amp;action=RestoreFull&amp;snap=' . rawurlencode($chosen) . '#restore" class="bk-restore bk-danger">'
             . '<h4>' . self::Icon('alert') . self::t('Restore the whole panel') . '</h4><p class="bk-sub">' . self::t('For a new or rebuilt server: every database (the panel\'s own included), the hosting accounts\' MySQL users, the panel\'s encryption key, the certificates, every account\'s websites and the mailboxes. The daemon then rebuilds the websites, PHP and DNS. This server keeps its own name, IP address, service passwords and off-server backup settings; what it has now is saved first.') . '</p>'

@@ -908,6 +908,14 @@ DNS, FTP, mailboxes and cron on Windows (2026-11-25, tested in the Windows insta
   the panel's own PHP); certificates in data\sentora\certs\branding (ctrl_branding::CertDir), got by Branding's daemon
   part with Lescript and sys_winvhosts::AcmeDir as the check folder; saving an address asks for a daemon run at once.
   The daemon part reads the sites file with its \r\n line ends.
+- Restore on Windows (2026-11-26): Backup Config's Restore tab, run by bin/sentora-offsite-restore.php (SYSTEM, started by
+  backup_admin's daemon hook from the same request file as Linux; log logs\panel\panel-restore.log). --list reads every
+  server's nights in the off-server folder (manifest.json) into restore-catalog.json (format 2, 'windows' => true; an
+  account's databases = the night's dumps named <user>_*). --account restores one account: its databases from the night
+  (the ones it has in the panel now; DROP DATABASE first, then the dump) and its websites from the folder's one up-to-date
+  copy (robocopy /E, or /MIR with "remove files the backup does not have"; /XJ, the files take the account folder's
+  rights). What it had is saved first in data\before-restore\<user>-<time> (Administrators and SYSTEM only). Not on
+  Windows: mailboxes per account (one copy of Stalwart's whole store) and the whole-panel restore (the page says how by hand).
 - AutoIP (2026-11-26): on Windows as on Linux (the public address from the IP service, server_ip and the x_dns records
   with the old address, the zones written again), but switched off once at its first Windows run (setting
   autoip_windows_off): a server behind a router would otherwise have its records changed to the router's address

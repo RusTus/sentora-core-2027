@@ -54,6 +54,32 @@ if (sys_versions::IsWindows()) {
         pclose(popen('start "" /B cmd.exe /c ""' . PHP_BINARY . '" -q "' . $obWin . '" ' . $obArg . ' >> "' . $obLog . '" 2>&1"', 'r'));
         echo "Off-server backup: " . ($obArg === '--check' ? 'connection test' : 'copy') . " started" . fs_filehandler::NewLine();
     }
+    // Restore (Restore tab): a request from the page, checked again here, run by bin/sentora-offsite-restore.php
+    $rsReq = '/var/lib/sentora/tmp/panel-restore-request.json';
+    if (is_file($rsReq) && !is_link($rsReq)) {
+        $r = json_decode((string) file_get_contents($rsReq), true);
+        @unlink($rsReq);
+        $rsWin = str_replace('/', '\\', rtrim(str_replace('\\', '/', (string) ctrl_options::GetSystemOption('sentora_root')), '/') . '/bin/sentora-offsite-restore.php');
+        $args = array();
+        if (is_array($r) && $r['action'] === 'list') {
+            $args = array('--list');
+        } elseif (is_array($r) && $r['action'] === 'account' && preg_match('/^[A-Za-z0-9][A-Za-z0-9._-]{0,252}$/', (string) ($r['server'] ?? ''))
+            && preg_match('/^20\d{2}-\d{2}-\d{2}$/', (string) ($r['date'] ?? '')) && preg_match('/^[A-Za-z0-9_-]{1,64}$/', (string) ($r['username'] ?? ''))) {
+            $args = array_merge(array('--account', $r['server'], $r['date'], $r['username']), array_values(array_intersect((array) ($r['parts'] ?? array()), array('files', 'databases', 'exact'))));
+        }
+        if ($args && is_file($rsWin)) {
+            $rsLog = str_replace('/', '\\', rtrim(str_replace('\\', '/', (string) ctrl_options::GetSystemOption('log_dir')), '/') . '/panel/panel-restore.log');
+            // (the page shows it at once as working)
+            $rsSt = json_decode((string) @file_get_contents('/var/lib/sentora/panel-restore.json'), true);
+            $rsSt = is_array($rsSt) ? $rsSt : array();
+            $rsSt[$args[0] === '--list' ? 'listing' : 'running'] = true;
+            @file_put_contents('/var/lib/sentora/panel-restore.json', json_encode($rsSt));
+            pclose(popen('start "" /B cmd.exe /c ""' . PHP_BINARY . '" -q "' . $rsWin . '" ' . implode(' ', $args) . ' >> "' . $rsLog . '" 2>&1"', 'r'));
+            echo "Restore: started " . implode(' ', $args) . fs_filehandler::NewLine();
+        } else {
+            echo "Restore: a request that was not valid was ignored" . fs_filehandler::NewLine();
+        }
+    }
     return;
 }
 // this panel's backup key (root's SSH key for the backup machine): made when missing, its public half
