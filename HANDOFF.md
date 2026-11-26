@@ -552,6 +552,14 @@ the node (https://<node>/, `sentora-elk-node kibana-from` limits who reaches it)
 
 ## Recent releases (newest first; every change is in CHANGELOG.md)
 
+- **Released 2027.101 (2026-11-26, ordinary, owner: "get everything released"):** on Windows Mail Config, SpamAV Admin
+  (ClamAV, Stalwart's spam filter, website file scanning), Branding, AutoIP, Restore, Matomo, PHP 8.4/8.3 per domain and
+  the PHP Versions page; the parked-domain timing fix. Linux install test passed on all five; the release's Windows test
+  stopped at a stale line of the test (PHP Versions in the kept-out list), and the release published anyway (release.yml
+  does not wait for the Windows test). The full Windows test afterwards found that the pages (Apache's account) could not
+  see bin\php-X.Y: fixed on master2027 for 2027.102 (the versions by their folders' names).
+- 2027.97 to 2027.100 (2026-11-25/26): the Windows panel step by step (Panel Update, Apache Config, Protected Directories,
+  FTP Config, Module/Widget Admin, Log Viewer, Server Monitor, Site Health, Forwarders, File Manager, Backup Config).
 - **Released 2027.92 (2026-11-21, ordinary; the owner held it until the company sources were done):** the core's only changes are the Apache timing log (GlobalLog, only while apache_timing_log is 'true') and PHP builds looked for hourly while one is waiting; with it Log Forwarder 205-210 and the Elk node's health, alerts, website speed, other sources (FortiGate, Veeam, Microsoft 365) and online store (Elk node test: 0 FAIL). Last full test still 2027.91.
 - **Released 2027.91 (2026-11-19, full test):** Matomo 5.14.3 (signed files checked; SENTORA-PATCHES.txt reapplied: the Ubuntu-PHP check now sits in `isPhpAffectedBySecurityAdvisory20261021()`, Matomo renamed it), published with Docker Hosting 141 / node agent 120 (real-node test passed on all six, alma10-vm with SELinux) and the Payment Plans MySQL/MariaDB tests (Add-ons workflow green).
 - **Apps 107, QuickFig 210 (add-ons, 2026-11-13, after 2027.90):** the system PHP from php_cli (was /usr/bin/php<version>, Debian's name: on AlmaLinux a WordPress install stopped at its file check). Tried on the owner's AlmaLinux panel: WordPress installs Ready. Owner confirmed (2026-11-15): OpenCart installs too; his AlmaLinux panel on 2027.90 ran a full restore from the Restore tab to its end; his Ubuntu panel's PHP 8.1-8.4 updated to the Snuffleupagus builds; a second panel added to the same backup node. All fine.
