@@ -39,6 +39,7 @@ class sys_winspamav
             'clam_scan_html' => null, 'clam_phishing_sigs' => null, 'clam_phishing_urls' => null, 'clam_heuristic' => null, 'clam_alert_encrypted' => null,
             'clam_db_checks' => null, 'clam_threads' => '8',
             'sa_enabled' => null, 'sa_required_score' => null, 'sa_reject_score' => '0', 'sa_user_settings' => null,
+            'sa_allow_from' => null, 'sa_block_from' => null,
             'fs_enabled' => null, 'fs_hour' => null, 'fs_full_day' => null, 'fs_max_file_size' => null, 'fs_backups' => null, 'fs_quarantine' => null,
             'fs_notify_owner' => null,
         );
@@ -66,6 +67,8 @@ class sys_winspamav
         $out['clam_on_fail'][4] = 'Accept: mail is delivered unscanned. Try later: the sender\'s server is asked to try again later (the mail is not lost).';
         $out['sa_enabled'] = array('spamassassin', 'Check mail for spam', 'bool', $out['sa_enabled'][3], 'The mail server\'s own spam filter scores incoming mail; mail at or above the spam score goes to the Junk Mail folder.', null);
         $out['sa_required_score'][4] = 'Mail scoring this or more is spam. Lower catches more spam but also more good mail.';
+        $out['sa_allow_from'][4] = 'Never spam, for every mailbox: one address or pattern per line (like *@partner.com). The mail server takes 100 off their score.';
+        $out['sa_block_from'][4] = 'Always spam, for every mailbox: the mail server adds 100 to their score.';
         $out['sa_user_settings'][4] = 'In Mail > SpamAV: spam filter on or off, sensitivity, Junk Mail folder or inbox, allowed and blocked senders, for their own mailboxes (a filter on the mailbox; one the owner made and switched on in webmail is left alone).';
         return $out;
     }
@@ -251,8 +254,26 @@ class sys_winspamav
                         @mkdir(dirname(self::STATE), 0700, true);
                     }
                     @file_put_contents(self::STATE, json_encode($state));
+                    self::Reload($out);
                     $out[] = 'SpamAV: spam filter ' . ($want['on'] ? 'on, spam from ' . $want['spam'] . ($want['reject'] > 0 ? ', refused from ' . $want['reject'] : ', never refused') : 'off');
                 }
+            }
+        }
+        // the server-wide allowed and blocked senders: two rules of Stalwart's spam filter
+        $lists = array('allow' => self::Patterns('sa_allow_from'), 'block' => self::Patterns('sa_block_from'));
+        if ((string) ctrl_options::GetSystemOption('mail_api') !== '' && (!isset($state['lists']) || $state['lists'] != $lists)) {
+            $why = sys_winmail::Connect();
+            $why = $why !== '' ? $why : self::SenderRules($lists);
+            if ($why !== '') {
+                $out[] = 'SpamAV: the allowed and blocked senders were not set: ' . $why;
+            } else {
+                $state['lists'] = $lists;
+                if (!is_dir(dirname(self::STATE))) {
+                    @mkdir(dirname(self::STATE), 0700, true);
+                }
+                @file_put_contents(self::STATE, json_encode($state));
+                self::Reload($out);
+                $out[] = 'SpamAV: senders always allowed ' . count($lists['allow']) . ', always blocked ' . count($lists['block']);
             }
         }
         // the jobs asked for on the page
@@ -337,6 +358,106 @@ class sys_winspamav
         $status['time'] = time();
         @file_put_contents(sys_spamav::STATUS, json_encode($status));
         return $out;
+    }
+
+    /**
+     * Ask Stalwart to read its settings again (its spam filter keeps them in memory).
+     *
+     * @param string[] $out Lines for the daemon's log.
+     * @return void
+     */
+    static function Reload(array &$out)
+    {
+        if (sys_winmail::Call('x:Action/set', array('create' => (object) array('a' => array('@type' => 'ReloadSettings')))) === null) {
+            $out[] = 'SpamAV: Stalwart did not reload its settings (' . sys_winmail::$why . ')';
+        }
+    }
+
+    /**
+     * A sender list setting's patterns (checked when saved: letters, digits, . * ? _ + = - and one @).
+     *
+     * @param string $name
+     * @return string[]
+     */
+    static function Patterns($name)
+    {
+        $out = array();
+        foreach (preg_split('/[\r\n]+/', (string) sys_spamav::Get($name)) as $l) {
+            $l = strtolower(trim($l));
+            if ($l !== '' && sys_spamav::ValidSenderPattern($l)) {
+                $out[] = $l;
+            }
+        }
+        sort($out);
+        return array_values(array_unique($out));
+    }
+
+    /**
+     * Stalwart's expression for "the sender is one of these": each pattern as a regular expression (* any text, ? one
+     * character; . and + taken as themselves, written as [.] and [+] so no backslash is needed), against the header From
+     * and the envelope sender, case ignored.
+     *
+     * @param string[] $patterns
+     * @return string
+     */
+    static function SenderExpr(array $patterns)
+    {
+        $re = implode('|', array_map(function ($p) {
+            return strtr($p, array('.' => '[.]', '+' => '[+]', '*' => '.*', '?' => '.'));
+        }, $patterns));
+        return "matches('(?i)^(" . $re . ")$', from) || matches('(?i)^(" . $re . ")$', env_from)";
+    }
+
+    /**
+     * Put the allowed and blocked senders into Stalwart's spam filter: a rule each (sentora_allow, sentora_block) that
+     * tags the message, and the tags' scores (SENTORA_ALLOW -100, SENTORA_BLOCK +100). An empty list's rule goes.
+     *
+     * @param array{allow: string[], block: string[]} $lists
+     * @return string '' when done, else why not.
+     */
+    static function SenderRules(array $lists)
+    {
+        $rules = sys_winmail::Call('x:SpamRule/get', array());
+        $tags = sys_winmail::Call('x:SpamTag/get', array());
+        if ($rules === null || $tags === null) {
+            return 'Stalwart did not list its spam rules (' . sys_winmail::$why . ')';
+        }
+        $haveRule = array();
+        foreach ((array) ($rules['list'] ?? array()) as $x) {
+            if (isset($x['name'], $x['id'])) {
+                $haveRule[(string) $x['name']] = (string) $x['id'];
+            }
+        }
+        $haveTag = array();
+        foreach ((array) ($tags['list'] ?? array()) as $x) {
+            if (isset($x['tag'], $x['id'])) {
+                $haveTag[strtoupper((string) $x['tag'])] = (string) $x['id'];
+            }
+        }
+        foreach (array('allow' => -100, 'block' => 100) as $kind => $score) {
+            $name = 'sentora_' . $kind;
+            $tag = 'SENTORA_' . strtoupper($kind);
+            if (!isset($haveTag[$tag]) && $lists[$kind]
+                && sys_winmail::Call('x:SpamTag/set', array('create' => (object) array('t' => array('@type' => 'Score', 'tag' => $tag, 'score' => $score)))) === null) {
+                return 'Stalwart refused the tag ' . $tag . ' (' . sys_winmail::$why . ')';
+            }
+            if (!$lists[$kind]) {
+                if (isset($haveRule[$name]) && sys_winmail::Call('x:SpamRule/set', array('destroy' => array($haveRule[$name]))) === null) {
+                    return 'Stalwart did not remove the rule ' . $name . ' (' . sys_winmail::$why . ')';
+                }
+                continue;
+            }
+            $rule = array('description' => 'Sentora (SpamAV Admin): senders always ' . ($kind === 'allow' ? 'allowed' : 'blocked') . '; written over by the panel',
+                'enable' => true, 'priority' => 100,
+                'condition' => array('match' => array(array('if' => self::SenderExpr($lists[$kind]), 'then' => "'" . $tag . "'")), 'else' => 'false'));
+            $args = isset($haveRule[$name])
+                ? array('update' => (object) array($haveRule[$name] => $rule))
+                : array('create' => (object) array('r' => array_merge(array('@type' => 'Any', 'name' => $name), $rule)));
+            if (sys_winmail::Call('x:SpamRule/set', $args) === null) {
+                return 'Stalwart refused the rule ' . $name . ' (' . sys_winmail::$why . ')';
+            }
+        }
+        return '';
     }
 
     /** Where the reading of the mail logs got to. */

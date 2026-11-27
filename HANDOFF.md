@@ -915,7 +915,12 @@ DNS, FTP, mailboxes and cron on Windows (2026-11-25, tested in the Windows insta
   started with start /B, output in logs\panel\filescan-last.log), clamd over 127.0.0.1:3310 (files up to clamd.conf's
   StreamMaxLength), results in data\sentora\filescan.json, quarantine filescan_quarantine (data\quarantine, locked by
   the installer; a moved file takes the folder's rights with icacls /reset, and its folder's again when put back), and a
-  folder whose real path leads out of the account (a junction) is never followed. Not on Windows yet: the server-wide senders lists, subject tag and "where spam goes" (Stalwart files spam into Junk Mail).
+  folder whose real path leads out of the account (a junction) is never followed. The server-wide senders lists (sa_allow_from,
+  sa_block_from; 2026-11-27) are Stalwart spam rules of type Any, sentora_allow and sentora_block
+  (SenderRules: matches('(?i)^(pattern|...)$', from) || the same on env_from; * -> .*, ? -> ., . and + as [.] [+], no
+  backslashes), tagging SENTORA_ALLOW / SENTORA_BLOCK, whose x:SpamTag scores are -100 / +100; an empty list's rule is
+  removed. After rules or scores change the daemon asks x:Action ReloadSettings. Not on Windows: the subject tag and
+  "where spam goes" (Stalwart files spam into Junk Mail).
 - Mail > SpamAV for mailbox owners (2026-11-26): on Windows too. Stalwart marks mail with X-Spam-Status (Yes/No) and
   X-Spam-Score ("spam, score=11.60") and files spam into "Junk Mail" by itself (seen with GTUBE in the Windows test).
   A mailbox's saved choices (x_spamav_prefs; sys_winmail::SpamRules) become Sieve rules in the panel's one script on the
