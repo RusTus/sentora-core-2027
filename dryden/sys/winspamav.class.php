@@ -449,7 +449,8 @@ class sys_winspamav
             }
             $rule = array('description' => 'Sentora (SpamAV Admin): senders always ' . ($kind === 'allow' ? 'allowed' : 'blocked') . '; written over by the panel',
                 'enable' => true, 'priority' => 100,
-                'condition' => array('match' => array(array('if' => self::SenderExpr($lists[$kind]), 'then' => "'" . $tag . "'")), 'else' => 'false'));
+                'condition' => array('match' => (object) array('0' => array('if' => self::SenderExpr($lists[$kind]), 'then' => "'" . $tag . "'")), 'else' => 'false'));
+            // (Stalwart's lists of objects are maps keyed by their place: {"0": {...}}, as in maxMessageSize)
             $args = isset($haveRule[$name])
                 ? array('update' => (object) array($haveRule[$name] => $rule))
                 : array('create' => (object) array('r' => array_merge(array('@type' => 'Any', 'name' => $name), $rule)));
