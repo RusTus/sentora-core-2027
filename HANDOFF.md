@@ -552,6 +552,9 @@ the node (https://<node>/, `sentora-elk-node kibana-from` limits who reaches it)
 
 ## Recent releases (newest first; every change is in CHANGELOG.md)
 
+- **Released 2027.105 (2026-11-27, ordinary; 1 of the owner's second ten):** the status page key on Linux and Windows
+  (security), Apache Status on Windows with the Lua guard, Matomo's setup checked/retried, the windows-mirror release
+  of the Windows downloads, Log Forwarder 215. Tested: Linux install test on five systems, Windows test.
 - **Released 2027.104 (2026-11-27, ordinary; the last of the owner's ten):** on Windows the SpamAV figures from Stalwart's
   log (a 0-byte read stopped the daemon in testing: fixed, and both new daemon parts catch their own errors), PHP
   Versions > Extensions, the server-wide sender lists as Stalwart spam rules (and ReloadSettings after spam changes), and
