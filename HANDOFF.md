@@ -984,8 +984,12 @@ DNS, FTP, mailboxes and cron on Windows (2026-11-25, tested in the Windows insta
   page made by [H=]. /server-status needs Require local and the header X-Sentora-Status with the key in
   configs\apache\status-key.txt (hidden setting apache_status_key; only Apache's account and the administrators read
   that folder), so the sites' own PHP on this server can not read it. The module's fetch (code/statusfetch.php) sends
-  the key and uses apache_port. On Linux the key is not set yet: there Require local alone (the Lua guard stops
-  handler tricks, not a site's PHP reading 127.0.0.1/server-status): to do the same there.
+  the key and uses apache_port. On Linux (2026-11-27) the Apache Config daemon makes the key (hidden setting
+  apache_status_secret, 32 characters) and writes it to sentora-status-key.conf beside the vhosts file ("Define
+  SENTORA_STATUS_KEY ...", root 0600; Apache reads it as root), included before the status block, whose Location needs
+  Require local and the header; without the file the page is closed (Require all denied). The vhosts are written again
+  once on servers whose status block has no key. Log Forwarder 215's health reader sends the key when the setting
+  exists. The Linux install test checks 403 without and 200 with the key.
 - PHP Versions > Extensions on Windows (2026-11-26): sys_phpext::WinDaemonRun (php_versions daemon hook). Each version's
   php.ini (bin\php for the default, bin\php-X.Y) gets a block between "; --- Sentora: PHP Versions > Extensions" markers
   (WinIni: on = extension=NAME there unless the installer's line is on already; off = the installer's line commented out

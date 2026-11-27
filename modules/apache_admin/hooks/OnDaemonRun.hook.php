@@ -69,6 +69,12 @@ if (ui_module::CheckModuleEnabled('Apache Config')) {
     if ($guardMissing) {
         echo "Apache Config: adding the request guard for hosted sites..." . fs_filehandler::NewLine();
     }
+    // ... or Apache's status page still answers without its key (before 2027.105)
+    if (!$guardMissing && strpos((string) @file_get_contents($vhostFile), '<Location /server-status>') !== false
+        && strpos((string) @file_get_contents($vhostFile), 'SENTORA_STATUS_KEY') === false) {
+        echo "Apache Config: Apache's status page asks for its key..." . fs_filehandler::NewLine();
+        $guardMissing = true;
+    }
     // ... or a domain still sends its PHP settings without a folder limit (written before 2027.19:
     // it then ran with the limit of another of the account's domains)
     // ... or a domain on an extra PHP version still uses the socket all extra versions shared (before 2027.24)
@@ -430,6 +436,41 @@ function BuildVhostPhpHandler($rowvhost, $vhostuser) {
  * @global db_driver $zdbh The panel's database connection.
  * @return string Apache configuration lines, or '' when the Lua script is not installed.
  */
+function SentoraStatusKey()
+{
+    global $zdbh;
+    // The key Apache's status page asks for (X-Sentora-Status): kept in the panel's database (hidden setting
+    // apache_status_secret, which the panel's pages read and the hosted sites can not) and given to Apache in a file
+    // only root reads (Apache reads its settings as root). '' when the file can not be written: then the status page
+    // is closed to everyone.
+    $key = (string) ctrl_options::GetSystemOption('apache_status_secret');
+    if (!preg_match('/^[A-Za-z0-9]{32}$/', $key)) {
+        $key = '';
+        $chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+        for ($i = 0; $i < 32; $i++) {
+            $key .= $chars[random_int(0, strlen($chars) - 1)];
+        }
+        $q = $zdbh->prepare("UPDATE x_settings SET so_value_tx = :v WHERE so_name_vc = 'apache_status_secret'");
+        $q->execute(array(':v' => $key));
+        if ($q->rowCount() === 0) {
+            $zdbh->prepare("INSERT INTO x_settings (so_name_vc, so_cleanname_vc, so_value_tx, so_defvalues_tx, so_desc_tx, so_module_vc, so_usereditable_en)
+                VALUES ('apache_status_secret', 'Apache status key', :v, NULL, 'The key Apache Status sends to Apache\'s status page', 'Apache Config', 'false')")
+                ->execute(array(':v' => $key));
+        }
+    }
+    $file = rtrim(dirname((string) ctrl_options::GetSystemOption('apache_vhost')), '/') . '/sentora-status-key.conf';
+    $text = "# Written by the Sentora daemon (Apache Status): only root may read this file\nDefine SENTORA_STATUS_KEY " . $key . "\n";
+    if (@file_get_contents($file) !== $text) {
+        $old = umask(077);
+        $ok = @file_put_contents($file . '.new', $text) !== false && @chmod($file . '.new', 0600) && @rename($file . '.new', $file);
+        umask($old);
+        if (!$ok) {
+            return '';
+        }
+    }
+    return $file;
+}
+
 function SentoraRequestGuard()
 {
     global $zdbh;
@@ -545,11 +586,18 @@ function BuildVhostConfig() {
     // Apache's status page, for this server only (Apache Status reads http://127.0.0.1/server-status;
     // the request guard keeps hosted sites from handing requests to it). Some systems' mod_status
     // comes with this block, others only load the module: it is written here for all of them.
-    $line .= "<IfModule status_module>" . fs_filehandler::NewLine()
+    // Only with the key (SentoraStatusKey): the hosted sites' own PHP runs on this server too, so "local" alone
+    // would let one site read every site's requests and visitors there.
+    $statusKey = SentoraStatusKey();
+    $line .= ($statusKey !== '' ? 'Include "' . $statusKey . '"' . fs_filehandler::NewLine() : '')
+        . "<IfModule status_module>" . fs_filehandler::NewLine()
         . "ExtendedStatus On" . fs_filehandler::NewLine()
         . "<Location /server-status>" . fs_filehandler::NewLine()
         . "SetHandler server-status" . fs_filehandler::NewLine()
-        . "Require local" . fs_filehandler::NewLine()
+        . ($statusKey !== ''
+            ? "<RequireAll>" . fs_filehandler::NewLine() . "Require local" . fs_filehandler::NewLine()
+                . "Require expr \"%{HTTP:X-Sentora-Status} == '\${SENTORA_STATUS_KEY}'\"" . fs_filehandler::NewLine() . "</RequireAll>" . fs_filehandler::NewLine()
+            : "Require all denied" . fs_filehandler::NewLine())
         . "</Location>" . fs_filehandler::NewLine()
         . "</IfModule>" . fs_filehandler::NewLine() . fs_filehandler::NewLine();
     // How long each request took, for every website at once (Log Forwarder's Elk node reads it for its Website
