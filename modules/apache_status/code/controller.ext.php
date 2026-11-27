@@ -30,12 +30,8 @@ class module_controller extends ctrl_module
     static function Status()
     {
         if (self::$status === null) {
-            $ch = curl_init('http://127.0.0.1/server-status?auto');
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_TIMEOUT, 5);
-            curl_setopt($ch, CURLOPT_FOLLOWLOCATION, false);
-            $body = (string) curl_exec($ch);
-            $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            require_once 'modules/apache_status/code/statusfetch.php';
+            list($code, $body) = apst_fetch('?auto');
             self::$status = array('ok' => ($code === 200 && strpos($body, 'Total Accesses') !== false), 'code' => $code);
         }
         return self::$status;

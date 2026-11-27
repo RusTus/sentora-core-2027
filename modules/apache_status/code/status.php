@@ -21,6 +21,7 @@ require_once 'dryden/loader.inc.php';
 require_once 'cnf/db.php';
 require_once 'inc/dbc.inc.php';
 require_once 'modules/apache_status/code/statusparse.php';
+require_once 'modules/apache_status/code/statusfetch.php';
 
 session_start();
 ctrl_auth::CheckSessionAccounts();   // (a switched-off or deleted account's session ends here)
@@ -38,22 +39,6 @@ header('X-Content-Type-Options: nosniff');
 if (!$user || (int) $user['usergroupid'] !== 1) {
     http_response_code(403);
     exit(json_encode(array('error' => ui_language::translate('Administrators only.'))));
-}
-
-/**
- * Fetch one of Apache's status pages from this server.
- *
- * @param string $query '' for the HTML page, '?auto' for the summary.
- * @return array{0: int, 1: string} The HTTP status code (0 when Apache did not answer) and the body.
- */
-function apst_fetch($query)
-{
-    $ch = curl_init('http://127.0.0.1/server-status' . $query);
-    curl_setopt_array($ch, array(CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 5, CURLOPT_CONNECTTIMEOUT => 2,
-        CURLOPT_FOLLOWLOCATION => false, CURLOPT_MAXFILESIZE => 8388608));
-    $body = (string) curl_exec($ch);
-    $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    return array($code, $body);
 }
 
 list($codeAuto, $auto) = apst_fetch('?auto');

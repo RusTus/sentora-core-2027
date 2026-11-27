@@ -977,6 +977,15 @@ DNS, FTP, mailboxes and cron on Windows (2026-11-25, tested in the Windows insta
   from bin\php-*, RecordLive/LiveState from the pool names). The PHP Versions page itself (extensions, updates) is Linux's.
 - The PHP Versions page on Windows (2026-11-26): the versions and their switches (php_versions_enabled); its daemon hook
   returns at once there; older logins, PHP updates and extensions are hidden (Linux's).
+- Apache Status on Windows (2026-11-27): the installer loads mod_status only when Apache has mod_lua, and writes
+  configs\apache\sentora-guard.lua (the hostdata path written in): for a site whose DocumentRoot is in hostdata it
+  refuses server-status/server-info/proxy-server and [P] (filename proxy:), and allows a proxy handler only to
+  balancer://php-NAME/ or phpNN-NAME of that account; an output filter (SetOutputFilter in Location /) blanks a status
+  page made by [H=]. /server-status needs Require local and the header X-Sentora-Status with the key in
+  configs\apache\status-key.txt (hidden setting apache_status_key; only Apache's account and the administrators read
+  that folder), so the sites' own PHP on this server can not read it. The module's fetch (code/statusfetch.php) sends
+  the key and uses apache_port. On Linux the key is not set yet: there Require local alone (the Lua guard stops
+  handler tricks, not a site's PHP reading 127.0.0.1/server-status): to do the same there.
 - PHP Versions > Extensions on Windows (2026-11-26): sys_phpext::WinDaemonRun (php_versions daemon hook). Each version's
   php.ini (bin\php for the default, bin\php-X.Y) gets a block between "; --- Sentora: PHP Versions > Extensions" markers
   (WinIni: on = extension=NAME there unless the installer's line is on already; off = the installer's line commented out
