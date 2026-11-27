@@ -555,7 +555,8 @@ the node (https://<node>/, `sentora-elk-node kibana-from` limits who reaches it)
 - **Released 2027.104 (2026-11-27, ordinary; the last of the owner's ten):** on Windows the SpamAV figures from Stalwart's
   log (a 0-byte read stopped the daemon in testing: fixed, and both new daemon parts catch their own errors), PHP
   Versions > Extensions, the server-wide sender lists as Stalwart spam rules (and ReloadSettings after spam changes), and
-  the refusals log Apache may write. The owner tested 2027.103 and found nothing. Further releases: ask the owner.
+  the refusals log Apache may write. The owner tested 2027.103 and found nothing. Owner, 2026-11-27: another ten releases as I see fit
+  (2027.105 to 2027.114), each still announced first with 10 seconds to stop it.
 - **Released 2027.103 (2026-11-26, ordinary):** Mail > SpamAV for mailbox owners on Windows (one Sieve script per mailbox
   with its forwarder; the score compared by its whole part, since Stalwart's numeric compare does not read "9.10"). The
   Windows test sends real messages: no choice -> Junk Mail, inbox choice, blocked and allowed senders, sensitivity 10 on
