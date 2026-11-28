@@ -1014,10 +1014,14 @@ DNS, FTP, mailboxes and cron on Windows (2026-11-25, tested in the Windows insta
   module only when its module.xml has <windows>yes</windows> (zppy_ready_here; else its folder goes and the job fails
   saying why); the info box warns for a repository xml whose ostype is not win/all. An add-on is made Windows-ready by
   <windows>yes</windows> in its module.xml and <ostype>all</ostype> in sentora-repo/NAME.xml, after checking it uses
-  nothing Linux-only. Ready: zGod (102). Windows test: the list read, zGod installed and its page loads, QuickFig
+  nothing Linux-only. Ready: zGod (102), PHP-Adminer (636), Payment Plans (114: only the panel's framework, PHP's curl
+  and its own PDF writer; the switch-off hooks run as PHP_BINARY on Windows; the Windows test switches a client with a site
+  off and on). Windows test: the list read, zGod installed and its page loads, QuickFig
   refused.
 - Still Linux-only, each needing its own Windows way (2026-11-25): PHP updates per version (a new installer brings new
-  builds), GoAccess (no native Windows build; Matomo is there), add-ons not yet checked for Windows.
+  builds), GoAccess (no native Windows build; Matomo is there), add-ons not yet checked for Windows
+  (left: Apps, Docker Hosting, Log Forwarder, Web Hardening, QuickFig, Visitor Stats, Webalizer: each uses Linux
+  tools, users or paths).
 Where Windows lives (owner, 2026-11-25): the native installer moved from RusTus/sentora-windows-2027 (left with a note) to
 sentora-installers-2027/windows/server (install-zpanel-stack.ps1; install-web-stack.ps1 = the same file with
 $Edition = 'stack', kept for other uses; README.txt; tests/), tested by .github/workflows/windows-server-test.yml there (a
