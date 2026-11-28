@@ -552,6 +552,9 @@ the node (https://<node>/, `sentora-elk-node kibana-from` limits who reaches it)
 
 ## Recent releases (newest first; every change is in CHANGELOG.md)
 
+- **Apache vhost backup clean-up (2026-11-28, found from the owner's post-install check):** it purged every file older
+  than apache_purge_date in /var/sentora/backups/ (shared with update rollbacks, restore snapshots, Docker Hosting's
+  docker-apps); now only VHOST_BACKUP_<number> files that are real files.
 - **Released 2027.106 (2026-11-28, ordinary; 2 of the owner's second ten):** Repo Browser on Windows (zppy with PHP's
   curl and PHP_BINARY; a module installs on Windows only with <windows>yes</windows>); zGod 102 and PHP-Adminer 636 marked
   for Windows (the Windows test installs PHP-Adminer from the branch's own build served by the panel, logs in with

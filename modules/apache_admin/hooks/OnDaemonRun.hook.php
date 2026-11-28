@@ -1850,8 +1850,11 @@ function BackupVhostConfigFile() {
         $purge_date = ctrl_options::GetSystemOption('apache_purge_date');
         if ($handle = @opendir(ctrl_options::GetSystemOption('apache_budir'))) {
             while (false !== ($file = readdir($handle))) {
-                if ($file != "." && $file != "..") {
-                    $filetime = @filemtime(ctrl_options::GetSystemOption('apache_budir') . $file);
+                // Only this hook's own copies: the folder is shared with panel update rollbacks,
+                // restore snapshots and add-ons' backups (Docker Hosting's docker-apps), never touched here.
+                $path = ctrl_options::GetSystemOption('apache_budir') . $file;
+                if (preg_match('/^VHOST_BACKUP_[0-9]+$/', $file) && is_file($path) && !is_link($path)) {
+                    $filetime = @filemtime($path);
 
                     if ($filetime == NULL) {
                         $filetime = @filemtime(mb_convert_encoding(ctrl_options::GetSystemOption('apache_budir') . $file, 'ISO-8859-1', 'UTF-8'));
