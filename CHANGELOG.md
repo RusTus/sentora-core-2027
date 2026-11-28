@@ -720,6 +720,7 @@ The whole core now lints clean on PHP 8.5, and every panel page loads with no PH
 - Repo Browser on Windows: it installs add-ons there too (zppy downloads with PHP's own curl and runs with the panel's PHP); an add-on is installed on Windows only when its module.xml says it works there (<windows>yes</windows>), and its info says so before. zGod 102 is the first.
 - Payment Plans 113: suspending or re-enabling an unpaid account starts its helper PHP on Windows too (it used a Linux-only path and /dev/null); not yet marked as working on Windows.
 - PHP-Adminer 636: marked as working on Windows (tested there: installed with Repo Browser, an account's MySQL user logs in and sees its database, root is refused).
+- Windows: no more "curl_close() is deprecated" warnings from PHP 8.5 in zppy, the mail and the FTP code (curl_close does nothing since PHP 8).
 - Release 2027.105: Apache's status page only with its key (Linux too: a hosted site's PHP could read every site's requests there); Apache Status on Windows; Matomo's setup checked and retried on Windows; a mirror of the Windows installer's downloads; Log Forwarder 215.
 - Release 2027.104: on Windows the SpamAV figures (counts, chart, activity from the mail server's log), PHP Versions > Extensions, senders always allowed and blocked for every mailbox, and refused viruses written down.
 - Release 2027.103: Mail > SpamAV on Windows: each mailbox owner's spam choices (on or off, sensitivity, Junk Mail or inbox, allowed and blocked senders) as a filter the mail server runs, applied within a minute.

@@ -104,7 +104,7 @@ function zppy_fetch($repo, $module)
         curl_setopt_array($ch, array(CURLOPT_FILE => $fh, CURLOPT_TIMEOUT => 120, CURLOPT_CONNECTTIMEOUT => 30, CURLOPT_USERAGENT => 'ZppyClient',
             CURLOPT_FOLLOWLOCATION => true, CURLOPT_MAXREDIRS => 5, CURLOPT_FAILONERROR => true, CURLOPT_PROTOCOLS => CURLPROTO_HTTP | CURLPROTO_HTTPS));
         $rc = curl_exec($ch) === false ? 1 : 0;
-        curl_close($ch);
+        unset($ch);   // (curl_close() does nothing since PHP 8 and is deprecated in 8.5)
         fclose($fh);
     } else {
         exec('wget -q -T 60 -UZppyClient -O ' . escapeshellarg($file) . ' ' . escapeshellarg($url), $out, $rc);

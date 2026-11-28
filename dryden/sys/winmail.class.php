@@ -82,7 +82,7 @@ class sys_winmail
         curl_setopt_array($h, $opt);
         $raw = (string) curl_exec($h);
         $code = (int) curl_getinfo($h, CURLINFO_HTTP_CODE);
-        curl_close($h);
+        unset($h);   // (curl_close() is deprecated in PHP 8.5)
         return array($code, json_decode($raw, true));
     }
 

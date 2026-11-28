@@ -84,7 +84,7 @@ class sys_winftp
             curl_setopt_array($h, array(CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 15, CURLOPT_USERPWD => $a[0] . ':' . $a[1]));
             $r = json_decode((string) curl_exec($h), true);
             $code = (int) curl_getinfo($h, CURLINFO_HTTP_CODE);
-            curl_close($h);
+            unset($h);   // (curl_close() is deprecated in PHP 8.5)
             if ($code !== 200 || empty($r['access_token'])) {
                 return array($code, 'SFTPGo refused the token (' . $code . ')');
             }
@@ -99,7 +99,7 @@ class sys_winftp
         curl_setopt_array($h, $opt);
         $raw = (string) curl_exec($h);
         $code = (int) curl_getinfo($h, CURLINFO_HTTP_CODE);
-        curl_close($h);
+        unset($h);   // (curl_close() is deprecated in PHP 8.5)
         return array($code, json_decode($raw, true));
     }
 
