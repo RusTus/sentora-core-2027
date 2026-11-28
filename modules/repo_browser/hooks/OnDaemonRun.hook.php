@@ -150,7 +150,10 @@ function RepoBrowserRunQueue()
             list($ok, $output) = RepoBrowserInstallUpload($root, $args[1]);
             $status = $ok ? 'done' : 'failed';
         } else {
-            $cmd = 'cd ' . escapeshellarg($root) . ' && ' . escapeshellarg($root . 'bin/zppy') . ' ' . implode(' ', array_map('escapeshellarg', $args)) . ' 2>&1';
+            // (Windows: zppy is run by the panel's own PHP, as a script there has no #! line to start it)
+            $cmd = sys_versions::IsWindows()
+                ? 'cd /d "' . str_replace('/', '\\', rtrim($root, '/')) . '" && "' . PHP_BINARY . '" -q bin/zppy ' . implode(' ', array_map(function ($a) { return '"' . $a . '"'; }, $args)) . ' 2>&1'
+                : 'cd ' . escapeshellarg($root) . ' && ' . escapeshellarg($root . 'bin/zppy') . ' ' . implode(' ', array_map('escapeshellarg', $args)) . ' 2>&1';
             $out = array();
             exec($cmd, $out, $rc);
             $output = implode("\n", $out);
@@ -277,7 +280,8 @@ function RepoBrowserSummary()
 function RepoBrowserSecureModule($root, $module)
 {
     $dir = $root . 'modules/' . $module;
-    if (repo_browser_helper::ValidModule($module) && is_dir($dir)) {
+    // (Windows: the module's folder takes the panel folder's rights, Administrators and SYSTEM to change it)
+    if (repo_browser_helper::ValidModule($module) && is_dir($dir) && !sys_versions::IsWindows()) {
         exec('chown -R root:root ' . escapeshellarg($dir) . ' && chmod -R u+rwX,go-w,go+rX ' . escapeshellarg($dir));
     }
 }

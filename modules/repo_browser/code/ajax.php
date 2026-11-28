@@ -219,17 +219,13 @@ function AjaxReturnModInfo($full)
         echo '<p class="rb-desc rb-sub">' . $h(ui_language::translate('No description in the repository.')) . '</p>';
         return;
     }
+    // (ostype: lin, win or all; on Windows a module installs only when it says it works there, see bin/zppy)
     $ostype = '';
-    switch (strtoupper(isset($info['ostype']) ? $info['ostype'] : '')) {
-        case 'WIN':
-            $ostype = '<p class="rb-os bad">' . $h(ui_language::translate('For Windows servers only: it will not work here.')) . '</p>';
-            break;
-        case 'LIN':
-            $ostype = '';
-            break;
-        case 'ALL':
-            $ostype = '';
-            break;
+    $os = strtoupper(isset($info['ostype']) ? $info['ostype'] : '');
+    if (sys_versions::IsWindows() && $os !== 'WIN' && $os !== 'ALL') {
+        $ostype = '<p class="rb-os bad">' . $h(ui_language::translate('For Linux servers only: it does not work on Windows, and is not installed here.')) . '</p>';
+    } elseif (!sys_versions::IsWindows() && $os === 'WIN') {
+        $ostype = '<p class="rb-os bad">' . $h(ui_language::translate('For Windows servers only: it will not work here.')) . '</p>';
     }
     $meta = array();
     if (isset($info['latestversion'])) {

@@ -1002,8 +1002,15 @@ DNS, FTP, mailboxes and cron on Windows (2026-11-25, tested in the Windows insta
   (Stale), restarting Apache (the panel's PHP too). The installer keeps the block when it writes php.ini again
   (Get-ExtBlock). Offered: the ext\php_*.dll the build ships; com_dotnet never (COM runs programs). Windows test: bz2 on
   for 8.5, the site's PHP has it, the panel's php -m too, then off.
+- Repo Browser on Windows (2026-11-28): bin/zppy downloads with PHP's curl (wget only where curl is missing) and the
+  daemon runs it as "PHP_BINARY -q bin/zppy" in the panel's folder (no chown on Windows). On Windows zppy installs a
+  module only when its module.xml has <windows>yes</windows> (zppy_ready_here; else its folder goes and the job fails
+  saying why); the info box warns for a repository xml whose ostype is not win/all. An add-on is made Windows-ready by
+  <windows>yes</windows> in its module.xml and <ostype>all</ostype> in sentora-repo/NAME.xml, after checking it uses
+  nothing Linux-only. Ready: zGod (102). Windows test: the list read, zGod installed and its page loads, QuickFig
+  refused.
 - Still Linux-only, each needing its own Windows way (2026-11-25): PHP updates per version (a new installer brings new
-  builds), GoAccess (no native Windows build), Repo Browser (add-ons are Linux's).
+  builds), GoAccess (no native Windows build; Matomo is there), add-ons not yet checked for Windows.
 Where Windows lives (owner, 2026-11-25): the native installer moved from RusTus/sentora-windows-2027 (left with a note) to
 sentora-installers-2027/windows/server (install-zpanel-stack.ps1; install-web-stack.ps1 = the same file with
 $Edition = 'stack', kept for other uses; README.txt; tests/), tested by .github/workflows/windows-server-test.yml there (a

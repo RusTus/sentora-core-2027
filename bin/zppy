@@ -97,7 +97,18 @@ function zppy_fetch($repo, $module)
         unlink($file);
     }
     $url = zppy_base($repo) . '/' . $module . '.zpp';
-    exec('wget -q -T 60 -UZppyClient -O ' . escapeshellarg($file) . ' ' . escapeshellarg($url), $out, $rc);
+    // (PHP's own curl: there is no wget on Windows, and the panel's PHP has curl on every system)
+    $rc = 1;
+    if (function_exists('curl_init') && ($fh = @fopen($file, 'wb'))) {
+        $ch = curl_init($url);
+        curl_setopt_array($ch, array(CURLOPT_FILE => $fh, CURLOPT_TIMEOUT => 120, CURLOPT_CONNECTTIMEOUT => 30, CURLOPT_USERAGENT => 'ZppyClient',
+            CURLOPT_FOLLOWLOCATION => true, CURLOPT_MAXREDIRS => 5, CURLOPT_FAILONERROR => true, CURLOPT_PROTOCOLS => CURLPROTO_HTTP | CURLPROTO_HTTPS));
+        $rc = curl_exec($ch) === false ? 1 : 0;
+        curl_close($ch);
+        fclose($fh);
+    } else {
+        exec('wget -q -T 60 -UZppyClient -O ' . escapeshellarg($file) . ' ' . escapeshellarg($url), $out, $rc);
+    }
     if ($rc !== 0 || !is_file($file) || filesize($file) === 0) {
         @unlink($file);
         fwrite(STDOUT, "Could not download " . $url . "\n");
@@ -128,6 +139,27 @@ function zppy_fetch($repo, $module)
     return true;
 }
 
+/**
+ * On Windows a module is installed only when its module.xml says it works there (<windows>yes</windows>, which
+ * ui_module::ReadyHere also reads): otherwise its files go again and the install fails with why.
+ *
+ * @param string $module
+ * @return bool True when it may stay.
+ */
+function zppy_ready_here($module)
+{
+    if (!sys_versions::IsWindows()) {
+        return true;
+    }
+    $xml = (string) @file_get_contents(ctrl_options::GetSystemOption('sentora_root') . 'modules/' . $module . '/module.xml');
+    if (preg_match('#<windows>\s*yes\s*</windows>#i', $xml)) {
+        return true;
+    }
+    fs_director::RemoveDirectory('modules/' . $module);
+    fwrite(STDOUT, "This module does not work on Windows (its module.xml has no <windows>yes</windows>): not installed.\n");
+    return false;
+}
+
 if (!runtime_controller::IsCLI())
     exit(1);
 
@@ -156,6 +188,8 @@ if ((isset($argv[1])) && ($argv[1] == 'install')) {
                             fs_director::SetFileSystemPermissions('modules/' . $argv[2] . '', 0777);
                             if (!fs_director::CheckFileExists('modules/' . $argv[2] . '/module.xml')) {
                                 fwrite(STDOUT, "No module.xml file found in the unzipped archive.\n");
+                                exit(1);
+                            } elseif (!zppy_ready_here($argv[2])) {
                                 exit(1);
                             } else {
                                 ui_module::ModuleInfoToDB($argv[2]);
