@@ -17,7 +17,7 @@
  * @package Sentora
  * @license GPL-3.0 https://www.gnu.org/licenses/gpl-3.0.html
  *
- * Written by RusTus, 2026-11-26
+ * Written by RusTus, 2026-11-28
  */
 class sys_winmail
 {

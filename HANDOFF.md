@@ -552,6 +552,10 @@ the node (https://<node>/, `sentora-elk-node kibana-from` limits who reaches it)
 
 ## Recent releases (newest first; every change is in CHANGELOG.md)
 
+- **Released 2027.106 (2026-11-28, ordinary; 2 of the owner's second ten):** Repo Browser on Windows (zppy with PHP's
+  curl and PHP_BINARY; a module installs on Windows only with <windows>yes</windows>); zGod 102 and PHP-Adminer 636 marked
+  for Windows (the Windows test installs PHP-Adminer from the branch's own build served by the panel, logs in with
+  Adminer's form token, root refused); mysqlnd.sha256_server_public_key on Windows; curl_close removed; Payment Plans 113.
 - **Released 2027.105 (2026-11-27, ordinary; 1 of the owner's second ten):** the status page key on Linux and Windows
   (security), Apache Status on Windows with the Lua guard, Matomo's setup checked/retried, the windows-mirror release
   of the Windows downloads, Log Forwarder 215. Tested: Linux install test on five systems, Windows test.
